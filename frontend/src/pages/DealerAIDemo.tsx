@@ -16,11 +16,17 @@ import {
   type Vehicle,
 } from "@/lib/api";
 
+// Demo openers — match the verified scenarios in
+// `docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`. Two are the canonical
+// SESSION_003 smoke shapes (4WD-finance + cash-commuter); the
+// others are dealer-realistic shape variants that exercise the
+// same code paths (budget classification, lever-flex, model
+// followup) without overlapping the canonical pair.
 const SUGGESTED_PROMPTS = [
-  "Show me F-150s under $65k with $5,000 down.",
-  "I need a used SUV under $30k for my family.",
-  "What's good for commuting from the city but still useful on the farm?",
-  "I need something that can tow a small camper.",
+  "I need a 4WD truck around $500/mo with $3k down.",
+  "I have cash and want good gas mileage.",
+  "Show me a used SUV under $30k for my family.",
+  "What's a reliable commuter under $15k?",
 ];
 
 export default function DealerAIDemo() {
