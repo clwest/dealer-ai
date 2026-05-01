@@ -1,0 +1,16 @@
+dealer_ai/
+  models.py
+  serializers.py
+  views.py
+  urls.py
+  services/
+    llm/
+      base.py
+      ollama.py
+      openai_provider.py
+      factory.py
+    chat_engine.py
+    intent_parser.py
+    inventory_search.py
+    payment_engine.py
+    lead_service.py
