@@ -104,77 +104,115 @@ The user provided these notes from prior inspection or context:
 > the next session should focus on; the "What's next" line inside the adopt
 > block is stale and will be overwritten on the next adopt run.
 
-**Item 4a — drivetrain hallucination guard.**
+**Dealer-demo polish pass: make cash and model-followup responses more
+decisive and sales-oriented without adding new architecture.**
 
-The post-LLM enforcement pass (Items 1–5) is complete. Five new scrubs
-and a preamble fix landed; the small-model llama3.2:latest is now
-viable in production because the contract is enforced post-generation
-rather than only at prompt time. See `docs/handoffs/SESSION_002_sales_behavior_snapshot.md`
-**§9 "Post-scrub stabilization pass"** for the full implementation log,
-the scrub pipeline order, and verification commands.
+The behavior-enforcement layer (items 1–15) is complete and stable.
+The post-LLM scrub stack now has 14 stages plus state-layer helpers
+(intent-shift reset, cash-mode persistence, weak-intent budget
+inference, debug-stock filtering, customer-facing drivetrain
+labels, "both" wording, length cap). The frontend ChatVehicleCard
+was rebuilt for scan density. See
+`docs/handoffs/SESSION_003_demo_polish_snapshot.md` for the full
+implementation log, the current scrub pipeline order, and the
+verification suite.
 
-The one remaining customer-visible correctness gap from the live smoke
-is drivetrain / feature hallucination. The next task is scoped to
-**drivetrain only** — adding feature/engine/towing claims is item 4b /
-4c, not this session.
+The remaining gaps are voice / tone, not correctness. Live smoke
+proves cards always surface, no debug stocks leak, no financing
+language reaches cash-mode customers, brochure copy gets stripped
+in model followups, and drivetrain labels are standardized. What's
+left is making the prose sound like a confident salesperson.
 
 ## Scope
 
-Add a post-LLM scrub `scrub_card_attribute_claims` (or similar) that
-cross-references prose drivetrain claims against
-`matched_vehicles[*].drivetrain`. The scrub:
+### 1. Cash comparison: more decisive
 
-1. **Detects** drivetrain tokens in the assistant prose: `"4WD"`,
-   `"4x4"`, `"AWD"`, `"all-wheel"`, `"four-wheel"`, `"2WD"`, `"4x2"`,
-   `"RWD"`, `"rear-wheel"`, `"FWD"`, `"front-wheel"`. Case-insensitive.
-   Limited to claims that name a specific card (by year/model or by
-   the card's `display_name` substring) — generic statements like
-   *"4WD trucks are popular"* should NOT trigger.
-2. **Verifies** the claimed drivetrain matches the card's
-   `drivetrain` field. Equivalence rules: `4x4 ≡ 4WD ≡ four-wheel`,
-   `4x2 ≡ 2WD ≡ rear-wheel ≡ RWD` (when the model is RWD-only),
-   `AWD ≡ all-wheel`, `FWD ≡ front-wheel`.
-3. **Strips** the false claim (or replaces with a neutral phrase like
-   *"see the drivetrain shown on the card"*). If stripping leaves
-   the surrounding sentence incoherent, fall back to the existing
-   `LIST_SHAPE_FALLBACK` / `META_NARRATION_FALLBACK` style canned
-   reply.
-4. **Stacks** with existing scrubs via the same flag-promotion logic
-   (`drivetrain_claim` in `scrubs_fired`,
-   `drivetrain_claim_scrubbed` flag, promotes to
-   `multiple_scrubs_fired` when stacked).
+Current cash-mode reply (validation case from the smoke):
 
-Coverage: unit tests for the detector + equivalence map, integration
-tests covering the smoke shapes (`"the Colorado is available in both
-2WD and 4WD configurations"` → strip the false 4WD claim).
+> *"For a cash purchase with good gas mileage, let's compare the
+> top three options: The Honda Accord LX has a great balance of
+> price and fuel efficiency, with an estimated 28 MPG in the city
+> and 38 MPG on the highway. The Ford Fusion SE also offers
+> decent fuel economy, with 23 MPG in the city and 34 MPG…"*
+
+That's a research brief. A real salesperson would:
+
+- Pick a concrete recommendation up front ("if I had to pick one
+  for daily commuting, the Accord — lowest price + best MPG").
+- Anchor each tradeoff to a specific number ("the Camry has 20k
+  fewer miles for $500 more").
+- Use a sales-tone pivot question ("Want me to set up a closer
+  look at the Accord?") instead of the current "Are you leaning
+  lowest price, or long-term reliability?".
+
+Tighten `_format_cash_mode_block` (in `backend/dealer_ai/services/
+chat_engine.py`) — the system message that fires when
+`cash_mode_active and len(matched) >= 2`. Add a worked GOOD
+example mirroring the desired voice; keep the existing forbidden
+list intact. Tests in `test_ui_leak_fixes.py::FormatCashModeBlockTests`
+pin the structural contract; the new voice example may need
+its own test asserting key phrasings appear in the prompt.
+
+### 2. Model followups: less technical, more salesperson
+
+Current model-followup output (Honda smoke):
+
+> *"With a trade-in Accord LX, you're getting a great deal on a
+> vehicle with excellent fuel economy and a smooth ride. The CVT
+> transmission makes it easy to cruise around town or hit the
+> highway, and the FWD drivetrain ensures you get good gas
+> mileage. Is that the direction you want to go?"*
+
+Reads engineering-spec ("CVT transmission", "FWD drivetrain
+ensures"). A salesperson would say:
+
+> *"Smooth around town, respectable on the highway, and the
+> front-wheel-drive layout keeps gas costs low. Want a closer
+> look?"*
+
+Tighten the **deep-dive branch reply rule** in
+`_format_budget_block` (the `followup_mode` branch). Same
+forbidden list. Add a GOOD example that mirrors conversational-
+sales voice. The `scrub_followup_anchors` filter already keeps
+sentences with constraint / comparison / card-data anchors —
+the prompt-rule change is what shapes the surviving prose.
+
+### 3. Optional — voice GOOD examples in BEHAVIOR_LAYER.md
+
+If the voice gets traction, add the worked examples to
+`docs/FREEDOM_FORD_BEHAVIOR_LAYER.md`'s GOOD/BAD examples
+section so the contract is documented in one place.
 
 ## Out of scope for this pass
 
-- **Engine / transmission / towing / fuel-economy / paint / feature
-  claims.** Those are item 4b / 4c — different source-of-truth fields
-  (`features` is free-text JSON, not a typed enum like `drivetrain`).
-- **Frontend changes.** `ChatVehicleCard.tsx` already renders
-  drivetrain authoritatively.
-- **`payment_engine` / `_classify_candidates` changes.**
-- **Inventory selection / lever picker changes.**
-- **`_CARD_PRESENTATION_PREAMBLE` changes.** The preamble already
-  warns against false drivetrain claims; the scrub is the
-  enforcement layer.
+- **No new scrubs.** Existing 14-stage chain is the enforcement
+  layer; this is a voice / tone refinement.
+- **No new architecture.** No new endpoints, models, services.
+- **No frontend redesign.** ChatVehicleCard rebuild already
+  landed. Possible future "focus mode" / one-card-at-a-time
+  view is documented in SESSION_003 §7 but is NOT this pass.
+- **No `payment_engine` / `_classify_candidates` /
+  inventory-selection changes.**
+- **No LLM provider switch.**
 
-If a fix appears to require any of the above, **stop and confirm with
-the user first.**
+If a fix appears to require any of the above, **stop and confirm
+with the user first.**
 
 ## Reading order before changing code
 
-1. `docs/handoffs/SESSION_002_sales_behavior_snapshot.md` §9 — full
-   post-scrub stabilization log, scrub pipeline order.
-2. `docs/FREEDOM_FORD_BEHAVIOR_LAYER.md` — voice/tone contract,
-   "Rule: Never imply a flex satisfies the original constraint"
-   GOOD/BAD examples.
-3. `context/INVENTORY.md` + `context/DO_NOTS.md` — locked behaviors.
-4. `backend/dealer_ai/services/chat_engine.py` — existing scrub
-   functions are the implementation template (`scrub_payment_drift`,
-   `scrub_list_shape`, etc.).
+1. `docs/handoffs/SESSION_003_demo_polish_snapshot.md` — full
+   stabilization arc log, current scrub stack, validation
+   shapes for cash / model-followup turns.
+2. `docs/handoffs/SESSION_002_sales_behavior_snapshot.md` §9 —
+   the original 5-item enforcement pass log + behavior contract
+   anchors.
+3. `docs/FREEDOM_FORD_BEHAVIOR_LAYER.md` — voice/tone contract;
+   note the "Post-LLM Enforcement Layer" section is stale (says
+   9 scrubs; actual is 14 — refresh if you touch it).
+4. `backend/dealer_ai/services/chat_engine.py` —
+   `_format_cash_mode_block`, `_format_budget_block`'s
+   followup branch, `_CARD_PRESENTATION_PREAMBLE` are the three
+   prompt-time levers that shape the LLM's voice.
 
 ## Tests that pin the behavior contract
 
@@ -184,23 +222,51 @@ These suites must stay green. If any go red, the change is wrong:
 cd backend && source .venv/bin/activate
 python manage.py test dealer_ai
 
-# Existing contract suites
+# Pre-existing contract suites
 python manage.py test dealer_ai.tests.test_card_presentation_rules
 python manage.py test dealer_ai.tests.test_lever_accept
 python manage.py test dealer_ai.tests.test_lever_flex_presentation
 python manage.py test dealer_ai.tests.test_stretch_options
 python manage.py test dealer_ai.tests.test_conversation_flow
 
-# Post-scrub stabilization suites (new this pass — must stay green)
+# Post-LLM enforcement layer (full stabilization arc)
 python manage.py test dealer_ai.tests.test_payment_consistency
 python manage.py test dealer_ai.tests.test_list_shape_scrub
 python manage.py test dealer_ai.tests.test_followup_question_scrub
 python manage.py test dealer_ai.tests.test_meta_narration_scrub
+python manage.py test dealer_ai.tests.test_drivetrain_claim_scrub
+python manage.py test dealer_ai.tests.test_generic_use_case_scrub
+python manage.py test dealer_ai.tests.test_model_followup_length_cap
+python manage.py test dealer_ai.tests.test_intent_shift_reset
+python manage.py test dealer_ai.tests.test_inferred_budget
+python manage.py test dealer_ai.tests.test_cash_mode_financing_scrub
+python manage.py test dealer_ai.tests.test_fallback_stall_scrub
+python manage.py test dealer_ai.tests.test_both_wording_scrub
+python manage.py test dealer_ai.tests.test_ui_leak_fixes
 python manage.py test dealer_ai.tests.test_post_llm_safety
 python manage.py test dealer_ai.tests.test_wac_compliance
 ```
 
-Test count baseline: **880 pass, 1 skipped, 0 failed.**
+Test count baseline: **1088 pass, 1 skipped, 0 failed.**
+
+Run the live smoke (`python -c "from dealer_ai.services.chat_engine
+import ChatEngine; ..."` — the four scenarios in SESSION_003 §6)
+before claiming the voice pass is done.
+
+## The four canonical smoke scenarios
+
+These shapes have been the validation set across the stabilization
+arc and remain the smoke for any voice changes:
+
+a. *"I want a 4WD truck for $500/mo with $3k down"* — finance
+   flow, $X/mo legit.
+b. *"I am looking for a cheap car I can pay cash for that gets
+   good gas mileage"* — cash mode, comparison block fires.
+c. *"tell me about the Honda"* — make-fallback model_followup.
+d. *"what about the Fusion"* — substring model_followup.
+
+If the voice change makes any of these worse, the change is
+wrong.
 
 Run the full suite (`python manage.py test dealer_ai`) and the live
 smoke (`python smoke_drift_audit.py` — requires Ollama running)
