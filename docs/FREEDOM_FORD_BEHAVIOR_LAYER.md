@@ -361,18 +361,21 @@ per scenario. All card-bearing branches prepend `_CARD_PRESENTATION_PREAMBLE`
 
 ## Post-LLM Enforcement Layer
 
-> Added during the post-`SESSION_002` stabilization pass. The behavior
-> contract above describes *how the assistant should sound*; the
-> enforcement layer described here is *what makes the contract hold
-> on a small model*. See `docs/handoffs/SESSION_002_sales_behavior_snapshot.md`
-> §9 for the full implementation log.
+> Added during the post-`SESSION_002` stabilization pass and
+> extended in `SESSION_003`. The behavior contract above describes
+> *how the assistant should sound*; the enforcement layer
+> described here is *what makes the contract hold on a small
+> model*. See `docs/handoffs/SESSION_003_demo_polish_snapshot.md`
+> §1 for the full pipeline order with code anchors.
 
-The behavior contract is now enforced at two layers — prompt-time
-(the reply rules and `_CARD_PRESENTATION_PREAMBLE`) and post-generation
-(the scrub stack below). Every load-bearing rule has a code-level
-enforcer; the prompt is no longer the sole guarantor. This is what
-makes Ollama llama3.2:latest viable for the customer-facing chat:
-the scrubs catch what the prompt cannot.
+The behavior contract is enforced at two layers — prompt-time
+(the reply rules, `_CARD_PRESENTATION_PREAMBLE`,
+`_format_cash_mode_block`, the model-followup branch GOOD/BAD
+examples) and post-generation (the scrub stack below). Every
+load-bearing rule has a code-level enforcer; the prompt is no
+longer the sole guarantor. This is what makes Ollama
+llama3.2:latest viable for the customer-facing chat — the scrubs
+catch what the prompt cannot.
 
 ### Scrub stack (in pipeline order)
 
@@ -382,42 +385,77 @@ After the wholesale-replacement guards (`post_safety_rewritten`,
 
 | # | Scrub | Enforces |
 |---|---|---|
-| 1 | `scrub_meta_narration` | "Strip 'Here's a revised response:', '(Note: I've removed…)', 'Let's try again', 'As requested:', 'Based on your request:', 'This response…'" |
-| 2 | `scrub_rate_language` | (existing) Strip APR / `\d+%` / "interest rate" leakage |
-| 3 | `scrub_internal_directives` | (existing) Strip `BUDGET ANALYSIS` / `DO NOT recompute` leakage |
-| 4 | `scrub_default_assumption_language` | (existing) Strip "with no money down" / "default 72-month term" |
-| 5 | `scrub_budget_category_labels` | (existing) Strip invented category labels |
-| 6 | `scrub_payment_drift` | "No fabricated payments" — replace `$X/mo` numbers not in `allowed_payments` |
-| 7 | `scrub_extra_payment_quotes` | "One payment quote per turn" — keep first card payment, strip rest |
-| 8 | `scrub_list_shape` | "ABSOLUTELY NO bulleted lists, NO numbered steps, NO pipe-delimited spec dumps" |
-| 9 | `scrub_followup_question` | "One natural close question" — strip duplicate `?`, replace forbidden openers |
+| 1 | `scrub_meta_narration` | Strip *"Here's a revised response:"*, *"(Note: I've removed…)"*, *"Let's try again"*, *"As requested:"*, *"Based on your request:"*, *"This response…"* |
+| 2 | `scrub_rate_language` | Strip APR / `\d+%` / "interest rate" leakage |
+| 3 | `scrub_internal_directives` | Strip `BUDGET ANALYSIS` / `DO NOT recompute` leakage |
+| 4 | `scrub_default_assumption_language` | Strip "with no money down" / "default 72-month term" |
+| 5 | `scrub_budget_category_labels` | Strip invented category labels |
+| 6 | `scrub_payment_drift` | No fabricated payments — replace `$X/mo` numbers not in `allowed_payments` with `"the payment shown on the card"` |
+| 7 | `scrub_extra_payment_quotes` | One payment quote per turn — keep first card payment, strip rest |
+| 8 | `scrub_list_shape` | NO bulleted lists, numbered steps, pipe-delimited spec dumps, `**Heading**` standalone lines |
+| 9 | `scrub_followup_question` | One natural close question — strip duplicate `?`, replace forbidden openers (`"Would you like..."`, `"narrowing question"`, `"specific aspect"`) |
+| 10 | `scrub_generic_use_cases` | (model_followup only) Strip `"perfect for hunting"`, `"ideal for off-road"`, `"great option for those"` brochure phrasings |
+| 11 | `scrub_followup_anchors` | (model_followup only) Drop sentences without constraint-fit / comparison / card-data anchor; `_DEFINITELY_BROCHURE_RE` overrides anchors for `"feature-packed"`, `"standout features"`, `"top-of-the-line"`, etc. |
+| 12 | `scrub_drivetrain_claims` | Strip false drivetrain claims about a card (e.g., *"the Colorado is 4WD"* when card is RWD) |
+| 13 | `scrub_financing_language` | (cash_mode only) Strip `$X/mo`, *"monthly payment"*, *"financing"*, *"loan"*, *"W.A.C."*, *"approved credit"*, X-month term phrasings |
+| 14 | `scrub_fallback_stall` | Block clarifier-only replies + *"let me pull our inventory"* / *"I'll come back with options"* stalling prose when cards are present |
+| 15 | `scrub_both_wording` | Replace *"both"* with *"these options"* / *"all of them"* when card count ≠ 2 |
+| — | `cap_model_followup_length` | (model_followup only) Hard cap 3 sentences + one trailing question |
 
-Scrubs 6–9 are gated on `bool(matched_vehicles)` (cards present);
-scrubs 1–5 fire whenever the wholesale guards haven't already
-replaced the body. Any combination of ≥ 2 scrubs promotes the
-metadata flag to `multiple_scrubs_fired`.
+Scrubs 6–15 are gated on `bool(matched_vehicles)` (cards
+present); scrubs 1–5 fire whenever the wholesale guards haven't
+already replaced the body. Mode-gated scrubs (`generic_use_case`,
+`followup_anchors`, `cap_model_followup_length`) require
+`metadata.mode == "model_followup"`. The `financing_language`
+scrub requires `metadata.cash_mode = True` (sticky in profile
+once a cash signal is detected).
+
+Any combination of ≥ 2 scrubs promotes the metadata flag to
+`multiple_scrubs_fired`.
+
+### Adjacent state-layer enforcement
+
+These aren't in the post-LLM scrub chain but they shape what the
+chain sees. All implemented in `chat_engine.py`:
+
+| Helper | Role |
+|---|---|
+| `customer_visible_vehicles()` | Single-source queryset that excludes debug stocks (`-DBG`, `DEBUG-`, `TEST-`, `__`) at every customer-facing inventory query site. |
+| `customer_drivetrain_label()` | Internal `Vehicle.drivetrain` (4x4 / RWD / AWD / FWD) → customer-facing label (4WD / 2WD / AWD / FWD). Used by `VehicleSerializer` and `scrub_drivetrain_claims`. |
+| `detect_intent_shift` + `apply_intent_reset` | Truck → car pivot resets stale anchor + irrelevant constraint state so a new BudgetContext rebuilds clean. |
+| `infer_budget_from_intent` | Cash + commuter signals bootstrap `max_price=$15,000` so the discovery gate doesn't fire on bare *"cheap car cash"*. |
+| `cash_mode_active` (sticky) | Once a cash signal is detected, persists in `merged_profile["cash_mode"]` so subsequent turns keep the financing scrub on. |
+| `_format_cash_mode_block` | When `cash_mode_active and len(matched) >= 2`, injects an extra system message with the **decisive-voice** comparison rule (GOOD / BAD examples, lead with strongest fit, no neutral side-by-side, next-step close). |
+| `_resolve_model_followup_vehicle` | Three-step resolver: (1) regex model match, (2) substring match of any prior model name in user_text, (3) make-only fallback when exactly one prior card from that make exists. Catches *"tell me about the Honda"* / *"what about the Fusion"*. |
 
 ### Implication for prompt rule writing
 
-Prompt rules in `_CARD_PRESENTATION_PREAMBLE` and the per-branch
-reply rules describe *desired* behavior. Negative directives
-("DO NOT recite alternate prices") are now belt-and-suspenders —
+Prompt rules in `_CARD_PRESENTATION_PREAMBLE`, `_format_cash_mode_block`,
+and the model-followup branch of `_format_budget_block` describe
+*desired* behavior. Negative directives are belt-and-suspenders —
 the scrubs are the actual contract. This means:
 
 - **Prompt rule changes don't risk customer regressions** as long
-  as the corresponding scrub still pins the contract. If you tweak
-  the GOOD example phrasing, the scrub still strips bullet shapes.
+  as the corresponding scrub still pins the contract. If you
+  tweak the GOOD example phrasing, the scrub still strips the
+  bullet shape, the drift number, the brochure cliché.
 - **Adding a new behavior contract requires both** a prompt-time
   rule (so the model produces the right output most of the time)
   and a post-generation enforcer (so the customer never sees a
   failure on the small model).
 - **BAD examples must not contain concrete imitation targets.**
   The original `_CARD_PRESENTATION_PREAMBLE` bug was the BAD
-  example shipping `$26,995, est $517/mo (W.A.C.); … $25,495, est
-  $486/mo` — small models imitated those numbers verbatim. The
-  current preamble uses `$XX,XXX` / `$XXX/mo` placeholders. A
-  regression test (`test_card_presentation_rules.BadExampleNoConcreteDollarsTests`)
+  example shipping `$26,995, est $517/mo (W.A.C.); … $25,495,
+  est $486/mo` — small models imitated those numbers verbatim.
+  The current preamble uses `$XX,XXX` / `$XXX/mo` placeholders.
+  A regression test
+  (`test_card_presentation_rules.BadExampleNoConcreteDollarsTests`)
   pins this contract.
+- **GOOD examples shape voice more than rule lists.** The
+  cash-mode block and model-followup branch each carry one or
+  two worked GOOD examples in the target voice. The small model
+  imitates them more reliably than it follows the forbidden
+  list. If voice drifts, refresh the GOOD examples first.
 
 ---
 

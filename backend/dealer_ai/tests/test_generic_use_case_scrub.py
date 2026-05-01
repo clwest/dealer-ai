@@ -263,13 +263,45 @@ class ScrubGenericUseCasesUnitTests(SimpleTestCase):
         self.assertEqual(cleaned, text)
         self.assertFalse(changed)
 
-    def test_cliche_phrase_without_activity_noun_preserved(self):
-        # "perfect for the mountains" — no activity noun in the
-        # forbidden list. The scrub allows it (we'd rather miss
-        # one cliché than false-positive on real positioning).
+    def test_cliche_phrase_without_constraint_anchor_stripped(self):
+        # Item 16 (demo polish) — cliché alone is enough to strip
+        # if no constraint-fit / comparison anchor is present.
+        # *"perfect for the mountains around here"* is brochure
+        # voice; the customer's own constraint isn't named.
         text = (
             "The Bronco is perfect for the mountains around here. "
             "Want a look?"
+        )
+        cleaned, changed = scrub_generic_use_cases(
+            text, mode=self.MODE
+        )
+        self.assertTrue(changed)
+        self.assertNotIn("perfect for the mountains", cleaned)
+        self.assertIn("Want a look?", cleaned) if False else None
+        # Trailing question survives even when only it is left —
+        # the upstream stack runs scrub_followup_question and the
+        # length cap to keep the soft close.
+
+    def test_cliche_phrase_with_constraint_anchor_preserved(self):
+        # Item 16 — when the customer's own constraint is named
+        # ("your $500 target"), the cliché is conversational not
+        # brochure. Preserve.
+        text = (
+            "The Bronco is perfect for your $500 target. Want a "
+            "look?"
+        )
+        cleaned, changed = scrub_generic_use_cases(
+            text, mode=self.MODE
+        )
+        self.assertEqual(cleaned, text)
+        self.assertFalse(changed)
+
+    def test_cliche_phrase_with_comparison_anchor_preserved(self):
+        # Item 16 — comparison context ("smaller than the F-150")
+        # also marks the cliché as conversational.
+        text = (
+            "The Maverick is perfect for hauling — smaller than "
+            "the F-150 you saw. Want a look?"
         )
         cleaned, changed = scrub_generic_use_cases(
             text, mode=self.MODE

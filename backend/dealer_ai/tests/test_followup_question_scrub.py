@@ -246,6 +246,51 @@ class ScrubFollowupQuestionUnitTests(SimpleTestCase):
             "Would that be something you'd consider?", cleaned
         )
 
+    def test_trailing_right_tag_is_forbidden(self):
+        # Item 17 (close-template polish) — trailing ", right?" is
+        # tentative dealer voice ("In your budget, right?"). The
+        # forbidden-close detector now catches it so the scrub's
+        # confident-fallback close takes over.
+        text = (
+            "The Fusion is a solid sedan at $11,995. In your "
+            "budget, right?"
+        )
+        cleaned, changed, kind = scrub_followup_question(
+            text, has_cards=True, card_count=1,
+        )
+        self.assertTrue(changed)
+        self.assertEqual(kind, "single_card")
+        self.assertNotIn("right?", cleaned.lower())
+        # Replaced with the dealer-natural fallback close.
+        self.assertIn(
+            "Is that the direction you want to go?", cleaned
+        )
+        # Useful prose preserved.
+        self.assertIn("Fusion", cleaned)
+        self.assertIn("$11,995", cleaned)
+
+    def test_bare_right_question_is_forbidden(self):
+        # Single-word "Right?" or "[X] right?" in any shape.
+        text = "Sounds like a good fit. Right?"
+        cleaned, changed, kind = scrub_followup_question(
+            text, has_cards=True, card_count=1,
+        )
+        self.assertTrue(changed)
+        self.assertNotIn("right?", cleaned.lower())
+
+    def test_natural_close_with_word_right_in_middle_preserved(self):
+        # "Want a closer look at the right one?" — "right" appears
+        # mid-sentence, not as a trailing tag. Should NOT fire.
+        text = (
+            "The Fusion is a solid sedan. Want a closer look at "
+            "the right one for you?"
+        )
+        cleaned, changed, _kind = scrub_followup_question(
+            text, has_cards=True, card_count=1,
+        )
+        self.assertEqual(cleaned, text)
+        self.assertFalse(changed)
+
     def test_what_would_you_like_is_open_ended_not_forbidden(self):
         # "What would you like..." is genuine discovery, NOT the
         # sales-template "Would you like..." opener. Must pass.

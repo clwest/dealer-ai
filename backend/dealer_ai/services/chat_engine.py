@@ -2074,6 +2074,11 @@ def _is_forbidden_followup_question(question: str) -> bool:
     # Compound "would you like X, or would you like Y?".
     if lower.count("would you like") >= 2:
         return True
+    # Item 17 (close-template polish) — trailing ", right?" or
+    # "right?" tag is tentative dealer voice ("In your budget,
+    # right?"). Replace with a confident close.
+    if re.search(r"\bright\s*\?\s*$", lower):
+        return True
     return False
 
 
@@ -2966,8 +2971,13 @@ _GENERIC_USE_CASE_PHRASES = (
     "great for",
     "great option for those",
     "perfect option for those",
+    "great option for someone",
     "great choice for",
     "perfect choice for",
+    "excellent choice for",
+    "good choice for",
+    "great fit for",
+    "perfect fit for",
 )
 # Activity / generic-noun tokens that downstream of the cliché
 # phrase mark this as brochure copy.
@@ -3016,32 +3026,32 @@ _COMPARISON_SIGNALS = (
 def _is_generic_use_case_sentence(sentence: str) -> bool:
     """True if the sentence is brochure-mode use-case fluff and
     carries no constraint-fit / comparison anchor.
+
+    Item 16 (demo polish) — the cliché phrases (``"perfect for"``,
+    ``"ideal for"``, ``"great option for those"``, etc.) are
+    themselves the brochure tell on this dealership's small
+    model. The earlier "must also contain a noun" check let
+    sentences like *"a great option for those looking for a
+    reliable and affordable vehicle"* slip through because no
+    activity noun appears nearby. We now strip on cliché alone
+    UNLESS the sentence carries a constraint-fit or comparison
+    anchor (which would make the cliché conversational rather
+    than brochure-y).
     """
     lower = sentence.lower()
 
-    # Step 1: must contain at least one cliché phrase.
-    has_cliche = any(p in lower for p in _GENERIC_USE_CASE_PHRASES)
-    if not has_cliche:
+    # Must contain at least one cliché phrase.
+    if not any(p in lower for p in _GENERIC_USE_CASE_PHRASES):
         return False
 
-    # Step 2: must contain at least one generic-noun token after
-    # (or near) the cliché phrase. Without an activity noun the
-    # cliché is bound to a real comparison ("perfect for hauling
-    # the trailer your wife mentioned" is fine — "hauling trailers"
-    # isn't in the noun list, "your wife" is conversational).
-    has_noun = any(n in lower for n in _GENERIC_USE_CASE_NOUNS)
-    if not has_noun:
-        return False
-
-    # Step 3: bail if the sentence contains a constraint-fit signal
-    # — the cliché is being used in service of fit-to-customer
-    # prose ("perfect for your $500 target with the 4WD you
-    # wanted").
+    # Bail if the sentence carries a constraint-fit signal — the
+    # cliché is being used in service of fit-to-customer prose
+    # ("perfect for your $500 target with the 4WD you wanted").
     if any(sig in lower for sig in _CONSTRAINT_FIT_SIGNALS):
         return False
 
-    # Step 4: bail if the sentence is positioning vs another
-    # vehicle the customer already saw.
+    # Bail if the sentence is positioning vs another vehicle the
+    # customer already saw.
     if any(sig in lower for sig in _COMPARISON_SIGNALS):
         return False
 
@@ -4636,6 +4646,12 @@ def _format_cash_mode_block(matched: List[Vehicle]) -> str:
     a cash buyer cares about: outright price, mileage,
     reliability, fuel economy. Returns an empty string when
     fewer than 2 cards are present (no comparison to make).
+
+    Item 16 (demo polish) — sharpened for a decisive, sales-
+    oriented voice. Leads with the strongest fit instead of
+    neutral side-by-side; explicitly forbids the "Option A has X,
+    Option B has Y" research-brief shape; close-questions are
+    next-step rather than tradeoff-restating.
     """
     if not matched or len(matched) < 2:
         return ""
@@ -4644,29 +4660,79 @@ def _format_cash_mode_block(matched: List[Vehicle]) -> str:
         "the words 'CASH-MODE PRESENTATION', or any directive "
         "phrasing into the customer reply):",
         "The customer is paying CASH. Compare the top 2-3 vehicles "
-        "below conversationally on dimensions that matter for a "
-        "cash buyer: outright price, mileage, long-term "
-        "reliability, fuel economy. ABSOLUTELY DO NOT mention "
-        "monthly payments, financing, loan terms, W.A.C., "
-        "'approved credit', or any $X/mo figure — those are "
-        "irrelevant to a cash sale and the customer will see them "
-        "as off-topic.",
+        "below on dimensions that matter for a cash buyer: outright "
+        "price, mileage, long-term reliability, fuel economy. "
+        "ABSOLUTELY DO NOT mention monthly payments, financing, "
+        "loan terms, W.A.C., 'approved credit', or any $X/mo "
+        "figure — those are irrelevant to a cash sale and the "
+        "customer will read them as off-topic.",
         "",
-        "Frame tradeoffs naturally — e.g. \"the Honda Accord is "
-        "the cheapest at $X, the Toyota Camry has lower miles and "
-        "stronger long-term reliability, the Hyundai Sonata sits "
-        "in the middle\". Reference real card data (price, "
-        "mileage, make/model) — never invent. Keep the whole "
-        "reply to 3-5 sentences.",
+        # Decisive-voice directive — what the user spec calls out.
+        "VOICE — sound like a confident dealership salesperson, "
+        "not a research brief:",
+        "  · LEAD with the strongest fit (the vehicle you'd steer "
+        "this customer toward first), then frame the others as "
+        "the value backup, the comfort step-up, or the smaller-"
+        "footprint alternative.",
+        "  · Make a recommendation. Pick a side. Avoid neutral "
+        "side-by-side phrasing.",
+        "  · Reference real card data (price, mileage, make/model) "
+        "— never invent. Keep the whole reply to 3-5 sentences.",
         "",
-        "Close with ONE soft question that surfaces the tradeoff "
-        "for the customer, e.g.:",
-        "  - \"Are you leaning lowest price, or long-term "
-        "reliability?\"",
-        "  - \"Want to prioritize lowest miles, or best gas "
-        "mileage?\"",
-        "  - \"Sound like a fit, or want to see something a bit "
-        "different?\"",
+        "GOOD examples (mirror the SHAPE — these use generic "
+        "references like \"the cheaper one\" / \"the newer one\" / "
+        "\"the lower-mile one\" so they read naturally even if "
+        "you echo them. In your reply, USE THE ACTUAL MAKE + "
+        "MODEL from the Top picks list below):",
+        "",
+        "  Example 1 — leads with a pick, explains the alternative "
+        "as a value play, sales-tone next-step close:",
+        "  \"The newer one is the strongest fit here if they want "
+        "the more current package and feel-better-owning angle. "
+        "The cheaper one is the better budget play, but it gives "
+        "up some of that newer-feeling polish. If they're buying "
+        "cash, I'd steer them toward the newer one first and use "
+        "the cheaper one as the value backup. Want me to narrow "
+        "this to the best cash buy under your target?\"",
+        "",
+        "  Example 2 — explicit either/or pivot, lowest cash "
+        "outlay vs feel-better-owning:",
+        "  \"If the goal is lowest cash outlay, the cheapest one "
+        "wins. If the goal is the one they'll probably feel "
+        "better owning longer, the lower-mile one is the stronger "
+        "pick. I'd show both, but lead with the lower-mile one "
+        "and frame the cheapest as the value alternative. Want "
+        "to compare those two side by side?\"",
+        "",
+        "When you write your reply, FILL IN actual make + model "
+        "names from the Top picks list below ONCE the framing is "
+        "set — e.g., \"The Honda Accord is the lower-mile pick…\". "
+        "DO NOT name vehicles that aren't in the Top picks "
+        "(\"Ranger\", \"Colorado\", \"Tundra\", \"F-150\" don't "
+        "belong in a CAR comparison — those are illustrative only).",
+        "",
+        "BAD example (NEVER write replies in this shape — research-"
+        "brief, no recommendation, neutral side-by-side):",
+        "  Wrong: \"For a cash purchase, let's compare the top "
+        "three options: The Honda Accord LX has a great balance "
+        "of price and fuel efficiency, with an estimated 28 MPG "
+        "in the city. The Ford Fusion SE also offers decent fuel "
+        "economy, with 23 MPG…\" (no pick, no recommendation, "
+        "reads like a spec sheet).",
+        "",
+        "Close with ONE next-step question — the customer should "
+        "be able to answer it with a yes / no / 'go with the X'. "
+        "Templates:",
+        "  - \"Want me to narrow this to the best cash buy under "
+        "your target?\"",
+        "  - \"Want to compare those two side by side?\"",
+        "  - \"Sound like the right call, or should I show "
+        "something a bit different?\"",
+        "  - \"Want me to set up a closer look at the [lead]?\"",
+        "Avoid restating the tradeoff in the question (e.g. NOT "
+        "\"are you leaning lowest price, or long-term reliability?\" "
+        "— the prose already framed that, the question should "
+        "move them forward).",
         "",
         "Top picks (cash-comparison context):",
     ]
@@ -4849,34 +4915,90 @@ def _format_budget_block(
             _CARD_PRESENTATION_PREAMBLE
             + "Branch-specific (MODEL FOLLOW-UP — single vehicle "
             "deep-dive): the customer is asking about THIS specific "
-            "vehicle. Speak like a salesperson positioning this unit, "
-            "not a brochure. 3-5 sentences. Allowed angles, in order "
-            "of preference:\n"
-            "  1. Real-world POSITIONING — size class, feel, fit ("
-            "\"a mid-size that handles like a smaller truck\", "
-            "\"two-row crossover, easy to park\"). NO generic "
-            "use-case clichés.\n"
-            "  2. FIT-TO-CONSTRAINTS — where the payment lands vs "
-            "their stated target / down / term. Quote the lead "
-            "payment ONCE (W.A.C.).\n"
+            "vehicle. Speak like a SALESPERSON explaining ownership "
+            "fit — not a spec parser, not a brochure. 3-5 sentences. "
+            "Allowed angles, in order of preference:\n"
+            "  1. OWNERSHIP-FIT framing — explain WHY this vehicle "
+            "fits a real buyer in real-world terms. Use buying-"
+            "logic vocabulary the customer can act on:\n"
+            "       · \"best value\" — lowest price for the spec\n"
+            "       · \"comfort upgrade\" — more interior / tech\n"
+            "       · \"work-truck practical\" — for jobs / hauling\n"
+            "       · \"family-friendly\" — space / safety / kids\n"
+            "       · \"worth stretching for\" — better long-term\n"
+            "       · \"everyday driver\" / \"daily driver\"\n"
+            "       · \"sweet spot\" trim — balance of price + nice\n"
+            "  2. TRADEOFF in buyer terms — name the tension "
+            "naturally: keeping cash down vs. nicer trim, lower "
+            "miles vs. lower price, capability vs. fuel cost. NOT "
+            "engineering tradeoffs (transmission types, drivetrain "
+            "physics).\n"
             "  3. COMPARISON to previously shown options when it "
             "sharpens the positioning. " + peers_clause + "\n"
+            "\n"
+            "GOOD example (mirror this shape — ownership-fit voice, "
+            "tradeoff in buyer terms, sales-tone close):\n"
+            "  \"The XLT is usually the sweet spot: enough comfort "
+            "and tech to feel modern without jumping into top-trim "
+            "money. If they care more about price than extra "
+            "features, the XL-style truck is the practical play. "
+            "If they want the nicer daily-driver feel, I'd keep "
+            "them on the XLT. Want me to compare the cheaper one "
+            "versus the nicer one?\"\n"
+            "\n"
+            "GOOD example (alt — single-vehicle positioning, "
+            "ownership-fit close):\n"
+            "  \"On this one, I'd sell it as the everyday truck "
+            "choice. It gives them the capability they asked for "
+            "without feeling like they're buying more truck than "
+            "they need. The main question is whether they care "
+            "more about keeping payment / cash down or getting "
+            "the nicer trim. Which way should I steer them?\"\n"
+            "\n"
             "FORBIDDEN:\n"
+            "  - Engineering-spec leads — \"the CVT transmission "
+            "makes it easy to cruise…\", \"the FWD drivetrain "
+            "ensures…\", \"the 2.3L EcoBoost engine produces…\". "
+            "Customers don't think in those terms. Translate: "
+            "\"smooth around town\" instead of \"CVT\", \"keeps "
+            "gas costs low\" instead of \"FWD ensures fuel "
+            "economy\".\n"
             "  - \"perfect for hunting / camping / off-road / "
             "adventures / commuting / family / weekend / outdoor "
             "enthusiasts / first-time buyers\" or any other generic "
             "use-case cliché.\n"
             "  - \"ideal for [activity]\" / \"great for [generic "
-            "activity]\".\n"
+            "activity]\" / \"feature-packed\" / \"standout features\" / "
+            "\"top-of-the-line\".\n"
             "  - Standalone feature lists (Engine: ... / "
             "Drivetrain: ... / Transmission: ...). Mention ONE "
             "feature only if it directly answers the customer's "
-            "question or differentiates this vehicle from the "
-            "previously shown peers.\n"
+            "question or differentiates this vehicle.\n"
+            "  - Restating Stock #, full price, full mileage, or "
+            "long feature lists — the cards already render those.\n"
             "  - Brochure copy / marketing voice.\n"
-            "Close with ONE soft, specific question (\"Is that the "
-            "direction you want to go?\", \"Want to set up a closer "
-            "look?\", \"Should I run the numbers at a longer term?\")."
+            "\n"
+            "Close with ONE next-step question that sounds natural "
+            "in dealer chat — first-person salesperson voice, not "
+            "internal-monologue. Templates (pick one and adapt to "
+            "the actual vehicle / context):\n"
+            "  - \"Is that the kind of fit you had in mind?\"\n"
+            "  - \"Does that sound like the direction you want to go?\"\n"
+            "  - \"Want me to compare it against the [other model "
+            "the customer saw]?\"\n"
+            "  - \"Should I keep you on this one or look for "
+            "something cheaper?\"\n"
+            "  - \"Want to set up a closer look at this one?\"\n"
+            "  - \"Sound like the right call, or want me to show "
+            "something a bit different?\"\n"
+            "AVOID:\n"
+            "  - 3rd-person internal phrasing (\"Which way should I "
+            "steer them?\" / \"Sound like what they want?\") — speak "
+            "TO the customer, not ABOUT them.\n"
+            "  - Trailing \"right?\" tags (\"In your budget, right?\") "
+            "— sounds tentative.\n"
+            "  - \"Would you like…\" openers (already forbidden by "
+            "the followup-question scrub)."
         )
     elif has_lever_flex:
         flex_kinds = []
