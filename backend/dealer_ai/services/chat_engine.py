@@ -2477,9 +2477,11 @@ _FINANCING_TOKEN_RE = re.compile(
     r"(?:/\s*mo(?:nth)?|\s+(?:per|a)\s+month|\s+monthly)"
     r"|"
     # Phrase-level financing tokens.
-    r"\bmonthly\s+payment"
+    r"\b(?:low\s+|estimated\s+|projected\s+)?monthly\s+payment"
     r"|"
     r"\bestimated\s+(?:monthly\s+)?payment"
+    r"|"
+    r"\bpayment\s+commuter"
     r"|"
     r"\bper\s+month\b"
     r"|"
@@ -2487,8 +2489,15 @@ _FINANCING_TOKEN_RE = re.compile(
     r"|"
     r"\bloan(?:s)?\b"
     r"|"
-    # W.A.C. — bare token or full parenthetical disclaimer.
-    r"\bW\.?A\.?C\.?\b"
+    # "approved credit" / "with approved credit" — the W.A.C.
+    # phrase spelled out.
+    r"\bapproved\s+credit\b"
+    r"|"
+    r"\bwith\s+approved\s+credit\b"
+    r"|"
+    # W.A.C. — bare token or full parenthetical disclaimer. Match
+    # the dotted form and the spaced variants ("W A C", "W. A. C.").
+    r"\bW\s*\.?\s*A\s*\.?\s*C\s*\.?"
     r"|"
     # Loan-term phrasings: "60-month term", "72 month term",
     # "84-month financing", "60-mo term".
@@ -2811,6 +2820,131 @@ def scrub_fallback_stall(
     return cleaned, True
 
 
+# Item 13 — debug-stock exclusion. Vehicles created during smoke
+# tests / dev probes (stock numbers ending in `-DBG`, `-DEBUG`,
+# starting with `DEBUG-` / `TEST-` / `__`) should never appear in
+# customer-facing chat results. The dev DB regularly accumulates
+# these from manual UI testing; without an explicit filter they
+# leak into matched_vehicles alongside real inventory.
+_CUSTOMER_VISIBLE_DEBUG_PATTERN = (
+    r"(?:^|[-_])(?:DBG|DEBUG)\b"  # ends in -DBG or -DEBUG
+    r"|^DEBUG[-_]"                # starts with DEBUG-
+    r"|^TEST[-_]"                 # starts with TEST-
+    r"|^__"                       # starts with __
+)
+
+
+def customer_visible_vehicles():
+    """Return the base ``Vehicle.objects`` queryset with
+    ``is_available=True`` AND debug stock numbers excluded.
+
+    All customer-facing inventory queries (chat, search, lever-
+    flex pool, etc.) should funnel through here so dev/test
+    vehicles can't leak into the matched_vehicles surface a
+    customer reads.
+    """
+    return Vehicle.objects.filter(is_available=True).exclude(
+        stock_number__iregex=_CUSTOMER_VISIBLE_DEBUG_PATTERN
+    )
+
+
+# Item 12 — "both" wording drift.
+#
+# When the LLM is presented with 3+ matched_vehicles it sometimes
+# still says "both" (referring to two of them, ignoring the third)
+# or "you'd love both" (when there are 3 / 4 / 5 cards). The word
+# is only correct when there are exactly 2 cards.
+_BOTH_VEHICLE_NOUNS = (
+    "vehicles", "options", "cars", "trucks", "suvs",
+    "picks", "models", "choices",
+)
+
+
+def scrub_both_wording(
+    reply_text: str,
+    *,
+    vehicle_count: int,
+) -> Tuple[str, bool]:
+    """Replace ``"both"`` with count-appropriate phrasing when the
+    number of cards is not exactly 2.
+
+    No-op when:
+      - ``vehicle_count == 2`` (the word is correct)
+      - reply has no ``\\bboth\\b`` token
+
+    Replacements (case preserved):
+      - ``"both <vehicle-noun>"`` → ``"these <vehicle-noun>"``
+        (vehicles / options / cars / trucks / SUVs / picks / models /
+        choices)
+      - ``"both of (them|these|those)"`` →
+        ``"all of (them|these|those)"``
+      - any other standalone ``"both"`` → ``"these options"``
+
+    Conjunction shape ``"both X and Y"`` (e.g., *"both available
+    and affordable"*) is left alone — that's a legitimate
+    non-vehicle usage.
+
+    Returns ``(cleaned_text, changed_flag)``.
+    """
+    if vehicle_count == 2 or not reply_text:
+        return reply_text, False
+    if not re.search(r"\bboth\b", reply_text, re.IGNORECASE):
+        return reply_text, False
+
+    cleaned = reply_text
+
+    # Step 1: "both of them/these/those" → "all of them/these/those".
+    def _both_of(m: re.Match) -> str:
+        leading = m.group(1)
+        target = m.group(2)
+        repl_word = "All" if leading[0].isupper() else "all"
+        return f"{repl_word} of {target}"
+
+    cleaned = re.sub(
+        r"\b(both)\s+of\s+(them|these|those)\b",
+        _both_of,
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    # Step 2: "both <vehicle-noun>" → "these <vehicle-noun>".
+    nouns_alt = "|".join(_BOTH_VEHICLE_NOUNS)
+
+    def _both_noun(m: re.Match) -> str:
+        leading = m.group(1)
+        noun = m.group(2)
+        repl_word = "These" if leading[0].isupper() else "these"
+        return f"{repl_word} {noun}"
+
+    cleaned = re.sub(
+        rf"\b(both)\s+({nouns_alt})\b",
+        _both_noun,
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    # Step 3: any remaining standalone "both" → "these options".
+    # Skip "both X and Y" structures (legitimate non-vehicle uses
+    # like "both available and affordable") — leave those alone.
+    def _bare_both(m: re.Match) -> str:
+        leading = m.group(0)
+        return "These options" if leading[0].isupper() else "these options"
+
+    bare_both_re = re.compile(
+        r"\b(both)\b(?!\s+\w+\s+and\b)",
+        re.IGNORECASE,
+    )
+    new_cleaned, n = bare_both_re.subn(_bare_both, cleaned)
+    if n:
+        cleaned = new_cleaned
+
+    if cleaned == reply_text:
+        return reply_text, False
+
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    return cleaned, True
+
+
 # Item 6 — generic-use-case scrub.
 #
 # Narrowly scoped: only fires on `mode == "model_followup"` turns —
@@ -2945,6 +3079,146 @@ def scrub_generic_use_cases(
 
     cleaned = " ".join(keep).strip()
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned, True
+
+
+# Item 14 — model-followup sentence-quality / anchor filter.
+#
+# Stricter than `scrub_generic_use_cases` (item 6). On a deep-dive
+# turn the customer asked about ONE specific vehicle. Every
+# statement should add useful info anchored to either (a) a
+# constraint the customer stated (budget / payment / drivetrain /
+# commute / mileage / reliability), (b) a comparison ("smaller
+# than the F-150", "sits between"), or (c) actual card data (the
+# make / model / specific feature from `matched_vehicles`).
+# Sentences with none of these anchors are pure brochure text and
+# get dropped.
+_FOLLOWUP_ANCHOR_RE = re.compile(
+    r"\b(?:"
+    # Constraint-fit anchors.
+    r"budget|cash|price|priced|payment|targets?|"
+    r"drivetrain|4wd|2wd|awd|fwd|rwd|4x4|4x2|"
+    r"four-?wheel|two-?wheel|all-?wheel|front-?wheel|rear-?wheel|"
+    r"commute|commuting|commuter|"
+    r"gas\s+mileage|fuel\s+economy|fuel\s+efficient|mpg|"
+    r"reliability|reliable|"
+    # Comparison anchors.
+    r"compared\s+to|smaller\s+than|bigger\s+than|larger\s+than|"
+    r"cheaper\s+than|more\s+expensive\s+than|"
+    r"more\s+reliable\s+than|less\s+expensive\s+than|"
+    r"sits\s+between|middle\s+ground|"
+    r"step\s+up\s+from|step\s+down\s+from|"
+    r"better\s+(?:on|for)\s+gas|"
+    # Mileage figures count as concrete anchor.
+    r"\d{1,3}(?:,\d{3})*\s*(?:mi|miles)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+# "Definite brochure" tokens — sentences carrying any of these are
+# always brochure copy, even when they ALSO contain a constraint-
+# fit anchor word like "budget" or "reliable". Drop them regardless.
+_DEFINITELY_BROCHURE_RE = re.compile(
+    r"\b(?:"
+    r"feature[-\s]?packed|feature[-\s]?rich|"
+    r"standout\s+features?|"
+    r"top[-\s]?of[-\s]?the[-\s]?line|"
+    r"state[-\s]?of[-\s]?the[-\s]?art|"
+    r"world[-\s]?class|"
+    r"premium\s+feel|"
+    r"rich\s+heritage|"
+    r"true\s+adventure\s+companion|"
+    r"unparalleled|"
+    r"versatility|"
+    r"swear\s+by\s+(?:this|it|the)|"
+    r"no\s+wonder\s+(?:why|that)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _has_card_data_anchor(sentence: str, matched: list) -> bool:
+    """True when `sentence` mentions a card-specific fact: any
+    matched vehicle's make / model / explicit feature, or carries
+    a ``$<number>`` price / payment marker.
+    """
+    lower = sentence.lower()
+    if re.search(r"\$\s*\d", sentence):
+        return True
+    for v in matched:
+        make = (getattr(v, "make", "") or "").lower()
+        if make and len(make) >= 3 and make in lower:
+            return True
+        model = (getattr(v, "model", "") or "").lower()
+        if model and len(model) >= 3 and model in lower:
+            return True
+        for f in (getattr(v, "features", None) or [])[:6]:
+            f_low = (f or "").lower()
+            if f_low and len(f_low) >= 4 and f_low in lower:
+                return True
+    return False
+
+
+def scrub_followup_anchors(
+    reply_text: str,
+    *,
+    mode: Optional[str],
+    matched: list,
+) -> Tuple[str, bool]:
+    """Drop statement sentences in ``model_followup`` mode that
+    carry no constraint-fit / comparison / card-data anchor.
+    Trailing question is preserved as the soft close.
+
+    No-op when ``mode != "model_followup"`` or `matched` is empty.
+
+    Returns ``(cleaned_text, changed_flag)``. Falls back to
+    ``LIST_SHAPE_FALLBACK`` if every statement is anchorless.
+    """
+    if mode != "model_followup" or not reply_text or not matched:
+        return reply_text, False
+
+    sentences = [
+        s for s in re.split(r"(?<=[.!?])\s+", reply_text.strip())
+        if s.strip()
+    ]
+    if not sentences:
+        return reply_text, False
+
+    last_idx = len(sentences) - 1
+    keep: List[str] = []
+    dropped_any = False
+    for i, s in enumerate(sentences):
+        if i == last_idx and s.rstrip().endswith("?"):
+            keep.append(s)
+            continue
+        # Drop sentences carrying brochure markers FIRST — even if
+        # they ALSO mention a constraint anchor word ("reliable
+        # and feature-packed on a budget"), the brochure phrasing
+        # makes the whole sentence sound like marketing copy.
+        if _DEFINITELY_BROCHURE_RE.search(s):
+            dropped_any = True
+            continue
+        has_anchor = (
+            bool(_FOLLOWUP_ANCHOR_RE.search(s))
+            or _has_card_data_anchor(s, matched)
+        )
+        if has_anchor:
+            keep.append(s)
+        else:
+            dropped_any = True
+
+    if not dropped_any:
+        return reply_text, False
+
+    cleaned = " ".join(keep).strip()
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+
+    word_count = len(cleaned.split())
+    has_sentence = bool(re.search(r"[.!?]", cleaned))
+    if not cleaned or word_count < 5 or not has_sentence:
+        return LIST_SHAPE_FALLBACK, True
+
     return cleaned, True
 
 
@@ -3647,7 +3921,8 @@ def build_budget_context(
     # Build the candidate set. Honour any structural preferences the customer
     # has expressed in the profile (vehicle_type, model, condition), but do
     # NOT pre-filter by price — payment-based classification handles that.
-    qs = Vehicle.objects.filter(is_available=True)
+    # Item 13 — debug stocks excluded via customer_visible_vehicles().
+    qs = customer_visible_vehicles()
     body_pref = profile.get("vehicle_type")
     if body_pref in ("truck", "suv", "car", "ev", "van"):
         qs = qs.filter(body_style=body_pref)
@@ -3816,7 +4091,8 @@ def _candidates_for_flex(
     model, condition, make_lock) ALWAYS stay applied — those are
     independent of the lever-flex feature.
     """
-    qs = Vehicle.objects.filter(is_available=True)
+    # Item 13 — debug stocks excluded via customer_visible_vehicles().
+    qs = customer_visible_vehicles()
     body_pref = profile.get("vehicle_type")
     if body_pref in ("truck", "suv", "car", "ev", "van"):
         qs = qs.filter(body_style=body_pref)
@@ -4351,6 +4627,66 @@ def _term_narrowing_line(term_months: int) -> str:
     )
 
 
+def _format_cash_mode_block(matched: List[Vehicle]) -> str:
+    """Item 15 — reply rule for cash-mode multi-card turns.
+
+    The customer is paying cash, so financing math (monthly
+    payments, term lengths, W.A.C.) is irrelevant. The
+    salesperson should compare the top 2-3 vehicles on dimensions
+    a cash buyer cares about: outright price, mileage,
+    reliability, fuel economy. Returns an empty string when
+    fewer than 2 cards are present (no comparison to make).
+    """
+    if not matched or len(matched) < 2:
+        return ""
+    lines = [
+        "CASH-MODE PRESENTATION (INTERNAL — do NOT echo this label, "
+        "the words 'CASH-MODE PRESENTATION', or any directive "
+        "phrasing into the customer reply):",
+        "The customer is paying CASH. Compare the top 2-3 vehicles "
+        "below conversationally on dimensions that matter for a "
+        "cash buyer: outright price, mileage, long-term "
+        "reliability, fuel economy. ABSOLUTELY DO NOT mention "
+        "monthly payments, financing, loan terms, W.A.C., "
+        "'approved credit', or any $X/mo figure — those are "
+        "irrelevant to a cash sale and the customer will see them "
+        "as off-topic.",
+        "",
+        "Frame tradeoffs naturally — e.g. \"the Honda Accord is "
+        "the cheapest at $X, the Toyota Camry has lower miles and "
+        "stronger long-term reliability, the Hyundai Sonata sits "
+        "in the middle\". Reference real card data (price, "
+        "mileage, make/model) — never invent. Keep the whole "
+        "reply to 3-5 sentences.",
+        "",
+        "Close with ONE soft question that surfaces the tradeoff "
+        "for the customer, e.g.:",
+        "  - \"Are you leaning lowest price, or long-term "
+        "reliability?\"",
+        "  - \"Want to prioritize lowest miles, or best gas "
+        "mileage?\"",
+        "  - \"Sound like a fit, or want to see something a bit "
+        "different?\"",
+        "",
+        "Top picks (cash-comparison context):",
+    ]
+    for v in matched[:3]:
+        try:
+            price = float(v.price) if v.price is not None else None
+        except (TypeError, ValueError):
+            price = None
+        price_str = f"${price:,.0f}" if price is not None else "?"
+        miles = (
+            f"{v.mileage:,} mi" if v.mileage else "miles unknown"
+        )
+        dt = customer_drivetrain_label(v.drivetrain) or "?"
+        lines.append(
+            f"  · {v.display_name} | {price_str} | {miles} | "
+            f"drivetrain {dt}"
+        )
+    return "\n".join(lines)
+
+
 def _format_budget_block(
     ctx: BudgetContext,
     *,
@@ -4813,29 +5149,67 @@ class ChatEngine:
         """Return the prior-turn vehicle whose model matches the current
         turn's regex-extracted model, or None when the conditions for
         anchoring don't hold. See class-level comment above for rules.
+
+        Item 14 — three resolution steps:
+          1. ``regex_hits["model"]`` exact match (original behavior).
+          2. SUBSTRING match — any prior vehicle's model name
+             appearing as a whole word in `user_text`. Catches
+             non-Ford models that ``regex_extract`` doesn't list
+             (Camry, Accord, Fusion, Sonata, …) without growing the
+             regex.
+          3. MAKE match — when exactly ONE prior vehicle of that
+             make exists (e.g., *"tell me about the Honda"* with one
+             prior Honda). Ambiguous (multi) → bail.
         """
         if not user_text:
             return None
-        model_pref = regex_hits.get("model")
-        if not model_pref:
-            return None
-        # Reframe guards — any current-turn search-criteria signal means
-        # the customer is starting a new search, not following up.
         for key in self._RESOLVE_FOLLOWUP_REFRAME_KEYS:
             if regex_hits.get(key) is not None:
                 return None
-        target = str(model_pref).strip().lower()
-        if not target:
+
+        prev = list(self._previous_assistant_matched_vehicles())
+        if not prev:
             return None
-        for v in self._previous_assistant_matched_vehicles():
-            if (v.model or "").strip().lower() != target:
+        lower_text = user_text.lower()
+
+        # Step 1: regex model match (original).
+        model_pref = regex_hits.get("model")
+        if model_pref:
+            target = str(model_pref).strip().lower()
+            for v in prev:
+                if (v.model or "").strip().lower() != target:
+                    continue
+                if not v.is_available:
+                    continue
+                return v
+
+        # Step 2: substring match of any prior model name in
+        # user_text. Word-bounded so "Fusion" doesn't false-match
+        # "Confusion".
+        for v in prev:
+            model_lower = (v.model or "").strip().lower()
+            if not model_lower or len(model_lower) < 3:
                 continue
-            # Confirm still on the lot. Demo resets / inventory edits
-            # would otherwise let us anchor to a vehicle the customer
-            # can no longer buy.
-            if not v.is_available:
+            if re.search(rf"\b{re.escape(model_lower)}\b", lower_text):
+                if v.is_available:
+                    return v
+
+        # Step 3: make match — only when the prior turn surfaced
+        # exactly ONE vehicle of that make. Multiple → ambiguous.
+        prev_makes: dict = {}
+        for v in prev:
+            mk = (v.make or "").strip().lower()
+            if mk:
+                prev_makes.setdefault(mk, []).append(v)
+        for mk, vehicles in prev_makes.items():
+            if len(mk) < 3:
                 continue
-            return v
+            if not re.search(rf"\b{re.escape(mk)}\b", lower_text):
+                continue
+            available = [v for v in vehicles if v.is_available]
+            if len(available) == 1:
+                return available[0]
+            return None
         return None
 
     def _current_vehicle_from_profile(
@@ -5436,6 +5810,16 @@ class ChatEngine:
         if budget_block:
             messages.append({"role": "system", "content": budget_block})
         messages.append({"role": "system", "content": inventory_block})
+        # Item 15 — cash-mode multi-card comparison rule. Injected
+        # AFTER the inventory block so the LLM sees the cards, then
+        # the comparison directive. Skipped when fewer than 2 cards
+        # are present (no comparison to make).
+        if cash_mode_active and len(matched) >= 2:
+            cash_block = _format_cash_mode_block(matched)
+            if cash_block:
+                messages.append(
+                    {"role": "system", "content": cash_block}
+                )
         if profile_block:
             messages.append({"role": "system", "content": profile_block})
         messages.extend(self._history_for_llm())
@@ -6019,6 +6403,47 @@ class ChatEngine:
                 elif existing_flag in uc_single_scrub_flags:
                     assistant_metadata["flag"] = "multiple_scrubs_fired"
 
+        # Item 14 — model-followup anchor filter. Stricter than
+        # generic_use_case: drops every statement that lacks a
+        # constraint-fit / comparison / card-data anchor. Runs
+        # after generic_use_case so it operates on the cleaner
+        # remainder. Same model_followup gate.
+        if (
+            matched
+            and not post_safety_rewritten
+            and not fabricated_inventory_fired
+            and not internal_confusion_fallback_fired
+            and assistant_metadata.get("mode") == "model_followup"
+        ):
+            cleaned_anchor, anchor_changed = scrub_followup_anchors(
+                reply_text,
+                mode=assistant_metadata.get("mode"),
+                matched=matched,
+            )
+            if anchor_changed:
+                reply_text = cleaned_anchor
+                scrubs_fired.append("followup_anchors")
+                assistant_metadata["scrubs"] = scrubs_fired
+                anchor_single_scrub_flags = {
+                    "rate_language_scrubbed",
+                    "internal_directive_scrubbed",
+                    "default_assumption_scrubbed",
+                    "category_label_scrubbed",
+                    "meta_narration_scrubbed",
+                    "payment_drift_scrubbed",
+                    "extra_payment_quote_scrubbed",
+                    "list_shape_scrubbed",
+                    "followup_question_scrubbed",
+                    "generic_use_case_scrubbed",
+                }
+                existing_flag = assistant_metadata.get("flag")
+                if existing_flag is None:
+                    assistant_metadata["flag"] = (
+                        "followup_anchors_scrubbed"
+                    )
+                elif existing_flag in anchor_single_scrub_flags:
+                    assistant_metadata["flag"] = "multiple_scrubs_fired"
+
         # Item 4 — drivetrain hallucination guard. Last in the
         # post-LLM scrub chain. Strips sentences that claim a
         # drivetrain configuration not present on the matched card.
@@ -6147,6 +6572,45 @@ class ChatEngine:
                         "fallback_stall_scrubbed"
                     )
                 elif existing_flag in stall_single_scrub_flags:
+                    assistant_metadata["flag"] = "multiple_scrubs_fired"
+
+        # Item 12 — "both" wording. When matched count != 2,
+        # rewrite "both" so the prose matches the cards on screen.
+        # No-op when count == 2.
+        if (
+            matched
+            and not post_safety_rewritten
+            and not fabricated_inventory_fired
+            and not internal_confusion_fallback_fired
+        ):
+            cleaned_both, both_changed = scrub_both_wording(
+                reply_text, vehicle_count=len(matched)
+            )
+            if both_changed:
+                reply_text = cleaned_both
+                scrubs_fired.append("both_wording")
+                assistant_metadata["scrubs"] = scrubs_fired
+                both_single_scrub_flags = {
+                    "rate_language_scrubbed",
+                    "internal_directive_scrubbed",
+                    "default_assumption_scrubbed",
+                    "category_label_scrubbed",
+                    "meta_narration_scrubbed",
+                    "payment_drift_scrubbed",
+                    "extra_payment_quote_scrubbed",
+                    "list_shape_scrubbed",
+                    "followup_question_scrubbed",
+                    "generic_use_case_scrubbed",
+                    "drivetrain_claim_scrubbed",
+                    "financing_language_scrubbed",
+                    "fallback_stall_scrubbed",
+                }
+                existing_flag = assistant_metadata.get("flag")
+                if existing_flag is None:
+                    assistant_metadata["flag"] = (
+                        "both_wording_scrubbed"
+                    )
+                elif existing_flag in both_single_scrub_flags:
                     assistant_metadata["flag"] = "multiple_scrubs_fired"
 
         # Item 10 — hard length cap for model-followup turns. Runs

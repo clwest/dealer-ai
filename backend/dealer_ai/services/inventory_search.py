@@ -121,7 +121,11 @@ def parse_filters(query: str) -> SearchFilters:
 
 
 def _build_queryset(filters: SearchFilters):
-    qs = Vehicle.objects.filter(is_available=True)
+    # Item 13 — exclude debug / test vehicles from customer-facing
+    # search. Sourced from chat_engine.customer_visible_vehicles()
+    # so the filter pattern stays in one place.
+    from .chat_engine import customer_visible_vehicles
+    qs = customer_visible_vehicles()
 
     if filters.body_style:
         qs = qs.filter(body_style=filters.body_style)
@@ -190,7 +194,9 @@ def search_vehicles(
         )
 
     if not query or not query.strip():
-        qs = Vehicle.objects.filter(is_available=True)
+        # Item 13 — exclude debug / test vehicles.
+        from .chat_engine import customer_visible_vehicles
+        qs = customer_visible_vehicles()
         if max_price is not None:
             qs = qs.filter(price__lte=Decimal(str(max_price)))
         if make:

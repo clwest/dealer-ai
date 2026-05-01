@@ -165,14 +165,15 @@ class ChatEngineGuardTests(TestCase):
         # Turn 2 — a clean question. The LLM should now be invoked.
         normal = engine.handle_user_message("Show me F-150s")
         # The point of this test is "engine runs normally after a
-        # refusal", not the exact reply text. The model-followup
-        # length-cap (item 10) fires here because turn 1's guard
-        # message attached the F-150 to matched_vehicles, so the
-        # F-150 mention in turn 2 routes through the model-followup
-        # branch — appending a close to the LLM's "Sure, here are
-        # some options." statement. Assert the LLM body is present
-        # and the engine ran normally.
-        self.assertIn("Sure, here are some options", normal.assistant_message.content)
+        # refusal" — not the exact reply text. Turn 1's guard
+        # message attached the F-150 to matched_vehicles, so
+        # turn 2's "Show me F-150s" routes through the
+        # model-followup branch. The mock reply "Sure, here are
+        # some options." has no constraint / comparison / card-
+        # data anchor, so the item-14 anchor filter strips it
+        # and the canned LIST_SHAPE_FALLBACK takes over. The
+        # substantive checks below — provider was invoked and
+        # matched_vehicles surfaced — are the real contract.
         self.assertEqual(len(provider.calls), 2)
         self.assertGreater(len(normal.matched_vehicles), 0)
 

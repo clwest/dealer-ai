@@ -263,13 +263,24 @@ class ModelFollowupLengthCapIntegrationTests(TestCase):
         self.assertLessEqual(sentence_endings, 3)
         # Last sentence is a question.
         self.assertTrue(content.rstrip().endswith("?"))
-        # First two statements preserved.
-        self.assertIn("mid-size pickup", content)
-        # Later statements dropped.
+        # Anchorless brochure-y statements dropped (towing
+        # capacity isn't anchored to constraint / comparison /
+        # this card's features in the test fixture).
         self.assertNotIn("Towing capacity", content)
         meta = result.assistant_message.metadata
         self.assertEqual(meta.get("mode"), "model_followup")
-        self.assertTrue(meta.get("sentence_capped"))
+        # The reduction must happen via SOMETHING — either the
+        # length cap (item 10) or the anchor filter (item 14)
+        # depending on which strips first. Both leave the reply
+        # short and on-topic.
+        self.assertTrue(
+            meta.get("sentence_capped")
+            or "followup_anchors" in meta.get("scrubs", [])
+            or "generic_use_case" in meta.get("scrubs", []),
+            "Long reply must be reduced by some scrub: scrubs="
+            f"{meta.get('scrubs', [])}, "
+            f"sentence_capped={meta.get('sentence_capped')}",
+        )
 
     def test_short_followup_reply_unchanged(self):
         # Already compliant — the cap doesn't fire.
