@@ -174,6 +174,157 @@ nowhere.
 
 ---
 
+## Live Chat Mode
+
+The mode triggered when a non-technical operator (Jessica, the
+sales manager, the owner) is talking with Claude in real time.
+Activated when the human is reporting what they tried, what they
+saw, and what felt off — without reading code or system internals.
+
+### Trigger phrases
+
+- "I'm going to have Jessica start talking with you now"
+- "talk to me like I'm not technical"
+- "live chat mode" / "live chat with the operator"
+- "I want to test something"
+- *(Implicit)* any message that reports a real prompt + the
+  assistant's response + a gut reaction, with no jargon
+
+### Operator workflow
+
+The validated path (worked end-to-end with Jessica on 2026-05-02,
+which surfaced the SESSION_011 fix):
+
+1. Operator opens a page and sends a real prompt.
+2. Operator pastes back what the assistant said.
+3. Operator describes — in plain English — what felt right or
+   wrong about the reply.
+4. Claude converts that input through the five-lens translation:
+   - **Operator meaning** — what was the human actually testing,
+     and what did "wrong" look like to them.
+   - **Builder/system issue** — what is the underlying technical
+     issue (Claude only surfaces this layer to the builder, or
+     when the operator explicitly asks).
+   - **Dealer-owner risk** — what does this mean for pilot
+     readiness, customer trust, or business risk.
+   - **Sales-manager workflow impact** — how does this change
+     what the team actually does day to day.
+   - **Claude Code implementation task** — what is the concrete
+     engineering task that addresses it.
+5. Claude reports the failure back to the operator in operator
+   language, then opens the technical layer for the builder.
+
+### Vocabulary contract
+
+When talking with a non-technical operator, the assistant **must
+not** use:
+
+- *backend*, *frontend*, *repo*, *code*, *files*, *endpoint*,
+  *API*, *database*, *schema*, *migration*, *commit*, *deploy*,
+  *env*, *config*
+- *model*, *LLM*, *Ollama*, *OpenAI*, *embeddings*, *regex*,
+  *prompt*, *scrub*, *pipeline*, *stack trace*, *exception*,
+  *mock*
+- Test names, file paths, line numbers, function names, or any
+  framework-specific term
+
+Substitute with:
+
+- *the system* (instead of the backend / the codebase)
+- *the page she sees* (instead of the frontend / a route)
+- *the saved settings* (instead of a database row or model)
+- *save* (instead of POST / PATCH / persist / migrate)
+- *guardrail* (instead of scrub / regex / pattern detector)
+- *the assistant* (instead of the LLM / the model)
+- *what the assistant said* (instead of the response payload)
+
+### Refusal rule
+
+If the operator asks "how does this work under the hood?" /
+"show me the code" / "is this Python or React?" — redirect:
+
+> "I can pull that up if you want, but it's not something you
+> need to know to test this. The cleanest way is to keep going
+> on the page and tell me what you see — I'll handle the rest."
+
+If the operator presses ("no really, I want to know"), surface a
+one-sentence high-level summary in their language ("There's a
+guardrail on the coaching page that checks the shape of the
+assistant's reply before showing it to you") — never paste code
+or function names back.
+
+### Grounding rule
+
+Live chat mode is held to the **same** truth-preservation rules
+as every other mode in this document. The operator's words do
+not unlock new claims. The assistant must:
+
+- Reflect what actually shipped, not what *will* ship.
+- Say "this improves manager-test reliability" — **not** "this
+  will increase sales" or "this saves the dealer money."
+- If the operator asks "is this in production?" and the source
+  of truth says no, the answer is "not yet" — never "soon",
+  "imminent", or "in pilot" without explicit support.
+
+When in doubt, downgrade to neutral phrasing rather than invent
+business impact.
+
+### Example — SESSION_011: Jessica catches a coaching-page leak
+
+The worked example from 2026-05-02 that drove this contract.
+
+**What Jessica did:**
+
+1. Opened the page titled *Test Assistant Coaching Mode*.
+2. Typed: *"i have $400/mo and want a sedan."*
+3. The assistant replied:
+   > *"Most sedans in our inventory fall under the payment
+   > shown on the card, but I can show you some options that
+   > might fit your budget. Would that be something you'd
+   > consider?"*
+4. Her reaction: *"this sounds like the customer page, not
+   coaching me."*
+5. She said: *"stop and flag now."*
+
+**Five-lens translation:**
+
+- **Operator meaning** (Jessica): The coaching page is supposed
+  to teach managers what the assistant *would* say. This reply
+  skipped that — it sounded like the assistant was selling to
+  her, not coaching her. The phrase *"the card"* was the
+  giveaway, since this page deliberately shows no cards.
+- **Builder/system issue** (Chris): The earlier guardrail
+  removed banned phrases sentence-by-sentence but did not enforce
+  the **shape** of the reply. Novel customer-facing wording
+  slipped through. The fix is structural enforcement — every
+  coaching reply must be either pure coaching ("If a customer
+  says X, I'd narrow on Y") or coaching plus a clearly-quoted
+  preview reply. Anything else gets rewritten before Jessica
+  sees it.
+- **Dealer-owner risk:** Low pilot risk — coaching mode is
+  internal-only and is not customer-visible. The risk it
+  addresses is *internal trust*: managers will not rely on the
+  coaching tool if it sounds like a sales pitch.
+- **Sales-manager workflow impact:** None today, since the leak
+  was caught before the team relied on the tool. After the fix,
+  the coaching page reliably stays in coaching shape across
+  saved tone variations.
+- **Claude Code implementation task:** Tighten the coaching
+  prompt to declare the two allowed shapes (Shape A: pure
+  coaching; Shape B: coaching + quoted preview) explicitly, and
+  add a structural validator that rewrites any non-conforming
+  reply into a context-aware coaching fallback. Add regression
+  tests including a replay of Jessica's exact prompt and the
+  leaked reply.
+
+**What ships from this:** a more reliable manager-coaching tool.
+**What does not ship from this:** increased sales, faster lead
+conversion, or any customer-facing change. Jessica's catch
+improves *manager-test reliability* — that is the only claim the
+translation layer is allowed to make.
+
+---
+
 ## Example Translations
 
 Three real examples drawn from the SESSION_008–010 handoffs. Each
@@ -415,7 +566,10 @@ the translations / examples / next-actions still hold.
 
 - **Last verified:** 2026-05-02 — by Chris against handoff
   `SESSION_010_manager_chat_tester.md` (coaching-reframe
-  appendix), backend baseline **1189 pass / 1 skip / 0 fail**.
+  appendix) plus the in-flight SESSION_011 structural-coaching
+  enforcement work and the Live Chat Mode contract validated
+  with Jessica the same day. Backend baseline **1210 pass /
+  1 skip / 0 fail** post-SESSION_011 (was 1189 pre).
 
 If this line is more than a few sessions old, treat the
 translations above as suggestive, not authoritative. Re-read the
