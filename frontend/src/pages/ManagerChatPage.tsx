@@ -67,29 +67,27 @@ export default function ManagerChatPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header note — SESSION_010 coaching follow-up: make the mode
-          explicit so future sessions don't drift toward "fake customer
-          chat with cards hidden". */}
-      <div className="card flex items-start gap-3 px-6 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-ford-blue text-white">
+      {/* SESSION_012 — page header. Plain-language framing for managers
+          ("train your AI") replaces the prior "Test Assistant Coaching
+          Mode" technical label. The smaller note still preserves the
+          SESSION_010 expectations (stateless, no cards, not customer-
+          facing) so nothing about the workflow drifts. */}
+      <div className="card flex items-start gap-3 px-6 py-5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <Bot className="h-4 w-4" />
         </div>
-        <div>
-          <h1 className="text-base font-bold text-ford-ink">
-            Test Assistant Coaching Mode
+        <div className="space-y-1">
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">
+            Train Your AI Sales Assistant
           </h1>
-          <p className="text-sm text-slate-500">
-            Use this to preview how the assistant will guide a customer.
-            This page does not show vehicle cards — replies are shaped as
-            sales-coaching guidance, reflecting the saved tone, banned
-            phrases, and disclaimer from{" "}
-            <span className="font-semibold">Onboarding</span>. Each
-            message is stateless — reload to reset the transcript.
+          <p className="text-sm text-muted-foreground">
+            Try real customer scenarios. The assistant will respond using
+            your store's voice.
           </p>
-          <p className="mt-1 text-xs text-amber-700">
-            Not customer-facing. Use{" "}
-            <span className="font-semibold">Customer demo</span> for the live
-            customer view.
+          <p className="text-xs text-muted-foreground">
+            Stateless — reload to reset. Not customer-facing; use{" "}
+            <span className="font-semibold text-foreground">Live Assistant</span>{" "}
+            for that.
           </p>
         </div>
       </div>
@@ -171,20 +169,27 @@ function ManagerBubble({ turn }: { turn: Turn }) {
       <div
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-          isUser ? "bg-ford-blue text-white" : "bg-slate-900 text-white",
+          isUser ? "bg-primary text-primary-foreground" : "bg-slate-900 text-white",
         )}
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
-      <div
-        className={cn(
-          "max-w-[78%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-soft",
-          isUser
-            ? "rounded-br-md bg-ford-blue text-white"
-            : "rounded-bl-md bg-white text-ford-ink",
-        )}
-      >
-        {turn.content}
+      <div className={cn("flex max-w-[78%] flex-col gap-1", isUser && "items-end")}>
+        {!isUser ? (
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Recommended Sales Approach
+          </span>
+        ) : null}
+        <div
+          className={cn(
+            "whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-soft",
+            isUser
+              ? "rounded-br-md bg-primary text-primary-foreground"
+              : "rounded-bl-md bg-white text-ford-ink",
+          )}
+        >
+          {turn.content}
+        </div>
       </div>
     </div>
   );

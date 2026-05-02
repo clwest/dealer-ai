@@ -14,6 +14,10 @@ node_modules/
 frontend/dist/
 frontend/.env
 frontend/.env.local
+frontend/tsconfig.tsbuildinfo
+
+# Playwright MCP traces (generated during agent verification)
+.playwright-mcp/
 
 # Editors / OS
 .vscode/
