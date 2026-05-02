@@ -39,6 +39,14 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },
 ];
 
+// Real dealer logo, captured from samsfreedomford.com on 2026-05-02 and
+// stored locally so the demo doesn't break when the dealer's CDN
+// rotates. See docs/handoffs/SESSION_017_branding_pass.md.
+const LOGO_SRC = "/branding/sams-freedom-ford-logo.jpg";
+const STORE_NAME = "Sam's Freedom Ford";
+const STORE_LOCATION = "McAlester";
+const PRODUCT_LABEL = "Dealer OS";
+
 export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
@@ -55,9 +63,7 @@ export default function App() {
       <div className="flex min-h-screen">
         <DesktopSidebar />
         <div className="flex flex-1 flex-col">
-          <TopBar
-            onOpenMobileNav={() => setMobileNavOpen(true)}
-          />
+          <TopBar onOpenMobileNav={() => setMobileNavOpen(true)} />
           <main className="flex-1 px-4 py-6 sm:px-6">
             <Outlet />
           </main>
@@ -71,15 +77,16 @@ export default function App() {
           showCloseButton
         >
           <SheetHeader className="border-b border-border">
-            <SheetTitle className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
-                FF
-              </span>
-              <span>Freedom Ford AI</span>
+            {/* SheetTitle is required for radix accessibility; render it
+                visually hidden and let <BrandHeader /> handle the actual
+                visual brand block. */}
+            <SheetTitle className="sr-only">
+              {STORE_NAME} {STORE_LOCATION} — {PRODUCT_LABEL}
             </SheetTitle>
             <SheetDescription className="sr-only">
-              Primary navigation for the Dealer Operating System.
+              Primary navigation for the {PRODUCT_LABEL}.
             </SheetDescription>
+            <BrandHeader compact />
           </SheetHeader>
           <NavList />
         </SheetContent>
@@ -91,19 +98,54 @@ export default function App() {
 function DesktopSidebar() {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-muted/40 sm:flex">
-      <div className="flex items-center gap-3 border-b border-border px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-          FF
-        </div>
-        <div className="text-sm font-semibold tracking-tight text-foreground">
-          Freedom Ford AI
-        </div>
-      </div>
+      <BrandHeader />
       <NavList />
       <div className="border-t border-border px-5 py-4 text-xs text-muted-foreground">
         Local · MVP
       </div>
     </aside>
+  );
+}
+
+/** Branded header block shared between desktop sidebar + mobile drawer.
+ *  Renders the dealer's real logo with a graceful text fallback if the
+ *  asset is missing. The product label ("Dealer OS") sits beneath as
+ *  small caps so it never competes with the brand. */
+function BrandHeader({ compact = false }: { compact?: boolean }) {
+  const [logoError, setLogoError] = useState(false);
+  const padding = compact ? "px-4 py-3" : "px-5 py-4";
+  const logoHeight = compact ? "h-9" : "h-11";
+
+  return (
+    <div className={cn("flex flex-col gap-1.5 border-b border-border", padding)}>
+      <div className="flex items-center">
+        {logoError ? (
+          <BrandTextFallback />
+        ) : (
+          <img
+            src={LOGO_SRC}
+            alt={`${STORE_NAME} ${STORE_LOCATION}`}
+            onError={() => setLogoError(true)}
+            className={cn(logoHeight, "w-auto select-none")}
+            draggable={false}
+          />
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        <span>{PRODUCT_LABEL}</span>
+      </div>
+    </div>
+  );
+}
+
+function BrandTextFallback() {
+  return (
+    <div className="flex flex-col leading-tight">
+      <span className="text-sm font-semibold tracking-tight text-foreground">
+        {STORE_NAME}
+      </span>
+      <span className="text-xs text-muted-foreground">{STORE_LOCATION}</span>
+    </div>
   );
 }
 
@@ -147,10 +189,10 @@ function TopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           <Menu className="h-4 w-4" />
         </Button>
         <span className="text-sm font-semibold tracking-tight text-foreground">
-          Freedom Ford
+          {STORE_NAME}
         </span>
-        <span className="hidden text-xs text-muted-foreground sm:inline">
-          Oklahoma · Dealer OS
+        <span className="text-xs text-muted-foreground">
+          · {STORE_LOCATION}
         </span>
       </div>
       <AIActiveIndicator />
