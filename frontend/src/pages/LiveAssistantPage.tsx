@@ -1,19 +1,29 @@
-// SESSION_013 — customer-facing Live Assistant page.
+// SESSION_013 / SESSION_016 — customer-facing Live Assistant page.
 //
 // One column. Chat is primary. When the assistant attaches
 // `matched_vehicles`, they render *inline beneath the assistant
 // message* as small shadcn Cards. No 4-CTA stack, no lead form, no
-// popup, no fake checkout — explicitly off the spec.
+// popup, no fake checkout — patterns the public-site audit
+// retired.
 //
-// This is the surface that will eventually be embedded on the
-// dealer's public site (SESSION_017). Treat every UX decision as
-// "would a customer feel like the assistant is helping them" — not
-// "does this dealer-side feature get a button". For dealer-side
-// affordances (flag for handoff, lead capture modal), use the
-// legacy /dealer-ai-demo page; this one stays clean.
+// SESSION_016 polish (visual only):
+//   - Customer-facing header copy + small trust row.
+//   - Buyer-friendly starter prompts.
+//   - Tighter spacing between turns; smoother loading copy.
+//   - Friendly error retry instead of a raw error wall.
+//
+// Backend, chat behavior, API contracts, and inventory matching
+// are all untouched per the SESSION_016 guardrails.
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Loader2, RotateCcw, Send, User } from "lucide-react";
+import {
+  Bot,
+  CircleCheck,
+  Loader2,
+  RotateCcw,
+  Send,
+  User,
+} from "lucide-react";
 
 import AssistantVehicleCard from "@/components/AssistantVehicleCard";
 import { Button } from "@/components/ui/button";
@@ -28,11 +38,13 @@ import {
 type SendStatus = "idle" | "sending" | "error";
 
 const STARTERS = [
-  "I want a truck under $30k.",
-  "Show me a used SUV under $35k for my family.",
-  "I have $5k down and want $400/mo.",
-  "What's a reliable commuter under $20k?",
+  "I need a truck under $30k",
+  "I have $400/mo and want a sedan",
+  "I need a family SUV with good gas mileage",
+  "I'm not sure what I want yet",
 ];
+
+const TRUST_POINTS = ["Real inventory", "Payment-aware", "No pressure"];
 
 export default function LiveAssistantPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -40,6 +52,10 @@ export default function LiveAssistantPage() {
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<SendStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Track the most recent user message text separately so the error
+  // retry button can re-send it even after the assistant turn fails
+  // and the user clears the composer.
+  const [lastUserMessage, setLastUserMessage] = useState<string | null>(null);
 
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -73,6 +89,7 @@ export default function LiveAssistantPage() {
 
     setError(null);
     setInput("");
+    setLastUserMessage(text);
 
     const userTurn: ChatMessage = {
       id: Date.now(),
@@ -111,12 +128,28 @@ export default function LiveAssistantPage() {
     );
   }
 
+  function handleRetry() {
+    if (!lastUserMessage) return;
+    // Drop the failed user turn so retry doesn't double-render the
+    // same prompt. handleSend will append a fresh optimistic bubble.
+    setMessages((prev) => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].role === "user" && prev[i].content === lastUserMessage) {
+          return prev.slice(0, i);
+        }
+      }
+      return prev;
+    });
+    void handleSend(lastUserMessage);
+  }
+
   function handleReset() {
     setSessionId(null);
     setMessages([]);
     setStatus("idle");
     setError(null);
     setInput("");
+    setLastUserMessage(null);
     inputRef.current?.focus();
   }
 
@@ -124,31 +157,10 @@ export default function LiveAssistantPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-9rem)] max-w-3xl flex-col gap-4">
-      {/* Page header — keeps the customer-facing framing explicit. */}
-      <header className="flex items-start justify-between gap-3">
-        <div className="space-y-0.5">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Live Assistant
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Tell the assistant what you're looking for. It will pull live
-            inventory, sketch realistic numbers, and stay in the
-            conversation with you.
-          </p>
-        </div>
-        {messages.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-1.5"
-            onClick={handleReset}
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            New chat
-          </Button>
-        ) : null}
-      </header>
+      <PageHeader
+        showReset={messages.length > 0}
+        onReset={handleReset}
+      />
 
       {/* Transcript */}
       <div
@@ -158,7 +170,7 @@ export default function LiveAssistantPage() {
         {showStarters ? (
           <Starters onPick={(p) => void handleSend(p)} />
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-6">
             {messages.map((m) => (
               <Turn
                 key={m.id}
@@ -167,16 +179,12 @@ export default function LiveAssistantPage() {
                 isLatestAssistant={m.id === lastAssistantId}
               />
             ))}
-            {sending ? (
-              <div className="flex items-center gap-2 pl-11 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                The assistant is thinking…
-              </div>
-            ) : null}
+            {sending ? <ThinkingIndicator /> : null}
             {error ? (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </div>
+              <ErrorRetry
+                onRetry={lastUserMessage ? handleRetry : undefined}
+                detail={error}
+              />
             ) : null}
           </div>
         )}
@@ -217,32 +225,140 @@ export default function LiveAssistantPage() {
   );
 }
 
+// ─── Pieces ─────────────────────────────────────────────────────────────────
+
+function PageHeader({
+  showReset,
+  onReset,
+}: {
+  showReset: boolean;
+  onReset: () => void;
+}) {
+  return (
+    <header className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Find Your Next Vehicle
+          </h1>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            Tell us your budget, needs, or must-haves. The assistant will
+            narrow the lot for you.
+          </p>
+        </div>
+        {showReset ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={onReset}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            New chat
+          </Button>
+        ) : null}
+      </div>
+      <TrustRow />
+    </header>
+  );
+}
+
+function TrustRow() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+      {TRUST_POINTS.map((point) => (
+        <span key={point} className="inline-flex items-center gap-1.5">
+          <CircleCheck className="h-3.5 w-3.5 text-primary" aria-hidden />
+          <span>{point}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function Starters({ onPick }: { onPick: (prompt: string) => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+    <div className="flex h-full flex-col items-center justify-center gap-5 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
         <Bot className="h-5 w-5" />
       </div>
-      <div className="max-w-md text-sm text-foreground">
-        Hi — I'm Freedom Ford's sales assistant. Tell me what you're looking
-        for and I'll show you what we have. Try one of these to start.
+      <div className="max-w-md space-y-1">
+        <div className="text-base font-medium text-foreground">
+          Hi — I'm Freedom Ford's sales assistant.
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Tell me what you're looking for and I'll show you what we have.
+          Try one of these to start, or type your own.
+        </p>
       </div>
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
         {STARTERS.map((p) => (
           <button
             key={p}
             type="button"
             onClick={() => onPick(p)}
             className={cn(
-              "rounded-full border border-border bg-background px-3 py-1.5",
-              "text-xs text-muted-foreground transition",
-              "hover:border-primary/40 hover:bg-background hover:text-foreground",
+              "rounded-lg border border-border bg-background px-3 py-2.5",
+              "text-left text-sm text-foreground transition",
+              "hover:border-primary/50 hover:bg-card hover:shadow-sm",
             )}
           >
             {p}
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ThinkingIndicator() {
+  return (
+    <div className="flex items-center gap-2 pl-11 text-sm text-muted-foreground">
+      <span className="flex gap-1" aria-hidden>
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:-0.3s]" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:-0.15s]" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+      </span>
+      <span>Finding the best matches…</span>
+    </div>
+  );
+}
+
+function ErrorRetry({
+  onRetry,
+  detail,
+}: {
+  onRetry?: () => void;
+  detail?: string | null;
+}) {
+  return (
+    <div className="ml-11 max-w-[85%] rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      <div className="font-medium">
+        That didn't go through.
+      </div>
+      <p className="mt-0.5 text-xs text-amber-800">
+        Connection might be slow on our end — let's try once more.
+      </p>
+      {onRetry ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2.5 h-8 gap-1.5 border-amber-300 bg-white text-xs text-amber-900 hover:bg-amber-100"
+          onClick={onRetry}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          Try again
+        </Button>
+      ) : null}
+      {detail ? (
+        <details className="mt-2 text-[11px] text-amber-800/80">
+          <summary className="cursor-pointer select-none">Details</summary>
+          <pre className="mt-1 whitespace-pre-wrap font-mono text-[11px] text-amber-900/70">
+            {detail}
+          </pre>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -288,7 +404,12 @@ function Turn({
           <Bot className="h-4 w-4" />
         )}
       </div>
-      <div className={cn("flex flex-col gap-3", isUser ? "items-end" : "items-start")}>
+      <div
+        className={cn(
+          "flex min-w-0 flex-col gap-3",
+          isUser ? "items-end" : "items-start",
+        )}
+      >
         <div
           className={cn(
             "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
@@ -301,7 +422,7 @@ function Turn({
         </div>
 
         {cards && cards.length > 0 ? (
-          <div className="grid w-full max-w-[85%] gap-2 sm:grid-cols-2">
+          <div className="grid w-full max-w-[85%] gap-3 sm:grid-cols-2">
             {cards.map((v) => (
               <AssistantVehicleCard
                 key={v.id}
