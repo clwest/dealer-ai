@@ -6,7 +6,14 @@ from rest_framework.response import Response
 
 from django.core.management import call_command
 
-from .models import ChatMessage, ChatSession, CustomerLead, Salesperson, Vehicle
+from .models import (
+    ChatMessage,
+    ChatSession,
+    CustomerLead,
+    DealerOnboardingProfile,
+    Salesperson,
+    Vehicle,
+)
 from .serializers import (
     AdminChatSessionListSerializer,
     AdminLeadListSerializer,
@@ -15,6 +22,8 @@ from .serializers import (
     ChatMessageSerializer,
     ChatSessionSerializer,
     CustomerLeadSerializer,
+    DealerOnboardingProfileSerializer,
+    ONBOARDING_DEFAULTS,
     SalespersonAdminSerializer,
     SalespersonPublicSerializer,
     StartChatSerializer,
@@ -789,4 +798,44 @@ def demo_load_scenarios(request):
             "stdout": out.getvalue(),
         },
         status=status.HTTP_200_OK,
+    )
+
+
+# ---- Onboarding (SESSION_008) ----------------------------------------------
+
+
+@api_view(["GET", "PUT", "PATCH"])
+def onboarding_profile(request):
+    """Singleton dealer onboarding profile.
+
+    GET: returns the current profile, or the default shape if none exists
+        yet. Always 200 — the page can render with defaults pre-filled.
+    PUT/PATCH: upserts the singleton row. PUT requires the full payload
+        (validates every field). PATCH allows partial updates and only
+        validates the keys present in the body.
+    """
+    profile = DealerOnboardingProfile.objects.first()
+
+    if request.method == "GET":
+        if profile is None:
+            return Response(ONBOARDING_DEFAULTS)
+        return Response(DealerOnboardingProfileSerializer(profile).data)
+
+    partial = request.method == "PATCH"
+    if profile is None:
+        # Seed creation with defaults so PATCH (partial) lands cleanly even
+        # when only some fields are supplied. PUT will validate every key
+        # the serializer requires (none are required by default since all
+        # CharField/TextField are blank=True and BooleanField has default).
+        serializer = DealerOnboardingProfileSerializer(
+            data={**ONBOARDING_DEFAULTS, **request.data}
+        )
+    else:
+        serializer = DealerOnboardingProfileSerializer(
+            profile, data=request.data, partial=partial
+        )
+    serializer.is_valid(raise_exception=True)
+    profile = serializer.save()
+    return Response(
+        DealerOnboardingProfileSerializer(profile).data, status=status.HTTP_200_OK
     )

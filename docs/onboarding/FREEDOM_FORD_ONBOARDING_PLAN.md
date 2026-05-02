@@ -1,7 +1,8 @@
 ---
 title: Freedom Ford Dealer AI — onboarding plan (v0)
-status: foundation — not yet wired to backend persistence
+status: foundation — backend persistence landed in SESSION_008
 generated: 2026-05-01
+updated: 2026-05-02
 audience: dealership managers, salespeople, pilot lead
 ---
 
@@ -13,9 +14,11 @@ the Freedom Ford Dealer AI pilot. It is written for two audiences:
 - **Pilot lead / GM / sales manager** — what gets configured and why.
 - **Engineering** — what is in scope for v0 vs. deferred.
 
-The matching frontend page lives at `/dealer-ai-onboarding`. All
-fields are currently **local-state only**; nothing persists to the
-backend yet (see *Out of scope* below).
+The matching frontend page lives at `/dealer-ai-onboarding`. As of
+**SESSION_008** the page reads/writes against a backend singleton
+profile (see *Persistence (SESSION_008)* below). The richer entity
+split — DealerAssistant / SalespersonAgent / ManagerAgent / etc. —
+remains a planning sketch in `ASSISTANT_AGENT_CREATION_ROADMAP.md`.
 
 ---
 
@@ -200,6 +203,49 @@ demo" to "running the pilot with their data".
 
 ---
 
+## Persistence (SESSION_008)
+
+**Status:** implemented.
+
+The onboarding page now reads from and writes to a singleton
+`DealerOnboardingProfile` row via:
+
+- **`GET /api/dealer-ai/onboarding/profile/`** — returns the saved
+  profile, or the default shape (matching the v0 frontend seed
+  values) if none exists yet. The default `payment_disclaimer`
+  ships with the standard W.A.C. wording.
+- **`PUT /api/dealer-ai/onboarding/profile/`** — full save. Upserts
+  the singleton row.
+- **`PATCH /api/dealer-ai/onboarding/profile/`** — partial update.
+  Useful for toggling individual checklist booleans without
+  re-sending the rest of the profile.
+
+The model is one Django row holding all 27 fields flat, with field
+names mirroring the future entity split sketched in
+`ASSISTANT_AGENT_CREATION_ROADMAP.md`. When the `Dealership` /
+`DealerAssistant` / `StorePolicyProfile` migration lands, columns
+move to the new tables without renames.
+
+### Current limitation
+
+- **One-store profile only.** The view layer enforces the singleton
+  by reading `.first()` and upserting on save. Multi-store / multi-
+  tenant support arrives with the `Dealership` entity in the
+  roadmap, not before.
+
+### Still deferred (despite persistence)
+
+- **No live AI behavior changes from these fields yet.** The
+  greeting / approved-phrases / banned-phrases / escalation-rule
+  values are persisted but **do not** flow into the chat engine
+  system prompt. Wiring them through `_build_system_message` is a
+  separate Phase-2 task.
+- **No DealerAssistant / SalespersonAgent / ManagerAgent /
+  StorePolicyProfile / VoiceProfile entities yet.** Those land
+  with the roadmap migration sequence.
+
+---
+
 ## Out of scope (v0)
 
 The following are explicitly **NOT** part of this onboarding
@@ -208,10 +254,6 @@ foundation. Adding any of them is a separate, scoped task.
 - **Full auth / RBAC system.** No login, no permissions matrix.
   The current backend has session-based admin access for the
   manager dashboard; no further auth work happens here.
-- **Backend persistence for onboarding fields.** The page captures
-  values to component state. No `OnboardingProfile` model, no
-  migration, no API endpoints. A follow-up task can wire this up
-  once the field shape is validated by a real dealership session.
 - **Multi-tenant isolation.** This codebase serves one dealership
   (Freedom Ford). Multi-tenant boundaries are a future architectural
   concern.
@@ -244,7 +286,9 @@ foundation. Adding any of them is a separate, scoped task.
 - **This plan:** `docs/onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md`
 - **Future entities sketch:** `docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md`
 
-When the backend persistence layer lands, fields will move into a
-new `dealer_ai/models/onboarding.py` module and the page will swap
-local state for `react-query` mutations against new DRF endpoints.
-That work is **not** in this commit.
+**SESSION_008 update:** persistence shipped as a single Django row
+(`DealerOnboardingProfile` in `backend/dealer_ai/models.py`). The
+frontend swaps local state for plain `fetch` against
+`GET|PUT|PATCH /api/dealer-ai/onboarding/profile/` (no react-query
+dependency added — keeps the bundle small and matches the rest of
+`src/lib/api.ts`).

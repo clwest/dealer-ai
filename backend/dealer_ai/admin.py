@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import ChatMessage, ChatSession, CustomerLead, Salesperson, Vehicle
+from .models import (
+    ChatMessage,
+    ChatSession,
+    CustomerLead,
+    DealerOnboardingProfile,
+    Salesperson,
+    Vehicle,
+)
 
 
 @admin.register(Salesperson)
@@ -109,3 +116,13 @@ class CustomerLeadAdmin(admin.ModelAdmin):
         "assigned_at",
     )
     autocomplete_fields = ("assigned_to",)
+
+
+@admin.register(DealerOnboardingProfile)
+class DealerOnboardingProfileAdmin(admin.ModelAdmin):
+    """SESSION_008: singleton onboarding profile. Only one row is expected
+    in v0; the manager flow reads/writes via the API, but the admin allows
+    inspection and emergency edits."""
+
+    list_display = ("dealership_name", "store_location", "pilot_approved", "updated_at")
+    readonly_fields = ("created_at", "updated_at")

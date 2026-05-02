@@ -1,12 +1,15 @@
-// SESSION_007 — onboarding foundation page.
+// SESSION_008 — onboarding now reads/writes against
+// GET|PUT /api/dealer-ai/onboarding/profile/ (singleton).
 //
-// Local-state only. No backend persistence yet (see
-// docs/onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md → "Out of scope").
-// Field names mirror the future schema in
-// docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md so when the
-// persistence layer lands, the UI shape is already correct.
+// Single store profile only. Multi-tenant boundaries (and the per-entity
+// split sketched in docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md)
+// are deferred. Field shapes mirror the future schema so when the
+// Dealership / DealerAssistant migration lands, columns just split.
+//
+// Frontend keeps camelCase state for ergonomics; transformer functions
+// map to/from the snake_case API payload at the boundary.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Building2,
@@ -18,6 +21,12 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
+
+import {
+  fetchOnboardingProfile,
+  saveOnboardingProfile,
+  type OnboardingProfilePayload,
+} from "@/lib/api";
 
 interface DealershipProfile {
   name: string;
@@ -60,6 +69,14 @@ interface PilotChecklist {
   pilotApproved: boolean;
 }
 
+interface OnboardingState {
+  dealership: DealershipProfile;
+  manager: ManagerPreferences;
+  salesperson: SalespersonProfile;
+  assistant: AssistantBehavior;
+  checklist: PilotChecklist;
+}
+
 const SALES_TONE_OPTIONS = [
   "Warm + consultative",
   "Direct + fast-paced",
@@ -95,21 +112,15 @@ const SALESPERSON_TONE_OPTIONS = [
 
 const SECTION_COUNT = 5; // dealership, manager, salesperson, assistant, checklist
 
-export default function DealerOnboardingPage() {
-  const [dealership, setDealership] = useState<DealershipProfile>({
-    name: "Freedom Ford",
-    location: "",
-    brands: "Ford (new) + multi-brand used",
-    salesPhone: "",
-    website: "",
-  });
-  const [manager, setManager] = useState<ManagerPreferences>({
+const EMPTY_STATE: OnboardingState = {
+  dealership: { name: "", location: "", brands: "", salesPhone: "", website: "" },
+  manager: {
     salesTone: "",
     pricingComfort: "",
     appointmentPreference: "",
     leadHandoffStyle: "",
-  });
-  const [salesperson, setSalesperson] = useState<SalespersonProfile>({
+  },
+  salesperson: {
     name: "",
     role: "",
     phone: "",
@@ -117,25 +128,143 @@ export default function DealerOnboardingPage() {
     specialties: "",
     preferredTone: "",
     personalIntro: "",
-  });
-  const [assistant, setAssistant] = useState<AssistantBehavior>({
+  },
+  assistant: {
     greeting: "",
     approvedPhrases: "",
     bannedPhrases: "",
     escalationRule: "",
-    paymentDisclaimer: "Payments shown are estimates. Final terms with approved credit (W.A.C.).",
-  });
-  const [checklist, setChecklist] = useState<PilotChecklist>({
+    paymentDisclaimer: "",
+  },
+  checklist: {
     inventoryConnected: false,
     financeRulesReviewed: false,
     salespeopleAdded: false,
     demoPromptsTested: false,
     pilotApproved: false,
-  });
+  },
+};
 
-  // Lightweight completion heuristic so the manager can see
-  // progress without a real persistence layer. Each section is
-  // "complete" when its primary fields are non-empty.
+// API payload (snake_case) → page state (camelCase, sectioned).
+function fromApi(payload: OnboardingProfilePayload): OnboardingState {
+  return {
+    dealership: {
+      name: payload.dealership_name,
+      location: payload.store_location,
+      brands: payload.main_brands,
+      salesPhone: payload.sales_phone,
+      website: payload.website,
+    },
+    manager: {
+      salesTone: payload.sales_tone,
+      pricingComfort: payload.pricing_comfort,
+      appointmentPreference: payload.appointment_preference,
+      leadHandoffStyle: payload.lead_handoff_style,
+    },
+    salesperson: {
+      name: payload.salesperson_name,
+      role: payload.salesperson_role,
+      phone: payload.salesperson_phone,
+      email: payload.salesperson_email,
+      specialties: payload.salesperson_specialties,
+      preferredTone: payload.salesperson_preferred_tone,
+      personalIntro: payload.salesperson_intro,
+    },
+    assistant: {
+      greeting: payload.dealership_greeting,
+      approvedPhrases: payload.approved_phrases,
+      bannedPhrases: payload.banned_phrases,
+      escalationRule: payload.escalation_rule,
+      paymentDisclaimer: payload.payment_disclaimer,
+    },
+    checklist: {
+      inventoryConnected: payload.inventory_connected,
+      financeRulesReviewed: payload.finance_rules_reviewed,
+      salespeopleAdded: payload.salespeople_added,
+      demoPromptsTested: payload.demo_prompts_tested,
+      pilotApproved: payload.pilot_approved,
+    },
+  };
+}
+
+// Page state → API payload (PUT body).
+function toApi(state: OnboardingState): OnboardingProfilePayload {
+  return {
+    dealership_name: state.dealership.name,
+    store_location: state.dealership.location,
+    main_brands: state.dealership.brands,
+    sales_phone: state.dealership.salesPhone,
+    website: state.dealership.website,
+    sales_tone: state.manager.salesTone,
+    pricing_comfort: state.manager.pricingComfort,
+    appointment_preference: state.manager.appointmentPreference,
+    lead_handoff_style: state.manager.leadHandoffStyle,
+    salesperson_name: state.salesperson.name,
+    salesperson_role: state.salesperson.role,
+    salesperson_phone: state.salesperson.phone,
+    salesperson_email: state.salesperson.email,
+    salesperson_specialties: state.salesperson.specialties,
+    salesperson_preferred_tone: state.salesperson.preferredTone,
+    salesperson_intro: state.salesperson.personalIntro,
+    dealership_greeting: state.assistant.greeting,
+    approved_phrases: state.assistant.approvedPhrases,
+    banned_phrases: state.assistant.bannedPhrases,
+    escalation_rule: state.assistant.escalationRule,
+    payment_disclaimer: state.assistant.paymentDisclaimer,
+    inventory_connected: state.checklist.inventoryConnected,
+    finance_rules_reviewed: state.checklist.financeRulesReviewed,
+    salespeople_added: state.checklist.salespeopleAdded,
+    demo_prompts_tested: state.checklist.demoPromptsTested,
+    pilot_approved: state.checklist.pilotApproved,
+  };
+}
+
+type LoadStatus = "loading" | "loaded" | "error";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+export default function DealerOnboardingPage() {
+  const [state, setState] = useState<OnboardingState>(EMPTY_STATE);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Load on mount. The backend always returns 200 with either the saved
+  // profile or the default shape, so we don't have a "no row yet" branch.
+  useEffect(() => {
+    let cancelled = false;
+    fetchOnboardingProfile()
+      .then((payload) => {
+        if (cancelled) return;
+        setState(fromApi(payload));
+        setLoadStatus("loaded");
+        setLoadError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLoadStatus("error");
+        setLoadError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const { dealership, manager, salesperson, assistant, checklist } = state;
+  const setDealership = (next: DealershipProfile) =>
+    setState((s) => ({ ...s, dealership: next }));
+  const setManager = (next: ManagerPreferences) =>
+    setState((s) => ({ ...s, manager: next }));
+  const setSalesperson = (next: SalespersonProfile) =>
+    setState((s) => ({ ...s, salesperson: next }));
+  const setAssistant = (next: AssistantBehavior) =>
+    setState((s) => ({ ...s, assistant: next }));
+  const setChecklist = (
+    updater: (prev: PilotChecklist) => PilotChecklist,
+  ) => setState((s) => ({ ...s, checklist: updater(s.checklist) }));
+
+  // Lightweight completion heuristic so the manager can see progress.
+  // Each section is "complete" when its primary fields are non-empty.
   const completion = useMemo(() => {
     const sectionsDone = [
       Boolean(dealership.name && dealership.location),
@@ -147,6 +276,21 @@ export default function DealerOnboardingPage() {
     return { sectionsDone, total: SECTION_COUNT };
   }, [dealership, manager, salesperson, assistant, checklist]);
 
+  const handleSave = async () => {
+    setSaveStatus("saving");
+    setSaveError(null);
+    try {
+      const saved = await saveOnboardingProfile(toApi(state));
+      // Reflect server-canonical values (e.g. updated_at) back into local
+      // state so a subsequent edit-then-save round-trip stays consistent.
+      setState(fromApi(saved));
+      setSaveStatus("saved");
+    } catch (err: unknown) {
+      setSaveStatus("error");
+      setSaveError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const checklistItems: Array<{
     key: keyof PilotChecklist;
     label: string;
@@ -157,6 +301,48 @@ export default function DealerOnboardingPage() {
     { key: "demoPromptsTested", label: "Demo prompts tested" },
     { key: "pilotApproved", label: "Pilot approved" },
   ];
+
+  if (loadStatus === "loading") {
+    return (
+      <div className="card flex items-center gap-3 px-6 py-5 text-sm text-slate-500">
+        <span
+          className="inline-block h-3 w-3 animate-pulse rounded-full bg-ford-blue"
+          aria-hidden
+        />
+        Loading onboarding profile…
+      </div>
+    );
+  }
+
+  if (loadStatus === "error") {
+    return (
+      <div className="card px-6 py-5">
+        <h1 className="text-lg font-bold text-ford-ink">Dealership Onboarding</h1>
+        <p className="mt-2 text-sm text-rose-600">
+          Failed to load onboarding profile: {loadError ?? "unknown error"}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setLoadStatus("loading");
+            setLoadError(null);
+            fetchOnboardingProfile()
+              .then((p) => {
+                setState(fromApi(p));
+                setLoadStatus("loaded");
+              })
+              .catch((err: unknown) => {
+                setLoadStatus("error");
+                setLoadError(err instanceof Error ? err.message : String(err));
+              });
+          }}
+          className="mt-4 rounded-md bg-ford-blue px-4 py-2 text-sm font-semibold text-white hover:bg-ford-blue/90"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -437,11 +623,43 @@ export default function DealerOnboardingPage() {
           })}
         </ul>
         <p className="mt-4 text-xs text-slate-500">
-          Saved locally for now — this checklist will persist to the
-          dealership profile once the backend onboarding endpoints land.
+          Toggling a checkbox is local until you press <em>Save changes</em>.
         </p>
       </SectionCard>
+
+      {/* Save bar */}
+      <div className="card flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+        <div className="text-xs text-slate-500">
+          <SaveStatusLabel status={saveStatus} error={saveError} />
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saveStatus === "saving"}
+          className="rounded-md bg-ford-blue px-5 py-2 text-sm font-semibold text-white transition hover:bg-ford-blue/90 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          {saveStatus === "saving" ? "Saving…" : "Save changes"}
+        </button>
+      </div>
     </div>
+  );
+}
+
+function SaveStatusLabel({
+  status,
+  error,
+}: {
+  status: SaveStatus;
+  error: string | null;
+}) {
+  if (status === "idle") return <>Changes are not saved until you press Save.</>;
+  if (status === "saving") return <>Saving…</>;
+  if (status === "saved")
+    return <span className="text-emerald-700">Saved.</span>;
+  return (
+    <span className="text-rose-600">
+      Save failed: {error ?? "unknown error"}
+    </span>
   );
 }
 

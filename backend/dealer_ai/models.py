@@ -200,3 +200,67 @@ class CustomerLead(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.urgency or 'no urgency'})"
+
+
+class DealerOnboardingProfile(models.Model):
+    """SESSION_008: persistence for the /dealer-ai-onboarding manager flow.
+
+    v0 is **one-store**: the view layer treats this as a singleton (loads
+    .first(), upserts on save). Multi-tenant boundaries land with the
+    Dealership entity in the assistant / agent roadmap; for now the
+    constraint is enforced in code, not schema, so the migration stays
+    cheap to revisit.
+
+    Field shapes mirror the frontend onboarding page sections (dealership
+    profile, manager preferences, salesperson seed, assistant behavior,
+    pilot checklist). Names follow the future schema sketched in
+    docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md so a future
+    migration can split this into DealerAssistant / SalespersonAgent /
+    StorePolicyProfile without renaming columns.
+    """
+
+    # Dealership profile.
+    dealership_name = models.CharField(max_length=255, blank=True, default="")
+    store_location = models.CharField(max_length=255, blank=True, default="")
+    main_brands = models.CharField(max_length=255, blank=True, default="")
+    sales_phone = models.CharField(max_length=64, blank=True, default="")
+    website = models.CharField(max_length=255, blank=True, default="")
+
+    # Manager preferences.
+    sales_tone = models.CharField(max_length=128, blank=True, default="")
+    pricing_comfort = models.CharField(max_length=128, blank=True, default="")
+    appointment_preference = models.CharField(max_length=128, blank=True, default="")
+    lead_handoff_style = models.CharField(max_length=128, blank=True, default="")
+
+    # Salesperson seed profile (one salesperson captured during onboarding;
+    # the full team lives in Salesperson via /dealer-ai-admin/team).
+    salesperson_name = models.CharField(max_length=128, blank=True, default="")
+    salesperson_role = models.CharField(max_length=128, blank=True, default="")
+    salesperson_phone = models.CharField(max_length=64, blank=True, default="")
+    salesperson_email = models.CharField(max_length=255, blank=True, default="")
+    salesperson_specialties = models.CharField(max_length=512, blank=True, default="")
+    salesperson_preferred_tone = models.CharField(max_length=128, blank=True, default="")
+    salesperson_intro = models.TextField(blank=True, default="")
+
+    # Assistant behavior.
+    dealership_greeting = models.TextField(blank=True, default="")
+    approved_phrases = models.TextField(blank=True, default="")
+    banned_phrases = models.TextField(blank=True, default="")
+    escalation_rule = models.TextField(blank=True, default="")
+    payment_disclaimer = models.TextField(blank=True, default="")
+
+    # Pilot checklist booleans.
+    inventory_connected = models.BooleanField(default=False)
+    finance_rules_reviewed = models.BooleanField(default=False)
+    salespeople_added = models.BooleanField(default=False)
+    demo_prompts_tested = models.BooleanField(default=False)
+    pilot_approved = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return self.dealership_name or "Dealer onboarding profile"

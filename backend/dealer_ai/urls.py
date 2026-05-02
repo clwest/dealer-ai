@@ -76,4 +76,10 @@ urlpatterns = [
         views.demo_load_scenarios,
         name="demo-load-scenarios",
     ),
+    # SESSION_008: onboarding singleton profile.
+    path(
+        "onboarding/profile/",
+        views.onboarding_profile,
+        name="onboarding-profile",
+    ),
 ]

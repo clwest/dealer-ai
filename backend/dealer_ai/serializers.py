@@ -1,6 +1,13 @@
 from rest_framework import serializers
 
-from .models import ChatMessage, ChatSession, CustomerLead, Salesperson, Vehicle
+from .models import (
+    ChatMessage,
+    ChatSession,
+    CustomerLead,
+    DealerOnboardingProfile,
+    Salesperson,
+    Vehicle,
+)
 from .services.chat_engine import customer_drivetrain_label
 
 
@@ -315,3 +322,79 @@ class AdminChatSessionListSerializer(serializers.ModelSerializer):
             "content": snippet + ("…" if len(msg.content) > 160 else ""),
             "created_at": msg.created_at.isoformat(),
         }
+
+
+# ---- Onboarding (SESSION_008) ----------------------------------------------
+
+
+# Default values returned by GET when no profile row exists. Mirror the
+# defaults the v0 frontend page used to seed its local state so the UI
+# behaves identically before the first save.
+ONBOARDING_DEFAULTS: dict = {
+    "dealership_name": "Freedom Ford",
+    "store_location": "",
+    "main_brands": "Ford (new) + multi-brand used",
+    "sales_phone": "",
+    "website": "",
+    "sales_tone": "",
+    "pricing_comfort": "",
+    "appointment_preference": "",
+    "lead_handoff_style": "",
+    "salesperson_name": "",
+    "salesperson_role": "",
+    "salesperson_phone": "",
+    "salesperson_email": "",
+    "salesperson_specialties": "",
+    "salesperson_preferred_tone": "",
+    "salesperson_intro": "",
+    "dealership_greeting": "",
+    "approved_phrases": "",
+    "banned_phrases": "",
+    "escalation_rule": "",
+    "payment_disclaimer": (
+        "Payments shown are estimates. Final terms with approved credit (W.A.C.)."
+    ),
+    "inventory_connected": False,
+    "finance_rules_reviewed": False,
+    "salespeople_added": False,
+    "demo_prompts_tested": False,
+    "pilot_approved": False,
+}
+
+
+class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
+    """Flat snake_case payload mirroring all 27 onboarding fields."""
+
+    class Meta:
+        model = DealerOnboardingProfile
+        fields = [
+            "dealership_name",
+            "store_location",
+            "main_brands",
+            "sales_phone",
+            "website",
+            "sales_tone",
+            "pricing_comfort",
+            "appointment_preference",
+            "lead_handoff_style",
+            "salesperson_name",
+            "salesperson_role",
+            "salesperson_phone",
+            "salesperson_email",
+            "salesperson_specialties",
+            "salesperson_preferred_tone",
+            "salesperson_intro",
+            "dealership_greeting",
+            "approved_phrases",
+            "banned_phrases",
+            "escalation_rule",
+            "payment_disclaimer",
+            "inventory_connected",
+            "finance_rules_reviewed",
+            "salespeople_added",
+            "demo_prompts_tested",
+            "pilot_approved",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]

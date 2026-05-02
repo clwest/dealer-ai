@@ -110,6 +110,19 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function putJSON<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API ${path} failed (${res.status}): ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export function startDealerChat(input: {
   customer_name?: string;
   customer_email?: string;
@@ -700,4 +713,46 @@ export function loadDemoScenarios(opts: { reset?: boolean } = {}) {
   return postJSON<LoadScenariosResponse>(`/demo/scenarios/`, {
     reset: opts.reset ?? false,
   });
+}
+
+// ---- SESSION_008: dealer onboarding profile (singleton) -------------------
+
+export interface OnboardingProfilePayload {
+  dealership_name: string;
+  store_location: string;
+  main_brands: string;
+  sales_phone: string;
+  website: string;
+  sales_tone: string;
+  pricing_comfort: string;
+  appointment_preference: string;
+  lead_handoff_style: string;
+  salesperson_name: string;
+  salesperson_role: string;
+  salesperson_phone: string;
+  salesperson_email: string;
+  salesperson_specialties: string;
+  salesperson_preferred_tone: string;
+  salesperson_intro: string;
+  dealership_greeting: string;
+  approved_phrases: string;
+  banned_phrases: string;
+  escalation_rule: string;
+  payment_disclaimer: string;
+  inventory_connected: boolean;
+  finance_rules_reviewed: boolean;
+  salespeople_added: boolean;
+  demo_prompts_tested: boolean;
+  pilot_approved: boolean;
+  // Server-managed; present on GET, ignored on PUT.
+  created_at?: string;
+  updated_at?: string;
+}
+
+export function fetchOnboardingProfile() {
+  return getJSON<OnboardingProfilePayload>(`/onboarding/profile/`);
+}
+
+export function saveOnboardingProfile(payload: OnboardingProfilePayload) {
+  return putJSON<OnboardingProfilePayload>(`/onboarding/profile/`, payload);
 }

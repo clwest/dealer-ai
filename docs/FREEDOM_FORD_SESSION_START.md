@@ -22,16 +22,16 @@ Onboarding foundation page exists; not yet persisted to the backend.
 
 ## Current baseline
 
-Verified 2026-05-02. Update if any row changes.
+Verified 2026-05-02 (after SESSION_008). Update if any row changes.
 
 | Surface | State |
 |---|---|
 | Demo | demo-ready — 5/5 canonical scenarios pass (`docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`) |
-| Backend tests | **1111 passed, 1 skipped, 0 failed** (`cd backend && python manage.py test dealer_ai`) |
-| Frontend | typecheck + build clean (`cd frontend && npm run typecheck && npm run build`) |
+| Backend tests | **1121 passed, 1 skipped, 0 failed** (`cd backend && python manage.py test dealer_ai`) |
+| Frontend | typecheck + build clean (`cd frontend && npx tsc --noEmit && npx vite build`) |
 | LLM | Ollama llama3.2:latest @ `http://localhost:11434` |
 | Frontend dev | Vite @ `:5173`, proxy to backend @ `:8001` via `VITE_API_PROXY_TARGET` |
-| Onboarding | page at `/dealer-ai-onboarding` — local-state only, no persistence |
+| Onboarding | page at `/dealer-ai-onboarding` — persisted via `GET\|PUT\|PATCH /api/dealer-ai/onboarding/profile/` (singleton, one-store) |
 
 ## Read order (every session)
 
@@ -50,21 +50,17 @@ Supporting (read on demand):
 
 ## Current next task
 
-**SESSION_008 — Persist onboarding config**
+**SESSION_009 — open**. See `00-START-NEXT-SESSION.md` for the
+hand-written priority block. SESSION_008 (onboarding config persistence)
+shipped on 2026-05-02 — handoff at
+`docs/handoffs/SESSION_008_persist_onboarding_config.md`.
 
-### Scope
-
-- Backend persistence for the one-store onboarding profile.
-- API save / load endpoints.
-- Replace the local-state form behavior in `DealerOnboardingPage.tsx` with save/load against the API.
-- Field shapes are locked in v0 — do not introduce new fields.
-
-### Out of scope
-
-- No auth or RBAC expansion.
-- No multi-store / multi-tenant work.
-- No full salesperson-agent backend.
-- No changes to demo behavior, LLM provider, payment engine, candidate classifier, or inventory selection.
+The strongest follow-on candidate is wiring the persisted onboarding
+fields (`dealership_greeting`, `banned_phrases`, `payment_disclaimer`,
+`escalation_rule`) into the chat engine's `_build_system_message` and
+post-LLM scrub stack so the data captured in SESSION_008 actually shapes
+AI voice. See SESSION_008 handoff §"Recommended next session" for two
+alternatives.
 
 ## What to skip or treat carefully
 
