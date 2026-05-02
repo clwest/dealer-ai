@@ -13,6 +13,7 @@ import {
 import type { ComponentType, SVGProps } from "react";
 
 import { Button } from "@/components/ui/button";
+import PublicPreviewDialog from "@/components/PublicPreviewDialog";
 import {
   Sheet,
   SheetContent,
@@ -195,7 +196,10 @@ function TopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           · {STORE_LOCATION}
         </span>
       </div>
-      <AIActiveIndicator />
+      <div className="flex items-center gap-2 sm:gap-3">
+        <PublicPreviewDialog />
+        <AIActiveIndicator />
+      </div>
     </header>
   );
 }

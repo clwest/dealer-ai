@@ -8,6 +8,7 @@ import DealerAIDemo from "@/pages/DealerAIDemo";
 import DealerAdmin from "@/pages/DealerAdmin";
 import DealerOnboardingPage from "@/pages/DealerOnboardingPage";
 import DealerOverviewPage from "@/pages/DealerOverviewPage";
+import EmbedAssistantPage from "@/pages/EmbedAssistantPage";
 import InventoryPreviewPage from "@/pages/InventoryPreviewPage";
 import LeadsPage from "@/pages/LeadsPage";
 import LiveAssistantPage from "@/pages/LiveAssistantPage";
@@ -24,6 +25,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       }}
     >
       <Routes>
+        {/* Public embed surface — rendered OUTSIDE the OS shell so a
+            dealer can drop it into their public site via iframe
+            without inheriting any sidebar / topbar / dashboard
+            chrome. Must come before the catch-all "/" route. */}
+        <Route path="/embed/assistant" element={<EmbedAssistantPage />} />
+
         <Route path="/" element={<App />}>
           <Route
             index
