@@ -184,3 +184,168 @@ class ManagerChatRespectsOnboardingOverridesTests(TestCase):
             )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["reply"], "Tell me a bit about what you need.")
+
+
+# ---- SESSION_010 hotfix: card-implying phrase scrub -----------------------
+
+
+class ManagerChatNoCardImplicationTests(TestCase):
+    """Hotfix regression: the manager-chat endpoint never renders cards,
+    so the reply must never imply visible options. Two layers of
+    defense: (1) MANAGER_TEST_HINT system message tells the LLM not
+    to produce card-implying language; (2) scrub_card_implying_phrases
+    in the view strips any sentences that slip through."""
+
+    def test_user_reported_bad_reply_is_repaired(self):
+        """The exact pattern reported in the SESSION_010 hotfix issue:
+        an LLM reply that splits across three card-implying sentences
+        ending in "Which one of these trucks catches your eye?"."""
+        bad_reply = (
+            "Wanting a truck under $30k means you're looking at some great "
+            "options. Let me show you some trucks that fit your budget. "
+            "Here are a few options: Which one of these trucks catches "
+            "your eye?"
+        )
+        provider = MockLLMProvider(replies=[json_reply({}), bad_reply])
+        with _ProviderInjector(provider):
+            res = self.client.post(
+                URL,
+                data=json.dumps({"message": "I want a truck under 30k"}),
+                content_type="application/json",
+            )
+        self.assertEqual(res.status_code, 200, res.content)
+        reply = res.json()["reply"]
+        # None of the reported card-implying phrasings may survive.
+        forbidden = [
+            "here are a few options",
+            "let me show you",
+            "let's take a look",
+            "take a look at some",
+            "these vehicles",
+            "these trucks",
+            "which one of these",
+            "take a look at these",
+            "pick one of these",
+            "looking at some great options",
+        ]
+        for phrase in forbidden:
+            self.assertNotIn(
+                phrase,
+                reply.lower(),
+                f"manager-chat reply must not imply visible cards (saw {phrase!r})",
+            )
+
+    def test_safe_fallback_when_every_sentence_strips(self):
+        # Pathological case: every sentence is card-implying. The view
+        # must still return SOMETHING usable — the safe fallback.
+        all_bad = (
+            "Let me show you some trucks. "
+            "Here are a few options. "
+            "Take a look at these models."
+        )
+        provider = MockLLMProvider(replies=[json_reply({}), all_bad])
+        with _ProviderInjector(provider):
+            res = self.client.post(
+                URL,
+                data=json.dumps({"message": "I want a truck"}),
+                content_type="application/json",
+            )
+        self.assertEqual(res.status_code, 200)
+        reply = res.json()["reply"]
+        self.assertTrue(reply.strip())
+        # The safe fallback is a manager-coaching prompt; it ends with a
+        # focused next-step question (not a card promise).
+        self.assertIn("?", reply)
+        for phrase in [
+            "here are a few options",
+            "let me show you",
+            "these trucks",
+            "take a look at these",
+        ]:
+            self.assertNotIn(phrase, reply.lower())
+
+    def test_clean_reply_passes_through_unmodified(self):
+        # The hint is meant to nudge the LLM, but a reply that already
+        # avoids the patterns must NOT be modified — the scrub is
+        # additive, not subtractive on good prose.
+        clean_reply = (
+            "Under $30k, I'd narrow what matters most for this customer "
+            "first — 4WD, crew cab, or lowest miles? That gives the "
+            "salesperson a way to focus before quoting inventory."
+        )
+        provider = MockLLMProvider(replies=[json_reply({}), clean_reply])
+        with _ProviderInjector(provider):
+            res = self.client.post(
+                URL,
+                data=json.dumps({"message": "I want a truck under 30k"}),
+                content_type="application/json",
+            )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["reply"], clean_reply)
+
+    def test_hint_reaches_llm_call(self):
+        # Inspect MockLLMProvider.calls[1] (chat-reply call): system
+        # messages must include the MANAGER_TEST_HINT marker.
+        from dealer_ai.services.manager_chat_response import MANAGER_TEST_HINT
+
+        provider = MockLLMProvider(replies=[json_reply({}), "ok"])
+        with _ProviderInjector(provider):
+            self.client.post(
+                URL,
+                data=json.dumps({"message": "hi"}),
+                content_type="application/json",
+            )
+        # provider.calls = [intent_parse_call, chat_reply_call]
+        chat_systems = "\n\n".join(
+            m["content"]
+            for m in provider.calls[1]
+            if m.get("role") == "system"
+        )
+        # Use a marker phrase from the hint that's specific enough to
+        # avoid false matches with SYSTEM_PROMPT.
+        self.assertIn("MANAGER TEST MODE", chat_systems)
+        # Sanity: the hint also names at least one of the forbidden
+        # phrasings so the LLM has the explicit list.
+        self.assertIn("Which one catches your eye", chat_systems)
+
+
+class CustomerChatNotAffectedByManagerHintTests(TestCase):
+    """The hint and scrub must NOT leak into the customer-facing chat
+    path. A regular ``send_message`` call (no manager_test channel)
+    produces the original reply unchanged."""
+
+    def test_send_message_does_not_inject_manager_hint(self):
+        from dealer_ai.models import ChatSession
+        from dealer_ai.services.chat_engine import ChatEngine
+
+        session = ChatSession.objects.create()  # no channel metadata
+        provider = MockLLMProvider(
+            replies=[json_reply({}), "Here are a few options for you."]
+        )
+        engine = ChatEngine(session=session, provider=provider)
+        engine.handle_user_message("show me trucks")
+        # Inspect the chat-reply call: NO manager-test marker.
+        chat_systems = "\n\n".join(
+            m["content"]
+            for m in provider.calls[1]
+            if m.get("role") == "system"
+        )
+        self.assertNotIn("MANAGER TEST MODE", chat_systems)
+
+    def test_send_message_reply_is_not_card_scrubbed(self):
+        # Customer chat keeps card-implying phrasing — those replies are
+        # accompanied by real cards in the customer demo. The view-level
+        # card scrub lives ONLY in manager_chat.
+        from dealer_ai.models import ChatSession
+        from dealer_ai.services.chat_engine import ChatEngine
+
+        session = ChatSession.objects.create()
+        provider = MockLLMProvider(
+            replies=[json_reply({}), "Here are a few options for you."]
+        )
+        engine = ChatEngine(session=session, provider=provider)
+        result = engine.handle_user_message("show me trucks")
+        self.assertIn(
+            "here are a few options",
+            result.assistant_message.content.lower(),
+        )

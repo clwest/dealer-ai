@@ -27,12 +27,12 @@ Verified 2026-05-02 (after SESSION_010). Update if any row changes.
 | Surface | State |
 |---|---|
 | Demo | demo-ready — 5/5 canonical scenarios pass (`docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`) |
-| Backend tests | **1180 passed, 1 skipped, 0 failed** (`cd backend && python manage.py test dealer_ai`) |
+| Backend tests | **1186 passed, 1 skipped, 0 failed** (`cd backend && python manage.py test dealer_ai`) |
 | Frontend | typecheck + build clean (`cd frontend && npx tsc --noEmit && npx vite build`) |
 | LLM | Ollama llama3.2:latest @ `http://localhost:11434` |
 | Frontend dev | Vite @ `:5173`, proxy to backend @ `:8001` via `VITE_API_PROXY_TARGET` |
 | Onboarding | page at `/dealer-ai-onboarding` — persisted via `GET\|PUT\|PATCH /api/dealer-ai/onboarding/profile/` (singleton, one-store); **fields shape live chat** — greeting/tone/approved/banned/disclaimer/escalation flow into the system prompt and post-LLM scrub stack |
-| Manager chat tester | page at `/dealer-ai-manager-chat`, endpoint `POST /api/dealer-ai/manager-chat/`. Stateless; reuses chat engine + onboarding overrides. Sessions tagged `channel=manager_test` so customer dashboards stay clean. |
+| Manager chat tester | page at `/dealer-ai-manager-chat`, endpoint `POST /api/dealer-ai/manager-chat/`. Stateless; reuses chat engine + onboarding overrides. Sessions tagged `channel=manager_test` so customer dashboards stay clean. Manager-test channel skips inventory/budget/cash blocks and injects `MANAGER_TEST_HINT` so the reply never implies cards (hotfix 2026-05-02). |
 
 ## Read order (every session)
 

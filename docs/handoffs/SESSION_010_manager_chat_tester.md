@@ -1,8 +1,8 @@
 ---
 date: 2026-05-02
-title: SESSION_010 — manager-side chat tester
+title: SESSION_010 — manager-side chat tester (+ hotfix)
 type: implementation-summary
-test_baseline: 1180
+test_baseline: 1186
 ---
 
 # Session handoff — manager chat tester
@@ -229,3 +229,117 @@ Three plausible directions, in order of payoff:
 
 Recommend **option 1** if the dealership-pilot workflow is the next
 real-world driver.
+
+---
+
+## Hotfix appendix (2026-05-02)
+
+After SESSION_010 shipped, the user reported a broken-feeling manager
+reply when changing onboarding tone to *"Firm"* and prompting *"I want
+a truck under 30k"*:
+
+> *"Wanting a truck under $30k means you're looking at some great
+> options. Let me show you some trucks that fit your budget. Here are
+> a few options: Which one of these trucks catches your eye?"*
+
+The reply implied vehicle cards were rendered, but the manager-chat
+endpoint never returns cards. Two-layer fix:
+
+### 1. Pre-LLM hint — `MANAGER_TEST_HINT`
+
+New module `backend/dealer_ai/services/manager_chat_response.py`. The
+chat engine reads `session.metadata["channel"]` and, when set to
+`manager_test`:
+
+- **Skips the inventory / budget / cash-mode system blocks entirely.**
+  Without this, the LLM sees the AVAILABLE INVENTORY block and
+  produces phrases like *"the cards above have the details"* — the
+  inventory block was actively reinforcing the broken behavior.
+- **Adds the `MANAGER_TEST_HINT` system message** explicitly listing
+  the forbidden phrasings (*"Here are a few options"*, *"Let me show
+  you"*, *"Let's take a look"*, *"Take a look at some"*, *"These
+  trucks/cars/SUVs"*, *"Which one catches your eye"*, *"options
+  below"*, *"check out these"*) and instructing the LLM to speak as
+  if no inventory list is visible.
+
+Customer-facing chat (`/dealer-ai-demo`, `/api/dealer-ai/chat/...`)
+is unaffected — the hint is gated on the channel metadata which only
+the manager-chat view sets.
+
+### 2. Post-LLM scrub — `scrub_card_implying_phrases`
+
+Pure-function safety net invoked in `views.manager_chat` after the
+engine returns. Strips sentences that match any card-implying pattern.
+If every sentence strips, returns a safe fallback:
+
+> *"Under that budget I'd start by narrowing what matters most — 4WD,
+> crew cab, towing, or lowest miles — so the conversation focuses
+> before quoting specific inventory. What's the priority for this
+> customer?"*
+
+### Live before / after
+
+**Before:** the user's reported reply (above).
+
+**After (no profile saved):**
+> *"Most trucks are above $30,000. What's your budget for down payment
+> and financing?"*
+
+**After (with onboarding tone = "Firm"):**
+> *"Let's explore some options. We have a few models available in that
+> price range. One option is the Chevrolet Colorado LT, which starts
+> at around $25,000 and offers a good balance of features and fuel
+> efficiency. Another option is the Ford Ranger XL, starting at about
+> $24,000, with a strong engine and decent towing capacity. What's most
+> important to you: payload capacity, towing capacity, or something
+> else?"*
+
+Both end with a focused next-step question and avoid every reported
+card-implying phrasing.
+
+### Tests added (6)
+
+In `tests/test_manager_chat.py`:
+
+- `ManagerChatNoCardImplicationTests.test_user_reported_bad_reply_is_repaired`
+  — replays the exact bad reply from the issue through `MockLLMProvider`
+  and asserts every reported forbidden phrasing is stripped.
+- `ManagerChatNoCardImplicationTests.test_safe_fallback_when_every_sentence_strips`
+  — pathological case: every sentence card-implying.
+- `ManagerChatNoCardImplicationTests.test_clean_reply_passes_through_unmodified`
+  — no false positives on coaching prose.
+- `ManagerChatNoCardImplicationTests.test_hint_reaches_llm_call`
+  — `MockLLMProvider` introspection: chat-reply call's system messages
+  contain the `MANAGER TEST MODE` marker.
+- `CustomerChatNotAffectedByManagerHintTests.test_send_message_does_not_inject_manager_hint`
+  — regular chat path has NO `MANAGER TEST MODE` marker.
+- `CustomerChatNotAffectedByManagerHintTests.test_send_message_reply_is_not_card_scrubbed`
+  — customer-facing replies keep card-implying phrasing (cards are
+  there).
+
+### File changes
+
+```
+backend/dealer_ai/
+  services/chat_engine.py                    (+18 -7) channel-aware skip
+  services/manager_chat_response.py          (new, ~140 lines)
+  views.py                                   (+11 -1) view-level scrub
+  tests/test_manager_chat.py                 (+~110 lines, 6 new tests)
+docs/handoffs/SESSION_010_manager_chat_tester.md  (this appendix)
+```
+
+### Verification
+
+```bash
+cd backend && source .venv/bin/activate
+python manage.py test dealer_ai
+# Ran 1186 tests in 2.582s — OK (skipped=1)
+```
+
+New baseline: **1186 pass, 1 skipped, 0 failed** (was 1180; +6 new).
+
+Live curl against the running dev backend confirmed both the
+no-profile and `sales_tone="Firm"` scenarios produce coaching prose
+without card-implying language.
+
+Frontend not touched.

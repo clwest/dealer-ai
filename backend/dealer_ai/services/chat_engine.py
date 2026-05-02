@@ -23,6 +23,7 @@ from .intent_parser import (
 from .inventory_search import search_vehicles
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
+from .manager_chat_response import MANAGER_TEST_HINT
 from .onboarding_overrides import (
     append_disclaimer,
     format_store_voice_block,
@@ -6189,24 +6190,45 @@ class ChatEngine:
         onboarding = load_overrides()
         store_voice_block = format_store_voice_block(onboarding)
 
+        # SESSION_010 hotfix: manager-test channel renders no vehicle cards,
+        # so the LLM must not produce sentences implying visible options
+        # ("Here are a few options", "Let me show you", etc.). Customer-
+        # facing chat is unaffected — the hint is gated on the channel
+        # metadata set by the manager-chat view only.
+        session_metadata = self.session.metadata or {}
+        manager_test_mode = (
+            session_metadata.get("channel") == "manager_test"
+        )
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
         ]
         if store_voice_block:
             messages.append({"role": "system", "content": store_voice_block})
-        if budget_block:
-            messages.append({"role": "system", "content": budget_block})
-        messages.append({"role": "system", "content": inventory_block})
-        # Item 15 — cash-mode multi-card comparison rule. Injected
-        # AFTER the inventory block so the LLM sees the cards, then
-        # the comparison directive. Skipped when fewer than 2 cards
-        # are present (no comparison to make).
-        if cash_mode_active and len(matched) >= 2:
-            cash_block = _format_cash_mode_block(matched)
-            if cash_block:
-                messages.append(
-                    {"role": "system", "content": cash_block}
-                )
+        if manager_test_mode:
+            # Manager-test mode is a coaching surface: no cards, no
+            # budget context, no cash-mode comparison directive. The
+            # LLM gets the system prompt + voice overrides + this hint
+            # only, so it produces a manager-facing coaching reply
+            # rather than referencing an inventory list it thinks is
+            # visible. Without this gate, the AVAILABLE INVENTORY block
+            # below would prompt phrases like "the cards above have
+            # the details", which mislead the manager.
+            messages.append({"role": "system", "content": MANAGER_TEST_HINT})
+        else:
+            if budget_block:
+                messages.append({"role": "system", "content": budget_block})
+            messages.append({"role": "system", "content": inventory_block})
+            # Item 15 — cash-mode multi-card comparison rule. Injected
+            # AFTER the inventory block so the LLM sees the cards, then
+            # the comparison directive. Skipped when fewer than 2 cards
+            # are present (no comparison to make).
+            if cash_mode_active and len(matched) >= 2:
+                cash_block = _format_cash_mode_block(matched)
+                if cash_block:
+                    messages.append(
+                        {"role": "system", "content": cash_block}
+                    )
         if profile_block:
             messages.append({"role": "system", "content": profile_block})
         messages.extend(self._history_for_llm())
