@@ -137,6 +137,32 @@ export default function DealerAIDemo() {
   }
 
   return (
+    <div className="space-y-4">
+      {/* Demo Mode banner — frames the page for non-technical viewers
+          so they immediately understand they're looking at the live
+          customer-facing assistant. Pure presentational; no state. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ford-blue/20 bg-gradient-to-r from-ford-blue/5 via-white to-ford-accent/5 px-5 py-3 shadow-soft">
+        <div>
+          <div className="flex items-center gap-2 text-base font-bold text-ford-ink">
+            <Sparkles className="h-4 w-4 text-ford-accent" />
+            AI Sales Assistant — Live Demo
+          </div>
+          <div className="text-xs text-slate-500">
+            Ask like a customer. I'll show you what your team would say.
+          </div>
+        </div>
+        <div
+          className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+          title="Backend + Ollama healthy"
+        >
+          <span
+            aria-hidden
+            className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500"
+          />
+          Live
+        </div>
+      </div>
+
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
       {/* Chat column */}
       <section className="card flex h-[78vh] flex-col">
@@ -147,7 +173,7 @@ export default function DealerAIDemo() {
             </div>
             <div>
               <div className="text-sm font-bold text-ford-ink">
-                Ask the Freedom Ford concierge
+                Ask the Freedom Ford sales assistant
               </div>
               <div className="text-xs text-slate-500">
                 Inventory · Payments · Comparisons · Handoff to sales
@@ -173,10 +199,10 @@ export default function DealerAIDemo() {
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500">
               <Sparkles className="h-6 w-6 text-ford-accent" />
               <div className="max-w-md text-sm">
-                Hi! I'm Freedom Ford's AI concierge. Tell me what you're
-                looking for — I'll find vehicles in our inventory, sketch
-                realistic payments, and connect you with sales when you're
-                ready.
+                Welcome to Freedom Ford. Tell me what you're shopping for —
+                a payment, a body style, a must-have feature. I'll pull
+                live inventory, sketch realistic numbers, and hand you
+                off to a real advisor when you're ready.
               </div>
               <div className="mt-2 flex flex-wrap justify-center gap-2">
                 {SUGGESTED_PROMPTS.map((p) => (
@@ -337,6 +363,7 @@ export default function DealerAIDemo() {
         onClose={() => setDetailVehicleId(null)}
         onToggleSelect={toggleVehicle}
       />
+    </div>
     </div>
   );
 }

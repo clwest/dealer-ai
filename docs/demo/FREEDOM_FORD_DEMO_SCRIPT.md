@@ -31,6 +31,21 @@ unavailable* below.
 
 ---
 
+## Presenter "wow" lines
+
+Drop one or both of these into the demo at natural pause points
+— right after a prompt lands, while the audience is reading the
+reply. Short, non-technical, dealership-friendly:
+
+- *"Notice it's not listing specs — it's guiding a buying decision."*
+  (Best after Prompt 2 or Prompt 5, when the assistant picks a
+  side instead of reciting features.)
+- *"This is what your best salesperson sounds like — on every lead, at 2 a.m."*
+  (Best at the close, after Prompt 5, while the audience is still
+  looking at the decisive recommendation.)
+
+---
+
 ## The 5-prompt flow
 
 | # | Prompt | Time | What it proves |

@@ -45,6 +45,15 @@ export default function ChatBubble({ message }: Props) {
       : null;
 
   return (
+    <div className="flex flex-col gap-1">
+      {!isUser ? (
+        // Subtle framing label so non-technical viewers immediately
+        // understand the bubble below is what the salesperson would
+        // say to a customer. Aligns with the avatar (left side).
+        <div className="ml-11 text-[10.5px] font-medium uppercase tracking-wider text-slate-400">
+          Recommended response to customer
+        </div>
+      ) : null}
     <div
       className={cn(
         "flex gap-3",
@@ -119,6 +128,7 @@ export default function ChatBubble({ message }: Props) {
           <div className="whitespace-pre-wrap">{message.content}</div>
         )}
       </div>
+    </div>
     </div>
   );
 }
