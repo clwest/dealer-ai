@@ -11,10 +11,12 @@ import { CircleCheck, RotateCcw } from "lucide-react";
 
 import AssistantChat from "@/components/AssistantChat";
 import { Button } from "@/components/ui/button";
+import { useBrand } from "@/lib/brand";
 
 const TRUST_POINTS = ["Real inventory", "Payment-aware", "No pressure"];
 
 export default function LiveAssistantPage() {
+  const brand = useBrand();
   // Bump `chatKey` to remount AssistantChat with fresh state. No
   // imperative API needed; the child component owns its own state
   // and `key` is React's contract for "start over".
@@ -58,10 +60,11 @@ export default function LiveAssistantPage() {
       <AssistantChat
         key={chatKey}
         onActivityChange={setHasMessages}
+        welcomeTitle={`Hi — I'm ${brand.possessiveName} sales assistant.`}
       />
 
       <p className="text-center text-[11px] text-muted-foreground">
-        Estimates only. A Freedom Ford advisor confirms real numbers.
+        Estimates only. A {brand.dealershipName} advisor confirms real numbers.
       </p>
     </div>
   );

@@ -21,10 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useBrand } from "@/lib/brand";
 
 const EMBED_PATH = "/embed/assistant";
 
 export default function PublicPreviewDialog() {
+  const brand = useBrand();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -78,13 +80,14 @@ export default function PublicPreviewDialog() {
         <DialogHeader>
           <DialogTitle>Public Preview</DialogTitle>
           <DialogDescription>
-            This is how the assistant appears on your website.
+            This is how the {brand.dealershipName} assistant appears on your
+            website.
           </DialogDescription>
         </DialogHeader>
 
         <div className="overflow-hidden rounded-lg border border-border bg-muted/40">
           <iframe
-            title="Live Assistant embed preview"
+            title={`${brand.embedAssistantName} preview`}
             src={embedUrl}
             className="h-[480px] w-full"
             style={{ border: "none" }}

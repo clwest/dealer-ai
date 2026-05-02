@@ -1,4 +1,4 @@
-// SESSION_017 — public-embed surface.
+// SESSION_017 / SESSION_018 — public-embed surface.
 //
 // Lives at /embed/assistant, mounted *outside* the OS shell so a
 // dealer can drop it into their public marketing site via iframe
@@ -6,27 +6,25 @@
 //
 // Same chat behavior as the dealer-side Live Assistant — the
 // underlying AssistantChat component is shared so the two
-// surfaces never drift. Differences are pure framing:
-//   - No OS shell (this page is rendered as a top-level route).
-//   - Mini brand bar at the top with the dealer name.
-//   - Trust row sits inline with the brand bar so first-time
-//     visitors see the value props above the fold.
-//   - Subtle "Powered by AI Sales Assistant" footer instead of
-//     the dealer-side estimate disclaimer.
+// surfaces never drift. Differences are pure framing.
 //
-// No backend, no chat tuning, no inventory logic touched per the
-// SESSION_017 guardrails.
+// SESSION_018: brand strings (dealership name, location, footer
+// disclaimer, welcome line) now flow from the existing
+// onboarding profile via `useBrand()`. Hard-coded fallbacks
+// preserve the verified Sam Wampler's Freedom Ford McAlester
+// identity when the profile is missing or empty.
 
 import { useState } from "react";
 import { CircleCheck, RotateCcw } from "lucide-react";
 
 import AssistantChat from "@/components/AssistantChat";
 import { Button } from "@/components/ui/button";
+import { useBrand, type Brand } from "@/lib/brand";
 
-const STORE_NAME = "Sam's Freedom Ford";
 const TRUST_POINTS = ["Real inventory", "Payment-aware", "No pressure"];
 
 export default function EmbedAssistantPage() {
+  const brand = useBrand();
   const [chatKey, setChatKey] = useState(0);
   const [hasMessages, setHasMessages] = useState(false);
 
@@ -38,6 +36,7 @@ export default function EmbedAssistantPage() {
   return (
     <div className="flex h-dvh min-h-[480px] flex-col bg-background text-foreground">
       <BrandBar
+        brand={brand}
         showReset={hasMessages}
         onReset={handleReset}
       />
@@ -46,20 +45,22 @@ export default function EmbedAssistantPage() {
         <AssistantChat
           key={chatKey}
           onActivityChange={setHasMessages}
-          welcomeTitle={`Hi — I'm ${STORE_NAME}'s sales assistant.`}
+          welcomeTitle={`Hi — I'm ${brand.possessiveName} sales assistant.`}
           welcomeBody="Tell me what you're looking for and I'll show you what's on our lot. Try one of these to start, or type your own."
         />
       </main>
 
-      <Footer />
+      <Footer brand={brand} />
     </div>
   );
 }
 
 function BrandBar({
+  brand,
   showReset,
   onReset,
 }: {
+  brand: Brand;
   showReset: boolean;
   onReset: () => void;
 }) {
@@ -67,10 +68,10 @@ function BrandBar({
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-3">
-          <BrandMark />
+          <BrandMark brand={brand} />
           <div className="leading-tight">
             <div className="text-sm font-semibold tracking-tight text-foreground">
-              {STORE_NAME} Assistant
+              {brand.embedAssistantName}
             </div>
             <TrustRow />
           </div>
@@ -92,22 +93,24 @@ function BrandBar({
   );
 }
 
-function BrandMark() {
+function BrandMark({ brand }: { brand: Brand }) {
   // Use the same dealer asset the OS shell loads so the brand reads
-  // identically in both contexts. If the asset is missing, fall
-  // back to a small Ford-blue chip so the bar doesn't collapse.
+  // identically in both contexts. Logo asset is intentionally NOT
+  // keyed off onboarding-profile values — that's a brand-team
+  // upload, not a derivable string. If the asset is missing, fall
+  // back to a small Ford-blue chip with the dealer's initials.
   const [errored, setErrored] = useState(false);
   if (errored) {
     return (
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
-        FF
+        {initials(brand.dealershipName)}
       </span>
     );
   }
   return (
     <img
       src="/branding/sams-freedom-ford-logo.jpg"
-      alt={STORE_NAME}
+      alt={brand.dealershipName}
       onError={() => setErrored(true)}
       className="h-9 w-auto select-none"
       draggable={false}
@@ -128,13 +131,28 @@ function TrustRow() {
   );
 }
 
-function Footer() {
+function Footer({ brand }: { brand: Brand }) {
   return (
     <footer className="border-t border-border bg-card">
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 py-2 text-[11px] text-muted-foreground sm:px-6">
-        <span>Estimates only. A {STORE_NAME} advisor confirms real numbers.</span>
+        <span>
+          Estimates only. A {brand.dealershipName} advisor confirms real
+          numbers.
+        </span>
         <span className="hidden sm:inline">Powered by AI Sales Assistant</span>
       </div>
     </footer>
   );
+}
+
+function initials(name: string): string {
+  // Two-letter chip fallback when the logo image fails. Walks the
+  // first words; "Sam Wampler's Freedom Ford" → "SF".
+  const parts = name
+    .split(/\s+/)
+    .map((s) => s.replace(/[^A-Za-z]/g, ""))
+    .filter(Boolean);
+  if (parts.length === 0) return "FF";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }

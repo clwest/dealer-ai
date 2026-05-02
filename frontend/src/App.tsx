@@ -21,6 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useBrand, type Brand } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -42,15 +43,16 @@ const NAV_ITEMS: NavItem[] = [
 
 // Real dealer logo, captured from samsfreedomford.com on 2026-05-02 and
 // stored locally so the demo doesn't break when the dealer's CDN
-// rotates. See docs/handoffs/SESSION_017_branding_pass.md.
+// rotates. The logo asset is intentionally NOT keyed off
+// onboarding-profile values — that's a brand-team upload, not a
+// derivable string. See SESSION_018 handoff for the rationale.
 const LOGO_SRC = "/branding/sams-freedom-ford-logo.jpg";
-const STORE_NAME = "Sam's Freedom Ford";
-const STORE_LOCATION = "McAlester";
 const PRODUCT_LABEL = "Dealer OS";
 
 export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
+  const brand = useBrand();
 
   // Close the mobile drawer whenever the route changes — clicking a
   // nav link inside the Sheet should land the user on the new page
@@ -62,9 +64,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen">
-        <DesktopSidebar />
+        <DesktopSidebar brand={brand} />
         <div className="flex flex-1 flex-col">
-          <TopBar onOpenMobileNav={() => setMobileNavOpen(true)} />
+          <TopBar
+            brand={brand}
+            onOpenMobileNav={() => setMobileNavOpen(true)}
+          />
           <main className="flex-1 px-4 py-6 sm:px-6">
             <Outlet />
           </main>
@@ -82,12 +87,12 @@ export default function App() {
                 visually hidden and let <BrandHeader /> handle the actual
                 visual brand block. */}
             <SheetTitle className="sr-only">
-              {STORE_NAME} {STORE_LOCATION} — {PRODUCT_LABEL}
+              {brand.displayName} — {PRODUCT_LABEL}
             </SheetTitle>
             <SheetDescription className="sr-only">
               Primary navigation for the {PRODUCT_LABEL}.
             </SheetDescription>
-            <BrandHeader compact />
+            <BrandHeader brand={brand} compact />
           </SheetHeader>
           <NavList />
         </SheetContent>
@@ -96,13 +101,13 @@ export default function App() {
   );
 }
 
-function DesktopSidebar() {
+function DesktopSidebar({ brand }: { brand: Brand }) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-muted/40 sm:flex">
-      <BrandHeader />
+      <BrandHeader brand={brand} />
       <NavList />
-      <div className="border-t border-border px-5 py-4 text-xs text-muted-foreground">
-        Local · MVP
+      <div className="border-t border-border px-5 py-4 text-[11px] italic text-muted-foreground">
+        {brand.tagline}
       </div>
     </aside>
   );
@@ -112,7 +117,13 @@ function DesktopSidebar() {
  *  Renders the dealer's real logo with a graceful text fallback if the
  *  asset is missing. The product label ("Dealer OS") sits beneath as
  *  small caps so it never competes with the brand. */
-function BrandHeader({ compact = false }: { compact?: boolean }) {
+function BrandHeader({
+  brand,
+  compact = false,
+}: {
+  brand: Brand;
+  compact?: boolean;
+}) {
   const [logoError, setLogoError] = useState(false);
   const padding = compact ? "px-4 py-3" : "px-5 py-4";
   const logoHeight = compact ? "h-9" : "h-11";
@@ -121,11 +132,11 @@ function BrandHeader({ compact = false }: { compact?: boolean }) {
     <div className={cn("flex flex-col gap-1.5 border-b border-border", padding)}>
       <div className="flex items-center">
         {logoError ? (
-          <BrandTextFallback />
+          <BrandTextFallback brand={brand} />
         ) : (
           <img
             src={LOGO_SRC}
-            alt={`${STORE_NAME} ${STORE_LOCATION}`}
+            alt={brand.displayName}
             onError={() => setLogoError(true)}
             className={cn(logoHeight, "w-auto select-none")}
             draggable={false}
@@ -139,13 +150,15 @@ function BrandHeader({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function BrandTextFallback() {
+function BrandTextFallback({ brand }: { brand: Brand }) {
   return (
     <div className="flex flex-col leading-tight">
       <span className="text-sm font-semibold tracking-tight text-foreground">
-        {STORE_NAME}
+        {brand.dealershipName}
       </span>
-      <span className="text-xs text-muted-foreground">{STORE_LOCATION}</span>
+      <span className="text-xs text-muted-foreground">
+        {brand.storeLocation}
+      </span>
     </div>
   );
 }
@@ -175,7 +188,13 @@ function NavList() {
   );
 }
 
-function TopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
+function TopBar({
+  brand,
+  onOpenMobileNav,
+}: {
+  brand: Brand;
+  onOpenMobileNav: () => void;
+}) {
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-background px-4 sm:px-6">
       <div className="flex items-center gap-2 sm:gap-3">
@@ -190,10 +209,10 @@ function TopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           <Menu className="h-4 w-4" />
         </Button>
         <span className="text-sm font-semibold tracking-tight text-foreground">
-          {STORE_NAME}
+          {brand.topbarName}
         </span>
         <span className="text-xs text-muted-foreground">
-          · {STORE_LOCATION}
+          · {brand.storeLocation}
         </span>
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
