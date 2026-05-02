@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  Boxes,
   Building2,
   CheckCircle2,
   Circle,
@@ -22,6 +23,7 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { DEFAULT_DEALER, PRODUCT } from "@/config/defaultDealer";
 import {
   fetchOnboardingProfile,
   saveOnboardingProfile,
@@ -425,6 +427,18 @@ export default function DealerOnboardingPage() {
         </div>
       </SectionCard>
 
+      {/* SESSION_020 — Dealer Kit Status.
+          Read-only summary that mirrors the Dealership profile
+          fields above plus the kit-level constants from
+          config/defaultDealer.ts. Updates live as the manager
+          types — they see exactly what the OS chrome and embed
+          will read once they save. */}
+      <DealerKitStatusCard
+        dealershipName={dealership.name}
+        storeLocation={dealership.location}
+        brands={dealership.brands}
+      />
+
       {/* Section 3 — Manager preferences */}
       <SectionCard
         icon={<Settings className="h-4 w-4" />}
@@ -683,6 +697,89 @@ interface SectionCardProps {
   subtitle?: string;
   right?: React.ReactNode;
   children: React.ReactNode;
+}
+
+/**
+ * SESSION_020 — Dealer Kit Status.
+ *
+ * Read-only summary of how the active dealer identity flows into
+ * the OS shell and embed. Values mirror the Dealership profile
+ * form state above, so as a manager edits the fields the card
+ * updates in real time — they can preview the change before
+ * committing it via Save.
+ *
+ * Product / kit-level identity (productName, productSubtitle,
+ * logoPath) is sourced from `config/defaultDealer.ts`. Active
+ * dealer values come from form state; falls back to
+ * `DEFAULT_DEALER` when the form hasn't been filled in.
+ */
+function DealerKitStatusCard({
+  dealershipName,
+  storeLocation,
+  brands,
+}: {
+  dealershipName: string;
+  storeLocation: string;
+  brands: string;
+}) {
+  const activeName = dealershipName.trim() || DEFAULT_DEALER.dealershipName;
+  const activeLocation =
+    storeLocation.trim() || DEFAULT_DEALER.storeLocation;
+  const activeBrands = brands.trim() || DEFAULT_DEALER.brand;
+
+  return (
+    <SectionCard
+      icon={<Boxes className="h-4 w-4" />}
+      title="Dealer Kit Status"
+      subtitle="How your dealer identity flows into the OS and the public embed."
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <StatusRow label="Product">{PRODUCT.productName}</StatusRow>
+        <StatusRow label="Active dealer">{activeName}</StatusRow>
+        <StatusRow label="Location">{activeLocation}</StatusRow>
+        <StatusRow label="Brand(s)">{activeBrands}</StatusRow>
+        <StatusRow label="Logo">
+          <code className="font-mono text-[11px]">{DEFAULT_DEALER.logoPath}</code>
+          <span className="ml-2 text-[11px] text-slate-500">
+            (static — swap via config)
+          </span>
+        </StatusRow>
+        <StatusRow label="Status">
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"
+            />
+            Single-dealer configuration
+          </span>
+        </StatusRow>
+      </div>
+      <p className="mt-4 text-xs leading-relaxed text-slate-500">
+        Changing these fields updates the visible dealer identity across
+        the OS and embed. Logo and feed integrations are configured
+        separately — see{" "}
+        <code className="font-mono text-[11px]">docs/DEALER_DUPLICATION_GUIDE.md</code>{" "}
+        for the full workflow.
+      </p>
+    </SectionCard>
+  );
+}
+
+function StatusRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 text-sm text-ford-ink">{children}</div>
+    </div>
+  );
 }
 
 function SectionCard({
