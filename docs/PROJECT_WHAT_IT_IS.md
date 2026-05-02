@@ -9,7 +9,7 @@
 
 ## In one paragraph
 
-Freedom Ford Dealer AI: budget-constrained vehicle selection on Ollama llama3.2 (3.2B); deterministic backend math + 16-stage post-LLM scrub pipeline + state-layer enforcement (intent reset, sticky cash mode, weak-intent budget inference); demo-ready UI (live banner + per-message framing label); onboarding foundation page + future-entity roadmap
+Freedom Ford Dealer AI: budget-constrained vehicle selection on Ollama llama3.2 (3.2B); deterministic backend math + post-LLM scrub pipeline + state-layer enforcement; manager coaching tester with structural enforcement (Shape A or Shape B only); onboarding foundation persisting to DB; shadcn UI primitives bridged onto Tailwind v3
 
 ## Stack
 

@@ -8,13 +8,13 @@
 
 ## What this project is
 
-Freedom Ford Dealer AI: budget-constrained vehicle selection on Ollama llama3.2 (3.2B); deterministic backend math + 16-stage post-LLM scrub pipeline + state-layer enforcement (intent reset, sticky cash mode, weak-intent budget inference); demo-ready UI (live banner + per-message framing label); onboarding foundation page + future-entity roadmap
+Freedom Ford Dealer AI: budget-constrained vehicle selection on Ollama llama3.2 (3.2B); deterministic backend math + post-LLM scrub pipeline + state-layer enforcement; manager coaching tester with structural enforcement (Shape A or Shape B only); onboarding foundation persisting to DB; shadcn UI primitives bridged onto Tailwind v3
 
 ## Discovered notes
 
 The user provided these notes from prior inspection or context:
 
-- 1111 backend tests passing, 1 skipped. Ollama llama3.2:latest verified at :11434. Frontend at :5173 via VITE_API_PROXY_TARGET to :8001. Demo script is 5/5 passing at docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md. Onboarding page at /dealer-ai-onboarding is local-state only. Recent commits: 72015f6 onboarding foundation, db4c343 demo weaponization, fe45cd2 meta-narration leaks, 2cb3e12 demo script.
+- SESSION_011 shipped: structural coaching enforcement for manager chat, Live Chat Mode contract in TRANSLATION_LAYER, shadcn primitives installed with Tailwind v3 bridge. Backend baseline 1210 pass / 1 skip. Next focus is frontend Dealer OS shell and visual polish.
 
 ## Tech stack
 
@@ -52,12 +52,12 @@ Full-stack web app (medium confidence)
 Reasoning: Recognized split monorepo with a Python backend (backend/) and a JavaScript frontend (frontend/).
 
 USER CONTEXT (provided during adopt)
-- Project (per the user): Freedom Ford Dealer AI: budget-constrained vehicle selection on Ollama llama3.2 (3.2B); deterministic backend math + 16-stage post-LLM scrub pipeline + state-layer enforcement (intent reset, sticky cash mode, weak-intent budget inference); demo-ready UI (live banner + per-message framing label); onboarding foundation page + future-entity roadmap
-- Next task (per the user): SESSION_008 — wire onboarding fields to backend persistence. Field shapes locked in v0; build small backend persistence + API, then replace local-state in DealerOnboardingPage.tsx with save/load behavior. Keep one-store profile first. No auth/RBAC expansion. No full salesperson-agent backend yet.
+- Project (per the user): Freedom Ford Dealer AI: budget-constrained vehicle selection on Ollama llama3.2 (3.2B); deterministic backend math + post-LLM scrub pipeline + state-layer enforcement; manager coaching tester with structural enforcement (Shape A or Shape B only); onboarding foundation persisting to DB; shadcn UI primitives bridged onto Tailwind v3
+- Next task (per the user): SESSION_012 — UI redesign with shadcn primitives + Playwright verification
 
 DISCOVERED NOTES / CONTEXT
 The user provided these notes from prior inspection or context:
-- 1111 backend tests passing, 1 skipped. Ollama llama3.2:latest verified at :11434. Frontend at :5173 via VITE_API_PROXY_TARGET to :8001. Demo script is 5/5 passing at docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md. Onboarding page at /dealer-ai-onboarding is local-state only. Recent commits: 72015f6 onboarding foundation, db4c343 demo weaponization, fe45cd2 meta-narration leaks, 2cb3e12 demo script.
+- SESSION_011 shipped: structural coaching enforcement for manager chat, Live Chat Mode contract in TRANSLATION_LAYER, shadcn primitives installed with Tailwind v3 bridge. Backend baseline 1210 pass / 1 skip. Next focus is frontend Dealer OS shell and visual polish.
 
 PRIMARY DETECTION
 Split monorepo — backend=Python, frontend=JavaScript / Node.js
@@ -119,7 +119,7 @@ _These contain files but none with extensions adopt categorizes as source (likel
 
 ## Next milestone
 
-SESSION_008 — wire onboarding fields to backend persistence. Field shapes locked in v0; build small backend persistence + API, then replace local-state in DealerOnboardingPage.tsx with save/load behavior. Keep one-store profile first. No auth/RBAC expansion. No full salesperson-agent backend yet.
+SESSION_012 — UI redesign with shadcn primitives + Playwright verification
 
 ## What NOT to change without asking
 
