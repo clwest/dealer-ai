@@ -8,6 +8,7 @@ const NAV_LINKS = [
   // also light up on `/dealer-ai-admin/team`.
   { to: "/dealer-ai-admin", label: "Manager dashboard", end: true },
   { to: "/dealer-ai-admin/team", label: "Sales team", end: false },
+  { to: "/dealer-ai-onboarding", label: "Onboarding", end: false },
 ];
 
 export default function App() {
