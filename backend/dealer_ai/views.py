@@ -45,7 +45,7 @@ from .services.follow_up import (
 )
 from .services.handoff_service import build_handoff_packet, packet_to_text
 from .services.lead_service import create_lead_from_session
-from .services.manager_chat_response import scrub_card_implying_phrases
+from .services.manager_chat_response import enforce_coaching_shape
 from .services.pipeline import pipeline_snapshot
 from .services.trends import trends_snapshot
 from .services.vehicle_assistant import analyze_vehicle, answer_vehicle_question
@@ -837,14 +837,19 @@ def manager_chat(request):
     engine = ChatEngine(session=session)
     result = engine.handle_user_message(message)
 
-    # SESSION_010 hotfix: defense-in-depth scrub for any card-implying
-    # phrasing the LLM produced despite the MANAGER_TEST_HINT system
-    # message. The chat engine already received the hint via the
-    # manager_test channel; this scrub catches the cases where the model
-    # ignored it. Customer-facing chat is unaffected — the scrub lives
-    # in this view only.
-    reply_text, _scrubbed = scrub_card_implying_phrases(
-        result.assistant_message.content
+    # SESSION_010 hotfix + SESSION_011 structural enforcement.
+    # The chat engine already received MANAGER_COACHING_HINT via the
+    # manager_test channel and applied SESSION_009 onboarding overrides
+    # (banned-phrase scrub + tone overrides + disclaimer). This call
+    # adds a final structural pass: it strips known-bad sentences via
+    # the existing card-implying scrub AND, if the surviving text
+    # impersonates the customer-facing assistant or lacks a coaching
+    # frame entirely, replaces it with a context-aware coaching
+    # fallback built from the customer's message. Customer-facing chat
+    # is unaffected — the enforcer lives in this view only.
+    reply_text, _action = enforce_coaching_shape(
+        result.assistant_message.content,
+        customer_message=message,
     )
 
     return Response(
