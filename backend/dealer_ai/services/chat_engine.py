@@ -1817,16 +1817,25 @@ META_NARRATION_FALLBACK = LIST_SHAPE_FALLBACK
 _META_NARRATION_LINE_PATTERNS: List[re.Pattern[str]] = [
     # "Here's a revised response that takes into account..."
     # "Here's a reply that follows the guidelines:"
-    # "Here's the response you wanted:"
-    # Trailing colon is the strong signal — it announces the next
-    # block of text as the actual reply and is virtually never used
-    # in normal sales conversation.
+    # "Here's a possible reply:"
+    # Trailing colon followed by newline is the strong signal — it
+    # announces the next block of text as the actual reply and is
+    # virtually never used in normal sales conversation. SESSION_004
+    # — relaxed from line-start anchor to "anywhere after sentence
+    # end / paragraph break" so the LLM's frequent shape "[meta
+    # sentence]. Here's a possible reply:\n\n[body]" is caught.
     re.compile(
-        r"^\s*here['\u2019]s\s+(?:a|the|some|my)?\s*"
+        # SESSION_004 — `:[ \t]*\n` (one newline, no greedy `\s*`)
+        # so the second newline of `:\n\n` survives as a paragraph
+        # separator. Earlier `:\s*\n` ate both newlines and fused
+        # the meta opener with the body line, letting downstream
+        # line patterns vacuum the surviving content.
+        r"(?:(?<=[.!?])\s+|^\s*)"
+        r"here['\u2019]s\s+(?:a|the|some|my)?\s*"
         r"[^\n:]*"
         r"\b(?:response|reply|version|answer)\b"
-        r"[^\n:]*:\s*$",
-        re.IGNORECASE | re.MULTILINE,
+        r"[^\n:]*:[ \t]*\n",
+        re.IGNORECASE,
     ),
     # "Let's try again." / "Let's try again:" — apology meta.
     re.compile(
@@ -1863,7 +1872,126 @@ _META_NARRATION_LINE_PATTERNS: List[re.Pattern[str]] = [
         r"^\s*this\s+response\b[^\n]*$",
         re.IGNORECASE | re.MULTILINE,
     ),
+    # SESSION_004 demo polish — meta-internal-monologue openers
+    # the small model emits when it tries to "show its work"
+    # before the actual reply. Examples observed in rehearsal:
+    #   "Based on the framing, I'd lead with the strongest fit."
+    #   "Based on the cash comparison context, I would recommend…"
+    #   "In this case, that's the 2017 Hyundai Sonata SE."
+    #   "Let me show you why the X is the top pick…"
+    re.compile(
+        # "Based on the [framing|context|comparison|cash|prompt|info|"
+        # "above|input|message|request]" — broad meta opener catching
+        # the family of phrasings the model uses to narrate its own
+        # reasoning before the real reply.
+        r"^\s*based\s+on\s+(?:the\s+)?"
+        r"(?:framing|context|comparison|cash|prompt|info|above|"
+        r"input|message|request|directive|guidance|customer['\u2019]s)"
+        r"[^\n]*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        r"^\s*in\s+this\s+case[,.]?\s+that['\u2019]s\b[^\n]*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(
+        r"^\s*let\s+me\s+show\s+you\s+why\b[^\n]*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    # SESSION_004 — "Here's why:" / "Here's the reason:" /
+    # "Here's the breakdown:" / "Here's the thing:" — short
+    # meta-opener lines the small model uses to introduce a
+    # quoted reply. The opener is always followed by a blank
+    # line + quoted body; pattern 0 only catches openers that
+    # contain "response|reply|version|answer", so this companion
+    # pattern handles the abstract-reasoning openers.
+    re.compile(
+        r"^\s*here['\u2019]s\s+"
+        r"(?:why|the\s+reason|the\s+breakdown|the\s+thing|"
+        r"the\s+rundown|how|what\s+i['\u2019]d\s+do)\s*:[^\n]*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
 ]
+
+
+# SESSION_004 — when the LLM puts both the meta sentence AND the
+# announcement on the same line ("Based on X, I would recommend Y.
+# Here's a possible reply:\n\n[body]"), pattern 0 above strips
+# everything from "Here's a..." onward, but the leading meta
+# sentence remains. This pattern catches the leading meta sentence
+# when it ends with a sentence-terminator immediately followed by
+# the (now-stripped) "Here's a..." position. Applied AFTER pattern
+# 0 has run.
+_META_NARRATION_LEADING_SENTENCE_RE = re.compile(
+    r"^[^\n.!?]*\b(?:i['\u2019]?d|i\s+would|i['\u2019]ll)\s+"
+    r"(?:lead|recommend|steer|show|pick|go\s+with|suggest)\b"
+    r"[^\n.!?]*[.!?]\s*",
+    re.IGNORECASE,
+)
+
+# SESSION_004 — "show your work" extractor. The small model
+# occasionally produces a draft → meta-announcement → final-quoted
+# reply shape:
+#   "Some first draft."
+#
+#   And then show the X as the Y.
+#
+#   So, my reply would be:
+#   "[the actual final reply]"
+#
+# When that shape is detected, replace the entire output with the
+# contents of the final quoted block. Without this extractor the
+# downstream line patterns chip away at individual lines but the
+# leading draft + monologue often survives as the visible reply.
+_META_NARRATION_FINAL_QUOTE_RE = re.compile(
+    r"(?:^|\n)[ \t]*"
+    r"(?:so[, ]+|then[, ]+|finally[, ]+|now[, ]+)?"
+    r"(?:my\s+|the\s+|here['\u2019]s\s+(?:my\s+|the\s+)?)?"
+    r"(?:final\s+|actual\s+|real\s+)?"
+    r"(?:reply|response|answer)"
+    r"\s+(?:would\s+)?(?:be|is)\s*:[ \t]*\n+"
+    r"[ \t]*[\"\u201c]\s*([\s\S]+?)\s*[\"\u201d][ \t]*$",
+    re.IGNORECASE,
+)
+
+# SESSION_004 — single-line variant of the show-your-work shape:
+#   I'd lead with the strongest fit, which is the newer one.
+#   "The Hyundai Sonata SE is the strongest fit here if ..."
+# The meta opener uses 3rd-person internal-directive verbs ("I'd
+# lead", "I'd recommend", "I'd steer", "I would show") and is
+# immediately followed (same line OR next line) by a quoted block
+# that runs to the end of the reply. When detected, replace the
+# entire output with the quoted body so the customer sees the
+# clean reply, not the model's internal directive.
+_META_NARRATION_DIRECTIVE_QUOTE_RE = re.compile(
+    r"^[\s\S]*?\b(?:i['\u2019]?d|i\s+would|i['\u2019]ll)\s+"
+    r"(?:lead|recommend|steer|show|pick|go\s+with|suggest)\b"
+    r"[^\n\"\u201c]*[.!?]\s*"
+    r"[\"\u201c]\s*([^\"\u201c\u201d]+?)\s*[\"\u201d][ \t]*$",
+    re.IGNORECASE,
+)
+
+# SESSION_004 — broad trailing-quoted-reply extractor. The small
+# model often emits a "show your work" preamble followed by the
+# real reply in a quoted block:
+#   "I'd lead with the Sonata. I'd frame the others as value plays,
+#    saying something like:
+#
+#    \"[the actual reply]\""
+#   "Here's an example of how I would phrase it:
+#
+#    \"[the actual reply]\""
+# When the reply ends with `:[whitespace]\n+"[body]"` AND the body
+# contains no other quote characters, replace the entire output
+# with the body. The `^[\s\S]*?` lazy prefix is anchored to `$`,
+# so the engine must consume the whole reply and the only quote
+# pair we can match is the trailing one.
+_META_NARRATION_TRAILING_QUOTE_RE = re.compile(
+    r"^[\s\S]*?:[ \t]*\n+[ \t]*"
+    r"[\"\u201c]([^\"\u201c\u201d]+?)[\"\u201d]"
+    r"[ \t]*\n*[ \t]*$",
+    re.IGNORECASE,
+)
 
 # Parenthetical meta notes anywhere in the reply. Matches `(Note:
 # I've ...)` and `(Note: prices vary)` alike — the ``(Note ...)``
@@ -1905,6 +2033,61 @@ def scrub_meta_narration(
     cleaned = reply_text
     changed = False
 
+    # 0. SESSION_004 — "show your work" extractor. If the reply ends
+    # with `... reply would be:\n"[final reply]"`, take the contents
+    # of that final quoted block and discard everything before it.
+    # This catches the multi-paragraph draft + monologue + quoted
+    # final shape the small model produces in cash-mode comparison
+    # turns.
+    final_quote_match = _META_NARRATION_FINAL_QUOTE_RE.search(cleaned)
+    if final_quote_match:
+        extracted = final_quote_match.group(1).strip()
+        # Only accept if the extracted body is substantive — same
+        # threshold the bottom of this function uses for fallback.
+        if (
+            extracted
+            and len(extracted.split()) >= 5
+            and re.search(r"[.!?]", extracted)
+        ):
+            cleaned = extracted
+            changed = True
+
+    # 0b. Single-line directive + quoted-exemplar variant. Catches
+    # "I'd lead with the strongest fit, which is the newer one.
+    # \"The Sonata SE is the strongest fit here if ...\"" — the
+    # leading directive is meta narration; the quoted block is the
+    # real reply.
+    if not changed:
+        directive_match = _META_NARRATION_DIRECTIVE_QUOTE_RE.match(cleaned)
+        if directive_match:
+            extracted = directive_match.group(1).strip()
+            if (
+                extracted
+                and len(extracted.split()) >= 5
+                and re.search(r"[.!?]", extracted)
+            ):
+                cleaned = extracted
+                changed = True
+
+    # 0c. Broad trailing-quoted-reply extractor. Catches all
+    # "show your work" variants where the reply ends with
+    # `:\n+"[real reply]"` and the quoted body is the only
+    # quote pair in the text. Handles:
+    #   "Here's an example of how I would phrase it:\n\n\"...\""
+    #   "I'd frame it as value plays, saying something like:\n\"...\""
+    #   "...phrasing for the reply:\n\"...\""
+    if not changed:
+        trailing_match = _META_NARRATION_TRAILING_QUOTE_RE.match(cleaned)
+        if trailing_match:
+            extracted = trailing_match.group(1).strip()
+            if (
+                extracted
+                and len(extracted.split()) >= 5
+                and re.search(r"[.!?]", extracted)
+            ):
+                cleaned = extracted
+                changed = True
+
     # 1. Strip parenthetical "(Note: ...)" segments first. Doing
     # this before the line patterns ensures a `(Note: ...)` that
     # sits on its own line is removed by the more targeted regex,
@@ -1921,6 +2104,20 @@ def scrub_meta_narration(
             cleaned = new_cleaned
             changed = True
 
+    # 2b. SESSION_004 — when the LLM packs the meta sentence and
+    # the announcement on the same line ("Based on X, I'd
+    # recommend Y. Here's a possible reply:\n\n[body]"), step 2
+    # strips "Here's a..." onward but leaves the leading meta
+    # sentence. Catch it here. Only fires if step 2 fired (the
+    # leading meta sentence is meaningless without its
+    # announcement partner).
+    if changed:
+        new_cleaned, n = _META_NARRATION_LEADING_SENTENCE_RE.subn(
+            "", cleaned, count=1
+        )
+        if n:
+            cleaned = new_cleaned
+
     if not changed:
         return reply_text, False, False
 
@@ -1932,6 +2129,23 @@ def scrub_meta_narration(
     # (" ." / " ," at line end).
     cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
     cleaned = cleaned.strip()
+
+    # SESSION_004 demo polish — strip surrounding straight or
+    # smart quotes when the entire body is wrapped (an artifact
+    # of the LLM imitating the GOOD-example quote shape and
+    # producing "[meta]\n\n\"[actual reply]\""). Only strip when
+    # the body BEGINS with " AND ENDS with " AND has no other "
+    # in between (so we don't break legitimate inline quotes).
+    if (
+        len(cleaned) >= 2
+        and cleaned[0] in ('"', "\u201c")
+        and cleaned[-1] in ('"', "\u201d")
+    ):
+        inner = cleaned[1:-1].strip()
+        # Only strip when the inner body has no other quote
+        # characters (i.e., these aren't mid-quote artifacts).
+        if not re.search(r'["\u201c\u201d]', inner):
+            cleaned = inner
 
     # Same coherence threshold as `scrub_list_shape` — a single
     # word or empty string isn't a real reply.
@@ -5230,6 +5444,31 @@ class ChatEngine:
                 return older_list
         return []
 
+    def _recent_matched_vehicles_union(
+        self, *, max_turns: int = 5
+    ) -> List[Vehicle]:
+        """Return a deduped list of matched_vehicles seen across the
+        last ``max_turns`` assistant turns, most-recent first.
+
+        Used by `_resolve_model_followup_vehicle` so a multi-turn
+        chain (3-card cash search → 1-card Honda deep-dive →
+        *"what about the Fusion?"*) can still resolve the Fusion
+        even though the immediately-prior turn narrowed to just
+        the Honda.
+        """
+        seen: dict = {}
+        msgs = (
+            self.session.messages.filter(role="assistant")
+            .order_by("-created_at")[:max_turns]
+        )
+        for msg in msgs:
+            for v in self._matched_vehicles_in_order(msg):
+                key = (v.stock_number or "").upper()
+                if not key or key in seen:
+                    continue
+                seen[key] = v
+        return list(seen.values())
+
     def _resolve_ordinal_vehicle(self, user_text: str) -> Optional[Vehicle]:
         """If the user_text contains an ordinal reference ('the first
         one', 'about the second', etc.), return the vehicle at that
@@ -5282,6 +5521,16 @@ class ChatEngine:
           3. MAKE match — when exactly ONE prior vehicle of that
              make exists (e.g., *"tell me about the Honda"* with one
              prior Honda). Ambiguous (multi) → bail.
+
+        SESSION_004 demo polish — the prior-vehicle pool is the
+        UNION of matched_vehicles across the last several assistant
+        turns (deduped by stock_number), not just the most recent.
+        Without this, a sequence like *"I have cash and want gas
+        mileage"* (3 cars surfaced) → *"tell me more about the
+        Honda"* (1 card) → *"what about the Fusion?"* would lose
+        the Fusion anchor because the most-recent turn only carries
+        the Honda. Demo flow and natural multi-turn conversations
+        both rely on the wider pool.
         """
         if not user_text:
             return None
@@ -5289,7 +5538,7 @@ class ChatEngine:
             if regex_hits.get(key) is not None:
                 return None
 
-        prev = list(self._previous_assistant_matched_vehicles())
+        prev = self._recent_matched_vehicles_union()
         if not prev:
             return None
         lower_text = user_text.lower()
