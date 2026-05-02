@@ -8,6 +8,7 @@ import DealerAIDemo from "@/pages/DealerAIDemo";
 import DealerAdmin from "@/pages/DealerAdmin";
 import DealerOnboardingPage from "@/pages/DealerOnboardingPage";
 import DealerOverviewPage from "@/pages/DealerOverviewPage";
+import InventoryPreviewPage from "@/pages/InventoryPreviewPage";
 import LiveAssistantPage from "@/pages/LiveAssistantPage";
 import ManagerChatPage from "@/pages/ManagerChatPage";
 import SalesTeamPage from "@/pages/SalesTeamPage";
@@ -26,6 +27,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route
             path="dealer-ai-live-assistant"
             element={<LiveAssistantPage />}
+          />
+          <Route
+            path="dealer-ai-inventory"
+            element={<InventoryPreviewPage />}
           />
           <Route path="dealer-ai-demo" element={<DealerAIDemo />} />
           <Route

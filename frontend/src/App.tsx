@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
   Bot,
+  Car,
   GraduationCap,
   LayoutDashboard,
   Settings,
@@ -20,6 +21,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-overview", label: "Overview", icon: LayoutDashboard, end: false },
   { to: "/dealer-ai-live-assistant", label: "Live Assistant", icon: Bot, end: false },
+  { to: "/dealer-ai-inventory", label: "Inventory", icon: Car, end: false },
   { to: "/dealer-ai-manager-chat", label: "Coaching Mode", icon: GraduationCap, end: false },
   { to: "/dealer-ai-admin/team", label: "Team", icon: Users, end: false },
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },
