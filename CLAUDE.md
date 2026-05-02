@@ -141,3 +141,47 @@ The user provided these notes from prior inspection or context:
   refactors, framework choices) that depend on the missing context.
 
 <!-- context-kit:adopt:end -->
+
+## Frontend stack notes (project-owned, hand-written)
+
+> Outside the context-kit adopt block above. Hand-edited; survives
+> `context-kit adopt` / `seed` / `inventory` re-runs.
+
+### Tailwind v3 + shadcn/ui (radix-nova preset, bridged)
+
+The frontend uses **Tailwind CSS v3.4** with **shadcn/ui** primitives
+installed via the `radix-nova` preset (which natively targets Tailwind
+v4). The two are bridged manually:
+
+- `frontend/src/index.css` — CSS variables (`--background`, `--primary`,
+  etc.) live under `@layer base { :root, .dark }`. The v4-only
+  `@import "shadcn/tailwind.css"` directive was stripped — do not
+  re-add it under v3.
+- `frontend/tailwind.config.js` — color tokens are mapped via
+  `var(--token)` (the vars contain full `oklch(...)` expressions, so
+  no `hsl()` wrapper). Animations use the `tailwindcss-animate`
+  plugin, not `tw-animate-css` (v4-only).
+- `frontend/components.json` — shadcn config; do not re-run
+  `npx shadcn init` without confirming, it will clobber the bridge.
+
+**Six v4-only variant patterns silently no-op under v3.** They appear
+in the installed primitives (button, card) and degrade gracefully.
+**Do not author new code that depends on them**:
+
+- `has-data-[icon=inline-end|inline-start]:` (button icon padding)
+- `has-data-[slot=card-action|card-description|card-footer]:` (card layout)
+- `in-data-[slot=button-group]:` (button group corner flattening)
+- `not-aria-[haspopup]:` (button click micro-animation)
+
+If shadcn primitives need full v4 polish, the path is a Tailwind v3 →
+v4 migration, not a deeper bridge.
+
+### Brand tokens
+
+The Ford palette (`ford.blue`, `ford.accent`, `ford.ink`, `ford.ash`,
+`ford.mist`) and the soft shadow / Inter font are preserved verbatim
+in `tailwind.config.js`. shadcn's neutral tokens (`primary`,
+`secondary`, `muted`, etc.) layer on top. New UI work should prefer
+the Ford tokens for brand surfaces and shadcn tokens for chrome
+(dialogs, dropdowns, popovers, form inputs).
+
