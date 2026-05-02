@@ -1,11 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import App from "@/App";
 import AdvisorWorkspacePage from "@/pages/AdvisorWorkspacePage";
 import DealerAIDemo from "@/pages/DealerAIDemo";
 import DealerAdmin from "@/pages/DealerAdmin";
+import DealershipHomePage from "@/pages/DealershipHomePage";
 import DealerOnboardingPage from "@/pages/DealerOnboardingPage";
 import DealerOverviewPage from "@/pages/DealerOverviewPage";
 import EmbedAssistantPage from "@/pages/EmbedAssistantPage";
@@ -13,6 +14,8 @@ import InventoryPreviewPage from "@/pages/InventoryPreviewPage";
 import LeadsPage from "@/pages/LeadsPage";
 import LiveAssistantPage from "@/pages/LiveAssistantPage";
 import ManagerChatPage from "@/pages/ManagerChatPage";
+import PublicAssistantPage from "@/pages/PublicAssistantPage";
+import PublicShowroomPage from "@/pages/PublicShowroomPage";
 import SalesTeamPage from "@/pages/SalesTeamPage";
 import "@/index.css";
 
@@ -31,11 +34,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             chrome. Must come before the catch-all "/" route. */}
         <Route path="/embed/assistant" element={<EmbedAssistantPage />} />
 
-        <Route path="/" element={<App />}>
-          <Route
-            index
-            element={<Navigate to="/dealer-ai-overview" replace />}
-          />
+        <Route index element={<DealershipHomePage />} />
+        <Route path="/assistant" element={<PublicAssistantPage />} />
+        <Route path="/showroom" element={<PublicShowroomPage />} />
+
+        <Route element={<App />}>
           <Route path="dealer-ai-overview" element={<DealerOverviewPage />} />
           <Route
             path="dealer-ai-live-assistant"

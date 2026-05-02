@@ -39,12 +39,12 @@ Onboarding foundation page exists; not yet persisted to the backend.
 
 ## Current baseline
 
-Verified 2026-05-02 (after SESSION_010). Update if any row changes.
+Verified 2026-05-02 (after SESSION_022). Update if any row changes.
 
 | Surface | State |
 |---|---|
 | Demo | demo-ready — 5/5 canonical scenarios pass (`docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`) |
-| Backend tests | **1189 passed, 1 skipped, 0 failed** (`cd backend && python manage.py test dealer_ai`) |
+| Backend tests | **1214 passed, 1 skipped, 0 failed** (`cd backend && python manage.py test dealer_ai`) |
 | Frontend | typecheck + build clean (`cd frontend && npx tsc --noEmit && npx vite build`) |
 | LLM | Ollama llama3.2:latest @ `http://localhost:11434` |
 | Frontend dev | Vite @ `:5173`, proxy to backend @ `:8001` via `VITE_API_PROXY_TARGET` |
@@ -68,15 +68,10 @@ Supporting (read on demand):
 
 ## Current next task
 
-**SESSION_011 — open**. See `00-START-NEXT-SESSION.md` for the
-hand-written priority block. SESSION_010 (manager chat tester) shipped
-on 2026-05-02 — handoff at
-`docs/handoffs/SESSION_010_manager_chat_tester.md`.
-
-The strongest follow-on candidate is still linking the salesperson seed
-to the existing `Salesperson` model. See SESSION_010 handoff
-§"Recommended next session" for three alternatives (banned-phrase audit
-panel, conversation-aware manager chat, context-kit drift cleanup).
+**SESSION_023 — open**. See `00-START-NEXT-SESSION.md` for the
+hand-written priority block. SESSION_022 (assistant-first public
+dealership site) shipped on 2026-05-02 — handoff at
+`docs/handoffs/SESSION_022_assistant_first_public_site.md`.
 
 ## What to skip or treat carefully
 
@@ -94,12 +89,12 @@ cd backend && source .venv/bin/activate
 python manage.py test dealer_ai
 ```
 
-Expect: `1111 passed, 1 skipped, 0 failed`.
+Expect: `1214 passed, 1 skipped, 0 failed`.
 
 If the change touched **the frontend**:
 
 ```bash
-cd frontend && npm run typecheck && npm run build
+cd frontend && npx tsc --noEmit && npx vite build
 ```
 
 Expect: 0 errors.

@@ -1,8 +1,8 @@
 ---
 state: active
 date: 2026-05-02
-last_session_shipped: SESSION_021
-next_session: SESSION_022
+last_session_shipped: SESSION_022
+next_session: SESSION_023
 ---
 
 # Next session — Dealer AI Kit
@@ -14,247 +14,181 @@ next_session: SESSION_022
 > `docs/DEALER_DUPLICATION_GUIDE.md` for the operator workflow
 > to onboard a second dealer without forking.
 
-## What just shipped (SESSION_021)
+## What just shipped (SESSION_022)
 
-**Multi-tenant logo upload via `OnboardingProfile.logo_url`.**
-The Setup form gains a Logo URL field, and the brand-resolution
-chain (`useBrand`) now resolves
-`profile.logo_url || DEFAULT_DEALER.logoPath`. The kit's
-static asset stays as the documented fallback. Net effect: a
-manager can stand up a second dealer's brand identity end-to-
-end from Setup without any developer file-drop.
-
-- Backend: new `logo_url` CharField on
-  `DealerOnboardingProfile` + serializer + migration 0005
-  + four new tests. **Backend baseline: 1214 / 1** (was
-  1210/1).
-- Frontend: `Brand.logoUrl` + `Brand.logoFromProfile`,
-  consumed by sidebar `BrandHeader`, embed `BrandMark`,
-  and the Setup Dealer Kit Status card (which now reads
-  `(from profile)` vs `(static default)` source labels).
-- Docs: `DEALER_DUPLICATION_GUIDE.md` updated — the Logo
-  asset section is retitled *"fallback only — SESSION_021
-  collapsed this"*; Phase 1 (developer) is now optional;
-  the printable checklist puts the Setup form first.
+**Assistant-first public dealership website.** The app no longer drops
+visitors at the operator OS by default. `/` is now a public dealership
+homepage built around the AI assistant, `/assistant` is a full-page
+customer assistant, and `/showroom` is a public demo inventory surface
+with "Ask AI" CTAs. The existing `/dealer-ai-*` operator routes remain
+inside the Dealer AI Kit shell, and `/embed/assistant` remains unchanged.
 
 Read the full handoff at
-`docs/handoffs/SESSION_021_logo_url_setting.md`.
+`docs/handoffs/SESSION_022_assistant_first_public_site.md`.
+
+**Verification from SESSION_022:**
+
+- `npx tsc --noEmit` — pass.
+- `npx vite build` — pass.
+- Playwright smoke:
+  - `/` → `Find your next Ford with help, not pressure.`
+  - `/assistant` → `Start with what matters to you.`
+  - `/showroom` → `Browse the lot, then ask the assistant to narrow it.`
+  - `/dealer-ai-overview` → `Overview`
+  - console warnings/errors: `[]`
+
+No backend changes. No chat behavior changes. No edits to
+`AssistantChat`, `EmbedAssistantPage`, `/dealer-ai-demo`, or
+`defaultDealer.ts`.
 
 ---
 
-## Recommended next session — SESSION_022
+## Recommended next session — SESSION_023
 
-**Leads pipeline page (turn the stub into real).**
+**Monday demo hardening for the assistant-first public site.**
 
-This recommendation has been on the board since SESSION_018,
-deferred four times now (in favor of the platform reframe,
-the duplication flow, and the logo upload). Each deferral
-was correctly higher-priority at the time. SESSION_021
-finished the brand-identity loop, so the deepest unfilled
-value gap in the OS is once again the Leads pipeline.
-
-`/dealer-ai-leads` is currently a SESSION_015-era stub: 10
-most recent leads with a *"Preview · full view coming soon"*
-badge and basic name / phone / email / urgency fields.
-SESSION_022 turns it into the real surface.
+The prior Leads pipeline recommendation is still valid, but it is not
+the right next move until the Monday public-site demo is locked. SESSION
+023 should harden the exact visitor journey that will be shown live.
 
 **Scope:**
 
-- Per-lead detail (modal or side panel) showing:
-  - Full conversation transcript.
-  - `extracted_profile` rendering (budget, body style,
-    model intent, urgency).
-  - `interested_vehicles` list rendered with the existing
-    `AssistantVehicleCard`.
-  - `recommended_next_action` text.
-  - Handoff status + `assigned_to` salesperson chip.
-- Filtering on the list:
-  - urgency, handoff state, free-text search by name /
-    email / phone (client-side over loaded page).
-- Reuse existing `fetchAdminLeads()` and
-  `fetchLeadDetail()` helpers in `lib/api.ts`.
-- Brand-aware copy via `useBrand()` where appropriate.
+- Walk the Monday demo path across:
+  - `/`
+  - `/assistant`
+  - `/showroom`
+  - `/embed/assistant`
+  - `/dealer-ai-overview`
+- Verify desktop and mobile visual fit with Playwright screenshots.
+- Tighten spacing, sizing, and copy where the public site still reads
+  like a prototype.
+- Decide whether `/assistant?prompt=...` should stay as "starter chip
+  first" or become a controlled auto-send flow.
+- Consider adding a tiny repeatable Playwright smoke script now that
+  `playwright` is installed.
+- Keep the public site assistant-first. Do not drift back to a generic
+  dealership landing page.
 
 **Strict guardrails:**
 
-- ❌ No new backend endpoints.
+- ❌ No backend changes unless a real blocker appears.
 - ❌ No chat behavior changes.
-- ❌ No edits to `AssistantChat`, `EmbedAssistantPage`, the
-  inventory snapshot, or `/dealer-ai-demo`.
-- ❌ No edits to `DEFAULT_DEALER` / `PRODUCT` /
-  `defaultDealer.ts`.
-- ❌ No write actions on leads (no reassign / handoff toggle
-  / notes) — read-only v1.
-- ❌ No new API contracts beyond a TypeScript field-sync if
-  a leads / session payload field is missing from the
-  interface.
+- ❌ No edits to `AssistantChat` unless the demo reveals a purely
+  presentational issue that affects both public assistant and embed.
+- ❌ No edits to `EmbedAssistantPage` unless verifying the Monday path
+  reveals a regression.
+- ❌ No edits to `/dealer-ai-demo`.
+- ❌ No edits to `DEFAULT_DEALER` / `PRODUCT` / `defaultDealer.ts`.
+- ❌ No new public inventory contract; showroom stays on the existing
+  SESSION_014 sample snapshot until CRM/DMS work is explicitly in scope.
 
-**Alternates** (still on the board):
+**Defer until after the Monday public-site demo is locked:**
 
-- `SESSION_022b` — Multipart logo upload (extends
-  SESSION_021's URL paste with real file uploads + object
-  storage). Pick if a real second-dealer pilot is imminent
-  and the URL paste turns out to be friction.
-- `SESSION_022c` — Backend X-Frame-Options / CSP allowlist
-  for cross-origin embedding. Pick when a third-party-embed
-  deadline is real.
-- `SESSION_022d` — Inventory data quality / image cleanup
-  (deferred since SESSION_016).
-- `SESSION_022e` — Live broadcast on Setup save
-  (`BrandContext` so topbar updates without navigation).
-
-Default to **SESSION_022 (Leads pipeline)** unless a specific
-alternate is dictated by the next demo audience.
+- Leads pipeline page.
+- Multipart logo upload.
+- CSP / X-Frame allowlist.
+- Inventory data quality cleanup.
+- Live brand broadcast on Setup save.
 
 ---
 
-## Agent launch prompt for SESSION_022
+## Agent launch prompt for SESSION_023
 
-Paste into Claude Code / Cursor / any AI coding agent as the
-session opener.
+Paste into Claude Code / Cursor / any AI coding agent as the session
+opener.
 
 ```text
-You are picking up SESSION_022 on the Dealer AI Kit (Sam
-Wampler's Freedom Ford McAlester is Dealer #1 / default).
+You are picking up SESSION_023 on the Dealer AI Kit. Sam Wampler's
+Freedom Ford McAlester is Dealer #1 / default.
 
-Read first (in order):
+Read first:
+- context-kit orient
+- docs/FREEDOM_FORD_SESSION_START.md
+- 00-START-NEXT-SESSION.md
+- docs/handoffs/SESSION_022_assistant_first_public_site.md
 - docs/PLATFORM_REFRAME.md
-- docs/DEALER_DUPLICATION_GUIDE.md
-- docs/handoffs/SESSION_021_logo_url_setting.md
-- docs/handoffs/SESSION_020_dealer_duplication_flow.md
-- docs/handoffs/SESSION_019_platform_reframe_dealer_ai_kit.md
-- docs/handoffs/SESSION_015_overview_realism_mobile_shell.md
-  (the SESSION_015 stub LeadsPage was the seed)
-- frontend/src/pages/LeadsPage.tsx (the stub to extend)
-- frontend/src/lib/api.ts (focus on AdminLead,
-  AdminLeadsQuery, fetchAdminLeads, fetchLeadDetail)
-- frontend/src/lib/brand.ts (use useBrand — don't recreate)
-- frontend/src/components/AssistantVehicleCard.tsx (reuse
-  for interested_vehicles in the detail surface)
-- frontend/src/config/defaultDealer.ts (read; do not edit)
+- docs/FREEDOM_FORD_BEHAVIOR_LAYER.md
+- docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md
 
 Goal:
-Turn /dealer-ai-leads from a stub into a real pipeline page.
+Harden the Monday demo path for the assistant-first public dealership
+site shipped in SESSION_022.
 
-Scope (frontend only):
-- Per-lead detail (modal or side panel) showing transcript,
-  extracted profile, interested vehicles (use
-  AssistantVehicleCard), recommended next action, handoff
-  status, salesperson chip.
-- Client-side filters: urgency, handoff state, free-text
-  search by name/email/phone.
-- Reuse existing API helpers — do not add new endpoints.
-- Read-only in v1.
+Primary routes:
+- /
+- /assistant
+- /showroom
+- /embed/assistant
+- /dealer-ai-overview
+
+Tasks:
+1. Run frontend typecheck/build.
+2. Start Vite and inspect the public routes with Playwright on desktop
+   and mobile viewports.
+3. Fix only visible demo blockers: spacing, layout, awkward copy,
+   responsiveness, route/link issues, or console errors.
+4. Decide whether query prompts on /assistant should remain starter-chip
+   only or safely auto-send. If changing behavior, keep it frontend-only
+   and StrictMode-safe.
+5. Optionally add a small Playwright smoke script if it helps repeat the
+   Monday-demo checks.
 
 Do NOT:
 - touch backend
 - change chat behavior
-- edit AssistantChat, EmbedAssistantPage, the inventory
-  snapshot, or /dealer-ai-demo
-- edit defaultDealer.ts (PRODUCT or DEFAULT_DEALER)
-- add new API contracts beyond a TypeScript field-sync if a
-  payload field is missing from the interface
-- add write actions on leads (reassign, handoff toggle,
-  notes — all explicitly v2)
-
-Tasks (suggested order):
-1. Inspect AdminLead / fetchLeadDetail return shapes vs
-   the current LeadsPage to spot any TypeScript field gaps.
-2. Add filter controls (urgency, handoff state, search).
-3. Add per-lead detail surface (Dialog or Sheet) wired to
-   fetchLeadDetail.
-4. Reuse AssistantVehicleCard for interested_vehicles.
-5. Apply useBrand() where dealer-name copy makes sense.
+- edit the backend prompt/scrub/payment/inventory logic
+- edit /dealer-ai-demo
+- edit DEFAULT_DEALER / PRODUCT / defaultDealer.ts
+- turn this into the deferred Leads pipeline session
 
 Verify:
 - npx tsc --noEmit
 - npx vite build
-- (Backend tests not required — frontend-only session.)
-- Playwright: open /dealer-ai-leads, exercise filters and
-  open detail surface for at least one lead. Console clean.
+- Playwright route smoke with console clean
 
 When complete:
-- Write docs/handoffs/SESSION_022_<slug>.md following the
-  established pattern.
-- Overwrite 00-START-NEXT-SESSION.md to point at SESSION_023.
-- Commit code + handoff together; commit the
-  00-START-NEXT-SESSION.md update separately.
+- Write docs/handoffs/SESSION_023_<slug>.md.
+- Overwrite 00-START-NEXT-SESSION.md for SESSION_024.
 ```
 
 ---
 
-## Recent commit history
+## Operational state
 
-```
-e9bb578 SESSION_021: multi-tenant logo upload via OnboardingProfile.logo_url
-a824aa3 SESSION_020: dealer duplication flow
-5bfde3c Close SESSION_019, open SESSION_020 (Leads pipeline)
-1753525 SESSION_019: platform reframe — Dealer AI Kit
-ce60e20 Close SESSION_018, open SESSION_019 (Leads pipeline)
-1fa172a SESSION_018: brand settings drive UI
-2e62e96 SESSION_017: add public embed preview
-4e6272e Branding pass: real Sam's Freedom Ford McAlester identity
-f39fce3 SESSION_016: polish Live Assistant customer UI
-6d21f08 SESSION_015: wire overview to real data and add mobile shell
-```
-
----
-
-## Operational state (verified 2026-05-02 after SESSION_021)
-
-- **Backend**: Django on `:8001`, Ollama llama3.2 on
-  `:11434`. Migration `0005_dealeronboardingprofile_logo_url`
-  applied to dev DB.
-- **Frontend**: Vite on `:5173`. Routes:
-  - `/dealer-ai-overview` (real APIs, brand-aware,
-    profile-driven logo via SESSION_021)
-  - `/dealer-ai-live-assistant` (chat, brand-aware)
-  - `/dealer-ai-inventory` (demo snapshot, 18 vehicles)
-  - `/dealer-ai-leads` ← **SESSION_022 target** (stub today)
-  - `/dealer-ai-manager-chat` (Coaching Mode)
-  - `/dealer-ai-admin/team` (sales team)
-  - `/dealer-ai-onboarding` (Setup — now has Logo URL +
-    Dealer Kit Status card)
-  - `/embed/assistant` (public embed, profile-driven logo)
-  - `/dealer-ai-demo` (legacy lab, off-nav)
-- **Test baseline**: **1214 / 1** (was 1210/1; +4 from
-  SESSION_021's logo_url tests).
-- **Console hygiene**: 0 errors, 0 warnings on every brand-
-  aware surface verified in SESSION_021.
-
----
+- **Backend**: Django expected on `:8001`, Ollama llama3.2 on `:11434`.
+- **Frontend**: Vite expected on `:5173`.
+- **Public routes**:
+  - `/` — assistant-first dealership homepage.
+  - `/assistant` — full-page public assistant.
+  - `/showroom` — public demo showroom.
+  - `/embed/assistant` — standalone embeddable assistant.
+- **Operator routes**:
+  - `/dealer-ai-overview`
+  - `/dealer-ai-live-assistant`
+  - `/dealer-ai-inventory`
+  - `/dealer-ai-leads`
+  - `/dealer-ai-manager-chat`
+  - `/dealer-ai-admin/team`
+  - `/dealer-ai-onboarding`
+  - `/dealer-ai-demo` — legacy lab, off-nav.
 
 ## Identity quick-reference
 
 | Layer | Source | Examples |
 | --- | --- | --- |
 | **Product** | `PRODUCT` in `frontend/src/config/defaultDealer.ts` | Sidebar caption "DEALER AI KIT", embed "Powered by AI Sales Assistant", `<title>` prefix |
-| **Default dealer** (fallback) | `DEFAULT_DEALER` in same file | `logoPath` (kit's static asset), fallback name "Sam Wampler's Freedom Ford", fallback location "McAlester", tagline "Sam Wampler Make It Happen" |
-| **Active dealer** (runtime) | `OnboardingProfile` via `useBrand()` | Topbar dealer chip, embed brand bar, footer disclaimers, welcome lines, **logo_url (SESSION_021)** |
+| **Default dealer** (fallback) | `DEFAULT_DEALER` in same file | `logoPath` fallback, name "Sam Wampler's Freedom Ford", location "McAlester", tagline "Sam Wampler Make It Happen" |
+| **Active dealer** (runtime) | `OnboardingProfile` via `useBrand()` | Public nav/header/footer, assistant welcome lines, embed brand bar |
 
 Resolution: `OnboardingProfile.logo_url || DEFAULT_DEALER.logoPath`
 for the logo; `OnboardingProfile.<field> || DEFAULT_DEALER.<field>`
-for everything else.
-
----
-
-## File pattern conventions
-
-- New page → `frontend/src/pages/<Name>Page.tsx`
-- New component → `frontend/src/components/<Name>.tsx`
-- New helper / hook → `frontend/src/lib/<name>.ts`
-- New config → `frontend/src/config/<name>.ts`
-- shadcn primitive lives in `frontend/src/components/ui/` —
-  patch primitives with `React.forwardRef` reactively when
-  they first surface a runtime ref warning. Already done:
-  Sheet, Dialog. Still on original pattern: DropdownMenu,
-  Tabs.
+for supported identity fields.
 
 ## Anchors that win on conflict
 
 If anything in this file disagrees with reality:
 
-1. The latest handoff (`docs/handoffs/SESSION_021_*.md`).
+1. The latest handoff (`docs/handoffs/SESSION_022_*.md`).
 2. `git log --oneline -10` (what actually shipped).
 3. `git show HEAD:frontend/src/<path>` (current source).
 
