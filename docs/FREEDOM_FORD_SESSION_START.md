@@ -10,6 +10,23 @@ hand_written: true
 > Read this first every session. If a generated doc disagrees with this file,
 > verify against the latest handoff and current code before trusting either.
 
+## SESSION_019 platform reframe (read first)
+
+> The codebase is **platform-first** as of SESSION_019. The kit is now
+> the *Dealer AI Kit* — a reusable dealer AI platform. **Sam Wampler's
+> Freedom Ford McAlester remains the active / default dealer
+> implementation** and is what every screenshot, handoff, and demo
+> targets today.
+>
+> One repo, many possible dealer configurations. See
+> `docs/PLATFORM_REFRAME.md` for the identity hierarchy
+> (product → default dealer → active dealer) and the path for adding
+> a second dealer without forking.
+>
+> The rest of this document still describes the Freedom Ford
+> implementation accurately — it is the active dealer, just not the
+> only conceivable one anymore.
+
 ## What this project is
 
 Freedom Ford Dealer AI — a budget-constrained vehicle-recommendation chat

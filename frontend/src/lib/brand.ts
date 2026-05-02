@@ -1,4 +1,7 @@
 // SESSION_018 — brand identity helper.
+// SESSION_019 — fallbacks now read from `config/defaultDealer.ts`
+// so the kit can be retargeted at a different default dealer in
+// one place.
 //
 // Reads the dealer's identity from the existing onboarding profile
 // (`fetchOnboardingProfile()` — the endpoint already used by the
@@ -7,28 +10,27 @@
 // embed brand bar, embed footer, AssistantChat welcome line.
 //
 // **Fetch-on-mount, no global state.** Each consumer fires its own
-// fetch. Per the SESSION_018 spec, save-then-navigate is the
-// expected refresh pattern; module-level caching would defeat that.
-// In practice, only two consumers live in any given page session
-// (the OS shell once, the embed once on its own route) so this is
-// fine.
+// fetch. Save-then-navigate is the expected refresh pattern;
+// module-level caching would defeat that.
 //
 // **Hard fallbacks.** When the fetch fails or fields are empty, we
-// fall back to the verified Sam Wampler's Freedom Ford McAlester
-// identity. The embed surface in particular can be loaded by a
-// customer before the OS ever boots — graceful degradation matters.
+// fall back to `DEFAULT_DEALER` from `config/defaultDealer.ts`
+// (currently Sam Wampler's Freedom Ford McAlester). The embed
+// surface in particular can load before the OS ever boots —
+// graceful degradation matters.
 
 import { useEffect, useState } from "react";
 
+import { DEFAULT_DEALER } from "@/config/defaultDealer";
 import {
   fetchOnboardingProfile,
   type OnboardingProfilePayload,
 } from "@/lib/api";
 
 const FALLBACK = {
-  dealershipName: "Sam Wampler's Freedom Ford",
-  storeLocation: "McAlester",
-  tagline: "Sam Wampler Make It Happen",
+  dealershipName: DEFAULT_DEALER.dealershipName,
+  storeLocation: DEFAULT_DEALER.storeLocation,
+  tagline: DEFAULT_DEALER.tagline,
 } as const;
 
 export interface Brand {

@@ -50,7 +50,10 @@ export default function AssistantChat({
   starters = DEFAULT_STARTERS,
   placeholder = "Ask about budget, body style, payments, trim…",
   className,
-  welcomeTitle = "Hi — I'm Freedom Ford's sales assistant.",
+  // SESSION_019 — defaults are kept brand-neutral so a leak on a
+  // newly-installed kit doesn't display Freedom-Ford-specific copy.
+  // Both call sites override these via props with brand-aware text.
+  welcomeTitle = "Hi — I'm your dealership's sales assistant.",
   welcomeBody = "Tell me what you're looking for and I'll show you what we have. Try one of these to start, or type your own.",
   onActivityChange,
 }: AssistantChatProps) {

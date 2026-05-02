@@ -393,7 +393,7 @@ export default function DealerOnboardingPage() {
             label="Dealership name"
             value={dealership.name}
             onChange={(v) => setDealership({ ...dealership, name: v })}
-            placeholder="Freedom Ford"
+            placeholder="Your dealership name"
           />
           <Field
             label="Store location"
@@ -418,7 +418,7 @@ export default function DealerOnboardingPage() {
             label="Website"
             value={dealership.website}
             onChange={(v) => setDealership({ ...dealership, website: v })}
-            placeholder="https://freedomford.example.com"
+            placeholder="https://your-dealership.example.com"
             type="url"
             className="sm:col-span-2"
           />
@@ -499,7 +499,7 @@ export default function DealerOnboardingPage() {
             label="Email"
             value={salesperson.email}
             onChange={(v) => setSalesperson({ ...salesperson, email: v })}
-            placeholder="sarah@freedomford.example.com"
+            placeholder="sarah@your-dealership.example.com"
             type="email"
           />
           <Field
@@ -525,7 +525,7 @@ export default function DealerOnboardingPage() {
             onChange={(v) =>
               setSalesperson({ ...salesperson, personalIntro: v })
             }
-            placeholder="Hi, I'm Sarah — I've been helping families pick the right Ford for 12 years."
+            placeholder="Hi, I'm Sarah — I've been helping families pick the right vehicle for 12 years."
             multiline
             className="sm:col-span-2"
           />
@@ -543,7 +543,7 @@ export default function DealerOnboardingPage() {
             label="Dealership greeting"
             value={assistant.greeting}
             onChange={(v) => setAssistant({ ...assistant, greeting: v })}
-            placeholder="Welcome to Freedom Ford. Tell me what you're shopping for…"
+            placeholder="Welcome to your dealership. Tell me what you're shopping for…"
             multiline
           />
           <Field

@@ -21,6 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { DEFAULT_DEALER, PRODUCT } from "@/config/defaultDealer";
 import { useBrand, type Brand } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
@@ -41,13 +42,13 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },
 ];
 
-// Real dealer logo, captured from samsfreedomford.com on 2026-05-02 and
-// stored locally so the demo doesn't break when the dealer's CDN
-// rotates. The logo asset is intentionally NOT keyed off
-// onboarding-profile values — that's a brand-team upload, not a
-// derivable string. See SESSION_018 handoff for the rationale.
-const LOGO_SRC = "/branding/sams-freedom-ford-logo.jpg";
-const PRODUCT_LABEL = "Dealer OS";
+// SESSION_019 — logo path comes from `config/defaultDealer.ts`,
+// product label comes from the same module's PRODUCT block. A
+// future multi-tenant session would swap the static logo path for
+// a per-dealer uploaded asset; the kit's product label stays
+// constant regardless of which dealer is configured.
+const LOGO_SRC = DEFAULT_DEALER.logoPath;
+const PRODUCT_LABEL = PRODUCT.productName;
 
 export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);

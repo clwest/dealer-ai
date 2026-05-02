@@ -19,6 +19,7 @@ import { CircleCheck, RotateCcw } from "lucide-react";
 
 import AssistantChat from "@/components/AssistantChat";
 import { Button } from "@/components/ui/button";
+import { DEFAULT_DEALER, PRODUCT } from "@/config/defaultDealer";
 import { useBrand, type Brand } from "@/lib/brand";
 
 const TRUST_POINTS = ["Real inventory", "Payment-aware", "No pressure"];
@@ -109,7 +110,7 @@ function BrandMark({ brand }: { brand: Brand }) {
   }
   return (
     <img
-      src="/branding/sams-freedom-ford-logo.jpg"
+      src={DEFAULT_DEALER.logoPath}
       alt={brand.dealershipName}
       onError={() => setErrored(true)}
       className="h-9 w-auto select-none"
@@ -139,7 +140,7 @@ function Footer({ brand }: { brand: Brand }) {
           Estimates only. A {brand.dealershipName} advisor confirms real
           numbers.
         </span>
-        <span className="hidden sm:inline">Powered by AI Sales Assistant</span>
+        <span className="hidden sm:inline">Powered by {PRODUCT.productSubtitle}</span>
       </div>
     </footer>
   );
