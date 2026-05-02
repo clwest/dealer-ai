@@ -67,20 +67,24 @@ export default function ManagerChatPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header note — SESSION_010 spec calls this out explicitly. */}
+      {/* Header note — SESSION_010 coaching follow-up: make the mode
+          explicit so future sessions don't drift toward "fake customer
+          chat with cards hidden". */}
       <div className="card flex items-start gap-3 px-6 py-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-ford-blue text-white">
           <Bot className="h-4 w-4" />
         </div>
         <div>
           <h1 className="text-base font-bold text-ford-ink">
-            Manager chat tester
+            Test Assistant Coaching Mode
           </h1>
           <p className="text-sm text-slate-500">
-            Test how your configured sales assistant responds to customers.
-            Saved settings on the Onboarding page (voice, banned phrases,
-            disclaimer) shape the replies you see here. Each message is
-            stateless — reload to reset the transcript.
+            Use this to preview how the assistant will guide a customer.
+            This page does not show vehicle cards — replies are shaped as
+            sales-coaching guidance, reflecting the saved tone, banned
+            phrases, and disclaimer from{" "}
+            <span className="font-semibold">Onboarding</span>. Each
+            message is stateless — reload to reset the transcript.
           </p>
           <p className="mt-1 text-xs text-amber-700">
             Not customer-facing. Use{" "}
@@ -97,8 +101,9 @@ export default function ManagerChatPage() {
       >
         {turns.length === 0 ? (
           <div className="text-sm text-slate-400">
-            No messages yet. Send a prompt below — for example:{" "}
-            <em>"I want a 4WD truck for $500/mo."</em>
+            No messages yet. Send a sample customer prompt below — for
+            example: <em>"I want a truck under $30k."</em> The assistant
+            will reply in coaching frame, not as a live customer chat.
           </div>
         ) : (
           turns.map((t) => <ManagerBubble key={t.id} turn={t} />)
@@ -123,12 +128,12 @@ export default function ManagerChatPage() {
       >
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-xs font-semibold text-slate-600">
-            Message as a customer
+            Sample customer prompt
           </span>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Try: I'm looking for a cheap car I can pay cash for that gets good gas mileage."
+            placeholder="Ask a sample customer question…"
             className="input min-h-[60px] resize-y"
             onKeyDown={(e) => {
               // Cmd/Ctrl+Enter to send, matching the demo page's UX.

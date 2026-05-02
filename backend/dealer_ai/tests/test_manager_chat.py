@@ -235,6 +235,88 @@ class ManagerChatNoCardImplicationTests(TestCase):
                 f"manager-chat reply must not imply visible cards (saw {phrase!r})",
             )
 
+    def test_first_person_inventory_claim_is_stripped(self):
+        """Coaching follow-up: replies that pretend the dealership has
+        specific inventory rendered ("We have a 2020 Chevrolet Colorado",
+        "Our F-150 starts at $24,000") get scrubbed because no card is
+        actually being shown."""
+        bad_reply = (
+            "Under $30k there are good options. "
+            "We have a 2020 Chevrolet Colorado LT in stock. "
+            "Our F-150 starts at $28,000. "
+            "Want to see a closer comparison?"
+        )
+        provider = MockLLMProvider(replies=[json_reply({}), bad_reply])
+        with _ProviderInjector(provider):
+            res = self.client.post(
+                URL,
+                data=json.dumps({"message": "trucks under 30k"}),
+                content_type="application/json",
+            )
+        self.assertEqual(res.status_code, 200)
+        reply = res.json()["reply"]
+        forbidden = [
+            "we have a 2020",
+            "our f-150",
+            "starts at $",
+        ]
+        for phrase in forbidden:
+            self.assertNotIn(
+                phrase,
+                reply.lower(),
+                f"first-person inventory claim survived ({phrase!r})",
+            )
+        # The coaching opener and the closing question survive — the
+        # scrub is sentence-level.
+        self.assertIn("good options", reply.lower())
+
+    def test_one_option_is_the_X_pattern_is_stripped(self):
+        bad_reply = (
+            "I'd narrow what matters first. "
+            "One option is the Chevrolet Colorado LT. "
+            "Another option is the Ford Ranger XL. "
+            "What matters most for this customer?"
+        )
+        provider = MockLLMProvider(replies=[json_reply({}), bad_reply])
+        with _ProviderInjector(provider):
+            res = self.client.post(
+                URL,
+                data=json.dumps({"message": "trucks"}),
+                content_type="application/json",
+            )
+        reply = res.json()["reply"]
+        # The "One option is the X" / "Another option is the Y"
+        # sentences are inventory-claim shapes for coaching mode.
+        self.assertNotIn("one option is the", reply.lower())
+        self.assertNotIn("another option is the", reply.lower())
+        # The coaching prose and qualifying question still survive.
+        self.assertIn("narrow what matters first", reply)
+        self.assertIn("matters most", reply.lower())
+
+    def test_coaching_frame_reply_passes_through(self):
+        """Pure coaching replies (the ideal shape per the product
+        decision) must NOT be modified — the scrub is additive, not
+        subtractive on good prose. Mentions of model names in coaching
+        context are fine; only first-person inventory claims get
+        stripped."""
+        coaching_reply = (
+            "If a customer asks about trucks under $30k, I'd narrow the "
+            "deal first: 4WD, cab size, towing, or mileage. The "
+            "assistant should ask one clean qualifying question like "
+            "\"What matters most: 4WD, crew cab, towing, or lowest "
+            "miles?\" before quoting any specific Ranger or Maverick."
+        )
+        provider = MockLLMProvider(
+            replies=[json_reply({}), coaching_reply]
+        )
+        with _ProviderInjector(provider):
+            res = self.client.post(
+                URL,
+                data=json.dumps({"message": "trucks under 30k"}),
+                content_type="application/json",
+            )
+        self.assertEqual(res.json()["reply"], coaching_reply)
+
     def test_safe_fallback_when_every_sentence_strips(self):
         # Pathological case: every sentence is card-implying. The view
         # must still return SOMETHING usable — the safe fallback.
@@ -285,9 +367,8 @@ class ManagerChatNoCardImplicationTests(TestCase):
 
     def test_hint_reaches_llm_call(self):
         # Inspect MockLLMProvider.calls[1] (chat-reply call): system
-        # messages must include the MANAGER_TEST_HINT marker.
-        from dealer_ai.services.manager_chat_response import MANAGER_TEST_HINT
-
+        # messages must include the MANAGER_COACHING_HINT marker and
+        # the role-reframe to "internal sales coaching advisor".
         provider = MockLLMProvider(replies=[json_reply({}), "ok"])
         with _ProviderInjector(provider):
             self.client.post(
@@ -301,12 +382,18 @@ class ManagerChatNoCardImplicationTests(TestCase):
             for m in provider.calls[1]
             if m.get("role") == "system"
         )
-        # Use a marker phrase from the hint that's specific enough to
-        # avoid false matches with SYSTEM_PROMPT.
-        self.assertIn("MANAGER TEST MODE", chat_systems)
-        # Sanity: the hint also names at least one of the forbidden
+        # Marker phrase asserted by tests; do not change without
+        # updating the constant in manager_chat_response.py.
+        self.assertIn("MANAGER COACHING MODE", chat_systems)
+        # Role re-frame line — the LLM must understand it is coaching,
+        # not impersonating the assistant.
+        self.assertIn("INTERNAL SALES COACHING ADVISOR", chat_systems)
+        # Sanity: the hint names at least one of the forbidden
         # phrasings so the LLM has the explicit list.
         self.assertIn("Which one catches your eye", chat_systems)
+        # Anti-shape rule: explicit "you are NOT the customer-facing
+        # assistant" guidance.
+        self.assertIn("NOT the customer-facing assistant", chat_systems)
 
 
 class CustomerChatNotAffectedByManagerHintTests(TestCase):
@@ -324,13 +411,14 @@ class CustomerChatNotAffectedByManagerHintTests(TestCase):
         )
         engine = ChatEngine(session=session, provider=provider)
         engine.handle_user_message("show me trucks")
-        # Inspect the chat-reply call: NO manager-test marker.
+        # Inspect the chat-reply call: NO manager-coaching marker.
         chat_systems = "\n\n".join(
             m["content"]
             for m in provider.calls[1]
             if m.get("role") == "system"
         )
-        self.assertNotIn("MANAGER TEST MODE", chat_systems)
+        self.assertNotIn("MANAGER COACHING MODE", chat_systems)
+        self.assertNotIn("INTERNAL SALES COACHING ADVISOR", chat_systems)
 
     def test_send_message_reply_is_not_card_scrubbed(self):
         # Customer chat keeps card-implying phrasing — those replies are

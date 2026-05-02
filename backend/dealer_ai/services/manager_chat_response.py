@@ -1,27 +1,32 @@
-"""SESSION_010 hotfix: shape replies for the manager-chat tester.
+"""SESSION_010 (+ coaching follow-up): shape replies for the manager chat.
 
-The manager-chat endpoint (`POST /api/dealer-ai/manager-chat/`) never
-renders vehicle cards — its only payload is `{"reply": text}`. When the
-LLM nonetheless produces sentences that imply cards are visible
-("Here are a few options", "Let me show you", "Which one of these trucks
-catches your eye?"), the manager sees a broken-feeling reply that
-references options that never appear.
+The manager-chat endpoint (`POST /api/dealer-ai/manager-chat/`) is the
+*coaching mode* surface — a sales-coaching advisor that explains how the
+customer-facing assistant should respond to a prompt. It is not a
+customer chat with the cards hidden, and it is not a fake assistant
+preview. The product decision (2026-05-02 follow-up) is:
 
-This module provides a two-layer fix:
+    Coaching / preview mode — help a manager understand how the assistant
+    would respond, without pretending inventory cards are visible.
 
-1. ``MANAGER_TEST_HINT`` — a system-message string the chat engine appends
-   when the session is on the ``manager_test`` channel. The hint tells the
-   LLM that no cards render and lists the phrasings to avoid. This is the
-   primary fix; it shapes the reply at generation time rather than
-   repairing it after the fact.
+This module provides a two-layer fix that pins the mode at both the
+prompt and the response level:
+
+1. ``MANAGER_COACHING_HINT`` — a system-message string the chat engine
+   appends when the session is on the ``manager_test`` channel. The
+   hint flips the LLM's role to "internal sales-coaching advisor" and
+   lists the forbidden phrasings explicitly. This is the primary fix.
 
 2. ``scrub_card_implying_phrases`` — a pure-function safety net that
-   strips sentences containing card-implying phrasing on the way out of
-   the manager-chat view. Runs even if the LLM ignored the hint.
+   strips card-implying *and* first-person inventory claims (e.g.,
+   "We have a 2020 Chevrolet Colorado", "Our F-150 starts at...") on
+   the way out of the manager-chat view. Runs even if the LLM ignored
+   the hint.
 
-Customer-facing chat is **not** affected: the engine only injects the
-hint when ``session.metadata["channel"] == "manager_test"``, and the
-scrub is invoked only inside the manager-chat view.
+Customer-facing chat (``/dealer-ai-demo``, ``/api/dealer-ai/chat/...``)
+is **not** affected: the engine only injects the hint when
+``session.metadata["channel"] == "manager_test"``, and the scrub is
+invoked only inside the manager-chat view.
 """
 
 from __future__ import annotations
@@ -31,32 +36,67 @@ from typing import Tuple
 
 
 # System-message text appended to the LLM call when the chat session is
-# on the ``manager_test`` channel. The wording is verbose on purpose —
-# llama3.2 needs the explicit list to reliably suppress these patterns.
-MANAGER_TEST_HINT = (
-    "MANAGER TEST MODE — IMPORTANT context for this turn:\n"
-    "- This reply is being shown to a dealership MANAGER inside an internal "
-    "testing tool. NO vehicle cards, inventory previews, or option lists "
-    "are rendered alongside the text.\n"
-    "- Do NOT use phrasings that imply visible options. Specifically avoid: "
-    "\"Here are a few options\", \"Here are some\", \"Let me show you\", "
-    "\"I'll show you\", \"Let's take a look\", \"Take a look at some\", "
-    "\"These trucks/cars/SUVs/vehicles/models\", \"Which one catches your "
-    "eye?\", \"Which one of these\", \"Pick one of these\", "
-    "\"options below\", \"check out these\".\n"
-    "- Speak as if no inventory list is visible. If you would recommend "
-    "something, describe the qualities to look for or the next narrowing "
-    "question. Do not promise to display options that will not appear.\n"
-    "- Keep the reply tight (2-4 sentences). End with one focused "
-    "next-step question."
+# on the ``manager_test`` channel. Verbose on purpose — llama3.2 needs
+# both the role re-frame ("you are NOT the customer-facing assistant")
+# AND the explicit forbidden-phrasing list to reliably stay in coaching
+# mode. The marker phrase "MANAGER COACHING MODE" is asserted by the
+# regression tests, so don't change it without updating the tests.
+MANAGER_COACHING_HINT = (
+    "MANAGER COACHING MODE — your role for this turn:\n"
+    "You are the dealership's INTERNAL SALES COACHING ADVISOR. A "
+    "dealership manager is testing how their customer-facing assistant "
+    "should guide customers; the message above is a sample customer "
+    "prompt. Your job is to explain to the manager how the assistant "
+    "should respond — not to BE the assistant directly.\n"
+    "\n"
+    "Two acceptable response shapes:\n"
+    "  (a) Pure coaching: explain what the assistant should do.\n"
+    "      Example: \"If a customer asks about trucks under $30k, I'd "
+    "narrow the deal first: 4WD, cab size, towing, or mileage. The "
+    "assistant should ask one clean qualifying question.\"\n"
+    "  (b) Quoted preview: describe the approach, then quote a sample "
+    "reply.\n"
+    "      Example: \"I'd open by acknowledging the budget and "
+    "narrowing priorities. A strong response: 'Absolutely — under "
+    "$30k, what matters most: 4WD, crew cab, towing, or lowest "
+    "miles?'\"\n"
+    "\n"
+    "Hard rules for coaching mode:\n"
+    "- You are NOT the customer-facing assistant in this turn. Speak "
+    "in third-person about what the assistant should do, OR provide a "
+    "brief sample reply in quotes.\n"
+    "- No cards or inventory list is visible to the manager. Do NOT "
+    "pretend they are.\n"
+    "- Do NOT make first-person dealership inventory claims like \"We "
+    "have a Chevrolet Colorado\", \"Our F-150 starts at\", \"One "
+    "option is the Ranger\". Generic price ranges and naming a model "
+    "as a coaching example are fine; specific stocked vehicles are "
+    "not.\n"
+    "- Do NOT use phrasings like: \"Here are some options\", \"Here "
+    "are a few options\", \"Let me show you\", \"I'll show you\", "
+    "\"Let's take a look\", \"Take a look at some\", \"These trucks/"
+    "cars/SUVs\", \"Which one catches your eye?\", \"Pick one of "
+    "these\", \"options below\", \"check out these\".\n"
+    "- DO reflect the dealership voice rules in any DEALER VOICE "
+    "OVERRIDES block above (tone, encouraged/banned phrases, "
+    "escalation rule).\n"
+    "- Keep the reply tight (2-4 sentences). End with a focused "
+    "next-step question OR a brief note on why the suggested approach "
+    "works."
 )
 
 
-# Card-implying phrase patterns. Each is a sentence-level substring
-# match; if any pattern hits a sentence, the whole sentence is dropped.
-# Patterns are case-insensitive; word-boundaries are loose so we catch
-# minor LLM variations ("Here's a few options" / "Here are some trucks").
+# Backwards-compat alias for any external imports of the old name. Safe
+# to remove once nothing references MANAGER_TEST_HINT.
+MANAGER_TEST_HINT = MANAGER_COACHING_HINT
+
+
+# Card-implying phrase patterns. Each pattern matches at the sentence
+# level; if a sentence matches, the whole sentence is dropped. Patterns
+# are case-insensitive and conservative on word boundaries so we catch
+# minor LLM variations.
 _CARD_IMPLYING_PATTERNS: Tuple[re.Pattern[str], ...] = (
+    # "Here are/'s a few options" / "Here is some trucks" / "Here are some"
     re.compile(
         r"here(?:'s|\s+(?:are|is))?\s+(?:a\s+few|some|several|the)?\s*"
         r"(?:options|trucks|cars|suvs|vehicles|models)",
@@ -85,18 +125,56 @@ _CARD_IMPLYING_PATTERNS: Tuple[re.Pattern[str], ...] = (
         r"(?:trucks|cars|suvs|options|models|vehicles)",
         re.IGNORECASE,
     ),
-    # "I've got X" / "I have X" / "I have a few X" — implies a stocked list.
+    # First-person LLM claim of stocked inventory.
     re.compile(
         r"i(?:'ve|\s+ha[vs]e)\s+(?:got\s+)?(?:a\s+few|some|several)?\s*"
         r"(?:trucks|cars|suvs|options|models|vehicles)\s+(?:for\s+you|that)",
         re.IGNORECASE,
     ),
-    # "looking at some great options" — sounds like cards are visible.
+    # "you're looking at some great options" — implies cards visible.
     re.compile(
         r"(?:you(?:'re|\s+are)|you(?:'ll|\s+will))\s+looking\s+at\s+"
         r"(?:some|a\s+few|several|these)\s+"
         r"(?:great\s+|good\s+|solid\s+)?"
         r"(?:options|trucks|cars|suvs|vehicles|models)",
+        re.IGNORECASE,
+    ),
+    # ----- Coaching-mode follow-up: first-person inventory claims -----
+    # "We have a 2020 ..." / "We've got the F-150" / "We carry several Rangers"
+    # Tight: requires a determiner-or-year token after "we have/carry/stock/got".
+    re.compile(
+        r"\bwe(?:\s+(?:have|has|carry|stock|got)|'(?:ve|d|re))\s+"
+        r"(?:got\s+)?"
+        r"(?:a|an|the|some|several|a\s+few|a\s+\d{4}|\d{4})\b",
+        re.IGNORECASE,
+    ),
+    # Possessive dealership claim: "Our F-150" / "Our Bronco Sport"
+    # Anchored to known make / model names so we don't strip "our customers".
+    re.compile(
+        r"\bour\s+("
+        r"Ford|Chevrolet|Chevy|Toyota|Honda|GMC|Ram|Nissan|Hyundai|Kia|"
+        r"Jeep|Dodge|Cadillac|Subaru|Mazda|Volkswagen|BMW|Mercedes|Audi|"
+        r"Lexus|Acura|Buick|Lincoln|Tesla|"
+        r"F-?\d+|F-?\d+\s+\w+|"
+        r"Ranger|Maverick|Bronco|Explorer|Escape|Mustang|Edge|Expedition|"
+        r"Fusion|Focus|Fiesta|Taurus|"
+        r"Colorado|Tundra|Silverado|Tacoma|Tahoe|Suburban|Equinox|Trailblazer|"
+        r"Camry|Civic|Accord|Highlander|Pilot|RAV4|CR-V|Corolla"
+        r")\b",
+        re.IGNORECASE,
+    ),
+    # "One option is the X" / "Another model is the Y" / "Next vehicle would be..."
+    re.compile(
+        r"\b(?:one|another|the\s+next|next)\s+"
+        r"(?:option|model|choice|vehicle|truck|car|suv)\s+"
+        r"(?:is|would\s+be)\s+(?:the\s+)?[A-Z][\w-]*",
+        re.IGNORECASE,
+    ),
+    # "starts at $X" / "starting around $X" — concrete inventory price claim.
+    re.compile(
+        r"\bstart(?:s|ing)\s+(?:at|around|from)\s*"
+        r"(?:around\s+|about\s+|approximately\s+|roughly\s+)?"
+        r"\$\d",
         re.IGNORECASE,
     ),
 )
@@ -109,10 +187,8 @@ _CARD_IMPLYING_PATTERNS: Tuple[re.Pattern[str], ...] = (
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])")
 
 
-# Safe fallback when every sentence in the reply was card-implying.
-# Keeps the manager unblocked with a deliberately direction-setting reply
-# rather than an empty string. Phrased as a manager-side coaching question
-# (matches one of the two acceptable shapes called out in the spec).
+# Safe fallback when every sentence in the reply was card-implying or
+# inventory-claiming. Phrased as a manager-side coaching prompt.
 _SAFE_FALLBACK = (
     "Under that budget I'd start by narrowing what matters most — "
     "4WD, crew cab, towing, or lowest miles — so the conversation "
@@ -122,7 +198,8 @@ _SAFE_FALLBACK = (
 
 
 def scrub_card_implying_phrases(reply: str) -> Tuple[str, bool]:
-    """Strip sentences that imply visible vehicle cards / option lists.
+    """Strip sentences that imply visible vehicle cards or make first-
+    person inventory claims.
 
     Returns ``(cleaned, fired)``. Fired is True when at least one
     sentence matched any of the patterns. If the scrub strips every

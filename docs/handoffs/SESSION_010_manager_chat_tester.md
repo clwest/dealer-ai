@@ -1,8 +1,8 @@
 ---
 date: 2026-05-02
-title: SESSION_010 — manager-side chat tester (+ hotfix)
+title: SESSION_010 — manager-side chat tester (+ hotfix + coaching reframe)
 type: implementation-summary
-test_baseline: 1186
+test_baseline: 1189
 ---
 
 # Session handoff — manager chat tester
@@ -343,3 +343,130 @@ no-profile and `sales_tone="Firm"` scenarios produce coaching prose
 without card-implying language.
 
 Frontend not touched.
+
+---
+
+## Coaching-mode reframe (2026-05-02 follow-up)
+
+After the hotfix landed, the manager chat was working but sat *between*
+two modes — sometimes speaking directly as the assistant ("Let's
+explore some options. We have a 2020 Chevrolet Colorado…"), sometimes
+coaching the manager. The product decision is now explicit:
+
+> **Coaching / preview mode.** Help a manager understand how the
+> assistant would respond, without pretending inventory cards are
+> visible. Avoid first-person dealership inventory claims unless cards
+> are actually returned.
+
+### Backend changes
+
+- **Renamed:** `MANAGER_TEST_HINT` → `MANAGER_COACHING_HINT`. The old
+  name is kept as a backwards-compat alias for one cycle.
+- **Reworded the hint** to flip the LLM's role explicitly:
+
+  > *"You are the dealership's INTERNAL SALES COACHING ADVISOR. A
+  > dealership manager is testing how their customer-facing assistant
+  > should guide customers… Your job is to explain to the manager how
+  > the assistant should respond — not to BE the assistant directly."*
+
+  Includes both acceptable response shapes (pure coaching prose,
+  quoted-preview frame) with worked examples, and a hard rule that
+  the LLM is **not** the customer-facing assistant in this turn.
+
+- **Added scrub patterns** for first-person inventory claims that the
+  hotfix scrub didn't cover:
+  - `\bwe(...have|carry|stock|got)\s+(a|an|the|some|several|YYYY)`
+  - `\bour\s+(Ford|Chevy|F-150|Ranger|Maverick|...)` — possessive
+    inventory claims, anchored to known make/model names so we don't
+    strip "our customers".
+  - `\b(one|another|next)\s+(option|model)\s+(is|would be)\s+(the )?[A-Z]…`
+    — pulls the LLM out of "preview the assistant's reply by listing
+    options" mode.
+  - `\bstart(s|ing)\s+(at|around|from)\s+\$\d` — concrete inventory
+    price claims (a stocked car "starts at $25,000" implies a card).
+
+### Frontend changes
+
+`pages/ManagerChatPage.tsx`:
+
+- Page title: *"Manager chat tester"* → **"Test Assistant Coaching Mode"**
+- Header copy: now reads *"Use this to preview how the assistant will
+  guide a customer. This page does not show vehicle cards — replies
+  are shaped as sales-coaching guidance, reflecting the saved tone,
+  banned phrases, and disclaimer from Onboarding."*
+- Composer label: *"Message as a customer"* → **"Sample customer prompt"**
+- Composer placeholder: → **"Ask a sample customer question…"**
+- Empty-state hint reworded to remind the manager that replies arrive
+  in *coaching frame*, not customer chat.
+
+### Live before / after
+
+**Pre-coaching-reframe (post-hotfix only):**
+> *"Let's explore some options. We have a few models available in that
+> price range. One option is the Chevrolet Colorado LT, which starts at
+> around $25,000 and offers a good balance of features and fuel
+> efficiency. Another option is the Ford Ranger XL, starting at about
+> $24,000…"*
+
+**After (this reframe, no profile saved):**
+> *"If you're looking at trucks under $30k, what matters most to you:
+> 4WD capability, crew cab space, towing capacity, or lowest miles?"*
+
+Compare against the spec's good example:
+> *"Absolutely — under $30k, what matters most: 4WD, crew cab, towing,
+> or lowest miles?"*
+
+Same structural shape (acknowledge → narrowing question), no card
+implication, no first-person inventory claims.
+
+### Tests added (3 new; full manager-chat suite now 17)
+
+- `test_first_person_inventory_claim_is_stripped` — replies that say
+  *"We have a 2020 Chevrolet Colorado LT in stock. Our F-150 starts at
+  $28,000."* get scrubbed because no card is shown.
+- `test_one_option_is_the_X_pattern_is_stripped` — *"One option is the
+  Chevrolet Colorado LT. Another option is the Ford Ranger XL."* gets
+  scrubbed; the surrounding coaching prose survives.
+- `test_coaching_frame_reply_passes_through` — pure coaching replies
+  that mention model names in coaching context (not as inventory
+  claims) are NOT modified — the scrub is additive, not subtractive
+  on good prose.
+
+Existing tests updated:
+- `test_hint_reaches_llm_call` — asserts marker `MANAGER COACHING MODE`
+  + role re-frame text + the explicit anti-shape rule *"NOT the
+  customer-facing assistant"*.
+- `test_send_message_does_not_inject_manager_hint` — asserts the new
+  marker is also absent from customer-facing chat.
+
+### File changes (this reframe only)
+
+```
+backend/dealer_ai/services/
+  manager_chat_response.py    (~150 lines, ~35 changed; constant rename,
+                               new patterns, reworded hint)
+  chat_engine.py              (import + comment updates)
+backend/dealer_ai/tests/
+  test_manager_chat.py        (+~80 lines, 3 new tests)
+frontend/src/pages/
+  ManagerChatPage.tsx         (~12 lines changed; copy only, no layout)
+docs/handoffs/
+  SESSION_010_manager_chat_tester.md  (this section)
+docs/FREEDOM_FORD_SESSION_START.md    (baseline 1186 → 1189)
+00-START-NEXT-SESSION.md              (note the coaching reframe)
+```
+
+### Verification
+
+```bash
+cd backend && source .venv/bin/activate
+python manage.py test dealer_ai
+# Ran 1189 tests in 2.575s — OK (skipped=1)
+
+cd frontend
+npx tsc --noEmit       # 0 errors
+npx vite build         # 893ms; 343kB JS, 32kB CSS
+```
+
+Live curl confirmed coaching-mode replies match the spec's good
+example shape. Customer demo path was not touched and remains green.

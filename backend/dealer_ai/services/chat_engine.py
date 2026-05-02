@@ -23,7 +23,7 @@ from .intent_parser import (
 from .inventory_search import search_vehicles
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
-from .manager_chat_response import MANAGER_TEST_HINT
+from .manager_chat_response import MANAGER_COACHING_HINT
 from .onboarding_overrides import (
     append_disclaimer,
     format_store_voice_block,
@@ -6206,15 +6206,19 @@ class ChatEngine:
         if store_voice_block:
             messages.append({"role": "system", "content": store_voice_block})
         if manager_test_mode:
-            # Manager-test mode is a coaching surface: no cards, no
+            # Manager-test mode is the *coaching* surface: no cards, no
             # budget context, no cash-mode comparison directive. The
-            # LLM gets the system prompt + voice overrides + this hint
-            # only, so it produces a manager-facing coaching reply
-            # rather than referencing an inventory list it thinks is
+            # LLM gets the system prompt + voice overrides + the
+            # coaching hint only, so it produces a coaching/preview
+            # reply that explains how the customer-facing assistant
+            # should respond — rather than pretending to BE the
+            # assistant against an inventory list it thinks is
             # visible. Without this gate, the AVAILABLE INVENTORY block
             # below would prompt phrases like "the cards above have
             # the details", which mislead the manager.
-            messages.append({"role": "system", "content": MANAGER_TEST_HINT})
+            messages.append(
+                {"role": "system", "content": MANAGER_COACHING_HINT}
+            )
         else:
             if budget_block:
                 messages.append({"role": "system", "content": budget_block})
