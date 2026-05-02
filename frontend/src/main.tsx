@@ -9,6 +9,7 @@ import DealerAdmin from "@/pages/DealerAdmin";
 import DealerOnboardingPage from "@/pages/DealerOnboardingPage";
 import DealerOverviewPage from "@/pages/DealerOverviewPage";
 import InventoryPreviewPage from "@/pages/InventoryPreviewPage";
+import LeadsPage from "@/pages/LeadsPage";
 import LiveAssistantPage from "@/pages/LiveAssistantPage";
 import ManagerChatPage from "@/pages/ManagerChatPage";
 import SalesTeamPage from "@/pages/SalesTeamPage";
@@ -16,7 +17,12 @@ import "@/index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Routes>
         <Route path="/" element={<App />}>
           <Route
@@ -32,6 +38,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             path="dealer-ai-inventory"
             element={<InventoryPreviewPage />}
           />
+          <Route path="dealer-ai-leads" element={<LeadsPage />} />
           <Route path="dealer-ai-demo" element={<DealerAIDemo />} />
           <Route
             path="dealer-ai-onboarding"

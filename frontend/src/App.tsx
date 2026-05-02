@@ -1,14 +1,25 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Bot,
   Car,
   GraduationCap,
   LayoutDashboard,
+  Menu,
   Settings,
   Users,
+  UserSquare,
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -22,28 +33,62 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-overview", label: "Overview", icon: LayoutDashboard, end: false },
   { to: "/dealer-ai-live-assistant", label: "Live Assistant", icon: Bot, end: false },
   { to: "/dealer-ai-inventory", label: "Inventory", icon: Car, end: false },
+  { to: "/dealer-ai-leads", label: "Leads", icon: UserSquare, end: false },
   { to: "/dealer-ai-manager-chat", label: "Coaching Mode", icon: GraduationCap, end: false },
   { to: "/dealer-ai-admin/team", label: "Team", icon: Users, end: false },
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },
 ];
 
 export default function App() {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
+
+  // Close the mobile drawer whenever the route changes — clicking a
+  // nav link inside the Sheet should land the user on the new page
+  // without leaving the drawer floating open.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen">
-        <Sidebar />
+        <DesktopSidebar />
         <div className="flex flex-1 flex-col">
-          <TopBar />
-          <main className="flex-1 px-6 py-6">
+          <TopBar
+            onOpenMobileNav={() => setMobileNavOpen(true)}
+          />
+          <main className="flex-1 px-4 py-6 sm:px-6">
             <Outlet />
           </main>
         </div>
       </div>
+
+      <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <SheetContent
+          side="left"
+          className="w-64 bg-background p-0"
+          showCloseButton
+        >
+          <SheetHeader className="border-b border-border">
+            <SheetTitle className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+                FF
+              </span>
+              <span>Freedom Ford AI</span>
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              Primary navigation for the Dealer Operating System.
+            </SheetDescription>
+          </SheetHeader>
+          <NavList />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
 
-function Sidebar() {
+function DesktopSidebar() {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-muted/40 sm:flex">
       <div className="flex items-center gap-3 border-b border-border px-5 py-5">
@@ -54,26 +99,7 @@ function Sidebar() {
           Freedom Ford AI
         </div>
       </div>
-      <nav className="flex flex-1 flex-col gap-0.5 p-3">
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 border-l-2 px-3 py-2 text-sm font-medium transition",
-                isActive
-                  ? "border-primary bg-background text-primary"
-                  : "border-transparent text-muted-foreground hover:bg-background hover:text-foreground",
-              )
-            }
-          >
-            <item.icon className="h-4 w-4" aria-hidden />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
-      </nav>
+      <NavList />
       <div className="border-t border-border px-5 py-4 text-xs text-muted-foreground">
         Local · MVP
       </div>
@@ -81,10 +107,45 @@ function Sidebar() {
   );
 }
 
-function TopBar() {
+function NavList() {
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-background px-6">
-      <div className="flex items-center gap-3">
+    <nav className="flex flex-1 flex-col gap-0.5 p-3">
+      {NAV_ITEMS.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          className={({ isActive }) =>
+            cn(
+              "flex items-center gap-3 border-l-2 px-3 py-2 text-sm font-medium transition",
+              isActive
+                ? "border-primary bg-background text-primary"
+                : "border-transparent text-muted-foreground hover:bg-background hover:text-foreground",
+            )
+          }
+        >
+          <item.icon className="h-4 w-4" aria-hidden />
+          <span>{item.label}</span>
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+function TopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
+  return (
+    <header className="flex h-14 items-center justify-between border-b border-border bg-background px-4 sm:px-6">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="sm:hidden"
+          aria-label="Open navigation"
+          onClick={onOpenMobileNav}
+        >
+          <Menu className="h-4 w-4" />
+        </Button>
         <span className="text-sm font-semibold tracking-tight text-foreground">
           Freedom Ford
         </span>
