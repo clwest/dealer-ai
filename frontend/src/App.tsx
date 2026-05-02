@@ -21,7 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { DEFAULT_DEALER, PRODUCT } from "@/config/defaultDealer";
+import { PRODUCT } from "@/config/defaultDealer";
 import { useBrand, type Brand } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
@@ -42,12 +42,11 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },
 ];
 
-// SESSION_019 — logo path comes from `config/defaultDealer.ts`,
-// product label comes from the same module's PRODUCT block. A
-// future multi-tenant session would swap the static logo path for
-// a per-dealer uploaded asset; the kit's product label stays
-// constant regardless of which dealer is configured.
-const LOGO_SRC = DEFAULT_DEALER.logoPath;
+// SESSION_021 — the logo path is no longer a module-level constant.
+// `useBrand()` resolves `brand.logoUrl` from the onboarding profile's
+// `logo_url` field with a fallback to `DEFAULT_DEALER.logoPath`, so
+// brand surfaces always read it through the hook. The product label
+// stays constant — it's the kit's voice, not a per-dealer setting.
 const PRODUCT_LABEL = PRODUCT.productName;
 
 export default function App() {
@@ -126,6 +125,13 @@ function BrandHeader({
   compact?: boolean;
 }) {
   const [logoError, setLogoError] = useState(false);
+  // Reset the error flag whenever the resolved URL changes — a manager
+  // who edits the Setup logo URL after a previous bad URL errored out
+  // should see the new image attempt to load instead of staying stuck
+  // on the text fallback.
+  useEffect(() => {
+    setLogoError(false);
+  }, [brand.logoUrl]);
   const padding = compact ? "px-4 py-3" : "px-5 py-4";
   const logoHeight = compact ? "h-9" : "h-11";
 
@@ -136,7 +142,12 @@ function BrandHeader({
           <BrandTextFallback brand={brand} />
         ) : (
           <img
-            src={LOGO_SRC}
+            // SESSION_021 — profile-supplied hosted URL wins; otherwise
+            // the kit's static fallback. Reset error state via the
+            // src key so a subsequent profile change re-attempts the
+            // load instead of staying stuck on the text fallback.
+            key={brand.logoUrl}
+            src={brand.logoUrl}
             alt={brand.displayName}
             onError={() => setLogoError(true)}
             className={cn(logoHeight, "w-auto select-none")}

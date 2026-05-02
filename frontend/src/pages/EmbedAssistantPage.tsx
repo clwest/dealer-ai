@@ -14,12 +14,12 @@
 // preserve the verified Sam Wampler's Freedom Ford McAlester
 // identity when the profile is missing or empty.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CircleCheck, RotateCcw } from "lucide-react";
 
 import AssistantChat from "@/components/AssistantChat";
 import { Button } from "@/components/ui/button";
-import { DEFAULT_DEALER, PRODUCT } from "@/config/defaultDealer";
+import { PRODUCT } from "@/config/defaultDealer";
 import { useBrand, type Brand } from "@/lib/brand";
 
 const TRUST_POINTS = ["Real inventory", "Payment-aware", "No pressure"];
@@ -95,12 +95,17 @@ function BrandBar({
 }
 
 function BrandMark({ brand }: { brand: Brand }) {
-  // Use the same dealer asset the OS shell loads so the brand reads
-  // identically in both contexts. Logo asset is intentionally NOT
-  // keyed off onboarding-profile values — that's a brand-team
-  // upload, not a derivable string. If the asset is missing, fall
-  // back to a small Ford-blue chip with the dealer's initials.
+  // SESSION_021 — sources `brand.logoUrl`, which is the
+  // profile-supplied hosted URL when set or the kit's static
+  // fallback otherwise. If even that fails to load, fall through
+  // to a small Ford-blue chip with the dealer's initials so the
+  // brand bar never collapses.
   const [errored, setErrored] = useState(false);
+  // Reset the error flag when the resolved URL changes so a Setup
+  // edit doesn't leave the embed permanently on the initials chip.
+  useEffect(() => {
+    setErrored(false);
+  }, [brand.logoUrl]);
   if (errored) {
     return (
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
@@ -110,7 +115,7 @@ function BrandMark({ brand }: { brand: Brand }) {
   }
   return (
     <img
-      src={DEFAULT_DEALER.logoPath}
+      src={brand.logoUrl}
       alt={brand.dealershipName}
       onError={() => setErrored(true)}
       className="h-9 w-auto select-none"

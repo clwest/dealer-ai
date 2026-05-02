@@ -225,6 +225,14 @@ class DealerOnboardingProfile(models.Model):
     main_brands = models.CharField(max_length=255, blank=True, default="")
     sales_phone = models.CharField(max_length=64, blank=True, default="")
     website = models.CharField(max_length=255, blank=True, default="")
+    # SESSION_021 — hosted logo URL. Falls back to the kit's static
+    # asset (DEFAULT_DEALER.logoPath on the frontend) when blank.
+    # CharField, not URLField, so the form can save partial drafts
+    # without strict URL validation; the frontend type=url input gives
+    # browser-side validation, and the consumer (`useBrand()`) just
+    # passes the string through to `<img src>` which already handles
+    # bad URLs via its own `onError` fallback.
+    logo_url = models.CharField(max_length=512, blank=True, default="")
 
     # Manager preferences.
     sales_tone = models.CharField(max_length=128, blank=True, default="")

@@ -61,6 +61,55 @@ class OnboardingDealershipFieldsTests(TestCase):
         self.assertEqual(profile.website, "https://freedomford.example.com")
 
 
+class OnboardingLogoUrlTests(TestCase):
+    """SESSION_021 — `logo_url` is the per-dealer logo override.
+
+    Empty string default keeps the kit's static fallback in play
+    (consumers resolve `profile.logo_url || DEFAULT_DEALER.logoPath`).
+    Saving a hosted URL persists it; clearing it back to "" returns
+    to fallback behavior.
+    """
+
+    LOGO = "https://cdn.example.com/dealer-logo.svg"
+
+    def test_default_logo_url_is_empty_string(self):
+        res = self.client.get(URL)
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn("logo_url", res.json())
+        self.assertEqual(res.json()["logo_url"], "")
+
+    def test_put_saves_logo_url(self):
+        body = {**ONBOARDING_DEFAULTS, "logo_url": self.LOGO}
+        res = self.client.put(URL, data=json.dumps(body), content_type="application/json")
+        self.assertEqual(res.status_code, 200, res.content)
+        profile = DealerOnboardingProfile.objects.get()
+        self.assertEqual(profile.logo_url, self.LOGO)
+
+    def test_get_after_save_returns_logo_url(self):
+        body = {**ONBOARDING_DEFAULTS, "logo_url": self.LOGO}
+        self.client.put(URL, data=json.dumps(body), content_type="application/json")
+        res = self.client.get(URL)
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()["logo_url"], self.LOGO)
+
+    def test_clearing_logo_url_persists_empty(self):
+        # Save a URL, then save back the empty default — confirms the
+        # frontend "clear the field to revert to fallback" path works
+        # at the API boundary.
+        self.client.put(
+            URL,
+            data=json.dumps({**ONBOARDING_DEFAULTS, "logo_url": self.LOGO}),
+            content_type="application/json",
+        )
+        self.client.put(
+            URL,
+            data=json.dumps({**ONBOARDING_DEFAULTS, "logo_url": ""}),
+            content_type="application/json",
+        )
+        profile = DealerOnboardingProfile.objects.get()
+        self.assertEqual(profile.logo_url, "")
+
+
 class OnboardingManagerFieldsTests(TestCase):
     def test_put_saves_manager_preferences(self):
         body = {

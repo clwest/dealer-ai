@@ -48,6 +48,16 @@ export interface Brand {
   possessiveName: string;
   /** Marketing tagline. Constant for now (no profile field for it yet). */
   tagline: string;
+  /** SESSION_021 — resolved logo URL. Profile-supplied hosted URL when
+   *  set; otherwise the kit's static fallback (`DEFAULT_DEALER.logoPath`).
+   *  Always a non-empty string — consumers can pass it straight to
+   *  `<img src>` and rely on the image's own `onError` for the
+   *  asset-missing case. */
+  logoUrl: string;
+  /** True iff the profile supplied a non-empty `logo_url`. Useful for
+   *  Setup-side surfaces that want to label the logo source ("from
+   *  profile" vs "default"). */
+  logoFromProfile: boolean;
   /** True once the fetch has resolved (success OR failure). Useful for
    *  surfaces that want to avoid flashing the fallback during first
    *  paint — both branches are valid, so most consumers can ignore it. */
@@ -69,6 +79,13 @@ export function brandFromProfile(
   const storeLocation =
     (profile?.store_location && profile.store_location.trim()) ||
     FALLBACK.storeLocation;
+  // SESSION_021 — logo resolution. Profile-supplied hosted URL wins;
+  // otherwise the kit's static fallback under /branding/. Either
+  // branch yields a usable string for <img src>; the image's own
+  // onError handler catches a 404 / bad URL.
+  const trimmedLogo = profile?.logo_url?.trim() ?? "";
+  const logoFromProfile = trimmedLogo.length > 0;
+  const logoUrl = logoFromProfile ? trimmedLogo : DEFAULT_DEALER.logoPath;
   return {
     dealershipName,
     storeLocation,
@@ -77,6 +94,8 @@ export function brandFromProfile(
     embedAssistantName: `${dealershipName} Assistant`,
     possessiveName: toPossessive(dealershipName),
     tagline: FALLBACK.tagline,
+    logoUrl,
+    logoFromProfile,
   };
 }
 

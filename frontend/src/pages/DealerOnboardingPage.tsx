@@ -36,6 +36,9 @@ interface DealershipProfile {
   brands: string;
   salesPhone: string;
   website: string;
+  /** SESSION_021 — hosted logo URL. Empty string keeps the static
+   *  fallback (`DEFAULT_DEALER.logoPath`) in play via useBrand(). */
+  logoUrl: string;
 }
 
 interface ManagerPreferences {
@@ -115,7 +118,14 @@ const SALESPERSON_TONE_OPTIONS = [
 const SECTION_COUNT = 5; // dealership, manager, salesperson, assistant, checklist
 
 const EMPTY_STATE: OnboardingState = {
-  dealership: { name: "", location: "", brands: "", salesPhone: "", website: "" },
+  dealership: {
+    name: "",
+    location: "",
+    brands: "",
+    salesPhone: "",
+    website: "",
+    logoUrl: "",
+  },
   manager: {
     salesTone: "",
     pricingComfort: "",
@@ -156,6 +166,7 @@ function fromApi(payload: OnboardingProfilePayload): OnboardingState {
       brands: payload.main_brands,
       salesPhone: payload.sales_phone,
       website: payload.website,
+      logoUrl: payload.logo_url ?? "",
     },
     manager: {
       salesTone: payload.sales_tone,
@@ -197,6 +208,7 @@ function toApi(state: OnboardingState): OnboardingProfilePayload {
     main_brands: state.dealership.brands,
     sales_phone: state.dealership.salesPhone,
     website: state.dealership.website,
+    logo_url: state.dealership.logoUrl,
     sales_tone: state.manager.salesTone,
     pricing_comfort: state.manager.pricingComfort,
     appointment_preference: state.manager.appointmentPreference,
@@ -424,6 +436,20 @@ export default function DealerOnboardingPage() {
             type="url"
             className="sm:col-span-2"
           />
+          {/* SESSION_021 — Logo URL. Profile-supplied URL wins over the
+              kit's static fallback in `defaultDealer.ts`. The
+              <BrandHeader /> in the OS shell and the <BrandMark /> on
+              the embed both source `brand.logoUrl`, so a save here
+              flows into every brand surface on the next route mount. */}
+          <Field
+            label="Logo URL"
+            value={dealership.logoUrl}
+            onChange={(v) => setDealership({ ...dealership, logoUrl: v })}
+            placeholder="https://cdn.example.com/dealer-logo.svg"
+            type="url"
+            className="sm:col-span-2"
+            helperText="Paste a hosted logo URL. If blank, the default dealer logo is used."
+          />
         </div>
       </SectionCard>
 
@@ -432,11 +458,14 @@ export default function DealerOnboardingPage() {
           fields above plus the kit-level constants from
           config/defaultDealer.ts. Updates live as the manager
           types — they see exactly what the OS chrome and embed
-          will read once they save. */}
+          will read once they save.
+          SESSION_021 — Logo row now reflects the profile URL
+          when set, falling back to DEFAULT_DEALER.logoPath. */}
       <DealerKitStatusCard
         dealershipName={dealership.name}
         storeLocation={dealership.location}
         brands={dealership.brands}
+        logoUrl={dealership.logoUrl}
       />
 
       {/* Section 3 — Manager preferences */}
@@ -717,15 +746,21 @@ function DealerKitStatusCard({
   dealershipName,
   storeLocation,
   brands,
+  logoUrl,
 }: {
   dealershipName: string;
   storeLocation: string;
   brands: string;
+  logoUrl: string;
 }) {
   const activeName = dealershipName.trim() || DEFAULT_DEALER.dealershipName;
   const activeLocation =
     storeLocation.trim() || DEFAULT_DEALER.storeLocation;
   const activeBrands = brands.trim() || DEFAULT_DEALER.brand;
+  // SESSION_021 — same resolution rule the brand hook uses.
+  const trimmedLogo = logoUrl.trim();
+  const logoFromProfile = trimmedLogo.length > 0;
+  const resolvedLogo = logoFromProfile ? trimmedLogo : DEFAULT_DEALER.logoPath;
 
   return (
     <SectionCard
@@ -739,9 +774,13 @@ function DealerKitStatusCard({
         <StatusRow label="Location">{activeLocation}</StatusRow>
         <StatusRow label="Brand(s)">{activeBrands}</StatusRow>
         <StatusRow label="Logo">
-          <code className="font-mono text-[11px]">{DEFAULT_DEALER.logoPath}</code>
-          <span className="ml-2 text-[11px] text-slate-500">
-            (static — swap via config)
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <code className="break-all font-mono text-[11px]">
+              {resolvedLogo}
+            </code>
+            <span className="text-[11px] text-slate-500">
+              {logoFromProfile ? "(from profile)" : "(static default)"}
+            </span>
           </span>
         </StatusRow>
         <StatusRow label="Status">
@@ -756,8 +795,8 @@ function DealerKitStatusCard({
       </div>
       <p className="mt-4 text-xs leading-relaxed text-slate-500">
         Changing these fields updates the visible dealer identity across
-        the OS and embed. Logo and feed integrations are configured
-        separately — see{" "}
+        the OS and embed. The logo URL above falls back to the kit's
+        static asset when blank — see{" "}
         <code className="font-mono text-[11px]">docs/DEALER_DUPLICATION_GUIDE.md</code>{" "}
         for the full workflow.
       </p>
@@ -818,6 +857,8 @@ interface FieldProps {
   type?: string;
   multiline?: boolean;
   className?: string;
+  /** Small subtext rendered beneath the input. SESSION_021. */
+  helperText?: string;
 }
 
 function Field({
@@ -828,6 +869,7 @@ function Field({
   type = "text",
   multiline = false,
   className = "",
+  helperText,
 }: FieldProps) {
   return (
     <label className={`flex flex-col gap-1 ${className}`}>
@@ -848,6 +890,9 @@ function Field({
           placeholder={placeholder}
         />
       )}
+      {helperText ? (
+        <span className="text-[11px] text-slate-500">{helperText}</span>
+      ) : null}
     </label>
   );
 }

@@ -57,6 +57,11 @@ changes required.**
 - Store location (`store_location`)
 - Main brands carried (`main_brands`) — informational; visible
   in the Setup form and the Dealer Kit Status card
+- **Logo URL (`logo_url`) — added in SESSION_021.** Hosted URL
+  for the dealer's logo image. When blank, the kit's static
+  fallback (`DEFAULT_DEALER.logoPath`) is used. Consumed by the
+  sidebar `BrandHeader`, the embed `BrandMark`, and the Setup
+  Dealer Kit Status card.
 - Sales phone / website
 - Sales tone / pricing comfort / appointment preference / lead
   handoff style
@@ -77,23 +82,41 @@ These are not user-editable yet. Each one has a documented path
 to becoming editable in a later session, but as of SESSION_020,
 they require a developer touch.
 
-### Logo asset
+### Logo asset (fallback only — SESSION_021 collapsed this)
 
 **Where**: `frontend/public/branding/sams-freedom-ford-logo.jpg`
-referenced via `DEFAULT_DEALER.logoPath`.
+referenced via `DEFAULT_DEALER.logoPath`. **This is now the
+fallback, not the primary path.** The primary path is the
+`logo_url` field in Setup, which any manager can edit live and
+have flow into every brand surface on the next route mount.
 
-**To swap**:
+**To swap (preferred — no developer)**:
+1. Open `/dealer-ai-onboarding`.
+2. Paste a hosted logo URL into the **Logo URL** field in the
+   Dealership profile section.
+3. Save. Navigate to Overview → confirm sidebar logo updated.
+   Navigate to `/embed/assistant` → confirm embed brand bar
+   logo updated.
+
+**To swap the static fallback (developer-only, optional)**:
+
 1. Drop the new dealer's logo into
    `frontend/public/branding/<dealer-slug>-logo.<ext>`.
    Acceptable formats: SVG (preferred), PNG with transparent
    background, JPG.
 2. Update `DEFAULT_DEALER.logoPath` to point at the new file.
-3. (Optional) Keep the Freedom Ford asset around if multi-
-   tenancy is on the roadmap; the kit can serve different
-   dealers different files later.
 
-**Future path**: when an `uploaded_logo_url` field lands on
-`OnboardingProfile`, this becomes a one-click upload in Setup.
+The static fallback only matters when the profile's
+`logo_url` is empty (e.g. a fresh kit installation, a
+manager who hasn't filled in the field, or a dealer who wants
+the kit's shipped asset rather than a hosted URL). Most real
+deployments will set a profile URL and never touch the
+fallback.
+
+**Future path**: a multipart upload control + object storage
+would let a manager upload the file directly through Setup
+instead of pasting a URL. The `logo_url` field shape supports
+either.
 
 ### Default fallback config
 
@@ -200,31 +223,38 @@ identity.
 
 Step-by-step. Skip steps already complete.
 
-### Phase 1 — Static brand (developer, ~30 min)
+### Phase 1 — Static fallback (developer, optional, ~5 min)
 
-1. **Capture the dealer's logo**.
-   - Take it from their public site (legal: same-dealer,
-     dealer-tool use case is fine).
-   - Drop it under `frontend/public/branding/<slug>.<ext>`.
+> **SESSION_021 collapsed this phase from 30 min to 5 min.**
+> The `logo_url` field in Setup is now the primary logo source,
+> so most second-dealer onboardings can skip Phase 1 entirely
+> and go straight to Phase 2.
+
+Only required if you want the kit's *shipped* asset to match
+the new dealer (e.g. when no hosted logo URL is available
+yet, or you want the kit to look right even before any
+manager fills out Setup):
+
+1. **Drop the new dealer's logo** into
+   `frontend/public/branding/<slug>.<ext>`. SVG preferred.
 2. **Edit `DEFAULT_DEALER`** in
    `frontend/src/config/defaultDealer.ts` for the new
    dealership name / location / tagline / brand / logoPath.
 3. **Run `npx tsc --noEmit && npx vite build`** to confirm
    the kit still compiles.
-4. **(Optional)** Refresh the demo inventory snapshot if the
-   demo audience cares about realistic browse copy. Skip if
-   you'll show Live Assistant only.
-5. **Commit** with a single commit message like
-   `Retarget kit at <Dealer Name>`.
+
+If you have a hosted URL for the dealer's logo, skip this
+phase entirely and configure it in Phase 2.
 
 ### Phase 2 — Dynamic identity (manager, ~15 min)
 
 1. **Open `/dealer-ai-onboarding`** in a browser.
 2. **Fill in** Dealership name, Store location, Main brands,
-   Sales phone, Website. The "Dealer Kit Status" card at the
-   top of the page mirrors these fields in real time so the
-   manager can see what the OS chrome will look like before
-   saving.
+   Sales phone, Website, **Logo URL** (a hosted image URL —
+   leave blank to use the kit's static fallback). The
+   "Dealer Kit Status" card mirrors these fields in real time
+   so the manager can see exactly what the OS chrome will
+   look like before saving.
 3. **Set** sales tone, pricing comfort, appointment preference,
    lead handoff style.
 4. **Add at least one salesperson** (full team via the Team
@@ -232,9 +262,9 @@ Step-by-step. Skip steps already complete.
 5. **Configure** dealership greeting, banned phrases, escalation
    rule, payment disclaimer. These drive chat behavior — the
    assistant reads them per-store.
-6. **Save**. Navigate to Overview → confirm topbar shows the
-   new identity. Navigate to `/embed/assistant` → confirm the
-   embed brand bar reads correctly.
+6. **Save**. Navigate to Overview → confirm topbar + sidebar
+   logo show the new identity. Navigate to `/embed/assistant`
+   → confirm the embed brand bar reads correctly.
 
 ### Phase 3 — Verification (5 min)
 
@@ -272,16 +302,16 @@ Step-by-step. Skip steps already complete.
 Copy this into a kickoff doc when standing up Dealer #2.
 
 ```
-□ Logo asset captured + placed in /public/branding/
-□ DEFAULT_DEALER edited (name, location, tagline, brand, logoPath)
-□ tsc --noEmit clean
-□ vite build clean
-□ Setup form filled (Dealership profile section)
+□ Setup form opened (/dealer-ai-onboarding)
+□ Dealership name + Store location + Main brands filled
+□ Logo URL pasted (or left blank to use the static fallback)
 □ Setup form saved
-□ Overview page shows new identity in topbar
+□ Overview page shows new identity in topbar + sidebar logo
 □ Embed page shows new identity in brand bar + footer
 □ Public Preview dialog description shows new dealer name
 □ Console clean across brand surfaces
+□ Optional (developer): static fallback updated in
+  /public/branding/ + DEFAULT_DEALER.logoPath
 □ Optional: demo inventory snapshot refreshed
 □ Optional: salesperson profiles added
 □ Optional: tagline + banned phrases + greeting set

@@ -723,6 +723,9 @@ export interface OnboardingProfilePayload {
   main_brands: string;
   sales_phone: string;
   website: string;
+  /** SESSION_021 — hosted logo URL. Empty string falls back to
+   *  DEFAULT_DEALER.logoPath via useBrand(). */
+  logo_url: string;
   sales_tone: string;
   pricing_comfort: string;
   appointment_preference: string;
