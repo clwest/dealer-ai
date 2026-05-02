@@ -19,6 +19,12 @@ frontend/tsconfig.tsbuildinfo
 # Playwright MCP traces (generated during agent verification)
 .playwright-mcp/
 
+# Scratch screenshots (research, ad-hoc captures).
+# Curated screenshots that belong in handoffs are committed explicitly
+# under docs/handoffs/screenshots/ and predate these patterns.
+/*.png
+docs/research/**/*.png
+
 # Editors / OS
 .vscode/
 .idea/
