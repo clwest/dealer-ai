@@ -7,6 +7,7 @@ import AdvisorWorkspacePage from "@/pages/AdvisorWorkspacePage";
 import DealerAIDemo from "@/pages/DealerAIDemo";
 import DealerAdmin from "@/pages/DealerAdmin";
 import DealerOnboardingPage from "@/pages/DealerOnboardingPage";
+import ManagerChatPage from "@/pages/ManagerChatPage";
 import SalesTeamPage from "@/pages/SalesTeamPage";
 import "@/index.css";
 
@@ -20,6 +21,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route
             path="dealer-ai-onboarding"
             element={<DealerOnboardingPage />}
+          />
+          <Route
+            path="dealer-ai-manager-chat"
+            element={<ManagerChatPage />}
           />
           <Route path="dealer-ai-admin" element={<DealerAdmin />} />
           <Route path="dealer-ai-admin/team" element={<SalesTeamPage />} />

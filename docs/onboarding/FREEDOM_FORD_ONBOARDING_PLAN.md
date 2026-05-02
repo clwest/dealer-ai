@@ -290,6 +290,33 @@ When the disclaimer is appended, `ChatMessage.metadata.disclaimer_appended = tru
 
 ---
 
+## Manager chat tester (SESSION_010)
+
+**Status:** implemented.
+
+Managers now have a sandbox to test how their configured assistant
+responds to a customer prompt without affecting real customer
+sessions or metrics.
+
+- **Page:** `/dealer-ai-manager-chat` (nav label: *Test assistant*).
+- **Endpoint:** `POST /api/dealer-ai/manager-chat/` — body
+  `{"message": "..."}`, response `{"reply": "..."}`. No vehicle
+  cards in the response (voice/tone test focus).
+- **Statelessness:** each request creates an ephemeral `ChatSession`
+  tagged `metadata={"channel": "manager_test"}` so customer-facing
+  audits / dashboards can filter the test traffic out. The
+  frontend keeps a local transcript only — reload resets it.
+- **Reuses the chat engine wholesale:** the SESSION_009 onboarding
+  overrides (greeting hint, tone directive, approved/banned phrases,
+  payment disclaimer, escalation rule) all flow through unchanged,
+  so the manager sees exactly what a customer would.
+
+Not customer-facing — the page header explicitly says so, and the
+nav label is *Test assistant*, not *Chat*. Customer chat remains at
+`/dealer-ai-demo`.
+
+---
+
 ## Out of scope (v0)
 
 The following are explicitly **NOT** part of this onboarding

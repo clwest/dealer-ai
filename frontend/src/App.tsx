@@ -9,6 +9,8 @@ const NAV_LINKS = [
   { to: "/dealer-ai-admin", label: "Manager dashboard", end: true },
   { to: "/dealer-ai-admin/team", label: "Sales team", end: false },
   { to: "/dealer-ai-onboarding", label: "Onboarding", end: false },
+  // SESSION_010 — internal voice tester (NOT customer-facing).
+  { to: "/dealer-ai-manager-chat", label: "Test assistant", end: false },
 ];
 
 export default function App() {

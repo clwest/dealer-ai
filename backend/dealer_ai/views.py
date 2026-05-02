@@ -23,6 +23,7 @@ from .serializers import (
     ChatSessionSerializer,
     CustomerLeadSerializer,
     DealerOnboardingProfileSerializer,
+    ManagerChatInputSerializer,
     ONBOARDING_DEFAULTS,
     SalespersonAdminSerializer,
     SalespersonPublicSerializer,
@@ -797,6 +798,46 @@ def demo_load_scenarios(request):
             "leads": CustomerLead.objects.count(),
             "stdout": out.getvalue(),
         },
+        status=status.HTTP_200_OK,
+    )
+
+
+# ---- Manager chat tester (SESSION_010) -------------------------------------
+
+
+@api_view(["POST"])
+def manager_chat(request):
+    """SESSION_010: stateless manager-side chat tester.
+
+    Lets a manager preview how the configured sales assistant responds —
+    voice, banned-phrase scrubbing, disclaimer behavior — without
+    polluting a real customer session. Each request runs in a fresh
+    ephemeral ``ChatSession`` tagged ``channel=manager_test``; the
+    existing chat engine handles everything (including SESSION_009
+    onboarding overrides), so behavior matches what real customers see.
+
+    Returns ``{"reply": <assistant text>}``. No vehicle cards — the
+    tester is voice-and-tone focused, and including matched_vehicles
+    here would couple the manager UI to inventory shape changes.
+    """
+    serializer = ManagerChatInputSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+    message = (data.get("message") or "").strip()
+    if not message:
+        return Response(
+            {"detail": "message is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    session = ChatSession.objects.create(
+        metadata={"channel": "manager_test"},
+    )
+    engine = ChatEngine(session=session)
+    result = engine.handle_user_message(message)
+
+    return Response(
+        {"reply": result.assistant_message.content},
         status=status.HTTP_200_OK,
     )
 

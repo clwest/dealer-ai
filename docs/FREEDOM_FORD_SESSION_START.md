@@ -22,16 +22,17 @@ Onboarding foundation page exists; not yet persisted to the backend.
 
 ## Current baseline
 
-Verified 2026-05-02 (after SESSION_009). Update if any row changes.
+Verified 2026-05-02 (after SESSION_010). Update if any row changes.
 
 | Surface | State |
 |---|---|
 | Demo | demo-ready — 5/5 canonical scenarios pass (`docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`) |
-| Backend tests | **1172 passed, 1 skipped, 0 failed** (`cd backend && python manage.py test dealer_ai`) |
+| Backend tests | **1180 passed, 1 skipped, 0 failed** (`cd backend && python manage.py test dealer_ai`) |
 | Frontend | typecheck + build clean (`cd frontend && npx tsc --noEmit && npx vite build`) |
 | LLM | Ollama llama3.2:latest @ `http://localhost:11434` |
 | Frontend dev | Vite @ `:5173`, proxy to backend @ `:8001` via `VITE_API_PROXY_TARGET` |
 | Onboarding | page at `/dealer-ai-onboarding` — persisted via `GET\|PUT\|PATCH /api/dealer-ai/onboarding/profile/` (singleton, one-store); **fields shape live chat** — greeting/tone/approved/banned/disclaimer/escalation flow into the system prompt and post-LLM scrub stack |
+| Manager chat tester | page at `/dealer-ai-manager-chat`, endpoint `POST /api/dealer-ai/manager-chat/`. Stateless; reuses chat engine + onboarding overrides. Sessions tagged `channel=manager_test` so customer dashboards stay clean. |
 
 ## Read order (every session)
 
@@ -50,16 +51,15 @@ Supporting (read on demand):
 
 ## Current next task
 
-**SESSION_010 — open**. See `00-START-NEXT-SESSION.md` for the
-hand-written priority block. SESSION_009 (onboarding fields shape live
-chat behavior) shipped on 2026-05-02 — handoff at
-`docs/handoffs/SESSION_009_onboarding_controls_chat_behavior.md`.
+**SESSION_011 — open**. See `00-START-NEXT-SESSION.md` for the
+hand-written priority block. SESSION_010 (manager chat tester) shipped
+on 2026-05-02 — handoff at
+`docs/handoffs/SESSION_010_manager_chat_tester.md`.
 
-The strongest follow-on candidate is linking the salesperson seed to
-the existing `Salesperson` model so the manager doesn't re-enter
-salesperson data on `/dealer-ai-admin/team`. See SESSION_009 handoff
-§"Recommended next session" for three alternatives (sample-reply
-preview, banned-phrase audit panel, context-kit drift cleanup).
+The strongest follow-on candidate is still linking the salesperson seed
+to the existing `Salesperson` model. See SESSION_010 handoff
+§"Recommended next session" for three alternatives (banned-phrase audit
+panel, conversation-aware manager chat, context-kit drift cleanup).
 
 ## What to skip or treat carefully
 

@@ -190,6 +190,19 @@ class ChatMessageInputSerializer(serializers.Serializer):
     message = serializers.CharField()
 
 
+class ManagerChatInputSerializer(serializers.Serializer):
+    """SESSION_010: stateless manager-test endpoint input.
+
+    The manager chat is a sandbox for testing how the configured assistant
+    responds to customer prompts. No session_id — each request runs in a
+    fresh ephemeral ``ChatSession`` tagged with ``channel=manager_test`` so
+    audits / dashboards can filter the test traffic out of real customer
+    metrics.
+    """
+
+    message = serializers.CharField()
+
+
 class VehicleAskSerializer(serializers.Serializer):
     question = serializers.CharField()
     session_id = serializers.UUIDField(required=False, allow_null=True)

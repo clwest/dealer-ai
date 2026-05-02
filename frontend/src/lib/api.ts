@@ -756,3 +756,13 @@ export function fetchOnboardingProfile() {
 export function saveOnboardingProfile(payload: OnboardingProfilePayload) {
   return putJSON<OnboardingProfilePayload>(`/onboarding/profile/`, payload);
 }
+
+// ---- SESSION_010: stateless manager-chat tester ---------------------------
+
+export interface ManagerChatResponse {
+  reply: string;
+}
+
+export function sendManagerChat(message: string) {
+  return postJSON<ManagerChatResponse>(`/manager-chat/`, { message });
+}
