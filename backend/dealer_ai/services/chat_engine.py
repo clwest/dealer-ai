@@ -23,6 +23,13 @@ from .intent_parser import (
 from .inventory_search import search_vehicles
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
+from .onboarding_overrides import (
+    append_disclaimer,
+    format_store_voice_block,
+    load_overrides,
+    scrub_banned_phrases,
+    should_append_disclaimer,
+)
 from .payment_engine import affordable_max_price, estimate_payment
 
 
@@ -6175,9 +6182,18 @@ class ChatEngine:
             )
         profile_block = _format_profile_block(merged_profile)
 
+        # SESSION_009: dealer-configurable voice overrides (greeting hint,
+        # tone directive, approved/banned phrases, escalation rule). One DB
+        # query per chat turn; falls back to demo behavior when no profile
+        # has been saved yet.
+        onboarding = load_overrides()
+        store_voice_block = format_store_voice_block(onboarding)
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
         ]
+        if store_voice_block:
+            messages.append({"role": "system", "content": store_voice_block})
         if budget_block:
             messages.append({"role": "system", "content": budget_block})
         messages.append({"role": "system", "content": inventory_block})
@@ -6984,6 +7000,56 @@ class ChatEngine:
                 elif existing_flag in both_single_scrub_flags:
                     assistant_metadata["flag"] = "multiple_scrubs_fired"
 
+        # SESSION_009 — dealer-configured banned-phrases scrub. Sentence-
+        # strips any sentence containing a banned phrase the manager set
+        # via /dealer-ai-onboarding. Runs AFTER all of the existing
+        # content scrubs (so we operate on already-cleaned text) and
+        # BEFORE the model-followup length cap (so a short reply that
+        # loses one sentence to this scrub still gets the cap counted on
+        # cleaned text).
+        if (
+            onboarding.banned_phrases
+            and not post_safety_rewritten
+            and not fabricated_inventory_fired
+            and not internal_confusion_fallback_fired
+        ):
+            cleaned_banned, banned_changed, banned_hits = scrub_banned_phrases(
+                reply_text, onboarding.banned_phrases
+            )
+            if banned_changed:
+                logger.warning(
+                    "Banned-phrase scrub fired (session=%s, hits=%s). Original (truncated): %r",
+                    self.session.id,
+                    banned_hits,
+                    reply_text[:240],
+                )
+                reply_text = cleaned_banned
+                scrubs_fired.append("banned_phrase")
+                assistant_metadata["scrubs"] = scrubs_fired
+                if banned_hits:
+                    assistant_metadata["banned_phrase_hits"] = banned_hits
+                banned_single_scrub_flags = {
+                    "rate_language_scrubbed",
+                    "internal_directive_scrubbed",
+                    "default_assumption_scrubbed",
+                    "category_label_scrubbed",
+                    "meta_narration_scrubbed",
+                    "payment_drift_scrubbed",
+                    "extra_payment_quote_scrubbed",
+                    "list_shape_scrubbed",
+                    "followup_question_scrubbed",
+                    "generic_use_case_scrubbed",
+                    "drivetrain_claim_scrubbed",
+                    "financing_language_scrubbed",
+                    "fallback_stall_scrubbed",
+                    "both_wording_scrubbed",
+                }
+                existing_flag = assistant_metadata.get("flag")
+                if existing_flag is None:
+                    assistant_metadata["flag"] = "banned_phrase_scrubbed"
+                elif existing_flag in banned_single_scrub_flags:
+                    assistant_metadata["flag"] = "multiple_scrubs_fired"
+
         # Item 10 — hard length cap for model-followup turns. Runs
         # AFTER every other post-LLM scrub so it operates on the
         # final cleaned text. Truncates to ≤ 3 sentences with
@@ -7003,6 +7069,29 @@ class ChatEngine:
             if capped:
                 reply_text = cleaned_cap
                 assistant_metadata["sentence_capped"] = True
+
+        # SESSION_009 — append the dealer-configured payment disclaimer
+        # when (a) a disclaimer is configured, (b) we're not in cash mode
+        # (the financing-language scrub will have already stripped finance
+        # prose from cash mode), (c) the reply contains payment/financing
+        # language, (d) the disclaimer text isn't already present. This
+        # runs AFTER every scrub so the disclaimer survives unmodified;
+        # it's appended, not injected mid-sentence.
+        if (
+            onboarding.payment_disclaimer
+            and not post_safety_rewritten
+            and not fabricated_inventory_fired
+            and not internal_confusion_fallback_fired
+            and should_append_disclaimer(
+                reply_text,
+                cash_mode=cash_mode_active,
+                disclaimer=onboarding.payment_disclaimer,
+            )
+        ):
+            reply_text = append_disclaimer(
+                reply_text, onboarding.payment_disclaimer
+            )
+            assistant_metadata["disclaimer_appended"] = True
 
         # Phase 8n: auto-set current_vehicle when this turn surfaces
         # exactly one vehicle (or when followup_mode already pinned to

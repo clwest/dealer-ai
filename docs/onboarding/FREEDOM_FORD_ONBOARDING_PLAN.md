@@ -1,6 +1,6 @@
 ---
 title: Freedom Ford Dealer AI — onboarding plan (v0)
-status: foundation — backend persistence landed in SESSION_008
+status: foundation — persistence (SESSION_008) + live AI wiring (SESSION_009) shipped
 generated: 2026-05-01
 updated: 2026-05-02
 audience: dealership managers, salespeople, pilot lead
@@ -235,13 +235,57 @@ move to the new tables without renames.
 
 ### Still deferred (despite persistence)
 
-- **No live AI behavior changes from these fields yet.** The
-  greeting / approved-phrases / banned-phrases / escalation-rule
-  values are persisted but **do not** flow into the chat engine
-  system prompt. Wiring them through `_build_system_message` is a
-  separate Phase-2 task.
 - **No DealerAssistant / SalespersonAgent / ManagerAgent /
   StorePolicyProfile / VoiceProfile entities yet.** Those land
+  with the roadmap migration sequence.
+
+---
+
+## Live AI wiring (SESSION_009)
+
+**Status:** implemented.
+
+The persisted onboarding fields now shape live chat behavior. One DB
+load per chat turn, no schema changes, no new agent architecture.
+Behavior with no profile saved is identical to the pre-SESSION_009
+chat engine.
+
+| Onboarding field | What it now does in chat |
+|---|---|
+| `dealership_greeting` | Injected as a tone-hint in the per-turn store-voice system block. Explicitly told NOT to be repeated verbatim every reply. |
+| `sales_tone` | Translated into a one-paragraph voice directive (consultative / direct / fast-paced / formal / friendly / casual). Unknown labels pass through verbatim so the LLM still sees manager intent. |
+| `approved_phrases` | Listed in the system block as encouraged phrasing (with explicit "do NOT phrase-stuff" guidance). Capped at 10 phrases. |
+| `banned_phrases` | New post-LLM scrub stage. Sentence-strips any sentence containing a banned phrase (case-insensitive substring match). Audit metadata records hits under `banned_phrase_hits`. |
+| `payment_disclaimer` | Appended at the end of the reply when (a) the reply mentions payment/financing language, (b) the conversation is **not** in cash-mode (the existing financing-language scrub already strips finance prose there), (c) the disclaimer text (or a W.A.C. fingerprint of it) isn't already in the reply. |
+| `escalation_rule` | Added to the store-voice system block as soft-handoff guidance. No auto-lead creation; the existing handoff workflow is unchanged. |
+
+The chat engine loads the singleton profile via
+`load_overrides()` (`backend/dealer_ai/services/onboarding_overrides.py`)
+near the top of the LLM-bound branch in `handle_user_message`. All helper
+functions (`format_store_voice_block`, `scrub_banned_phrases`,
+`should_append_disclaimer`, `append_disclaimer`) are pure-input/pure-output
+so they unit-test without a chat session.
+
+### Audit metadata
+
+When a banned-phrase scrub fires, `ChatMessage.metadata` gains:
+
+- `scrubs` includes `"banned_phrase"`
+- `banned_phrase_hits` lists the matched phrases (deduplicated)
+- `flag` becomes `"banned_phrase_scrubbed"` (or `"multiple_scrubs_fired"` when other scrubs also fired)
+
+When the disclaimer is appended, `ChatMessage.metadata.disclaimer_appended = true`.
+
+### Still deferred (after SESSION_009)
+
+- **Salesperson seed not linked to `Salesperson` model.** Saving the
+  onboarding profile does not create a `Salesperson` row.
+- **No multi-store, no auth, no RBAC.** Same as SESSION_008.
+- **No automatic lead creation from `escalation_rule`.** The rule is
+  guidance for the LLM's voice; the existing handoff/lead workflow is
+  unchanged.
+- **No DealerAssistant / SalespersonAgent / ManagerAgent /
+  StorePolicyProfile / VoiceProfile entities yet.** Those still land
   with the roadmap migration sequence.
 
 ---

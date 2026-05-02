@@ -629,8 +629,16 @@ export default function DealerOnboardingPage() {
 
       {/* Save bar */}
       <div className="card flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-        <div className="text-xs text-slate-500">
-          <SaveStatusLabel status={saveStatus} error={saveError} />
+        <div className="space-y-1">
+          <p className="text-xs text-slate-500">
+            <SaveStatusLabel status={saveStatus} error={saveError} />
+          </p>
+          {/* SESSION_009: surface the live-AI link so managers know edits aren't cosmetic. */}
+          <p className="text-xs text-slate-400">
+            Saved settings shape the live sales assistant — voice, encouraged
+            phrasing, banned phrases, and the payment disclaimer all flow into
+            the chat engine on the next reply.
+          </p>
         </div>
         <button
           type="button"
@@ -655,7 +663,11 @@ function SaveStatusLabel({
   if (status === "idle") return <>Changes are not saved until you press Save.</>;
   if (status === "saving") return <>Saving…</>;
   if (status === "saved")
-    return <span className="text-emerald-700">Saved.</span>;
+    return (
+      <span className="text-emerald-700">
+        Saved. Live AI behavior updated.
+      </span>
+    );
   return (
     <span className="text-rose-600">
       Save failed: {error ?? "unknown error"}
