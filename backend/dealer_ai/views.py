@@ -1,9 +1,14 @@
+from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
+from django.conf import settings
+from django.core.files.storage import default_storage
 from django.core.management import call_command
 
 from .models import (
@@ -56,6 +61,13 @@ DEMO_SOURCE = "demo_seed"
 
 DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 200
+MAX_LOGO_UPLOAD_BYTES = 2 * 1024 * 1024
+ALLOWED_LOGO_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg",
+}
 
 
 def _parse_limit(request, default: int = DEFAULT_LIST_LIMIT) -> int:
@@ -890,6 +902,63 @@ def onboarding_profile(request):
     else:
         serializer = DealerOnboardingProfileSerializer(
             profile, data=request.data, partial=partial
+        )
+    serializer.is_valid(raise_exception=True)
+    profile = serializer.save()
+    return Response(
+        DealerOnboardingProfileSerializer(profile).data, status=status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@parser_classes([MultiPartParser, FormParser])
+def onboarding_logo_upload(request):
+    """Upload a dealer logo and store its served URL in ``logo_url``.
+
+    This keeps ``logo_url`` as the single source of truth for every brand
+    surface. Hosted URL paste still uses the JSON profile endpoint.
+    """
+    upload = request.FILES.get("logo")
+    if upload is None:
+        return Response(
+            {"detail": "Upload a file field named 'logo'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    content_type = (upload.content_type or "").lower()
+    extension = ALLOWED_LOGO_CONTENT_TYPES.get(content_type)
+    if extension is None:
+        return Response(
+            {
+                "detail": (
+                    "Unsupported logo type. Use JPG, PNG, WEBP, or SVG."
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if upload.size > MAX_LOGO_UPLOAD_BYTES:
+        return Response(
+            {"detail": "Logo file must be 2 MB or smaller."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    original_suffix = Path(upload.name).suffix.lower()
+    if original_suffix in {".jpg", ".jpeg", ".png", ".webp", ".svg"}:
+        extension = ".jpg" if original_suffix == ".jpeg" else original_suffix
+    path = default_storage.save(
+        f"dealer-logos/{uuid4().hex}{extension}",
+        upload,
+    )
+    logo_url = request.build_absolute_uri(f"{settings.MEDIA_URL}{path}")
+
+    profile = DealerOnboardingProfile.objects.first()
+    if profile is None:
+        serializer = DealerOnboardingProfileSerializer(
+            data={**ONBOARDING_DEFAULTS, "logo_url": logo_url}
+        )
+    else:
+        serializer = DealerOnboardingProfileSerializer(
+            profile, data={"logo_url": logo_url}, partial=True
         )
     serializer.is_valid(raise_exception=True)
     profile = serializer.save()

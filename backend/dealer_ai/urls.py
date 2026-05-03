@@ -82,6 +82,11 @@ urlpatterns = [
         views.onboarding_profile,
         name="onboarding-profile",
     ),
+    path(
+        "onboarding/profile/logo/",
+        views.onboarding_logo_upload,
+        name="onboarding-logo-upload",
+    ),
     # SESSION_010: stateless manager-side chat tester.
     path(
         "manager-chat/",

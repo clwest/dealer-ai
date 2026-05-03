@@ -30,6 +30,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "freedom_ford.middleware.EmbedFramePolicyMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -87,6 +88,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -100,6 +103,12 @@ CORS_ALLOWED_ORIGINS = [
         "CORS_ALLOWED_ORIGINS",
         "http://localhost:5173,http://localhost:3000",
     ).split(",")
+    if o.strip()
+]
+
+DEALER_AI_EMBED_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("DEALER_AI_EMBED_ALLOWED_ORIGINS", "").split(",")
     if o.strip()
 ]
 

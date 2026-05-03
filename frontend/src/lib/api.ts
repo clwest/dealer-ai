@@ -123,6 +123,18 @@ async function putJSON<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function postForm<T>(path: string, body: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API ${path} failed (${res.status}): ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export function startDealerChat(input: {
   customer_name?: string;
   customer_email?: string;
@@ -758,6 +770,12 @@ export function fetchOnboardingProfile() {
 
 export function saveOnboardingProfile(payload: OnboardingProfilePayload) {
   return putJSON<OnboardingProfilePayload>(`/onboarding/profile/`, payload);
+}
+
+export function uploadOnboardingLogo(file: File) {
+  const body = new FormData();
+  body.set("logo", file);
+  return postForm<OnboardingProfilePayload>(`/onboarding/profile/logo/`, body);
 }
 
 // ---- SESSION_010: stateless manager-chat tester ---------------------------

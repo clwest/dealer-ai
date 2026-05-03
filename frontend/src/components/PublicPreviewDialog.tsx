@@ -67,7 +67,8 @@ export default function PublicPreviewDialog() {
         onClick={() => setOpen(true)}
       >
         <Eye className="h-3.5 w-3.5" />
-        Public Preview
+        <span className="hidden sm:inline">Public Preview</span>
+        <span className="sr-only sm:hidden">Public Preview</span>
       </Button>
 
       <DialogContent

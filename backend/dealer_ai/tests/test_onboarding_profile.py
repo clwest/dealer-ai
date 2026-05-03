@@ -8,8 +8,10 @@ PUT/PATCH upserts the singleton row.
 from __future__ import annotations
 
 import json
+import tempfile
 
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from dealer_ai.models import DealerOnboardingProfile
@@ -17,6 +19,7 @@ from dealer_ai.serializers import ONBOARDING_DEFAULTS
 
 
 URL = reverse("dealer_ai:onboarding-profile")
+LOGO_UPLOAD_URL = reverse("dealer_ai:onboarding-logo-upload")
 
 
 class OnboardingDefaultsTests(TestCase):
@@ -108,6 +111,36 @@ class OnboardingLogoUrlTests(TestCase):
         )
         profile = DealerOnboardingProfile.objects.get()
         self.assertEqual(profile.logo_url, "")
+
+
+class OnboardingLogoUploadTests(TestCase):
+    def test_upload_logo_creates_profile_and_sets_logo_url(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEDIA_ROOT=tmp, MEDIA_URL="/media/"):
+                upload = SimpleUploadedFile(
+                    "dealer-logo.png",
+                    b"\x89PNG\r\n\x1a\n",
+                    content_type="image/png",
+                )
+                res = self.client.post(LOGO_UPLOAD_URL, {"logo": upload})
+
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        self.assertIn("/media/dealer-logos/", data["logo_url"])
+        self.assertTrue(data["logo_url"].endswith(".png"))
+        profile = DealerOnboardingProfile.objects.get()
+        self.assertEqual(profile.logo_url, data["logo_url"])
+
+    def test_upload_rejects_non_image_file(self):
+        upload = SimpleUploadedFile(
+            "dealer-logo.txt",
+            b"not an image",
+            content_type="text/plain",
+        )
+        res = self.client.post(LOGO_UPLOAD_URL, {"logo": upload})
+
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("Unsupported logo type", res.json()["detail"])
 
 
 class OnboardingManagerFieldsTests(TestCase):

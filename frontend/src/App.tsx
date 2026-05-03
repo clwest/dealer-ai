@@ -65,7 +65,7 @@ export default function App() {
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen">
         <DesktopSidebar brand={brand} />
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           <TopBar
             brand={brand}
             onOpenMobileNav={() => setMobileNavOpen(true)}
@@ -208,8 +208,8 @@ function TopBar({
   onOpenMobileNav: () => void;
 }) {
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-background px-4 sm:px-6">
-      <div className="flex items-center gap-2 sm:gap-3">
+    <header className="flex h-14 items-center justify-between gap-3 border-b border-border bg-background px-4 sm:px-6">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <Button
           type="button"
           variant="ghost"
@@ -220,14 +220,14 @@ function TopBar({
         >
           <Menu className="h-4 w-4" />
         </Button>
-        <span className="text-sm font-semibold tracking-tight text-foreground">
+        <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground">
           {brand.topbarName}
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="hidden shrink-0 text-xs text-muted-foreground min-[460px]:inline">
           · {brand.storeLocation}
         </span>
       </div>
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <PublicPreviewDialog />
         <AIActiveIndicator />
       </div>

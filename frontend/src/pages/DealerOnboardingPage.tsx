@@ -17,9 +17,11 @@ import {
   CheckCircle2,
   Circle,
   ClipboardList,
+  Loader2,
   Megaphone,
   Settings,
   Sparkles,
+  Upload,
   UserRound,
 } from "lucide-react";
 
@@ -27,6 +29,7 @@ import { DEFAULT_DEALER, PRODUCT } from "@/config/defaultDealer";
 import {
   fetchOnboardingProfile,
   saveOnboardingProfile,
+  uploadOnboardingLogo,
   type OnboardingProfilePayload,
 } from "@/lib/api";
 
@@ -235,6 +238,7 @@ function toApi(state: OnboardingState): OnboardingProfilePayload {
 
 type LoadStatus = "loading" | "loaded" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
+type UploadStatus = "idle" | "uploading" | "uploaded" | "error";
 
 export default function DealerOnboardingPage() {
   const [state, setState] = useState<OnboardingState>(EMPTY_STATE);
@@ -242,6 +246,8 @@ export default function DealerOnboardingPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Load on mount. The backend always returns 200 with either the saved
   // profile or the default shape, so we don't have a "no row yet" branch.
@@ -302,6 +308,20 @@ export default function DealerOnboardingPage() {
     } catch (err: unknown) {
       setSaveStatus("error");
       setSaveError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleLogoUpload = async (file: File | null) => {
+    if (!file) return;
+    setUploadStatus("uploading");
+    setUploadError(null);
+    try {
+      const saved = await uploadOnboardingLogo(file);
+      setDealership({ ...dealership, logoUrl: saved.logo_url ?? "" });
+      setUploadStatus("uploaded");
+    } catch (err: unknown) {
+      setUploadStatus("error");
+      setUploadError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -449,6 +469,11 @@ export default function DealerOnboardingPage() {
             type="url"
             className="sm:col-span-2"
             helperText="Paste a hosted logo URL. If blank, the default dealer logo is used."
+          />
+          <LogoUploadField
+            status={uploadStatus}
+            error={uploadError}
+            onUpload={handleLogoUpload}
           />
         </div>
       </SectionCard>
@@ -894,6 +919,68 @@ function Field({
         <span className="text-[11px] text-slate-500">{helperText}</span>
       ) : null}
     </label>
+  );
+}
+
+function LogoUploadField({
+  status,
+  error,
+  onUpload,
+}: {
+  status: UploadStatus;
+  error: string | null;
+  onUpload: (file: File | null) => void;
+}) {
+  const uploading = status === "uploading";
+  return (
+    <div className="flex flex-col gap-1 sm:col-span-2">
+      <span className="text-xs font-semibold text-slate-600">Upload logo</span>
+      <label
+        className={`flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-4 py-3 transition ${
+          uploading
+            ? "border-slate-200 bg-slate-50 text-slate-400"
+            : "border-slate-300 bg-white text-ford-ink hover:border-ford-blue/60 hover:bg-ford-blue/5"
+        }`}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-ford-blue/10 text-ford-blue">
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">
+              {uploading ? "Uploading logo..." : "Choose logo file"}
+            </span>
+            <span className="block text-xs text-slate-500">
+              JPG, PNG, WEBP, or SVG. 2 MB max. Upload saves the logo URL to
+              this profile.
+            </span>
+          </span>
+        </span>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          className="sr-only"
+          disabled={uploading}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0] ?? null;
+            onUpload(file);
+            event.currentTarget.value = "";
+          }}
+        />
+      </label>
+      {status === "uploaded" ? (
+        <span className="text-[11px] text-emerald-700">
+          Logo uploaded. Save any other profile edits when ready.
+        </span>
+      ) : null}
+      {status === "error" && error ? (
+        <span className="text-[11px] text-rose-600">{error}</span>
+      ) : null}
+    </div>
   );
 }
 
