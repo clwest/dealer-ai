@@ -39,7 +39,7 @@ Onboarding foundation page exists; not yet persisted to the backend.
 
 ## Current baseline
 
-Verified 2026-05-02 (after SESSION_022). Update if any row changes.
+Verified 2026-05-03 (after SESSION_023). Update if any row changes.
 
 | Surface | State |
 |---|---|
@@ -68,10 +68,10 @@ Supporting (read on demand):
 
 ## Current next task
 
-**SESSION_023 — open**. See `00-START-NEXT-SESSION.md` for the
-hand-written priority block. SESSION_022 (assistant-first public
-dealership site) shipped on 2026-05-02 — handoff at
-`docs/handoffs/SESSION_022_assistant_first_public_site.md`.
+**SESSION_024 — open**. See `00-START-NEXT-SESSION.md` for the
+hand-written priority block. SESSION_023 (context-kit refresh + fresh
+session prep) shipped on 2026-05-03 — handoff at
+`docs/handoffs/SESSION_023_CONTEXT_KIT_REFRESH.md`.
 
 ## What to skip or treat carefully
 

@@ -1,8 +1,8 @@
 ---
 state: active
-date: 2026-05-02
-last_session_shipped: SESSION_022
-next_session: SESSION_023
+date: 2026-05-03
+last_session_shipped: SESSION_023
+next_session: SESSION_024
 ---
 
 # Next session — Dealer AI Kit
@@ -14,42 +14,37 @@ next_session: SESSION_023
 > `docs/DEALER_DUPLICATION_GUIDE.md` for the operator workflow
 > to onboard a second dealer without forking.
 
-## What just shipped (SESSION_022)
+## What just shipped (SESSION_023)
 
-**Assistant-first public dealership website.** The app no longer drops
-visitors at the operator OS by default. `/` is now a public dealership
-homepage built around the AI assistant, `/assistant` is a full-page
-customer assistant, and `/showroom` is a public demo inventory surface
-with "Ask AI" CTAs. The existing `/dealer-ai-*` operator routes remain
-inside the Dealer AI Kit shell, and `/embed/assistant` remains unchanged.
+**Context-kit refresh + fresh-session prep.** The repo's generated
+orientation state was refreshed so the next clean terminal can use the
+new `start-codex` flows and the current truth/state layer. The root
+start file now has an explicit `## NEXT TASK` section, `docs/CONTEXT_KIT_INVENTORY.md`
+was regenerated, and `start-codex` now resolves a real next task instead
+of falling back to the missing-task message.
 
 Read the full handoff at
-`docs/handoffs/SESSION_022_assistant_first_public_site.md`.
+`docs/handoffs/SESSION_023_CONTEXT_KIT_REFRESH.md`.
 
-**Verification from SESSION_022:**
+**Verification from SESSION_023:**
 
+- `context-kit inventory --write` — pass.
+- `context-kit doctor` — pass with 4 warnings.
+- `context-kit orient --short` — pass.
+- `context-kit start-codex --short` — pass, next task resolved.
+- `context-kit start-codex --mode=execute --model=cheap --short` — pass.
 - `npx tsc --noEmit` — pass.
 - `npx vite build` — pass.
-- Playwright smoke:
-  - `/` → `Find your next Ford with help, not pressure.`
-  - `/assistant` → `Start with what matters to you.`
-  - `/showroom` → `Browse the lot, then ask the assistant to narrow it.`
-  - `/dealer-ai-overview` → `Overview`
-  - console warnings/errors: `[]`
-
-No backend changes. No chat behavior changes. No edits to
-`AssistantChat`, `EmbedAssistantPage`, `/dealer-ai-demo`, or
-`defaultDealer.ts`.
 
 ---
 
-## Recommended next session — SESSION_023
+## Recommended next session — SESSION_024
 
 **Monday demo hardening for the assistant-first public site.**
 
 The prior Leads pipeline recommendation is still valid, but it is not
 the right next move until the Monday public-site demo is locked. SESSION
-023 should harden the exact visitor journey that will be shown live.
+024 should harden the exact visitor journey that will be shown live.
 
 **Scope:**
 
@@ -68,6 +63,17 @@ the right next move until the Monday public-site demo is locked. SESSION
   `playwright` is installed.
 - Keep the public site assistant-first. Do not drift back to a generic
   dealership landing page.
+
+## NEXT TASK
+
+Harden the Monday demo path for the assistant-first public site.
+
+Focus on:
+- `/`
+- `/assistant`
+- `/showroom`
+- `/embed/assistant`
+- `/dealer-ai-overview`
 
 **Strict guardrails:**
 
@@ -92,13 +98,13 @@ the right next move until the Monday public-site demo is locked. SESSION
 
 ---
 
-## Agent launch prompt for SESSION_023
+## Agent launch prompt for SESSION_024
 
 Paste into Claude Code / Cursor / any AI coding agent as the session
 opener.
 
 ```text
-You are picking up SESSION_023 on the Dealer AI Kit. Sam Wampler's
+You are picking up SESSION_024 on the Dealer AI Kit. Sam Wampler's
 Freedom Ford McAlester is Dealer #1 / default.
 
 Read first:
@@ -147,8 +153,8 @@ Verify:
 - Playwright route smoke with console clean
 
 When complete:
-- Write docs/handoffs/SESSION_023_<slug>.md.
-- Overwrite 00-START-NEXT-SESSION.md for SESSION_024.
+- Write docs/handoffs/SESSION_024_<slug>.md.
+- Overwrite 00-START-NEXT-SESSION.md for the following session.
 ```
 
 ---
