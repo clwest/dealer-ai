@@ -1,0 +1,4 @@
+# Production-only Python deps — layered on top of requirements.txt by Render.
+# Keeping these separate so the dev requirements file stays minimal.
+gunicorn==22.0.0
+whitenoise==6.7.0
