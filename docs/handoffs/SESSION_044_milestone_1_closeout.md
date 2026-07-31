@@ -7,8 +7,7 @@ session: 044
 milestone: 1
 milestone_status: shipped
 commits:
-  - <fill after feat commit>  # Increment 4F — franchise env-override wiring + doc flips + retrospective + Milestone 2 kickoff pointer
-  - <fill after docs commit>  # SESSION_044 handoff hash backfill (if separated)
+  - 2cebb37  # Increment 4F — franchise env-override wiring + doc flips + retrospective + SESSION_044 handoff + Milestone 2 kickoff pointer (single commit — verification-only session)
 ---
 
 # SESSION_044 — Milestone 1 · Increment 4F (closeout)
