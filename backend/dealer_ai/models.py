@@ -3,6 +3,33 @@ import uuid
 from django.db import models
 
 
+class Dealership(models.Model):
+    """Tenancy root introduced in Milestone 1.
+
+    Every data-carrying model (Vehicle, ChatSession, ChatMessage,
+    CustomerLead, Salesperson, DealerOnboardingProfile) will gain a
+    ``dealership`` FK pointing here in subsequent Milestone 1 increments.
+    Introduced first, in isolation, so the FK-carrier work in later
+    increments has a real target row to reference and the backfill has
+    somewhere to point.
+
+    ``slug`` is the stable identifier used by request-context resolution
+    (subsequent increments will resolve tenant from an incoming header
+    or the authenticated user's dealership). Kept unique.
+    """
+
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Vehicle(models.Model):
     CONDITION_CHOICES = [
         ("new", "New"),
