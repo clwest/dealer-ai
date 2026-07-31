@@ -16,13 +16,13 @@ services:
       pip install -r requirements.txt -r render-requirements.txt
       DJANGO_SECRET_KEY=build-only-key \
       DJANGO_ALLOWED_HOSTS=build.localhost \
-        python manage.py collectstatic --noinput --settings=freedom_ford.prod_settings
+        python manage.py collectstatic --noinput --settings=dealer_kit.prod_settings
       DJANGO_SECRET_KEY=build-only-key \
       DJANGO_ALLOWED_HOSTS=build.localhost \
-        python manage.py migrate --settings=freedom_ford.prod_settings
+        python manage.py migrate --settings=dealer_kit.prod_settings
 
     startCommand: |
-      gunicorn freedom_ford.wsgi:application \
+      gunicorn dealer_kit.wsgi:application \
         --bind 0.0.0.0:$PORT \
         --workers 2 \
         --timeout 60 \
@@ -33,7 +33,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.6
       - key: DJANGO_SETTINGS_MODULE
-        value: freedom_ford.prod_settings
+        value: dealer_kit.prod_settings
       - key: DJANGO_DEBUG
         value: "false"
       - key: DJANGO_SECRET_KEY

@@ -35,11 +35,11 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-    "freedom_ford.middleware.EmbedFramePolicyMiddleware",
+    "dealer_kit.middleware.EmbedFramePolicyMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "freedom_ford.urls"
+ROOT_URLCONF = "dealer_kit.urls"
 
 TEMPLATES = [
     {
@@ -57,7 +57,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "freedom_ford.wsgi.application"
+WSGI_APPLICATION = "dealer_kit.wsgi.application"
 
 USE_POSTGRES = os.getenv("POSTGRES_DB") and os.getenv("POSTGRES_USER")
 

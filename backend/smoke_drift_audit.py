@@ -24,7 +24,7 @@ import sys
 import django
 
 os.environ.setdefault(
-    "DJANGO_SETTINGS_MODULE", "freedom_ford.settings"
+    "DJANGO_SETTINGS_MODULE", "dealer_kit.settings"
 )
 django.setup()
 
