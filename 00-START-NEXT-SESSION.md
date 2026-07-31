@@ -1,177 +1,169 @@
 ---
 state: active
 date: 2026-07-31
-last_session_shipped: SESSION_040
-next_session: SESSION_041
+last_session_shipped: SESSION_041
+next_session: SESSION_042
 ---
 
-# Next session — SESSION_041 · Milestone 1 · Increment 4C (Advisor workspace: slug-obscurity → real auth + tenant scope)
+# Next session — SESSION_042 · Milestone 1 · Increment 4D (admin endpoint gating + queryset scoping)
 
-> **Milestone 1 is in progress.** SESSION_040 shipped Increment 4B
-> (DRF authentication defaults + `get_current_dealership` request-
-> context resolver + `AUTHENTICATION_MODEL.md` reference). Handoff at
-> `docs/handoffs/SESSION_040_milestone_1_auth_defaults_and_request_context.md`.
+> **Milestone 1 is in progress.** SESSION_041 shipped Increment 4C
+> (advisor workspace slug-obscurity → real membership-based
+> authorization). Handoff at
+> `docs/handoffs/SESSION_041_milestone_1_advisor_authorization.md`.
 >
 > Increment 4 remains split across six sub-sessions (4A–4F). The full
 > contract lives in `docs/roadmap/MILESTONE_1_PLANNING.md` §7.
-> SESSION_041 opens **Increment 4C**.
+> SESSION_042 opens **Increment 4D**.
 >
 > **All governance layers apply:**
 >
 > - `docs/PROJECT_RULES.md` — six project-work rules.
 > - `docs/DOC_GOVERNANCE.md` — documentation rules.
 > - `docs/roadmap/AUTHENTICATION_MODEL.md` — canonical layer
->   separation. **Read this before writing permission classes.**
+>   separation. **Read §7 before writing permission classes.** 4C
+>   updated it with the concrete `IsAdvisorForSlug` +
+>   `IsDealerOwnerForAdvisorSlug` shapes; 4D will add
+>   `IsSalesManagerOrOwnerAtActiveDealership` +
+>   `IsDealerOwnerAtActiveDealership`.
 > - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 1 — scope
 >   boundary.
 > - `docs/roadmap/MILESTONE_1_PLANNING.md` §3 — acceptance contract
->   (must still verify true after 4C).
+>   (must still verify true after 4D).
 > - `docs/roadmap/MILESTONE_1_PLANNING.md` §7 — Increment 4
 >   sub-sequencing (why the work is split A–F).
 
 ## What just shipped
 
-- **SESSION_040** — Increment 4B. Test baseline 1,333 → 1,349.
-  Commits `dc24ab6` (docs refinement), `7fc415f` (feat),
-  `aa02bc6` (handoff + AUTHENTICATION_MODEL.md).
-  Handoff at
-  `docs/handoffs/SESSION_040_milestone_1_auth_defaults_and_request_context.md`.
+- **SESSION_041** — Increment 4C. Test baseline 1,349 → 1,361.
+  Commits `76d625b` (feat), `<fill after docs>` (handoff +
+  AUTHENTICATION_MODEL.md §7 update). Handoff at
+  `docs/handoffs/SESSION_041_milestone_1_advisor_authorization.md`.
+- **SESSION_040** — Increment 4B. Commits `dc24ab6`, `7fc415f`,
+  `aa02bc6`, `02b0252`.
 - **SESSION_039** — Increment 4A. Commit `92e3c48`.
 - **SESSION_038** — Increment 3.
 - **SESSION_037** — Increments 1 & 2.
 
 ## Increment 4 at a glance
 
-Recorded in full at `docs/roadmap/MILESTONE_1_PLANNING.md` §7. Each
-sub-increment is a single-session unit; each leaves the application
-deployable and the test baseline healthy.
+Recorded in full at `docs/roadmap/MILESTONE_1_PLANNING.md` §7.
 
 - **4A** ✅ (SESSION_039) — User↔Dealership membership + role foundation.
 - **4B** ✅ (SESSION_040) — DRF auth defaults + `get_current_dealership`.
-- **4C** (this session) — Advisor workspace: slug-obscurity → auth +
-  tenant scope. URL shape preserved.
-- **4D** — Admin endpoint gating + queryset scoping across every
-  `/api/dealer-ai/admin/*` route + onboarding profile
+- **4C** ✅ (SESSION_041) — Advisor workspace: slug-obscurity → auth
+  + tenant scope.
+- **4D** (this session) — Admin endpoint gating + queryset scoping
+  across every `/api/dealer-ai/admin/*` route + onboarding profile
   (`IsDealerOwner`).
 - **4E** — Frontend login page + shared `authFetch()` helper.
 - **4F** — Full compatibility sweep + hardening + Milestone 1 close
   (update `CAPABILITY_MATRIX` §7/§8 + roadmap §2.7).
 
-## What SESSION_041 should do — Increment 4C
+## What SESSION_042 should do — Increment 4D
 
-**Goal:** replace the advisor-workspace slug-obscurity check with
-real authentication + role + tenant enforcement. URL shape preserved
-(the frontend still routes to `/dealer-ai-advisor/:slug`).
+**Goal:** apply real authorization + tenant scoping to every admin
+endpoint and to the onboarding profile mutation. Customer-facing
+endpoints stay `AllowAny`. The GET side of onboarding profile stays
+public because `useBrand()` renders on unauthenticated pages.
 
 ### Recommended step sequence
 
 1. **Read first (in this order):**
    - `docs/roadmap/AUTHENTICATION_MODEL.md` — the layer separation
-     4C must respect. This is the canonical reference; do not
-     collapse Identity / Authorization / Business permissions.
-   - `docs/handoffs/SESSION_040_milestone_1_auth_defaults_and_request_context.md`
-     — the resolver and auth defaults 4C consumes.
-   - `docs/roadmap/MILESTONE_1_PLANNING.md` §1.4 + §7 · 4C.
-   - `backend/dealer_ai/views.py::advisor_workspace` and
-     `::advisor_follow_up` (currently ~lines 452–564; verify against
-     the file — line numbers may drift).
-   - The 403 lead-ownership check inside `advisor_follow_up`
-     (currently ~views.py:529). Preserve verbatim.
+     4D must respect. §7 lists the shipped 4C classes; 4D extends
+     with `IsSalesManagerOrOwnerAtActiveDealership` +
+     `IsDealerOwnerAtActiveDealership`.
+   - `docs/handoffs/SESSION_041_milestone_1_advisor_authorization.md`
+     — the 4C pattern (permission composition at the view layer,
+     shared `_auth_helpers`).
+   - `docs/roadmap/MILESTONE_1_PLANNING.md` §7 · 4D.
+   - `backend/dealer_ai/permissions.py` — the module 4D extends.
+   - `backend/dealer_ai/services/tenancy.py::get_current_dealership`
+     — the resolver 4D's new classes consume.
+   - Every admin view in `backend/dealer_ai/views.py` (search for
+     `admin/` in `urls.py` to enumerate).
 
 2. **Implement in this order:**
 
-   1. **DRF permission classes** in a new file
-      `backend/dealer_ai/permissions.py`:
-      - `AdvisorForSlug` — passes when
-        `request.user.is_authenticated` AND
-        `getattr(request.user, "salesperson", None)` exists AND
-        `request.user.salesperson.slug == view.kwargs["slug"]`.
-      - `SameDealership` — passes when the requesting user's active
-        dealership (via `get_current_dealership(request)`) matches
-        the target Salesperson's dealership.
-      - `IsDealerOwnerOrAdvisorForSlug` — union: an authenticated
-        dealer_owner at the same dealership may view any advisor's
-        queue (per `MILESTONE_1_PLANNING.md` §1.4).
-   2. **Apply to `advisor_workspace()` and `advisor_follow_up()`.**
-      Add `@permission_classes([...])` (or class-based equivalent).
-      Keep `authentication_classes` at DRF default (Session + Token
-      inherit from settings). Do not touch other views.
-   3. **Preserve the lead-ownership 403** at views.py:529 verbatim.
-      That check is orthogonal to auth — it enforces "own leads
-      only" once the auth check has passed.
-   4. **Test-client fixture** in a new
-      `backend/dealer_ai/tests/_auth_helpers.py`. Helpers:
-      - `make_advisor_user(slug, dealership)` — creates User +
-        Salesperson (with slug + dealership) + `Salesperson.user`
-        link.
-      - `make_membership(user, dealership, role)` — creates
-        `UserDealershipRole`.
-      - `authenticated_client(user)` — returns a DRF `APIClient`
-        with `force_authenticate(user=user)`.
-   5. **Update existing advisor tests** (search for
-      `/api/dealer-ai/advisor/`) so they authenticate. The test
-      count should *increase* — the pre-4C tests exercised
-      anonymous slug-only access; 4C replaces that with
-      authenticated access and adds negative-path coverage.
-   6. **New negative-path tests** in
-      `tests/test_advisor_workspace_auth.py`:
-      - Unauthenticated → 401.
-      - Authenticated user, no linked Salesperson → 403.
-      - Authenticated user, linked to a different Salesperson slug
-        → 403.
-      - Authenticated advisor, correct slug, correct dealership →
-        200.
-      - Authenticated dealer_owner at same dealership, any slug →
-        200 (per §1.4).
-      - Authenticated dealer_owner at *different* dealership → 403.
+   1. **Extend `dealer_ai/permissions.py`** with:
+      - `IsSalesManagerOrOwnerAtActiveDealership` — the caller
+        holds `sales_manager` OR `dealer_owner` at
+        `get_current_dealership(request)`.
+      - `IsDealerOwnerAtActiveDealership` — the caller holds
+        `dealer_owner` at `get_current_dealership(request)`.
+      Both consult the resolver rather than a URL kwarg — this is
+      a different URL-shape family from 4C. Keep the classes
+      focused and reusable.
+   2. **Gate every admin endpoint.** Apply `[IsAuthenticated &
+      IsSalesManagerOrOwnerAtActiveDealership]` to:
+      `admin/pipeline`, `admin/leads`, `admin/lead/<id>/*`,
+      `admin/salespeople`, `admin/audit-events`, `admin/trends`,
+      `admin/ad-copy`, `manager-chat`.
+   3. **Gate onboarding profile mutation.** Apply
+      `[IsAuthenticated & IsDealerOwnerAtActiveDealership]` to
+      PUT/PATCH on `onboarding/profile/` and POST on
+      `onboarding/profile/logo/`. Keep GET `AllowAny` — branding
+      is public per §3.
+   4. **Queryset scoping.** For each gated admin endpoint add
+      `.filter(dealership=get_current_dealership(request))` to
+      every `Lead.objects.*`, `ChatSession.objects.*`,
+      `Salesperson.objects.*` query. This is the Data Scoping
+      layer landing on the admin surface.
+   5. **Existing test updates.** Any admin test that currently
+      hits an endpoint anonymously must authenticate via the
+      `_auth_helpers` fixtures. Prefer minimal edits — add
+      authentication in `setUp`, adjust assertions only when the
+      new authorization semantics require it.
+   6. **New focused tests** in `tests/test_admin_endpoints_auth.py`.
+      For each admin endpoint: unauth → 401/403; wrong-role
+      (authenticated advisor) → 403; wrong-tenant (correct role at
+      a different dealership) → 403; correct → 200. Plus a
+      queryset-scoping test per endpoint: an admin at Dealership A
+      only sees Dealership A's rows.
 
 3. **Verify continuously.** After each step run
-   `python3 manage.py test dealer_ai` and confirm the pre-existing
-   advisor tests still pass (after being updated to authenticate)
-   and every §3 compatibility item still holds.
+   `python3 manage.py test dealer_ai` and confirm zero regressions
+   plus every §3 compatibility item.
 
-4. **Verify layer discipline.** Cross-check against
-   `AUTHENTICATION_MODEL.md`:
-   - Identity — DRF auth classes (unchanged, inherited from
-     settings).
-   - Authorization — `get_current_dealership(request)` (called by
-     `SameDealership`).
-   - Business permissions — the three classes above.
-   - Data scoping — the existing lead-ownership queryset filter
-     inside `advisor_follow_up` (preserved).
-   No layer is collapsed into another.
+4. **Verify layer discipline** against `AUTHENTICATION_MODEL.md`:
+   - Identity — DRF auth classes (unchanged, inherited).
+   - Authorization — the two new classes.
+   - Business permissions — the role check inside those classes.
+   - Data scoping — `.filter(dealership=...)` in every gated view.
+   No layer collapsed into another.
 
 5. **Close the session** with:
-   - Handoff at `docs/handoffs/SESSION_041_<slug>.md`.
-   - Overwrite this file with the SESSION_042 = Increment 4D priority.
-   - Update `AUTHENTICATION_MODEL.md` §7 with the concrete
-     `AdvisorForSlug + SameDealership` permission-class names now
-     that they exist in code.
-   - `docs/CAPABILITY_MATRIX.md` update **not required** — Milestone
-     1 auth surface is not complete until 4F.
+   - Handoff at `docs/handoffs/SESSION_042_<slug>.md`.
+   - Overwrite this file with the SESSION_043 = Increment 4E
+     priority.
+   - Update `AUTHENTICATION_MODEL.md` §7 with the concrete new
+     class names.
+   - `docs/CAPABILITY_MATRIX.md` update **not required** —
+     Milestone 1 close is 4F.
 
-## Explicit non-goals for SESSION_041 (Increment 4C)
+## Explicit non-goals for SESSION_042 (Increment 4D)
 
-- ❌ Do NOT touch admin endpoints. That's 4D.
+- ❌ Do NOT touch the advisor workspace or its permission classes.
+  4C is done.
 - ❌ Do NOT change `DEFAULT_PERMISSION_CLASSES` in settings.
   Enforcement is per-endpoint.
 - ❌ Do NOT touch frontend code. Login UI is 4E.
-- ❌ Do NOT introduce tenant-scoped uniqueness on `Salesperson.slug`.
+- ❌ Do NOT introduce tenant-scoped uniqueness on any model
+  (`Salesperson.slug`, `Vehicle.stock_number`,
+  `DealerOnboardingProfile` OneToOne). Deferred.
 - ❌ Do NOT touch the 16-stage safety pipeline.
-- ❌ Do NOT auto-create `Salesperson.user` links. The bootstrap
-  path (superuser wires the link via Django admin) is still the
-  only mechanism.
-- ❌ Do NOT change the URL shape. Frontend routing must continue to
-  resolve `/dealer-ai-advisor/:slug` unchanged.
+- ❌ Do NOT re-scope customer-facing chat, embed frame, or vehicle
+  Q&A — those stay `AllowAny` per §1.2.
 - ❌ Do NOT commit any real `OPENAI_API_KEY`.
 - ❌ Do NOT create parallel docs. Update `AUTHENTICATION_MODEL.md`
-  and `MILESTONE_1_PLANNING.md` only if implementation reveals a
-  real deviation from the contract.
+  §7 and `MILESTONE_1_PLANNING.md` §7 · 4D only if implementation
+  reveals a real deviation from the contract.
 
 ## NEXT TASK
 
-Start SESSION_041 with the read-first list above, then implement
-Increment 4C in the six-step sequence.
+Start SESSION_042 with the read-first list above, then implement
+Increment 4D in the six-step sequence.
 
 ---
 
@@ -186,36 +178,41 @@ Increment 4C in the six-step sequence.
 6. `docs/BUSINESS_DOMAIN_MAP.md`
 7. `docs/research/*_MAPPING.md` + `*_PIVOT.md`
 8. `docs/CAPABILITY_MATRIX.md`
-9. Most recent handoffs (`SESSION_040_*.md`, `SESSION_039_*.md`).
+9. Most recent handoffs (`SESSION_041_*.md`, `SESSION_040_*.md`).
 10. `git log --oneline -25`; `git show HEAD:<path>`.
 
 Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_040)
+## Operational state (post-SESSION_041)
 
 - **Backend (local):** Django on `:8001`. Package `backend/dealer_ai/`.
   Migrations `0001`–`0011` applied. `authtoken` migrations
   `0001`–`0004` applied. Default `Dealership` row exists
-  (`slug='default'`). No `Token` / `UserDealershipRole` rows exist;
-  `Salesperson.user` is NULL on every existing row.
+  (`slug='default'`). No `Token` / live `UserDealershipRole` rows in
+  dev DB; the authorization surface is exercised entirely by
+  focused tests.
 - **Backend (prod):** `vehicle-match-api.onrender.com` — NOT active.
 - **Frontend (local):** Vite on `:5173`. Unchanged since SESSION_038.
 - **Frontend (prod):** NONE.
-- **Test baseline:** 1,349 pass, 1 skipped, 0 fail.
+- **Test baseline:** 1,361 pass, 1 skipped, 0 fail.
 - **DRF defaults:** `SessionAuthentication` + `TokenAuthentication`
-  installed at framework level; `DEFAULT_PERMISSION_CLASSES` is
-  unset (DRF `AllowAny` default stands).
+  installed at framework level; `DEFAULT_PERMISSION_CLASSES` unset.
+- **Endpoint-level permission classes shipped:** advisor workspace
+  + advisor follow-up only.
+  `IsAuthenticated & (IsAdvisorForSlug | IsDealerOwnerForAdvisorSlug)`.
+  Every other endpoint still uses the DRF default (`AllowAny`).
 - **Request-context resolver:**
   `services.tenancy.get_current_dealership(request)` and
-  `services.tenancy.get_active_membership(user)` available. No
-  view calls them yet — 4C is the first consumer.
+  `services.tenancy.get_active_membership(user)` available and
+  consumed by `IsDealerOwnerForAdvisorSlug` indirectly (via role
+  check). 4D's new classes will call `get_current_dealership`
+  directly.
 - **Env overrides for franchise config still work:**
   `DEALER_AI_DEALER_TYPE=franchise`,
   `DEALER_AI_PRIMARY_MAKE=<OEM>`,
   `DEALER_AI_DEALER_NAME=<name>`.
 - **`docs/roadmap/DEFERRED_IDEAS.md`** — still does not exist.
 - **Dev DB note (unchanged from SESSION_038 handoff):**
-  `DealerOnboardingProfile` count = 0. Visit `/dealer-ai-onboarding`
-  and save once to restore if the demo relies on a persisted profile.
+  `DealerOnboardingProfile` count = 0.
