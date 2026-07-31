@@ -6,7 +6,7 @@ date: 2026-07-31
 session: 043
 commits:
   - 0935ed6  # Increment 4E — /auth/{login,logout,me} + CSRF trust origins + frontend authFetch/AuthContext/RequireAuth/LoginPage + api.ts operator split + AUTHENTICATION_MODEL §2/§2b/§2c updates
-  - <fill after docs commit>  # SESSION_043 handoff + SESSION_044 pointer
+  - cffa37c  # SESSION_043 handoff + SESSION_044 pointer
 ---
 
 # SESSION_043 — Milestone 1 · Increment 4E

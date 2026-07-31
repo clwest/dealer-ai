@@ -37,7 +37,7 @@ next_session: SESSION_044
 - **SESSION_043** — Increment 4E. Test baseline 1,445 → 1,466 +
   clean frontend typecheck + clean vite build + browser smoke
   through all 8 required steps. Commits `0935ed6` (feat),
-  `<fill after docs>` (handoff). Handoff at
+  `cffa37c` (handoff). Handoff at
   `docs/handoffs/SESSION_043_milestone_1_frontend_auth_flow.md`.
 - **SESSION_042** — Increment 4D. Commits `17333af`, `91b634c`,
   `7ab2571`.
