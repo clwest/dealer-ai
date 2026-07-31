@@ -4,6 +4,8 @@ status: planning
 type: planning-artifact
 generated: 2026-07-31
 generated_at_session: SESSION_035 (pre-implementation)
+updated: 2026-07-31
+updated_at_session: SESSION_038 (added §7 Increment sequencing including 4A–4F breakdown)
 milestone: 1
 milestone_name: "Multi-tenant + role-based access foundation"
 sources:
@@ -384,7 +386,143 @@ Planning docs are claims. Rules + research + code are facts.
 
 ---
 
-## 7. Related documents
+## 7. Increment sequencing (as-shipped)
+
+The design memo (§1) describes *what* Milestone 1 delivers. This
+section records *how* the work was sliced into per-session
+increments so future readers understand the commit history and each
+handoff's scope. Increments 1–3 shipped in SESSION_037–038;
+Increments 4A–4F carry Milestone 1 to completion.
+
+### Shipped
+
+- **Increment 1 (SESSION_037, commit `36a4d74`)** — `Dealership`
+  tenancy-root model in isolation. Schema migration `0007`. Model
+  shape locked by 4 tests.
+- **Increment 2 (SESSION_037, commit `0e7e710`)** — Nullable
+  `dealership` FK on the six tenant carriers (`Vehicle`,
+  `Salesperson`, `ChatSession`, `ChatMessage`, `CustomerLead`,
+  `DealerOnboardingProfile`) via schema migration `0008`; data
+  migration `0009` seeds the default `Dealership` row (slug=`default`)
+  and backfills every existing row via a three-tier name-resolution
+  ladder. Post-backfill count check inside a transaction, so a
+  partial backfill can never commit. +9 tests.
+- **Increment 3 (SESSION_038, commit `9ea7ff3`)** — Write-path
+  plumbing. New `services/tenancy.py` primitive
+  (`get_default_dealership` + `pre_save` autofill signal registered
+  in `DealerAiConfig.ready`; signal also inherits from parent
+  `ChatSession` for `ChatMessage` / `CustomerLead`). Extended
+  `dealer_config.py` resolvers with optional `dealership=` argument.
+  Explicit `dealership=` sweeps in `views.py`,
+  `services/lead_service.py`, `services/inventory_import.py`.
+  Migration `0010` flips all six FKs to `NOT NULL`. +9 tests
+  (1,313 → 1,322).
+
+### Remaining — Increment 4 sub-sequencing (A–F)
+
+Each sub-increment is a single-session unit. Every one leaves the
+application deployable and the test baseline healthy. The scope
+boundary between sub-increments is a scope-discipline choice — a
+single monolithic "auth increment" is high-blast-radius work with
+poor rollback granularity, so the sequencing below trades one long
+session for six smaller ones with independent verification points.
+
+**4A — User↔Dealership membership + role foundation.**
+Introduce the tenant-scoped role vocabulary from
+`IMPLEMENTATION_ROADMAP.md` §Milestone 1 (`dealer_owner`,
+`sales_manager`, `recon_manager`, `f_and_i_manager`, `collections`,
+`advisor`, `porter`). Preferred shape: a small
+`UserDealershipRole` through-model (User FK, Dealership FK, role
+CharField with choices, timestamps) so a User can hold different
+roles at different dealerships without collapsing the semantics
+into Django `Group`. Extend `Salesperson` with an optional
+`user = OneToOneField(User, null=True)` link so Increment 4C can
+resolve advisor identity from the authenticated user. Django admin
+registration for both. Zero endpoint auth changes. Migration +
+model tests only.
+
+**4B — DRF authentication classes + request-context tenancy.**
+Populate `REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]` with
+`SessionAuthentication` (customer chat stays cookie-friendly for
+the embed frame) plus `TokenAuthentication` for API clients.
+`DEFAULT_PERMISSION_CLASSES` stays permissive at the framework
+level — endpoint-level tightening lands in 4C/4D so this
+increment does not silently break any currently-public endpoint.
+Extend `services/tenancy.py` with `get_current_dealership(request)`
+that resolves in this order: (1) `request.user.memberships.first().dealership`
+when authenticated and a membership row exists, (2) header
+`X-Dealership-Slug` matched against a live `Dealership`, (3)
+`get_default_dealership()` — the single-tenant fallback. Resolver
+tests only; no endpoint changes.
+
+**4C — Advisor workspace slug-obscurity replacement.**
+Replace the slug-only access check on
+`/api/dealer-ai/advisor/<slug>/*` (views.py:452–564) with
+`IsAuthenticated + AdvisorForSlug + SameDealership`. `AdvisorForSlug`
+matches `request.user.salesperson.slug == slug`; `SameDealership`
+matches the advisor's tenant against the requesting user's active
+tenant. URL shape preserved. Lead-ownership check at views.py:529
+preserved verbatim. Frontend still uses the slug URL — the login
+UI lands in 4E, so this increment is verified via authenticated
+DRF test-client calls. `dealer_owner` can view any advisor's queue
+(per §1.4).
+
+**4D — Admin endpoint gating + queryset scoping.**
+Every `/api/dealer-ai/admin/*` endpoint moves to
+`IsAuthenticated + IsSalesManagerOrOwner + SameDealership`. Every
+`Lead.objects.*`, `ChatSession.objects.*`, `Salesperson.objects.*`
+inside those endpoints gains a `.filter(dealership=...)` scoping
+call. Includes: leads pipeline, admin leads list + detail,
+salespeople admin, audit-events, trends, coaching (`manager_chat`),
+ad-copy generator, onboarding profile (biggest live security debt
+after advisor slug per §2 row 10 — moves to `IsDealerOwner`).
+Customer-facing chat + vehicle Q&A stay `AllowAny` per §1.2 but
+resolve tenancy from `get_current_dealership(request)` for queryset
+scoping. Comprehensive test coverage: unauth → 401, wrong-role →
+403, wrong-tenant → 403, correct → 200.
+
+**4E — Frontend login + shared `authFetch()`.**
+Greenfield `frontend/src/pages/Login.tsx` (or equivalent under the
+existing routing structure). Shared `authFetch()` helper that
+injects the `Authorization` / session cookie and handles 401 by
+redirecting to `/login`. Every operator page (leads admin, coaching,
+onboarding) uses `authFetch`; public pages (`/`, `/assistant`,
+`/showroom`, `/embed/assistant`) do not. Persist auth state via a
+lightweight context / hook, not a heavyweight state library.
+Verified via `npx tsc --noEmit`, `npx vite build`, and manual
+smoke of the login → leads-admin → logout flow in a browser.
+
+**4F — Full compatibility sweep + hardening + Milestone 1 close.**
+Walk every item in §3 of this doc and confirm it still holds.
+Add integration tests spanning login → tenant scoping → advisor
+workspace end-to-end. Verify the franchise env-override path
+(`DEALER_AI_DEALER_TYPE=franchise`) still works under the new
+resolver. Verify Copper Canyon defaults still ship for a
+zero-config install. Verify the 16-stage scrub stack is byte-for-byte
+untouched. Confirm no currently-public route regressed to 401
+(branding, chat/*, vehicles/<id>/*, embed frame). Update
+`docs/CAPABILITY_MATRIX.md` §7/§8 (auth model + roles now
+implemented) and `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §2.7
+(Milestone 1 → complete). Handoff for closing out Milestone 1
+and identifying Milestone 2 kickoff scope.
+
+### Scope-discipline reminders that apply to every 4-series sub-increment
+
+- ❌ No tenant-scoped uniqueness (`(dealership, stock_number)`,
+  `(dealership, slug)`, `DealerOnboardingProfile` OneToOne) — those
+  belong to the increment that first needs them.
+- ❌ No multi-photo storage, no `Vehicle.is_available` → computed,
+  no `Vehicle.make` default rename. All deferred per §5.
+- ❌ No SSO / MFA. Explicitly out-of-scope per §5.
+- ❌ No per-role UI polish beyond what auth strictly requires.
+- ❌ No changes to the 16-stage scrub stack.
+- ❌ No changes to `services/payment_engine.py`.
+- ❌ No deletion of the franchise config path or Freedom Ford demo
+  assets.
+
+---
+
+## 8. Related documents
 
 - `docs/PROJECT_RULES.md` — governance layer.
 - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` — the implementation
