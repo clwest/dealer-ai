@@ -372,6 +372,22 @@ throwaway `ChatSession` per request, so tenant scoping there means
 attaching the caller's active dealership to the row it creates
 (not filtering an existing queryset).
 
+**Pre-save autofill is a fallback, not the primary write path.**
+The `services/tenancy._auto_attach_default_dealership` `pre_save`
+signal exists to guarantee no row can be saved with a null
+`dealership_id` — it attaches the seeded default when a caller
+forgets. Production views MUST pass `dealership=` explicitly (from
+`get_current_dealership(request)` for request-scoped writes, or
+from an explicit business argument for out-of-band writes like
+management commands). Relying on the fallback in production code
+is a bug: a request-scoped tenant would silently write against the
+default dealership instead of the caller's active one.
+
+Rule of thumb: if a caller has a `request`, it MUST pass
+`dealership=get_current_dealership(request)`. Only tenantless
+call sites (management commands, seeders, tests that predate
+multi-tenancy) may rely on the pre_save autofill.
+
 ## 9. What this model does NOT cover
 
 Out of scope for the kit's authentication model as of Milestone 1.

@@ -1,13 +1,16 @@
 ---
 title: "Milestone 1 — Implementation-Planning Pass"
-status: planning
+status: shipped
 type: planning-artifact
 generated: 2026-07-31
 generated_at_session: SESSION_035 (pre-implementation)
 updated: 2026-07-31
-updated_at_session: SESSION_038 (added §7 Increment sequencing including 4A–4F breakdown)
+updated_at_session: SESSION_044 (Milestone 1 closeout — §3 annotated with shipped evidence, franchise env-override wired in settings.py)
 milestone: 1
 milestone_name: "Multi-tenant + role-based access foundation"
+shipped_at_session: SESSION_044
+shipped_over: SESSION_037, SESSION_038, SESSION_039, SESSION_040, SESSION_041, SESSION_042, SESSION_043, SESSION_044
+retrospective: docs/roadmap/MILESTONE_1_RETROSPECTIVE.md
 sources:
   - docs/PROJECT_RULES.md
   - docs/roadmap/IMPLEMENTATION_ROADMAP.md
@@ -21,6 +24,14 @@ applies_to:
   - SESSION_035 Milestone 1 implementation session
   - Any subsequent session that resumes Milestone 1
 ---
+
+> **Milestone 1 shipped at SESSION_044.** Original plan preserved
+> below; §3 annotated in place with the shipped evidence, and
+> §7 records the actual increment sequence with commit pointers.
+> The retrospective at
+> `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` captures deviations,
+> lessons, and remaining deferred work. Do not rewrite the plan
+> — annotate.
 
 # Milestone 1 — Implementation-Planning Pass
 
@@ -208,62 +219,100 @@ goes unaccounted-for.
 
 ## 3. Compatibility Checklist
 
-**Milestone 1 is not complete until every item below is verified true.**
-These are the invariants the existing platform must uphold *after*
-Milestone 1 ships. Each item is testable.
+**Milestone 1 shipped at SESSION_044. Every item verified true;
+evidence recorded inline.** Original invariants preserved; each
+row now cites the test class, code location, or runtime probe that
+locks it. Where an item's outward behavior changed intentionally
+(e.g. slug-obscurity 404 → real-auth 403), the annotation records
+the new invariant + the reason.
 
 ### Existing onboarding flow
-- [ ] `GET /api/dealer-ai/onboarding/profile/` returns the same shape (35 fields including the 8 SESSION_032 indie fields).
-- [ ] `PUT /api/dealer-ai/onboarding/profile/` still upserts, now scoped to the authenticated user's dealership.
-- [ ] `POST /api/dealer-ai/onboarding/profile/logo/` still accepts multipart upload.
-- [ ] `/dealer-ai-onboarding` UI (6 sections) still saves.
+- [x] `GET /api/dealer-ai/onboarding/profile/` returns the same shape (35 fields including the 8 SESSION_032 indie fields).
+  *Locked by `test_onboarding_profile.OnboardingDefaultsTests.test_get_returns_defaults_when_no_profile`. Endpoint at `views.py::onboarding_profile`; GET stays public via `[ReadOnly | (IsAuthenticated & IsDealerOwnerAtActiveDealership)]`.*
+- [x] `PUT /api/dealer-ai/onboarding/profile/` still upserts, now scoped to the authenticated user's dealership.
+  *Locked by `test_onboarding_profile` + `test_admin_endpoints_auth.OnboardingProfileMutationAuth`. Requires `IsDealerOwnerAtActiveDealership`; `sales_manager` is 403.*
+- [x] `POST /api/dealer-ai/onboarding/profile/logo/` still accepts multipart upload.
+  *Locked by `test_onboarding_profile` + `test_admin_endpoints_auth.OnboardingLogoUploadRequiresDealerOwner`.*
+- [x] `/dealer-ai-onboarding` UI (6 sections) still saves.
+  *Frontend route wrapped in `<RequireAuth>` per `main.tsx`; `saveOnboardingProfile()` uses `authFetch` (`api.ts`). Verified via browser smoke at SESSION_043 (owner signed in → onboarding page → save).*
 
 ### Existing inventory import
-- [ ] `services/inventory_import.py` still upserts by `stock_number` per source, now scoped to a dealership.
-- [ ] `Vehicle.last_seen_at` / `Vehicle.imported_at` semantics unchanged.
-- [ ] The seed_phase3_demo (Copper Canyon 45-unit dataset) still loads cleanly against a default dealership.
+- [x] `services/inventory_import.py` still upserts by `stock_number` per source, now scoped to a dealership.
+  *`inventory_import.import_rows(..., dealership: Optional[Dealership] = None)` — line 288. When omitted, resolves to `get_default_dealership()`. Existing tests unchanged; SESSION_038 handoff §"Explicit dealership= sweeps".*
+- [x] `Vehicle.last_seen_at` / `Vehicle.imported_at` semantics unchanged.
+  *`test_inventory_import*` unchanged; the two fields are set only by the importer, whose behavior contract is preserved.*
+- [x] The seed_phase3_demo (Copper Canyon 45-unit dataset) still loads cleanly against a default dealership.
+  *Verified via SESSION_038 dev-DB reseed (135 vehicles post-seed per SESSION_038 handoff). Full baseline includes seed-consuming tests.*
 
 ### Existing vehicle behavior
-- [ ] `GET /api/dealer-ai/vehicles/<id>/` still returns payment analysis.
-- [ ] `POST /api/dealer-ai/vehicles/<id>/ask/` still passes through the 16-stage safety stack unchanged.
-- [ ] `Vehicle.is_available` boolean semantics unchanged (`Vehicle.is_available` → computed lifecycle is a Milestone 5 concern, NOT Milestone 1).
+- [x] `GET /api/dealer-ai/vehicles/<id>/` still returns payment analysis.
+  *`views.py::vehicle_detail` unchanged (customer-facing, `AllowAny`). `test_vehicle_assistant` covers.*
+- [x] `POST /api/dealer-ai/vehicles/<id>/ask/` still passes through the 16-stage safety stack unchanged.
+  *`test_post_llm_safety` + `test_vehicle_assistant` — 90+ tests exercise the scrub stack; every one passes at the 1,466 baseline.*
+- [x] `Vehicle.is_available` boolean semantics unchanged.
+  *No `is_available` handling touched during Milestone 1. Computed-lifecycle refactor is deferred per §5 (Milestone 5 scope).*
 
-### Existing advisor workflow
-- [ ] Advisor sees own leads only (same behavior).
-- [ ] Follow-up drafts still pass through `invented_appointment` scrub.
-- [ ] 403 still returned when a lead isn't assigned to this advisor.
-- [ ] The URL `/dealer-ai-advisor/:slug` still resolves once logged in (frontend routing unchanged).
+### Existing advisor workflow (updated to record 4C invariants)
+- [x] Advisor sees own leads only.
+  *Unchanged. `views.py::advisor_workspace` still filters `CustomerLead.filter(assigned_to=sp)`.*
+- [x] Follow-up drafts still pass through `invented_appointment` scrub.
+  *`test_follow_up` exercises the scrub — no service-layer change.*
+- [x] 403 still returned when a lead isn't assigned to this advisor.
+  *Preserved verbatim (`views.py:597` — the `lead.assigned_to_id != sp.pk` check). Locked by `test_advisor_workspace_auth.AdvisorFollowUpAuthorization.test_lead_ownership_still_enforced_for_authorized_caller`.*
+- [x] The URL `/dealer-ai-advisor/:slug` still resolves once logged in.
+  *`main.tsx` route unchanged; wrapped in `<RequireAuth>`. Verified via SESSION_043 browser smoke steps 3, 4, 7.*
+- [x] **New (4C):** unknown or deactivated advisor slugs return 403, not 404, to authenticated non-privileged callers. Reason: slug obscurity was the *thing being replaced* by real auth; returning 404 for missing slugs would re-leak existence via differential status codes. Locked by `AdvisorWorkspaceAuthorizationDoesNotLeakUnknownSlugs`.
 
 ### Existing chat behavior
-- [ ] All 8 pre-LLM guards fire in existing order.
-- [ ] All 8 post-LLM scrubs + fabricated-inventory + invented-promotion + invented-appointment + indie-prohibited-copy scrubs run.
-- [ ] Every dollar figure still comes from `payment_engine.py`.
-- [ ] Budget-fit classification (`fit / near_fit / over_budget`) unchanged.
-- [ ] The customer never encounters auth.
+- [x] All 8 pre-LLM guards fire in existing order.
+- [x] All 8 post-LLM scrubs + fabricated-inventory + invented-promotion + invented-appointment + indie-prohibited-copy scrubs run.
+- [x] Every dollar figure still comes from `payment_engine.py`.
+- [x] Budget-fit classification (`fit / near_fit / over_budget`) unchanged.
+- [x] The customer never encounters auth.
+  *All five locked by the pre-existing scrub / payment-engine / budget-flow / demo-scenarios test suites (~700+ tests in the 1,466 baseline). Customer chat endpoints (`chat/start`, `chat/message`, `vehicles/<id>/ask`) remain `AllowAny` — verified by `views.py` review + `test_admin_endpoints_auth.PublicBrandingRemainsUnauthenticated`.*
 
 ### Existing dealer configuration resolution
-- [ ] Env-override still works: `DEALER_AI_DEALER_NAME=<name>` beats the DB row.
-- [ ] Franchise config path still works: `DEALER_AI_DEALER_TYPE=franchise` + `DEALER_AI_PRIMARY_MAKE=Ford` produces franchise-shaped `DealerProfile`.
-- [ ] Copper Canyon defaults still apply when neither env nor DB row is set.
-- [ ] `get_dealer_name()` and `get_dealer_profile()` still return the same shape.
+- [x] Env-override still works: `DEALER_AI_DEALER_NAME=<name>` beats the DB row.
+- [x] Franchise config path still works: `DEALER_AI_DEALER_TYPE=franchise` + `DEALER_AI_PRIMARY_MAKE=Ford` produces franchise-shaped `DealerProfile`.
+- [x] Copper Canyon defaults still apply when neither env nor DB row is set.
+- [x] `get_dealer_name()` and `get_dealer_profile()` still return the same shape.
+  *All four verified at SESSION_044 close via a fresh-process smoke script (see retrospective §"Regressions avoided"). Note: SESSION_044 wired `DEALER_AI_DEALER_TYPE` and `DEALER_AI_PRIMARY_MAKE` into `settings.py` — the resolver reads them via `getattr(settings, ...)` and the settings entries were missing pre-4F, so the invariant was effectively broken. Two-line fix landed in the 4F commit.*
 
 ### Existing branding
-- [ ] `useBrand()` and `useDealerProfile()` still resolve without a logged-in user (public pages must render).
-- [ ] `brand.*` Tailwind tokens unchanged (Copper Canyon palette still ships as default).
-- [ ] Public routes (`/`, `/assistant`, `/showroom`, `/embed/assistant`) still render unauthenticated.
+- [x] `useBrand()` and `useDealerProfile()` still resolve without a logged-in user.
+  *`brand.ts::useBrand` calls `fetchOnboardingProfile()` which uses plain `fetch` (not `authFetch`). GET `/onboarding/profile/` is public via `ReadOnly` composition. Locked by `test_auth_endpoints.PublicBrandingRemainsUnauthenticated`.*
+- [x] `brand.*` Tailwind tokens unchanged.
+  *`tailwind.config.js` untouched during Milestone 1.*
+- [x] Public routes (`/`, `/assistant`, `/showroom`, `/embed/assistant`) still render unauthenticated.
+  *`main.tsx` routes public routes OUTSIDE `<RequireAuth>`. Verified via SESSION_043 browser smoke step 8.*
 
 ### Existing AI behavior
-- [ ] Same LLM provider abstraction (OpenAI / Ollama) — no changes to `services/llm_client.py` or equivalent.
-- [ ] `INDIE_MODE_HINT` injection unchanged for indie configs.
-- [ ] `Ford-first` ranking generalized to `primary_make` unchanged.
-- [ ] Ad-copy generator still produces 2–3 variants, still passes through `invented_promotion` scrub.
-- [ ] Manager coaching chat still enforces Shape A / Shape B.
+- [x] Same LLM provider abstraction (OpenAI / Ollama) — no changes to `services/llm_client.py` or equivalent.
+- [x] `INDIE_MODE_HINT` injection unchanged for indie configs.
+- [x] `Ford-first` ranking generalized to `primary_make` unchanged.
+- [x] Ad-copy generator still produces 2–3 variants, still passes through `invented_promotion` scrub.
+- [x] Manager coaching chat still enforces Shape A / Shape B.
+  *All five locked by `test_indie_mode_hint`, `test_ad_copy`, `test_manager_chat`, and the LLM factory tests — none of these files were touched by Milestone 1's service-layer `dealership=` threading (that argument was added; behavior for existing callers unchanged).*
 
 ### Existing test baseline
-- [ ] `python3 manage.py test dealer_ai` → **at least 1,300 pass**, 1 skipped. Milestone 1 is expected to *add* auth/tenancy/permission tests, not remove existing ones.
-- [ ] No test suppressed with `@skip` to make the baseline pass.
-- [ ] Frontend `npx tsc --noEmit` still clean.
-- [ ] Frontend `npx vite build` still clean.
+- [x] `python3 manage.py test dealer_ai` → **1,466 pass** (grew from 1,300 pre-Milestone-1 baseline via +166 new tenancy / auth / permission / scoping / auth-endpoint tests), 1 skipped.
+- [x] No test suppressed with `@skip` to make the baseline pass.
+  *Grep of `tests/` shows the single pre-existing `@skip` (unchanged from SESSION_037).*
+- [x] Frontend `npx tsc --noEmit` still clean.
+- [x] Frontend `npx vite build` still clean.
+  *Both verified at SESSION_044 close; same pre-existing chunk-size warning as SESSION_042/043 (unrelated to auth work).*
+
+### New (Milestone 1 introduced these invariants)
+- [x] `DEFAULT_PERMISSION_CLASSES` remains **unset**. The DRF `AllowAny` default stands. Locked by `test_current_dealership.DrfAuthenticationDefaultsIntegration.test_default_permission_classes_remain_unset`.
+- [x] Six tenant-carrying models (`Vehicle`, `Salesperson`, `ChatSession`, `ChatMessage`, `CustomerLead`, `DealerOnboardingProfile`) enforce `dealership` FK as **NOT NULL**. Locked by `test_dealership.WritePathFallback` + `test_fk_is_now_not_null`.
+- [x] Every write path either passes `dealership=` explicitly OR is caught by the `pre_save` autofill signal that attaches the default. Locked by `test_dealership.WritePathFallback`. **The pre_save signal is a fallback safety net, not the preferred write mechanism** — production views pass `dealership=get_current_dealership(request)` explicitly. Recorded in `AUTHENTICATION_MODEL.md` §8b.
+- [x] `get_current_dealership(request)` never returns `None` and never raises on unknown header slugs. Locked by `test_current_dealership.GetCurrentDealershipResolver`.
+- [x] Cross-tenant pk lookups on admin endpoints fail closed (404), never 200 with cross-tenant data. Locked by `test_admin_endpoints_auth.AdminLeadDetailFailsClosedAcrossTenants`.
+- [x] Cross-tenant salesperson body on `admin_lead_assign` returns 400. Locked by `test_admin_endpoints_auth.AdminLeadAssignRejectsCrossTenantSalesperson`.
+- [x] Login endpoint returns identical 401 body for wrong password AND unknown user (no user enumeration). Locked by `test_auth_endpoints.AuthLoginEndpoint.test_unknown_user_returns_same_generic_401`.
+- [x] Authenticated unsafe methods require `X-CSRFToken`. Locked by `test_auth_endpoints.CsrfEnforcedOnAuthenticatedMutations`.
+- [x] `CSRF_TRUSTED_ORIGINS` includes the Vite dev origin (env-configurable). Confirmed by SESSION_043 browser smoke — pre-4E, every authenticated POST 403'd with "CSRF Failed: Origin checking failed".
+- [x] Frontend distinguishes 401 (redirect to `/login`) from 403 ("Not authorized" surface, stays on page). Locked by `authFetch.ts` typed errors + `RequireAuth.tsx` behavior + SESSION_043 browser smoke step 4.
 
 ---
 

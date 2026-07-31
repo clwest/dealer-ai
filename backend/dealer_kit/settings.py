@@ -168,3 +168,13 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 # `dealer_ai.services.dealer_config.get_dealer_name()`, which prefers
 # this env var over the persisted DealerOnboardingProfile.
 DEALER_AI_DEALER_NAME = os.getenv("DEALER_AI_DEALER_NAME", "")
+
+# Franchise config env-override path. The resolver
+# `services/dealer_config.get_dealer_profile()` reads these via
+# ``getattr(settings, ...)`` and layers them BETWEEN the persisted
+# `DealerOnboardingProfile` and the Copper Canyon defaults. Empty
+# strings (the default) → resolver falls through to defaults.
+# Documented in `MILESTONE_1_PLANNING.md` §3 "Existing dealer
+# configuration resolution".
+DEALER_AI_DEALER_TYPE = os.getenv("DEALER_AI_DEALER_TYPE", "")
+DEALER_AI_PRIMARY_MAKE = os.getenv("DEALER_AI_PRIMARY_MAKE", "")

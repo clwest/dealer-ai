@@ -201,9 +201,9 @@ reconciles the two.
 | Runtime dealer identity resolver (env → profile → default) | F | §3.9 dealer_config | Also right shape for per-vehicle overrides |
 | Dealer onboarding profile (35 fields, indie shape-of-business) | F | §3.10 onboarding profile | Complete for the fields captured |
 | Runtime brand tokens (frontend `brand.*`; useBrand + useDealerProfile) | F | (self-contained) | Multi-tenant capable at the presentation layer |
-| Chat-engine safety pipeline (chat/message + vehicles/<id>/ask) | F | §3.1 + §3.2 | 8-stage pre-LLM chain + 8-stage post-LLM scrubs; 1300 tests |
-| Multi-tenancy (Dealership FK-carrier model) | N | — | Singleton onboarding profile today |
-| Real authentication + role-based permissions | N | — | Slug-by-obscurity for advisor workspace; no other auth |
+| Chat-engine safety pipeline (chat/message + vehicles/<id>/ask) | F | §3.1 + §3.2 | 8-stage pre-LLM chain + 8-stage post-LLM scrubs; 1466 tests |
+| Multi-tenancy (Dealership FK-carrier model) | F | §3.9 dealer_config resolver (extended) | Milestone 1 (SESSION_037–044). `Dealership` model + `dealership` FK on all six tenant carriers + `NOT NULL` at the DB layer + `pre_save` autofill safety net + request-context resolver. See `CAPABILITY_MATRIX.md` §7b. |
+| Real authentication + role-based permissions | F | §3.9 dealer_config + `services/tenancy.py` + `dealer_ai/permissions.py` | Milestone 1 (SESSION_037–044). DRF `SessionAuthentication` + `TokenAuthentication`; seven-role vocabulary via `UserDealershipRole`; per-endpoint permission classes for advisor + admin surfaces; browser session flow. See `CAPABILITY_MATRIX.md` §7b and `docs/roadmap/AUTHENTICATION_MODEL.md`. |
 | Multi-photo file storage (S3-compatible + CDN) | N | (logo upload uses default_storage) | One-logo-deep today |
 | Async job orchestration (Celery / Redis) | N | — | Not present; deferred per VCP |
 | Prod deployment | N | — | Render Blueprint staged, not active |
@@ -223,8 +223,10 @@ reconciles the two.
   math exists; portfolio operations do not.
 - **Accounting as a full department is not built.** The
   reconciliation layer is greenfield.
-- **Two foundations must land before sensitive-data surfaces:**
-  multi-tenancy and real auth.
+- **Multi-tenancy + real auth shipped (Milestone 1, SESSION_044).**
+  Every subsequent milestone that stores sensitive data (ledger,
+  credit apps, BHPH payments) now inherits the substrate — no more
+  "foundations must land first" caveat.
 
 ---
 
@@ -384,11 +386,11 @@ would rightly refuse.
   milestone applies role scoping to its own surfaces); SSO;
   MFA (add later if research surfaces the need).
 
-**Recommended order — first.** Blocks Milestones 2, 6, 10, 12,
-and 13. The Vehicle-Centric Pivot names auth as
-"[moved from] a 'Phase 5 debt' to a **Phase 0 blocker**"
-because ledger data is more sensitive than any string the
-existing scrub stack protects.
+**Recommended order — first. Shipped SESSION_037 → SESSION_044.**
+Six sub-increments (4A–4F within the tenancy + auth + admin +
+frontend split). Full planning artifact at
+`docs/roadmap/MILESTONE_1_PLANNING.md`; retrospective at
+`docs/roadmap/MILESTONE_1_RETROSPECTIVE.md`.
 
 ---
 

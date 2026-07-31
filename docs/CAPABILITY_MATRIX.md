@@ -182,12 +182,52 @@ without copying and they're gone. No `AdCopy` model, no history view.
 | --- | --- | --- |
 | Public "meet the team" | `GET /api/dealer-ai/salespeople/` | Active only, contact details intentionally omitted |
 | Public salesperson detail | `GET /api/dealer-ai/salespeople/<slug>/` | Single-advisor public detail |
-| Advisor workspace (own leads only) | `GET /api/dealer-ai/advisor/<slug>/` | Slug-by-obscurity is the only access control in v1 |
-| Advisor follow-up drafts (SMS + email, `invented_appointment` scrubbed) | `POST /api/dealer-ai/advisor/<slug>/lead/<id>/follow-up/` | 403 when the lead isn't assigned to this advisor |
-| Salesperson admin (all, incl. inactive + full contact) | `GET /api/dealer-ai/admin/salespeople/` | Used by the manager team page + assignment dropdown |
+| Advisor workspace (own leads only) | `GET /api/dealer-ai/advisor/<slug>/` | **Real DRF authorization (Milestone 1 · SESSION_041):** `[IsAuthenticated & (IsAdvisorForSlug \| IsDealerOwnerForAdvisorSlug)]`. Cross-dealership access rejected; unknown slug returns 403 not 404 (no information leakage) |
+| Advisor follow-up drafts (SMS + email, `invented_appointment` scrubbed) | `POST /api/dealer-ai/advisor/<slug>/lead/<id>/follow-up/` | Same auth composition. Lead-ownership 403 (`lead.assigned_to_id != sp.pk`) preserved verbatim as the data-scoping layer |
+| Salesperson admin (all, incl. inactive + full contact) | `GET /api/dealer-ai/admin/salespeople/` | **Real DRF authorization (Milestone 1 · SESSION_042):** `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`. Queryset tenant-scoped to `get_current_dealership(request)` |
 
 Ships with 5 seed advisors (Dave Okafor, Jordan Rivera, Linda Park,
 Maria Cortez, Sam Bell).
+
+---
+
+## 7b. Multi-tenancy + real auth (Milestone 1, shipped)
+
+Milestone 1 (SESSION_037 → SESSION_044) introduced the tenancy
+foundation, real authentication, membership-based authorization, and
+the browser sign-in flow. Every subsequent milestone that stores
+sensitive data (ledger, credit apps, BHPH payments) inherits this
+substrate. See `docs/roadmap/AUTHENTICATION_MODEL.md` for the
+canonical description and `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md`
+for what shipped vs. what was deferred.
+
+| Concern | Shipped surface | Notes |
+| --- | --- | --- |
+| Tenancy root | `models.Dealership` (`slug`, `name`, timestamps) + migration `0007` | Every tenant-carrying row has a `dealership` FK; six carriers gained the FK in migration `0008`, backfilled in `0009`, flipped to `NOT NULL` in `0010`. |
+| Default-tenancy resolver | `services.tenancy.get_default_dealership()` + `pre_save` autofill signal | Fallback safety net for callers that omit `dealership=`; the primary write mechanism is explicit `dealership=` at the view layer. |
+| Request-context tenancy | `services.tenancy.get_current_dealership(request)` + `get_active_membership(user)` | Composes identity → `X-Dealership-Slug` header → default. Never returns `None`. Extension seam for future dealership switching lives inside `get_active_membership`. |
+| Membership + role vocabulary | `models.UserDealershipRole` (user, dealership, role) + `ROLE_CHOICES` | Seven canonical roles: `dealer_owner`, `sales_manager`, `recon_manager`, `f_and_i_manager`, `collections`, `advisor`, `porter`. `unique_together = (user, dealership, role)` permits multi-role per dealership (indie owner + sales manager). |
+| DRF authentication defaults | `settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"] = [SessionAuthentication, TokenAuthentication]` | `DEFAULT_PERMISSION_CLASSES` intentionally unset — permission enforcement is per-endpoint. |
+| Advisor authorization | `dealer_ai/permissions.py::IsAdvisorForSlug`, `IsDealerOwnerForAdvisorSlug` | Composed at the view layer via DRF `\|` / `&` operators. |
+| Admin authorization | `dealer_ai/permissions.py::IsSalesManagerOrOwnerAtActiveDealership`, `IsDealerOwnerAtActiveDealership`, `ReadOnly` | `ReadOnly` composed on onboarding profile so branding GET stays public while PUT/PATCH require dealer_owner. |
+| Tenant-scoped admin querysets | `.filter(dealership=get_current_dealership(request))` on every admin endpoint + service-layer `dealership=` kwarg on `trends`, `pipeline`, `audit`, `ad_copy` | Explicit filtering — no hidden ORM-manager magic. Cross-tenant pk lookups fail closed (404). |
+| Browser auth flow | `POST /api/dealer-ai/auth/login/`, `POST /auth/logout/`, `GET /auth/me/` (with `@ensure_csrf_cookie`) | Session cookies drive the browser flow. Login errors return generic 401 (defeats enumeration). Logout is idempotent. |
+| CSRF enforcement | `settings.CSRF_TRUSTED_ORIGINS` (env-configurable); every authenticated unsafe method requires `X-CSRFToken`. | Frontend reads `csrftoken` cookie on every request; browser never stores a DRF token in localStorage. |
+| Frontend auth primitives | `lib/authFetch.ts` (single operator-fetch primitive with typed 401/403 errors), `lib/AuthContext.tsx` (`useAuth()`), `components/RequireAuth.tsx`, `pages/LoginPage.tsx` | Public/protected route split in `main.tsx`; public branding GET stays on plain `fetch`. |
+
+**What is NOT shipped in Milestone 1** (deferred to the increment
+that first needs it — do not re-plan without reopening the
+research trigger):
+
+- User-management UI, invitations, password reset.
+- SSO, MFA.
+- Dealership switcher UI (extension seam left inside
+  `get_active_membership`).
+- Tenant-scoped uniqueness on `Salesperson.slug`, `Vehicle.stock_number`,
+  or `DealerOnboardingProfile` (all still globally unique today).
+- Gating `demo/reset` + `demo/scenarios` endpoints (intentional
+  cross-tenant wipe semantics; separate scope decision).
+- Prod deployment.
 
 ---
 
@@ -292,8 +332,15 @@ questions) or Shape B (coaching directive). Rejects free-form monologues.
 
 ## Honest gaps to flag when pitching
 
-- **Auth is by slug obscurity** for the advisor workspace. Real auth was
-  earmarked for a Phase 5 that hasn't happened.
+- **Auth is real (Milestone 1 · SESSION_037–044).** Advisor
+  workspace, admin endpoints, and onboarding mutation gate on
+  membership-based DRF permission classes; browser sign-in is
+  wired via `/auth/{login,logout,me}` + `<RequireAuth>`. What is
+  NOT yet built: user-management UI, invitations, password reset,
+  SSO, MFA, dealership switcher UI, tenant-scoped uniqueness.
+  See `docs/CAPABILITY_MATRIX.md` §7b and
+  `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` for the shipped/
+  deferred boundary.
 - **Ad-copy drafts are ephemeral.** No persistence, no history view. If
   the modal closes without copying, drafts are lost.
 - **No public inventory API contract** — internal endpoints only. If a
