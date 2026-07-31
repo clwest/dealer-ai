@@ -8,7 +8,15 @@
 // surface. Keeps both call sites simple.
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Loader2, RotateCcw, Send, User } from "lucide-react";
+import {
+  Bot,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  RotateCcw,
+  Send,
+  User,
+} from "lucide-react";
 
 import AssistantVehicleCard from "@/components/AssistantVehicleCard";
 import { Button } from "@/components/ui/button";
@@ -157,7 +165,7 @@ export default function AssistantChat({
       {/* Transcript */}
       <div
         ref={transcriptRef}
-        className="flex-1 overflow-y-auto rounded-xl border border-border bg-muted/30 px-4 py-5"
+        className="flex-1 overflow-y-auto overflow-x-hidden rounded-xl border border-border bg-muted/30 px-4 py-5"
       >
         {showStarters ? (
           <Starters
@@ -350,7 +358,7 @@ function Turn({
       </div>
       <div
         className={cn(
-          "flex min-w-0 flex-col gap-3",
+          "flex min-w-0 flex-1 flex-col gap-3",
           isUser ? "items-end" : "items-start",
         )}
       >
@@ -366,16 +374,94 @@ function Turn({
         </div>
 
         {cards && cards.length > 0 ? (
-          <div className="grid w-full max-w-[85%] gap-3 sm:grid-cols-2">
-            {cards.map((v) => (
-              <AssistantVehicleCard
-                key={v.id}
-                vehicle={v}
-                onContinue={onContinue}
-              />
-            ))}
+          <VehicleMatchDeck vehicles={cards} onContinue={onContinue} />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function VehicleMatchDeck({
+  vehicles,
+  onContinue,
+}: {
+  vehicles: Vehicle[];
+  onContinue: (v: Vehicle) => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const count = vehicles.length;
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [vehicles]);
+
+  function move(delta: number) {
+    setActiveIndex((index) => (index + delta + count) % count);
+  }
+
+  const visibleIndexes = Array.from(
+    { length: Math.min(3, count) },
+    (_, offset) => (activeIndex + offset) % count,
+  );
+
+  return (
+    <div className="w-full max-w-[85%]" aria-label="Matched vehicles">
+      <div className="mb-2 flex w-[min(100%,360px)] items-center justify-between gap-2">
+        <div className="text-xs font-medium text-muted-foreground">
+          {count} vehicle{count === 1 ? "" : "s"} matched
+        </div>
+        {count > 1 ? (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Previous vehicle"
+              onClick={() => move(-1)}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="min-w-10 text-center text-xs text-muted-foreground">
+              {activeIndex + 1}/{count}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Next vehicle"
+              onClick={() => move(1)}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
           </div>
         ) : null}
+      </div>
+
+      <div className="relative h-[450px] w-[min(100%,360px)] overflow-visible">
+        {[...visibleIndexes].reverse().map((vehicleIndex) => {
+          const stackIndex = visibleIndexes.indexOf(vehicleIndex);
+          const vehicle = vehicles[vehicleIndex];
+          const isActive = stackIndex === 0;
+          return (
+            <div
+              key={vehicle.id}
+              className={cn(
+                "absolute left-0 top-0 w-[min(100%,320px)] transition duration-200",
+                isActive ? "pointer-events-auto" : "pointer-events-none",
+              )}
+              style={{
+                transform: `translate(${stackIndex * 18}px, ${
+                  stackIndex * 18
+                }px) scale(${1 - stackIndex * 0.035})`,
+                zIndex: visibleIndexes.length - stackIndex,
+                opacity: 1 - stackIndex * 0.1,
+              }}
+              aria-hidden={!isActive}
+            >
+              <AssistantVehicleCard vehicle={vehicle} onContinue={onContinue} />
+            </div>
+          );
+        })}
       </div>
     </div>
   );

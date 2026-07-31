@@ -70,7 +70,7 @@ export default function PublicAssistantPage() {
             </div>
           </aside>
 
-          <section className="flex min-h-[620px] flex-col rounded-lg border border-border bg-card p-3 shadow-soft sm:p-5 lg:min-h-0">
+          <section className="flex min-h-[620px] min-w-0 flex-col rounded-lg border border-border bg-card p-3 shadow-soft sm:p-5 lg:min-h-0">
             <div className="mb-3 flex items-center justify-between gap-3 px-1">
               <div>
                 <div className="text-sm font-semibold">

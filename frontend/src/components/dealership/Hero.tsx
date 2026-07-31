@@ -15,8 +15,8 @@ import { FREEDOM_FORD_SAMPLE_INVENTORY } from "@/data/freedomFordInventorySample
 import { useBrand } from "@/lib/brand";
 
 const TRUST_POINTS = [
-  { label: "Real inventory", icon: Car },
-  { label: "Honest payments", icon: ShieldCheck },
+  { label: "Current inventory", icon: Car },
+  { label: "Payment-aware", icon: ShieldCheck },
   { label: "No pressure", icon: Sparkles },
 ];
 
@@ -65,8 +65,8 @@ export default function Hero() {
           <p className="mt-5 max-w-xl text-base text-white/80 sm:text-lg">
             Tell {brand.dealershipName.replace(/'s$/i, "")}'s AI assistant what
             you need — budget, body style, payment, trade-in. It pulls from
-            real inventory, runs honest payment math, and connects you with a
-            real human when you're ready.
+            current inventory and connects you with a real human when you're
+            ready.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -138,7 +138,7 @@ function HeroVisual() {
               Freedom Ford Assistant
             </div>
             <div className="text-[10.5px] text-white/60">
-              Real inventory · Real payments
+              Current inventory · Payment-aware
             </div>
           </div>
           <span className="text-[10px] font-medium text-emerald-400">●  online</span>

@@ -54,25 +54,25 @@ export default function AssistantBand() {
               </span>
             </h2>
             <p className="mt-4 max-w-md text-sm text-muted-foreground sm:text-base">
-              {brand.dealershipName}'s AI assistant pulls from our real lot,
-              runs honest payment math, and never pushes a deal that doesn't
-              fit your budget. Start with one of the prompts on the right —
-              or just type what's on your mind.
+              {brand.dealershipName}'s AI assistant pulls from current
+              inventory and helps narrow the lot around what you are trying to
+              solve. Start with one of the prompts on the right — or just type
+              what's on your mind.
             </p>
 
             <ul className="mt-6 space-y-3 text-sm text-foreground">
               <li className="flex gap-3">
                 <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ford-blue" />
                 <span>
-                  <strong className="font-semibold">Real inventory.</strong>{" "}
-                  Every match is a vehicle on the lot today.
+                  <strong className="font-semibold">Current inventory.</strong>{" "}
+                  Pulls from current inventory.
                 </span>
               </li>
               <li className="flex gap-3">
                 <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ford-blue" />
                 <span>
-                  <strong className="font-semibold">Honest payments.</strong>{" "}
-                  Math runs server-side; the AI never invents a number.
+                  <strong className="font-semibold">Payment-aware.</strong>{" "}
+                  Payment details stay on the vehicle cards.
                 </span>
               </li>
               <li className="flex gap-3">
