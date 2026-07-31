@@ -3,8 +3,38 @@ title: "Independent Dealer Pivot — Scoping & Execution Plan"
 status: active
 last_updated: 2026-07-31
 baseline_commit: 2286557
+phase_1_completed_commit: 3460414  # INDIE_MODE_HINT injection
+phase_2_completed_commit: 5f2e537  # Copper Canyon scenarios seed
 target_persona: Copper Canyon Auto (Yuma, AZ)
 ---
+
+## Status snapshot (2026-07-31)
+
+- **Phase 1 (backend behavior surface):** ✅ shipped in 8 commits
+  `36a347f` → `3460414`. Test baseline 1218 → 1261 (+43),
+  1 skipped preserved, zero regressions. DealerProfile resolver
+  extended; BHPH payment engine variant; indie-prohibited-copy
+  post-LLM scrub; Ford-first ranking generalized to `primary_make`
+  across chat_engine + inventory_search + ad_copy; SYSTEM_PROMPT
+  Ford-model examples neutralized; intent parser Ford lean softened
+  + model→make map; pipeline `_band_model_hint` neutralized;
+  `INDIE_MODE_HINT` system fragment injected for indie configs.
+- **Phase 2 (seed data + demo scenarios):** ✅ substantially shipped
+  in commits `4041b91`, `63bcf4f`, `5f2e537`. Test baseline
+  1261 → 1281 (+20), zero regressions. `seed_copper_canyon_demo`
+  command (45 mixed-make used units). `seed_copper_canyon_scenarios`
+  command (4 hand-crafted chat sessions + leads). New canonical
+  `docs/demo/COPPER_CANYON_DEMO_SCRIPT.md`. Existing Freedom Ford
+  seed + scenarios intentionally preserved — additive approach.
+- **Deferred within Phase 2:** `seed_phase3_demo` indie
+  counterpart (dashboard-population variant). Not blocking — the
+  4-scenario Copper Canyon seed gives enough for the ops demo.
+- **Phase 3–5:** Not started. Frontend `ford.*` → `brand.*`,
+  Copper Canyon logo + inventory sample, onboarding form fields,
+  Django `freedom_ford/` → `dealer_kit/` rename, and docs +
+  `CLAUDE.md` refresh + handoff.
+
+
 
 # Independent Dealer Pivot — Scoping & Execution Plan
 
