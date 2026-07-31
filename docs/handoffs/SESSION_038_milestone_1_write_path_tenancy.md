@@ -5,7 +5,8 @@ type: handoff
 date: 2026-07-31
 session: 038
 commits:
-  - <fill after commit>  # Increment 3 — tenancy primitive + write-path plumbing + NOT NULL flip
+  - 9ea7ff3  # Increment 3 — tenancy primitive + write-path plumbing + NOT NULL flip
+  - bf4197f  # SESSION_038 handoff + SESSION_039 next-session priority
 ---
 
 # SESSION_038 — Milestone 1 · Increment 3
