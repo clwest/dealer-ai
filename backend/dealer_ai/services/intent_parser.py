@@ -291,6 +291,25 @@ _MODEL_KEYWORDS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bmustangs?\b", re.IGNORECASE), "Mustang"),
 ]
 
+# Model → OEM make so :func:`regex_extract` can infer the make when a
+# customer names a model without naming its brand ("show me F-150s"
+# implies Ford). Non-Ford models can join this map without touching the
+# inference logic; the regex list above stays lean until Phase 2's
+# indie-inventory-shape work expands it. If a detected model isn't in
+# this map, make inference is skipped (safer than a Ford-shaped
+# guess).
+_MODEL_TO_MAKE: dict[str, str] = {
+    "F-150": "Ford",
+    "Ranger": "Ford",
+    "Maverick": "Ford",
+    "Bronco Sport": "Ford",
+    "Bronco": "Ford",
+    "Explorer": "Ford",
+    "Escape": "Ford",
+    "Mustang Mach-E": "Ford",
+    "Mustang": "Ford",
+}
+
 # Brand-lock detection: triggers when the customer explicitly restricts to a
 # single make. Used dealership inventory typically includes other brands too
 # (trade-ins, auctions), so the search defaults to all-makes — only filter
@@ -426,12 +445,14 @@ def regex_extract(message: str) -> Dict[str, Any]:
     model = _first_match(_MODEL_KEYWORDS, message)
     if model:
         out["model"] = model
-        out.setdefault("make", "Ford")
+        inferred_make = _MODEL_TO_MAKE.get(model)
+        if inferred_make:
+            out.setdefault("make", inferred_make)
 
     # Brand-lock: only fires for explicit single-make requests like "Ford only"
-    # or "I want a Ford". Mentioning a Ford model alone (e.g. "Show me F-150s")
-    # does NOT lock the make — the customer might still be open to a comparable
-    # used Toyota Tacoma if it fits.
+    # or "I want a Toyota". Mentioning a model alone (e.g. "Show me F-150s")
+    # does NOT lock the make — the customer might still be open to a
+    # comparable trade-in from another brand if it fits.
     for pattern in _MAKE_LOCK_PATTERNS:
         m = pattern.search(message)
         if m:
@@ -463,8 +484,8 @@ Schema:
 {
   "intent": "vehicle_search|payment_estimate|compare_vehicles|trade_in|financing_help|service_question|salesperson_handoff",
   "vehicle_type": "truck|suv|car|ev|van|hybrid",
-  "make": "Ford",
-  "model": "F-150|Ranger|Maverick|Bronco|Bronco Sport|Explorer|Escape|Mustang|Mustang Mach-E|...",
+  "make": "Ford|Toyota|Honda|Chevy|Nissan|Kia|Ram|GMC|Hyundai|Jeep|Subaru|...",
+  "model": "F-150|Ranger|Maverick|Bronco Sport|Tacoma|Tundra|Silverado|Colorado|Civic|Accord|Camry|Corolla|Altima|Wrangler|...",
   "condition": "new|used|certified|any",
   "target_monthly_payment": 500,
   "down_payment": 2000,
