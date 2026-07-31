@@ -68,11 +68,12 @@ depend on the LLM.
 ```bash
 cd frontend
 npm install
-npm run dev    # dev server with /api proxied to localhost:8000
+npm run dev    # dev server with /api proxied to 127.0.0.1:8000
 npm run build  # production bundle to dist/
 ```
 
-Vite proxies `/api/*` → `http://localhost:8000` in dev so CORS is a non-issue.
+Vite proxies `/api/*` → `http://127.0.0.1:8000` in dev so CORS is a non-issue.
+If you want to bypass the proxy, set `VITE_API_BASE=http://127.0.0.1:8000/api/dealer-ai`.
 
 ## API surface
 

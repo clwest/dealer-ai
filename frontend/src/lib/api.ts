@@ -1,5 +1,7 @@
 // API helpers for the Dealer AI backend.
-// Vite dev server proxies /api → http://localhost:8000 (see vite.config.ts).
+// Vite dev server proxies /api → http://127.0.0.1:8000 (see vite.config.ts).
+// Override with VITE_API_PROXY_TARGET in frontend/.env.local, or set
+// VITE_API_BASE to bypass the proxy entirely (requires CORS).
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/dealer-ai";
 
