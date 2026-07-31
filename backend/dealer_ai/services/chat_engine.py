@@ -223,6 +223,46 @@ Rate / financing language rules (CRITICAL — compliance):
 """
 
 
+# Additional system fragment appended when the current DealerProfile is
+# an independent (mixed-lot used) dealership. Franchise deployments do
+# not see this fragment. Kept short — llama3.2 loses coherence on long
+# concatenated system messages, so we only add the deltas that matter
+# for indie sales motion (no OEM captive finance, AS-IS / limited
+# powertrain warranty defaults, credit-tier conversation is normal,
+# in-house / BHPH may exist). The post-LLM indie-prohibited-copy scrub
+# in :mod:`llm_safety` is the safety net if the LLM drifts.
+INDIE_MODE_HINT = (
+    "INDEPENDENT DEALER MODE — additional context for how {dealer_name} "
+    "operates:\n"
+    "- Mixed-make used-vehicle lot. Assume every unit in AVAILABLE "
+    "INVENTORY is used unless the card explicitly says \"new\".\n"
+    "- No manufacturer captive financing (no Ford Credit, Toyota "
+    "Financial, Honda Financial, etc.). Financing runs through the "
+    "dealership's lender partners; in-house paper may be available for "
+    "credit-challenged buyers. Never quote a specific APR — the "
+    "existing rate-language rule applies.\n"
+    "- Retail units carry a limited powertrain warranty by default; "
+    "cash / wholesale units are sold AS-IS. Never say \"brand new\", "
+    "\"certified pre-owned\", \"CPO\", or \"manufacturer warranty\" "
+    "— those are franchise-lot terms and don't apply here.\n"
+    "- Credit-range conversation is normal. If the customer volunteers "
+    "their credit tier (excellent / good / fair / poor / rebuilding), "
+    "acknowledge without judgment and match your tone to it. Buyers "
+    "with challenged credit still deserve helpful, non-condescending "
+    "guidance and should be offered a real path forward (advisor "
+    "follow-up, in-house financing walk-through).\n"
+    "- Down-payment framing: on higher-APR / in-house-financed deals, "
+    "a larger down payment meaningfully lowers monthly cost. When a "
+    "customer asks about affordability, mention this as one lever "
+    "without pressuring for a specific number.\n"
+    "- If the customer asks about buy-here-pay-here, in-house "
+    "financing, weekly / biweekly payments, or credit-challenged "
+    "options, confirm the dealership can walk them through it and "
+    "offer an advisor follow-up. Do NOT quote weekly / monthly "
+    "payment numbers unless the BUDGET ANALYSIS block above has them."
+)
+
+
 # ---- Pre-LLM guard ---------------------------------------------------------
 #
 # These patterns are checked BEFORE the LLM is invoked. If a customer message
@@ -6221,6 +6261,16 @@ class ChatEngine:
         messages = [
             {"role": "system", "content": _render(SYSTEM_PROMPT)},
         ]
+
+        # Independent-dealer sales-motion hint. Franchise deployments
+        # (primary_make configured) skip this fragment — the base
+        # SYSTEM_PROMPT already handles franchise semantics well.
+        from .dealer_config import get_dealer_profile
+        if get_dealer_profile().dealer_type == "independent":
+            messages.append(
+                {"role": "system", "content": _render(INDIE_MODE_HINT)}
+            )
+
         if store_voice_block:
             messages.append({"role": "system", "content": store_voice_block})
         if manager_test_mode:
