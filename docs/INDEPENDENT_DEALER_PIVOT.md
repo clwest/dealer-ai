@@ -5,6 +5,7 @@ last_updated: 2026-07-31
 baseline_commit: 2286557
 phase_1_completed_commit: 3460414  # INDIE_MODE_HINT injection
 phase_2_completed_commit: 5f2e537  # Copper Canyon scenarios seed
+phase_3_completed_commit: 8e969d9  # inventory sample swap
 target_persona: Copper Canyon Auto (Yuma, AZ)
 ---
 
@@ -29,10 +30,31 @@ target_persona: Copper Canyon Auto (Yuma, AZ)
 - **Deferred within Phase 2:** `seed_phase3_demo` indie
   counterpart (dashboard-population variant). Not blocking — the
   4-scenario Copper Canyon seed gives enough for the ops demo.
-- **Phase 3–5:** Not started. Frontend `ford.*` → `brand.*`,
-  Copper Canyon logo + inventory sample, onboarding form fields,
-  Django `freedom_ford/` → `dealer_kit/` rename, and docs +
-  `CLAUDE.md` refresh + handoff.
+- **Phase 3 (frontend identity + tokens):** ✅ shipped in
+  commits `058cf4a`, `61c57fa`, `8e969d9`. Tailwind `ford.*`
+  → `brand.*` (config + 27 consumers) with Copper Canyon
+  palette (desert-sky blue + copper terracotta). `DEFAULT_DEALER`
+  pivots from "Your Dealership" fallback to shipped Copper
+  Canyon Auto values + placeholder SVG logo at
+  `/branding/copper-canyon-logo.svg`. Inventory sample
+  renamed to `sampleInventory.ts` and replaced with 12 Copper
+  Canyon units matching backend seed stock. All 4 consumers
+  (Hero, PublicShowroomPage, DealershipHomePage,
+  InventoryPreviewPage) updated. tsc + Vite build clean.
+- **Deferred within Phase 3:** Onboarding form new fields
+  (dealer_type, bhph_enabled, subprime_lenders, floor_plan_lender,
+  warranty_offering, credit_range_served, makes_carried) — needs
+  a `DealerOnboardingProfile` migration first. `useBrand()`
+  extension to expose the full DealerProfile — same migration
+  dependency. The Freedom Ford legacy asset
+  `public/sams-freedom-ford-logo.jpg` is intentionally not
+  deleted (guardrail: pivot doc forbids Tier 3 asset removal).
+- **Phase 4–5:** Not started. Django package rename
+  `backend/freedom_ford/` → `backend/dealer_kit/` (contained-
+  blast-radius commit); docs renames (`docs/FREEDOM_FORD_*.md`
+  → `docs/DEALER_KIT_*.md`), rewrites for Copper Canyon anchor;
+  `CLAUDE.md` adopt block + frontend stack notes refresh;
+  formal SESSION_030 handoff.
 
 
 
