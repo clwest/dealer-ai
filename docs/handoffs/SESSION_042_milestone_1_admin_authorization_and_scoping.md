@@ -6,7 +6,7 @@ date: 2026-07-31
 session: 042
 commits:
   - 17333af  # Increment 4D — permissions + admin gating + service tenant threading + existing test updates + new focused auth/scoping tests + AUTHENTICATION_MODEL §7/§8b updates
-  - <fill after docs commit>  # SESSION_042 handoff + SESSION_043 pointer
+  - 91b634c  # SESSION_042 handoff + SESSION_043 pointer
 ---
 
 # SESSION_042 — Milestone 1 · Increment 4D

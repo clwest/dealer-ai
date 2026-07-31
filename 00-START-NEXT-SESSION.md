@@ -32,7 +32,7 @@ next_session: SESSION_043
 ## What just shipped
 
 - **SESSION_042** — Increment 4D. Test baseline 1,361 → 1,445.
-  Commits `17333af` (feat), `<fill after docs>` (handoff). Handoff at
+  Commits `17333af` (feat), `91b634c` (handoff). Handoff at
   `docs/handoffs/SESSION_042_milestone_1_admin_authorization_and_scoping.md`.
 - **SESSION_041** — Increment 4C. Commits `76d625b`, `b1816a9`,
   `6c7cc49`.
