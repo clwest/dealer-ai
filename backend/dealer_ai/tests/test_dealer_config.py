@@ -74,3 +74,16 @@ class GetDealerProfileResolution(TestCase):
     @override_settings(DEALER_AI_DEALER_TYPE="nonsense")
     def test_invalid_dealer_type_env_falls_back_to_default(self):
         self.assertEqual(get_dealer_profile().dealer_type, "independent")
+
+    def test_primary_make_defaults_to_none_for_indie(self):
+        # Indie mixed-lot has no primary brand.
+        self.assertIsNone(get_dealer_profile().primary_make)
+
+    @override_settings(DEALER_AI_PRIMARY_MAKE="Ford")
+    def test_primary_make_env_override(self):
+        # Franchise config sets DEALER_AI_PRIMARY_MAKE to the OEM brand.
+        self.assertEqual(get_dealer_profile().primary_make, "Ford")
+
+    @override_settings(DEALER_AI_PRIMARY_MAKE="  Toyota  ")
+    def test_primary_make_env_is_stripped(self):
+        self.assertEqual(get_dealer_profile().primary_make, "Toyota")

@@ -54,10 +54,16 @@ class DealerProfile:
 
     Immutable so prompt templates and payment-engine callers can cache
     the result within a request without worrying about mid-turn edits.
+
+    ``primary_make`` is ``None`` for independent (mixed-lot) dealers and
+    the OEM brand for a franchise config. It drives the inventory
+    ranking key in :mod:`chat_engine` — franchise deployments still get
+    "primary brand first" ordering; indies rank purely on financial fit.
     """
 
     name: str
     dealer_type: DealerType
+    primary_make: str | None
     bhph_enabled: bool
     subprime_lenders: tuple[str, ...]
     floor_plan_lender: str
@@ -82,6 +88,11 @@ class DealerProfile:
 _COPPER_CANYON_DEFAULTS = DealerProfile(
     name=_FALLBACK_DEALER_NAME,
     dealer_type="independent",
+    # Indie mixed-lot has no primary brand — every make competes on
+    # financial fit. Franchise deployments set DEALER_AI_PRIMARY_MAKE
+    # (or Phase 3's DealerOnboardingProfile field) to restore
+    # primary-brand-first ranking.
+    primary_make=None,
     bhph_enabled=True,
     subprime_lenders=(
         "Sonoran Credit",
@@ -129,10 +140,11 @@ def get_dealer_name() -> str:
 def get_dealer_profile() -> DealerProfile:
     """Return the full shape of the currently-configured dealer.
 
-    For the SESSION_030 pivot, only ``name`` and ``dealer_type`` have
-    real dynamic resolution paths. The rest come from the Copper Canyon
-    Auto independent-dealer defaults until Phase 3 extends
-    ``DealerOnboardingProfile`` with the remaining fields.
+    For the SESSION_030 pivot, ``name``, ``dealer_type``, and
+    ``primary_make`` have real dynamic resolution paths. The rest come
+    from the Copper Canyon Auto independent-dealer defaults until
+    Phase 3 extends ``DealerOnboardingProfile`` with the remaining
+    fields.
     """
     dealer_type_env = (
         getattr(settings, "DEALER_AI_DEALER_TYPE", "") or ""
@@ -142,8 +154,14 @@ def get_dealer_profile() -> DealerProfile:
     else:
         dealer_type = _COPPER_CANYON_DEFAULTS.dealer_type
 
+    primary_make_env = (
+        getattr(settings, "DEALER_AI_PRIMARY_MAKE", "") or ""
+    ).strip()
+    primary_make = primary_make_env or _COPPER_CANYON_DEFAULTS.primary_make
+
     return replace(
         _COPPER_CANYON_DEFAULTS,
         name=get_dealer_name(),
         dealer_type=dealer_type,
+        primary_make=primary_make,
     )

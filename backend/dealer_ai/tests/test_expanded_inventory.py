@@ -15,7 +15,7 @@ from decimal import Decimal
 from io import StringIO
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from dealer_ai.models import Vehicle
@@ -116,9 +116,15 @@ class BudgetCoverageTests(TestCase):
             )
 
 
+@override_settings(DEALER_AI_PRIMARY_MAKE="Ford")
 class FordFirstRankingTests(TestCase):
-    """Even with non-Ford trade-ins in the seed, Ford should rank ahead of
-    other brands in budget-mode results when both qualify."""
+    """Franchise-config ranking contract: with DealerProfile.primary_make
+    set to "Ford", non-Ford trade-ins in the seed still rank below the
+    dealership's primary brand in budget-mode results.
+
+    Independent-dealer default (primary_make=None) has no ranking bias
+    — that behavior is exercised in ``IndieMixedLotRankingTests``.
+    """
 
     def setUp(self):
         _seed()

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from dealer_ai.models import ChatSession, Vehicle
 from dealer_ai.services.chat_engine import ChatEngine, build_budget_context
@@ -159,8 +159,11 @@ class BudgetContextMakeLockTests(TestCase):
         self.assertIn(ford.id, ids)
         self.assertNotIn(toyota.id, ids)
 
+    @override_settings(DEALER_AI_PRIMARY_MAKE="Ford")
     def test_ford_first_in_budget_ranking(self):
-        # Two equally-priced trucks — Ford should sort first.
+        # Franchise config: DealerProfile.primary_make="Ford" restores
+        # OEM-brand-first ranking. Two equally-priced trucks — Ford
+        # should sort first when the primary brand is Ford.
         toyota = _make_vehicle("RT", make="Toyota", model="Tacoma", price="20000")
         ford = _make_vehicle("RF", make="Ford", model="Ranger", price="20000")
         profile = {"target_monthly_payment": 500, "down_payment": 3000, "term_months": 60}
@@ -169,6 +172,52 @@ class BudgetContextMakeLockTests(TestCase):
         ranked = ctx.matched_in_budget + ctx.near_fit
         self.assertGreater(len(ranked), 0)
         self.assertEqual(ranked[0].id, ford.id)
+
+    def test_indie_default_has_no_primary_make_bias(self):
+        # Independent-dealer default: primary_make=None → ranking is
+        # not biased toward any specific OEM. Under the existing
+        # in-budget secondary sort (descending estimated payment,
+        # i.e. surface the closest-to-budget option first), the more
+        # expensive in-budget truck wins.
+        #
+        # Same fixtures under DEALER_AI_PRIMARY_MAKE="Ford" — see the
+        # companion test — would swap the outcome (Ford wins despite
+        # lower payment), which is exactly the franchise-config
+        # contract we're separating from the indie default.
+        _make_vehicle("IF", make="Ford", model="Ranger", price="18000")
+        toyota = _make_vehicle(
+            "IT", make="Toyota", model="Tacoma", price="24000"
+        )
+        profile = {
+            "target_monthly_payment": 500,
+            "down_payment": 3000,
+            "term_months": 60,
+        }
+        ctx = build_budget_context(profile, "$500/mo trucks")
+        surfaced = ctx.matched_in_budget + ctx.near_fit
+        self.assertGreater(len(surfaced), 0)
+        # Toyota (higher payment, closer to target) surfaces first
+        # because there's no OEM bias to override the secondary
+        # payment-descending sort.
+        self.assertEqual(surfaced[0].id, toyota.id)
+
+    @override_settings(DEALER_AI_PRIMARY_MAKE="Ford")
+    def test_franchise_primary_make_beats_secondary_sort(self):
+        # Same fixtures as the indie test above — but with
+        # primary_make="Ford", the OEM bias overrides the secondary
+        # payment-descending sort. Ford surfaces first despite the
+        # Toyota being closer to the customer's target payment.
+        ford = _make_vehicle("XF", make="Ford", model="Ranger", price="18000")
+        _make_vehicle("XT", make="Toyota", model="Tacoma", price="24000")
+        profile = {
+            "target_monthly_payment": 500,
+            "down_payment": 3000,
+            "term_months": 60,
+        }
+        ctx = build_budget_context(profile, "$500/mo trucks")
+        surfaced = ctx.matched_in_budget + ctx.near_fit
+        self.assertGreater(len(surfaced), 0)
+        self.assertEqual(surfaced[0].id, ford.id)
 
 
 # ---- ChatEngine integration -----------------------------------------------
@@ -194,7 +243,10 @@ class ChatEngineMakeLockTests(TestCase):
         for v in result.matched_vehicles:
             self.assertEqual(v.make, "Ford")
 
+    @override_settings(DEALER_AI_PRIMARY_MAKE="Ford")
     def test_default_request_includes_all_brands(self):
+        # Franchise config (primary_make="Ford"): all brands surface,
+        # Ford ranks first.
         ford = _make_vehicle("CHF2", make="Ford", model="Ranger", price="20000")
         toyota = _make_vehicle("CHT2", make="Toyota", model="Tacoma", price="20000")
         session = ChatSession.objects.create()
@@ -206,7 +258,7 @@ class ChatEngineMakeLockTests(TestCase):
         makes = {v.make for v in result.matched_vehicles}
         self.assertIn("Ford", makes)
         self.assertIn("Toyota", makes)
-        # Ford ranks first.
+        # Ford ranks first under the franchise-config primary_make.
         self.assertEqual(result.matched_vehicles[0].id, ford.id)
         # Sanity: Toyota IS in the list.
         self.assertIn(toyota.id, {v.id for v in result.matched_vehicles})

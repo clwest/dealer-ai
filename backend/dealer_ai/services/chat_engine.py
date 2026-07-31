@@ -4192,8 +4192,8 @@ def build_budget_context(
     elif drivetrain_pref == "FWD":
         qs = qs.filter(drivetrain__iexact="FWD")
     # Make filter: only applied when the customer explicitly locked a brand
-    # ("Ford only", "I want a Ford"). Otherwise used inventory may include
-    # trade-ins / non-Ford brands the dealership has on the lot.
+    # ("Ford only", "I want a Toyota"). Otherwise used inventory may include
+    # trade-ins / mixed-brand inventory the dealership has on the lot.
     if profile.get("make_lock") and profile.get("make"):
         qs = qs.filter(make__iexact=profile["make"])
 
@@ -4207,17 +4207,25 @@ def build_budget_context(
         tolerance=tolerance,
     )
 
-    # Ranking: Ford first (dealership's primary brand), then by classification
-    # priority. We do NOT exclude other brands — they can still appear, just
-    # below Ford options of equal financial fit.
-    def _ford_first(v: Vehicle) -> int:
-        return 0 if (v.make or "").strip().lower() == "ford" else 1
+    # Ranking: dealership's primary brand first (franchise config), then
+    # by classification priority. Independent dealers have no primary
+    # brand — every make competes purely on financial fit. We do NOT
+    # exclude any brand from the results; the primary-make check only
+    # affects sort order for franchise deployments.
+    from .dealer_config import get_dealer_profile
+
+    primary_make_lc = (get_dealer_profile().primary_make or "").strip().lower()
+
+    def _primary_make_first(v: Vehicle) -> int:
+        if not primary_make_lc:
+            return 0  # Indie: no primary brand → no ranking bias.
+        return 0 if (v.make or "").strip().lower() == primary_make_lc else 1
 
     in_budget.sort(
-        key=lambda v: (_ford_first(v), -float(v._estimated_payment))
+        key=lambda v: (_primary_make_first(v), -float(v._estimated_payment))
     )
-    near.sort(key=lambda v: (_ford_first(v), float(v._payment_delta)))
-    over.sort(key=lambda v: (_ford_first(v), float(v._payment_delta)))
+    near.sort(key=lambda v: (_primary_make_first(v), float(v._payment_delta)))
+    over.sort(key=lambda v: (_primary_make_first(v), float(v._payment_delta)))
 
     # Phase 8s: cap multi-option output at 1 fit + 2 near_fit (= 3 total).
     # The cap lives here so BudgetContext.matched_in_budget / .near_fit
