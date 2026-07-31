@@ -23,6 +23,12 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    # Milestone 1 · Increment 4B — provides the ``Token`` model consumed
+    # by :class:`rest_framework.authentication.TokenAuthentication` in
+    # ``REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]`` below. The
+    # token table is created but no tokens exist until an operator
+    # provisions one (per-user or via ``manage.py drf_create_token``).
+    "rest_framework.authtoken",
     "corsheaders",
     "dealer_ai",
 ]
@@ -100,6 +106,23 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    # Milestone 1 · Increment 4B — establish that requests *carry*
+    # identity when credentials are present. `SessionAuthentication`
+    # keeps the customer-facing chat + embed frame cookie-friendly.
+    # `TokenAuthentication` enables scripted / API-client access
+    # (Increment 4E frontend will use session cookies; token is here
+    # for headless clients and future integrations).
+    #
+    # ``DEFAULT_PERMISSION_CLASSES`` is intentionally NOT SET — the
+    # DRF default (``AllowAny``) stands so no currently-public
+    # endpoint silently gains a 401. Endpoint-level tightening
+    # arrives in 4C (advisor workspace) and 4D (admin endpoints).
+    # See ``docs/roadmap/AUTHENTICATION_MODEL.md`` for the identity /
+    # authorization / permission layer separation.
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
+    ],
 }
 
 CORS_ALLOWED_ORIGINS = [

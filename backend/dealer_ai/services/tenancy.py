@@ -1,18 +1,35 @@
-"""Milestone 1 · Increment 3 — default-tenancy resolver + write-path safety net.
+"""Milestone 1 tenancy resolvers — default row + request-context.
 
-The kit is still single-tenant at every request boundary today; every
-tenant-carrying row therefore belongs to the deterministically-seeded
-default :class:`Dealership` (``slug="default"``) created by data-migration
-``0009_backfill_dealership_fks``.
+The module is the *single source of truth* for tenancy resolution. Two
+distinct entry points serve two distinct call-sites:
 
-This module is the *single source of truth* for that resolution. Future
-increments will layer request-context resolution on top (e.g. reading a
-tenant from the authenticated user or an incoming ``X-Dealership-Slug``
-header) but they will delegate to :func:`get_default_dealership` as the
-fallback path. The primitive is deliberately small so the extension
-happens *inside* it, not by paralleling it.
+- :func:`get_default_dealership` — the single-tenant fallback and the
+  target of the write-path ``pre_save`` safety net. Introduced in
+  Increment 3.
+- :func:`get_current_dealership` — the request-context resolver
+  introduced in Increment 4B. Composes three orthogonal signals in
+  priority order: authenticated-user membership → request header
+  (``X-Dealership-Slug``) → default. Never returns ``None``.
 
-Two consumers:
+Layer separation (kept intentionally distinct — do not collapse):
+
+- **Identity** — established by DRF's authentication classes; leaves
+  ``request.user`` populated (or ``AnonymousUser``). Not this module's
+  concern.
+- **Authorization** — *which dealership is this user acting within*.
+  Answered by :func:`get_current_dealership`. This is the layer 4B
+  introduces.
+- **Business permissions** — *what may this user do*. Answered by DRF
+  permission classes in 4C (advisor workspace) and 4D (admin
+  endpoints). Not this module's concern.
+
+Increment 4B write-path plumbing (from Increment 3) is unchanged: the
+``pre_save`` autofill signal continues to attach the default when a
+tenant is unset. The request-context resolver is *read-side only* —
+views call it to scope querysets; write-path callers still pass
+``dealership=`` explicitly (or accept the default fallback).
+
+Consumers today:
 
 1. :func:`services.dealer_config.get_dealer_name` /
    :func:`services.dealer_config.get_dealer_profile` — read-path
@@ -26,6 +43,9 @@ Two consumers:
    ``dealership=`` (production views, seeders, request-context code
    in later increments) short-circuit the fallback — the handler never
    overwrites an explicit value.
+3. :func:`get_current_dealership` (Increment 4B). Called by views that
+   need to scope querysets to the requesting user's active dealership.
+   No view uses it yet; 4C/4D are the first consumers.
 
 Import-safety: the module never touches the DB at import time. The
 first :func:`get_default_dealership` call performs the lookup and
@@ -109,6 +129,126 @@ def reset_default_dealership_cache() -> None:
     """
     global _default_dealership_pk
     _default_dealership_pk = None
+
+
+# ---- request-context resolvers (Increment 4B) --------------------------------
+
+_DEALERSHIP_HEADER = "X-Dealership-Slug"
+
+
+def get_active_membership(user):
+    """Return the :class:`UserDealershipRole` a user is currently acting under.
+
+    **This is the extension seam for dealership switching.** Increment
+    4B ships a deterministic single-membership implementation; future
+    increments (a proper dealership-picker UI, per-session active-role
+    persistence, etc.) replace *this function's body* without altering
+    :func:`get_current_dealership` or any downstream caller.
+
+    Current implementation (Increment 4B, single-dealership dev
+    environment):
+
+    - Anonymous or ``None`` → ``None``.
+    - No memberships → ``None``.
+    - Exactly one membership → that membership.
+    - Multiple memberships → deterministically the first by the model's
+      ``Meta.ordering`` (``user, dealership, role``). Deterministic
+      choice is safe *today* because no live user holds cross-dealership
+      memberships (there are no live users at all). When 4E+ ships the
+      login flow the number of multi-dealership users will still be
+      zero in single-tenant deployments, and the eventual multi-tenant
+      dealership-switching UI is expected to replace this branch before
+      real multi-dealership users appear.
+
+    Future extension shape (recorded here so the extension is
+    obviously *inside* this helper, not a parallel implementation):
+
+    - Read a session-scoped active-membership PK
+      (``request.session["active_membership_id"]``) written by the
+      dealership-picker UI. Validate it still belongs to ``user``.
+    - If unset or stale, fall through to the deterministic-first
+      branch below.
+    - A dedicated ``set_active_membership(request, membership)`` helper
+      writes the session key.
+
+    Nothing about that extension changes the return type or the
+    resolver at :func:`get_current_dealership`.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return None
+
+    from ..models import UserDealershipRole
+
+    # ``select_related("dealership")`` so callers who then read
+    # ``membership.dealership`` do not incur a second query.
+    return (
+        UserDealershipRole.objects.filter(user=user)
+        .select_related("dealership")
+        .first()
+    )
+
+
+def get_current_dealership(request) -> "Dealership":
+    """Return the :class:`Dealership` for the current request context.
+
+    Composes three orthogonal signals in priority order. Each layer is
+    a distinct concern; they are ordered by *specificity of intent*,
+    not by *strength of authentication*.
+
+    1. **Authenticated identity.**
+       :func:`get_active_membership` returns a membership; use its
+       dealership. Auth is the strongest signal of intent because the
+       user *chose* to log in as themselves and their memberships are
+       explicit business data.
+    2. **Explicit request signal.** ``X-Dealership-Slug`` header
+       matching a live :class:`Dealership`. Enables public / embed /
+       cross-domain callers that cannot authenticate (customer chat,
+       partner integrations) to declare tenancy explicitly. Silent
+       fall-through when the header is missing or the slug does not
+       resolve — no exception.
+    3. **Default fallback.** :func:`get_default_dealership` — the
+       terminal fallback. Guarantees this function never returns
+       ``None`` even in a fully anonymous, header-less request.
+
+    Never returns ``None``. Never raises on unknown header slugs (the
+    header is a hint, not a contract; treating it as a contract would
+    let a caller induce a 500 by sending a bogus slug).
+
+    Not called by any view yet — 4C (advisor workspace) and 4D (admin
+    endpoints) are the first consumers. This function is deliberately
+    landed one increment ahead of its callers so the resolver's
+    behavior can be locked by tests in isolation.
+    """
+    user = getattr(request, "user", None)
+    membership = get_active_membership(user)
+    if membership is not None:
+        return membership.dealership
+
+    header_value = _read_dealership_header(request)
+    if header_value:
+        from ..models import Dealership
+
+        header_dealership = Dealership.objects.filter(slug=header_value).first()
+        if header_dealership is not None:
+            return header_dealership
+
+    return get_default_dealership()
+
+
+def _read_dealership_header(request) -> str:
+    """Return the ``X-Dealership-Slug`` header value or empty string.
+
+    Django surfaces HTTP headers on ``request.META`` prefixed with
+    ``HTTP_``. DRF's ``request.headers`` (Django ≥3) gives a
+    case-insensitive dict but is only present when ``request`` is a
+    DRF ``Request``; we support both to keep the resolver callable
+    from plain Django views without requiring a DRF wrapper.
+    """
+    headers = getattr(request, "headers", None)
+    if headers is not None:
+        return (headers.get(_DEALERSHIP_HEADER) or "").strip()
+    meta = getattr(request, "META", None) or {}
+    return (meta.get("HTTP_X_DEALERSHIP_SLUG") or "").strip()
 
 
 # ---- pre_save signal — write-path safety net --------------------------------
