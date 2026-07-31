@@ -72,7 +72,8 @@ Verified 2026-07-31 (after SESSION_031 Phase 4). Update if any row changes.
 3. Latest `docs/handoffs/SESSION_NNN_*.md` — what last session shipped
 4. `docs/DEALER_KIT_BEHAVIOR_LAYER.md` — voice / UI / constraint contract
 5. `docs/demo/COPPER_CANYON_DEMO_SCRIPT.md` — canonical indie demo (5-prompt flow)
-6. `docs/INDEPENDENT_DEALER_PIVOT.md` — pivot plan + status snapshot
+6. `docs/research/INDEPENDENT_DEALER_PIVOT.md` — pivot plan + status snapshot
+7. `docs/research/VEHICLE_CENTRIC_PIVOT.md` — vehicle-centric OS pivot plan (proposed)
 
 Supporting (read on demand):
 

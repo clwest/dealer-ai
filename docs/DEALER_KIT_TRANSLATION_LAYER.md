@@ -72,7 +72,7 @@ anchors; it never adds new facts.
    moves through pre-LLM guards → LLM → post-LLM scrub stack.
 5. `docs/DEALER_KIT_BEHAVIOR_LAYER.md` — voice / display / constraint
    contract for the customer-facing assistant.
-6. `docs/INDEPENDENT_DEALER_PIVOT.md` — the 2026-07-31 pivot plan +
+6. `docs/research/INDEPENDENT_DEALER_PIVOT.md` — the 2026-07-31 pivot plan +
    phase-by-phase status snapshot (persona, deltas, guardrails).
 7. `docs/onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md` — onboarding
    architecture; SESSION_008 persistence, SESSION_009 wiring,

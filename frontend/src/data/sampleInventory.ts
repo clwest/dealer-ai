@@ -14,7 +14,7 @@
 // Persona: Copper Canyon Auto (Yuma, AZ). Every unit is a used
 // mixed-make vehicle sourced through auctions / trades / private-
 // party acquisitions. No new inventory, no OEM CPO. See
-// `docs/INDEPENDENT_DEALER_PIVOT.md`.
+// `docs/research/INDEPENDENT_DEALER_PIVOT.md`.
 //
 // Image URLs are Unsplash placeholders sized for card thumbnails;
 // they don't necessarily match the exact trim / color of the

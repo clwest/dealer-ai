@@ -20,7 +20,7 @@ credit-challenged buyers, mixed-make used inventory, BHPH conversations
 Copper Canyon Auto is a *2nd-generation, 40–60-vehicle, mixed-make
 used lot in Yuma, AZ*, owned by Elena Vargas (dad Manuel started it
 in 1987). Financing runs through a subprime lender panel + in-house
-BHPH; no OEM captive. See `docs/INDEPENDENT_DEALER_PIVOT.md` for the
+BHPH; no OEM captive. See `docs/research/INDEPENDENT_DEALER_PIVOT.md` for the
 full persona.
 
 ## Setup (60 seconds before the demo)

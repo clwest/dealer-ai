@@ -6,7 +6,7 @@ snapshot_commit: 02472f1
 purpose: External-LLM prompt bundle for strategic / go-to-market analysis
 source_docs:
   - docs/CAPABILITY_MATRIX.md
-  - docs/INDEPENDENT_DEALER_PIVOT.md
+  - docs/research/INDEPENDENT_DEALER_PIVOT.md
   - docs/DEALER_KIT_SESSION_START.md
 ---
 
@@ -26,7 +26,7 @@ source_docs:
 > the honest gaps.
 >
 > **What this file is not.** Not runtime source-of-truth. Living
-> docs (`CAPABILITY_MATRIX.md`, `INDEPENDENT_DEALER_PIVOT.md`,
+> docs (`CAPABILITY_MATRIX.md`, `platform/INDEPENDENT_DEALER_PIVOT.md`,
 > `DEALER_KIT_SESSION_START.md`) evolve; this bundle is frozen.
 > Regenerate by re-running the bundle assembly when the underlying
 > docs drift materially.
@@ -100,7 +100,7 @@ runnable via env / setting overrides:
 
 ### 2.1 — Why the pivot to indie-default (2026-07-31)
 
-> Extracted from `docs/INDEPENDENT_DEALER_PIVOT.md` §"Why this pivot".
+> Extracted from `docs/research/INDEPENDENT_DEALER_PIVOT.md` §"Why this pivot".
 
 Independent used-car dealers are a bigger, more addressable SMB
 market than franchise stores, and franchise dealers already have
@@ -114,7 +114,7 @@ compliance + guard + scrub surface.
 
 ### 2.2 — The default persona: Copper Canyon Auto
 
-> Extracted from `docs/INDEPENDENT_DEALER_PIVOT.md` §"The persona — Copper Canyon Auto".
+> Extracted from `docs/research/INDEPENDENT_DEALER_PIVOT.md` §"The persona — Copper Canyon Auto".
 > Invented, not a real dealership.
 
 | Field | Value |
@@ -161,7 +161,7 @@ compliance + guard + scrub surface.
 
 ### 2.5 — Non-goals (explicitly out of scope today)
 
-> Extracted from `docs/INDEPENDENT_DEALER_PIVOT.md` §"Non-goals".
+> Extracted from `docs/research/INDEPENDENT_DEALER_PIVOT.md` §"Non-goals".
 
 - Multi-tenant SaaS shell (login, org, billing) — separate future project.
 - Real inventory-feed integrations (auction APIs, dealer DMS) — synthetic sample inventory only.

@@ -157,7 +157,7 @@ Read first:
 - 00-START-NEXT-SESSION.md
 - docs/DEALER_KIT_SESSION_START.md
 - docs/handoffs/SESSION_032_indie_onboarding_migration.md
-- docs/INDEPENDENT_DEALER_PIVOT.md
+- docs/research/INDEPENDENT_DEALER_PIVOT.md
 
 Goal: surface the saved indie profile in the actual UI. Top
 candidates in priority order (from the handoff):
@@ -212,7 +212,7 @@ Do NOT:
 
 If anything here disagrees with reality:
 
-1. `docs/INDEPENDENT_DEALER_PIVOT.md` — pivot living plan.
+1. `docs/research/INDEPENDENT_DEALER_PIVOT.md` — pivot living plan.
 2. `docs/handoffs/SESSION_032_indie_onboarding_migration.md` —
    most recent handoff.
 3. `docs/handoffs/SESSION_031_pivot_phase4_5.md` — Phase 4/5.

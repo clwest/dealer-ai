@@ -85,7 +85,7 @@ class DealerProfile:
 
 # Copper Canyon Auto — Yuma, AZ — invented independent-dealer persona
 # that ships as the kit's shape-of-business default per
-# docs/INDEPENDENT_DEALER_PIVOT.md. `.name` is intentionally left as the
+# docs/research/INDEPENDENT_DEALER_PIVOT.md. `.name` is intentionally left as the
 # sentence-safe fallback so unconfigured copy still reads as generic
 # ("the dealership") rather than surprising a fresh install with an
 # invented brand name. Callers wanting the persona name should either
@@ -94,7 +94,7 @@ class DealerProfile:
 #
 # The invented subprime-lender names ("Sonoran Credit", "Desert Auto
 # Finance", "Vista Lending") are provisional — flagged as open
-# question 3 in INDEPENDENT_DEALER_PIVOT.md, to be locked when Phase 2
+# question 3 in research/INDEPENDENT_DEALER_PIVOT.md, to be locked when Phase 2
 # seed data ships.
 _COPPER_CANYON_DEFAULTS = DealerProfile(
     name=_FALLBACK_DEALER_NAME,

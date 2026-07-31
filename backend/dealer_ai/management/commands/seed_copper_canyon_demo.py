@@ -1,7 +1,7 @@
 """SESSION_030 pivot — Copper Canyon Auto (Yuma, AZ) demo inventory.
 
 The invented independent-dealer persona that ships as the kit's
-default demo per docs/INDEPENDENT_DEALER_PIVOT.md. 45 mixed-make used
+default demo per docs/research/INDEPENDENT_DEALER_PIVOT.md. 45 mixed-make used
 units, $4k–$25k, truck/SUV-heavy, 3–10 yrs old, no OEM feed, no CPO,
 no captive finance. Runs alongside :mod:`seed_demo_vehicles` (the
 Freedom Ford franchise-config seed); the two are keyed by
@@ -363,7 +363,7 @@ def _all_units() -> list[dict]:
 
     Trucks/SUVs/cars use their group's default body_style; vans set it
     explicitly on the dict since :data:`_VANS` overrides. The seed
-    ships 45 units total; per :file:`docs/INDEPENDENT_DEALER_PIVOT.md`
+    ships 45 units total; per :file:`docs/research/INDEPENDENT_DEALER_PIVOT.md`
     the Phase 2 target is 40–60, so future work can add or trim
     without touching this helper.
     """

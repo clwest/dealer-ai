@@ -103,7 +103,7 @@ export interface ProductConfig {
  *
  * Post-SESSION_030 pivot, this ships the Copper Canyon Auto
  * (Yuma, AZ) invented independent-dealer persona. See
- * docs/INDEPENDENT_DEALER_PIVOT.md for the full persona and
+ * docs/research/INDEPENDENT_DEALER_PIVOT.md for the full persona and
  * docs/demo/COPPER_CANYON_DEMO_SCRIPT.md for the demo flow.
  *
  * Real dealers still override this via the OnboardingProfile

@@ -73,10 +73,6 @@ configuration:
   vehicles captured from samsfreedomford.com on 2026-05-02 for
   the demo Inventory page. Will be replaced by a CRM/DMS feed
   integration; until then it's Freedom-Ford-specific demo data.
-- **Public-site research**:
-  `docs/research/samsfreedomford/` — captured screenshots and
-  the SITE_AUDIT. Frozen as historical reference; not
-  generalized into a "dealer audit framework".
 - **Historical handoffs**: `docs/handoffs/SESSION_*.md` and
   `docs/handoffs/screenshots/`. Names and copy reflect the
   Freedom-Ford era of the project. **Not rewritten** —
