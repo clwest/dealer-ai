@@ -24,6 +24,7 @@ frontend/tsconfig.tsbuildinfo
 # under docs/handoffs/screenshots/ and predate these patterns.
 /*.png
 docs/research/**/*.png
+/redesign/
 
 # Editors / OS
 .vscode/
