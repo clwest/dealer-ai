@@ -90,7 +90,8 @@ def _resolve_vehicles_for_recommendation(
 
     1. ``vehicle_id`` → exact match if present and available.
     2. Inventory recommendation with ``evidence.band_label`` → top
-       Ford-first vehicles whose price falls in the band.
+       primary-make-first vehicles whose price falls in the band
+       (indie mixed-lot: newest / cheapest first, no OEM bias).
     3. Marketing recommendation with ``evidence.model`` → top units of
        that model in available inventory.
     4. Marketing recommendation with ``evidence.stock_number`` → that
@@ -128,7 +129,7 @@ def _resolve_vehicles_for_recommendation(
             )
         else:
             qs = qs.filter(price__gte=Decimal(str(price_low)))
-        return _ford_first_top(qs, MAX_VEHICLE_CONTEXT)
+        return _primary_make_first_top(qs, MAX_VEHICLE_CONTEXT)
 
     if category == "marketing":
         stock_number = evidence.get("stock_number")
@@ -146,7 +147,7 @@ def _resolve_vehicles_for_recommendation(
             qs = Vehicle.objects.filter(
                 is_available=True, model__icontains=model
             )
-            return _ford_first_top(qs, MAX_VEHICLE_CONTEXT)
+            return _primary_make_first_top(qs, MAX_VEHICLE_CONTEXT)
 
     return []
 
@@ -172,14 +173,26 @@ def _payment_band_to_price_range(
     return _band_price_range(band)
 
 
-def _ford_first_top(qs: QuerySet[Vehicle], limit: int) -> List[Vehicle]:
-    """Pull a small set, then sort Ford-first / newest / cheapest in
-    Python. Mirrors the chat path's Ford-first preference so ad copy
-    leads with the dealership's primary brand."""
+def _primary_make_first_top(qs: QuerySet[Vehicle], limit: int) -> List[Vehicle]:
+    """Pull a small set, then sort primary-make-first / newest / cheapest
+    in Python. Mirrors the chat path's ranking preference so ad copy
+    leads with the dealership's primary brand when one is configured
+    (franchise config); indie mixed-lot has no OEM bias so ranking
+    falls back to newest-year / cheapest."""
+    from .dealer_config import get_dealer_profile
+
+    primary_make_lc = (get_dealer_profile().primary_make or "").strip().lower()
+
     rows = list(qs.order_by("-year", "price")[: limit * 4])
+
+    def _make_key(v: Vehicle) -> int:
+        if not primary_make_lc:
+            return 0
+        return 0 if (v.make or "").strip().lower() == primary_make_lc else 1
+
     rows.sort(
         key=lambda v: (
-            0 if (v.make or "").strip().lower() == "ford" else 1,
+            _make_key(v),
             -int(v.year or 0),
             float(v.price),
         )

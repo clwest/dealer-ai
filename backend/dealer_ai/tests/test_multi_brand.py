@@ -93,13 +93,28 @@ class SearchVehiclesMixedBrandTests(TestCase):
         self.assertIn(toyota.id, ids)
         self.assertIn(chevy.id, ids)
 
+    @override_settings(DEALER_AI_PRIMARY_MAKE="Ford")
     def test_ford_appears_first_when_mixed_brands_match(self):
+        # Franchise config (primary_make="Ford"): search_vehicles
+        # ranks the primary brand first regardless of price/year.
         toyota = _make_vehicle("T2", make="Toyota", model="Tacoma", price="27000")
         ford = _make_vehicle("F2", make="Ford", model="Ranger", price="28000")
 
         results = search_vehicles("trucks under 30k")
-        # Ford should rank first regardless of price/year tie.
         self.assertEqual(results[0].id, ford.id)
+
+    def test_indie_default_ranks_by_year_price_not_make(self):
+        # Independent-dealer default (primary_make=None): search_vehicles
+        # ranks purely by newest year, then cheapest price — no OEM
+        # bias. Two same-year trucks, Toyota is cheaper → Toyota ranks
+        # first.
+        _make_vehicle("IFT", make="Ford", model="Ranger", price="28000")
+        toyota = _make_vehicle(
+            "ITT", make="Toyota", model="Tacoma", price="26000"
+        )
+
+        results = search_vehicles("trucks under 30k")
+        self.assertEqual(results[0].id, toyota.id)
 
     def test_make_kwarg_filters_to_single_brand(self):
         ford = _make_vehicle("F3", make="Ford", model="Ranger", price="26000")

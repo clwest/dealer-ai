@@ -179,24 +179,38 @@ def _band_price_range(band: dict) -> tuple[int, Optional[int]]:
 
 
 def _band_model_hint(price_low: int, price_high: Optional[int]) -> str:
-    """Suggest model families to source for a band. Mirrors the narrowing
-    vocabulary used in the chat system prompt (Maverick / Bronco Sport /
-    Escape for low; F-150 / Bronco / Mustang for higher) without ever
-    quoting a payment or rate."""
+    """Suggest body-style families to source for a price band.
+
+    Manager-facing acquisition hint on the pipeline dashboard. Kept
+    make-agnostic so the same rule works for a Copper Canyon-style
+    mixed-lot indie config, a Freedom Ford-style franchise config, or
+    any other configuration — the manager knows the specific models
+    they buy; the hint just tells them WHAT price/segment shape has
+    demand outrunning supply.
+    """
     if price_high is None:
-        return "F-150 Lightning, loaded Bronco, Mustang Mach-E, or Expedition"
+        return (
+            "loaded full-size trucks, three-row luxury SUVs, or "
+            "high-trim performance vehicles"
+        )
     avg = (price_low + price_high) / 2
     if avg < 20_000:
-        return "Maverick, Bronco Sport, or used Escape"
+        return "compact crossovers, subcompact SUVs, or older-year compact trucks"
     if avg < 28_000:
-        return "Maverick, Escape, or used Edge"
+        return "mid-size sedans, small crossovers, or lower-mile compact trucks"
     if avg < 38_000:
-        return "Bronco Sport, Edge, Ranger, or used F-150"
+        return (
+            "mid-size crossovers, mid-size trucks, or lower-mile "
+            "compact SUVs"
+        )
     if avg < 50_000:
-        return "F-150, Bronco, Explorer, or Mustang"
+        return "full-size trucks, three-row SUVs, or higher-trim mid-size trucks"
     if avg < 70_000:
-        return "F-150, Bronco, Explorer, Mustang Mach-E, or Expedition"
-    return "F-150 Lightning, loaded Bronco, Mustang Mach-E, or Expedition"
+        return "full-size trucks, luxury-brand crossovers, or three-row SUVs"
+    return (
+        "loaded full-size trucks, three-row luxury SUVs, or "
+        "high-trim performance vehicles"
+    )
 
 
 def _classify_tier(*, lead_count: int, vehicle_count: int) -> tuple[str, float]:

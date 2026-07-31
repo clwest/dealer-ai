@@ -175,19 +175,33 @@ def search_vehicles(
     parsed from the text — the tighter of the two wins. Vehicles strictly above
     `max_price` are NEVER returned. This is the budget-constrained search path.
 
-    `make` is only applied when the customer has explicitly locked a brand
-    ("Ford only" / "I want a Ford"). Without it, all makes are eligible
-    — used inventory at a Ford dealership often includes trade-ins from
-    other brands. Ford vehicles are still ordered first.
+    `make` is only applied when the customer has explicitly locked a
+    brand ("Ford only" / "I want a Toyota"). Without it, all makes are
+    eligible — mixed-lot used inventory routinely spans multiple
+    brands. When ``DealerProfile.primary_make`` is set (franchise
+    config), that brand's vehicles rank first; independent-dealer
+    default has no OEM ranking bias.
     """
-    # Ford-first ordering (dealership preference): Postgres/SQLite both
-    # accept a Case expression, but a simple Python sort after limit*4 is
-    # plenty fast for demo-scale inventory and works on any backend.
+    from .dealer_config import get_dealer_profile
+
+    primary_make_lc = (get_dealer_profile().primary_make or "").strip().lower()
+
+    # Primary-make-first ordering (dealership preference). Postgres and
+    # SQLite both accept a Case expression, but a simple Python sort
+    # after limit*4 is plenty fast for demo-scale inventory and works
+    # on any backend. When primary_make is None (indie mixed-lot), the
+    # make-based key is 0 for every row, so ranking falls back to
+    # year-desc / price-asc — no OEM bias.
     def _final_order(rows: List[Vehicle]) -> List[Vehicle]:
+        def _make_key(v: Vehicle) -> int:
+            if not primary_make_lc:
+                return 0
+            return 0 if (v.make or "").strip().lower() == primary_make_lc else 1
+
         return sorted(
             rows,
             key=lambda v: (
-                0 if (v.make or "").strip().lower() == "ford" else 1,
+                _make_key(v),
                 -v.year,
                 float(v.price),
             ),
