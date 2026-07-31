@@ -2,7 +2,7 @@
 title: "Dealer AI Kit — Verified Capability Matrix"
 status: living
 last_verified: 2026-07-31
-verified_against_commit: 0ec372a
+verified_against_commit: 02472f1
 ---
 
 # Dealer AI Kit — Verified Capability Matrix
@@ -37,7 +37,7 @@ dealership.
 
 ## Objective baseline
 
-- **Backend test suite:** `python3 manage.py test dealer_ai` → **1281 pass, 1
+- **Backend test suite:** `python3 manage.py test dealer_ai` → **1300 pass, 1
   skipped**. ~3.6s. Run from `backend/`.
 - **Frontend typecheck:** `npx tsc --noEmit` → clean. Run from `frontend/`.
 - **Frontend build:** `npx vite build` → clean, ~490 kB bundle / ~134 kB
@@ -193,25 +193,38 @@ Maria Cortez, Sam Bell).
 
 ## 8. Dealer branding + onboarding
 
-Runtime dealer identity is templated (SESSION_029).
+Runtime dealer identity is templated (SESSION_029) and the full
+shape-of-business is persisted (SESSION_032 migration `0006`).
 
 | Layer | Source | Resolves to |
 | --- | --- | --- |
-| Frontend brand context | `OnboardingProfile` via `useBrand()` → falls back to `DEFAULT_DEALER` in `frontend/src/config/defaultDealer.ts` | `brand.dealershipName`, `brand.tagline`, `brand.logoUrl`, etc. |
-| Backend prompt/response `{dealer_name}` interpolation | `settings.DEALER_AI_DEALER_NAME` env → `DealerOnboardingProfile.dealership_name` → `"the dealership"` fallback | `dealer_ai.services.dealer_config.get_dealer_name()` |
+| Frontend display strings | `useBrand()` reads `OnboardingProfile` → falls back to `DEFAULT_DEALER` in `frontend/src/config/defaultDealer.ts` | `brand.dealershipName`, `brand.tagline`, `brand.logoUrl`, etc. |
+| Frontend shape-of-business | `useDealerProfile()` reads same profile → falls back to Copper Canyon indie defaults | `dealerType`, `bhphEnabled`, `subprimeLenders`, `floorPlanLender`, `warrantyOffering`, `creditRangeServed`, `makesCarried` |
+| Backend prompt `{dealer_name}` interpolation | `settings.DEALER_AI_DEALER_NAME` env → `DealerOnboardingProfile.dealership_name` → `"the dealership"` fallback | `dealer_ai.services.dealer_config.get_dealer_name()` |
+| Backend shape-of-business | `DealerOnboardingProfile` non-empty → env override (dealer_type only) → Copper Canyon defaults | `get_dealer_profile()` returns frozen `DealerProfile` dataclass with all 8 indie fields |
 
-Configure a real dealer name either by:
-- `DEALER_AI_DEALER_NAME=<name>` in `backend/.env` (or repo-root `.env`), OR
-- Filling the `Dealership name` field via `/dealer-ai-onboarding` UI.
+Configure a real dealer either by:
+- Filling the 6-section `/dealer-ai-onboarding` UI (Dealership profile,
+  Manager preferences, Salesperson seed, Assistant behavior, Business
+  shape, Pilot checklist), OR
+- `DEALER_AI_DEALER_NAME=<name>` / `DEALER_AI_DEALER_TYPE=<independent|franchise>` /
+  `DEALER_AI_PRIMARY_MAKE=<OEM>` in `backend/.env` for env-driven configs.
 
 Backend prompts + response templates use `{dealer_name}` placeholders
 formatted at call time via each module's `_render()` helper. Changes
-take effect immediately (no restart).
+take effect immediately (no restart). Business-shape fields are read
+lazily per request from the singleton `DealerOnboardingProfile` row.
 
 | Capability | Endpoint |
 | --- | --- |
-| Onboarding profile (singleton, drives UI + backend prompts) | `GET/PUT /api/dealer-ai/onboarding/profile/` |
+| Onboarding profile (singleton, 35 fields, drives UI + backend prompts) | `GET/PUT /api/dealer-ai/onboarding/profile/` |
 | Multipart logo upload | `POST /api/dealer-ai/onboarding/profile/logo/` |
+
+**Indie shape-of-business fields** (SESSION_032): `dealer_type`,
+`bhph_enabled` (+ `bhph_configured` sentinel), `subprime_lenders`
+(newline-separated), `floor_plan_lender`, `warranty_offering`,
+`credit_range_served`, `makes_carried` (newline-separated;
+supersedes legacy CSV `main_brands`).
 
 ---
 
@@ -275,7 +288,7 @@ questions) or Shape B (coaching directive). Rejects free-form monologues.
 - **Trending-signal ad recommendations.** The admin dashboard surfaces
   ad-copy opportunities based on which models/types customers actually
   asked about, then generates compliant ad drafts on demand.
-- **1281 tests passing.**
+- **1300 tests passing.**
 
 ## Honest gaps to flag when pitching
 
@@ -312,5 +325,5 @@ questions) or Shape B (coaching directive). Rejects free-form monologues.
   constraint preservation across turns, reply-rule branch matrix.
 - `docs/DEALER_KIT_TRANSLATION_LAYER.md` — audience contract per
   persona (Builder / Operator / Executive / Tester).
-- Backend tests under `backend/dealer_ai/tests/` — 1281 tests are the
+- Backend tests under `backend/dealer_ai/tests/` — 1300 tests are the
   authoritative behavior contract.
