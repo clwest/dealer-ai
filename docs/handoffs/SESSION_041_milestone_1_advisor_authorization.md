@@ -6,7 +6,7 @@ date: 2026-07-31
 session: 041
 commits:
   - 76d625b  # Increment 4C — permissions.py + advisor view gating + tests + AUTHENTICATION_MODEL §7 update
-  - <fill after docs commit>  # SESSION_041 handoff + SESSION_042 pointer
+  - b1816a9  # SESSION_041 handoff + SESSION_042 pointer
 ---
 
 # SESSION_041 — Milestone 1 · Increment 4C
