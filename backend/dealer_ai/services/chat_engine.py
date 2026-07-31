@@ -115,8 +115,8 @@ Budget category labels (CRITICAL — there are EXACTLY TWO allowed categories):
   ANALYSIS block is provided, use the term-extension wording from that block verbatim —
   never invent specific term lengths yourself. Never suggest a term that is shorter than
   or equal to the customer's current term. Other valid narrowing angles: trade-in,
-  larger down payment, smaller vehicle (Maverick / Bronco Sport / Escape), or used
-  inventory instead of new.
+  larger down payment, a smaller / less-expensive vehicle from inventory, or a used
+  option if new was on the table.
 - Do not list more than 3 vehicles in a single reply unless the customer asks for more.
 - Do not explain or compare trim levels unless there is a meaningful difference
   between the vehicles you are presenting. If only one vehicle is shown, focus
@@ -147,8 +147,8 @@ Conversation flow & phrasing (CRITICAL — sound human, not formulaic):
       tradeoff in one sentence ("It's about $17 over $500/mo at 60 months —
       a 72-month term lands closer"), then ONE narrowing question.
     · Multiple distinct options → ask a preference question that helps you
-      narrow ("Which one is closer to what you had in mind — the Ranger or
-      the Maverick?").
+      narrow ("Which one is closer to what you had in mind — the pickup or
+      the smaller crossover?").
     · No fit and no near-fit → explain the gap, then ONE narrowing question.
 - Always ONE question per reply, never a list of three. Vary the wording
   turn-to-turn so the conversation doesn't feel like a script.
@@ -172,10 +172,10 @@ Inventory fidelity (CRITICAL — automatic parser will reject fabricated units):
   unit to fill a "1 best + 2 alternatives" template — honest "this is the
   one truck that fits at this target" beats a fabricated list every time.
 - If you want to mention an alternative direction the customer could
-  consider (e.g., "you could look at a smaller Maverick" or "a longer
-  term opens up more options"), describe it generically — model name and
-  the structural change only. Do NOT cite a Stock # or a price for any
-  unit that isn't in this turn's AVAILABLE INVENTORY.
+  consider (e.g., "you could look at a smaller SUV" or "a longer
+  term opens up more options"), describe it generically — body style
+  and the structural change only. Do NOT cite a Stock # or a price for
+  any unit that isn't in this turn's AVAILABLE INVENTORY.
 
 External-data and assumption rules (CRITICAL — never fabricate):
 - NEVER quote Blue Book, KBB, NADA, Edmunds, TrueCar, or any third-party
@@ -3951,11 +3951,11 @@ def _format_discovery_block(text: str, profile: dict) -> str:
                 "",
                 "CONVERTIBLE-SPECIFIC NOTE: We do not currently "
                 "have any convertibles in inventory. Acknowledge this "
-                "honestly in one short sentence. You MAY mention that the "
-                "Mustang is the closest in spirit (sporty Ford coupe) and "
-                "that used / other-brand trade-ins occasionally come "
-                "through, but do NOT recommend any specific Mustang trim "
-                "or quote a payment in this turn. After acknowledging the "
+                "honestly in one short sentence. You MAY mention that a "
+                "sporty coupe like the Mustang or Camaro is the closest "
+                "in spirit and that used trade-ins occasionally come "
+                "through, but do NOT recommend a specific trim or quote "
+                "a payment in this turn. After acknowledging the "
                 "convertible gap, still ask your 1-2 clarifying questions "
                 "(budget, new vs. used, must-have features) before "
                 "recommending anything in a future turn.",
@@ -4812,11 +4812,11 @@ _CARD_PRESENTATION_PREAMBLE = (
     "\n"
     "GOOD example (mirror this pattern — qualitative references, "
     "ONE payment quoted, soft close):\n"
-    "  \"The Ranger is really close at about $517/mo. If you're "
-    "flexible on drivetrain the Colorado actually slips under your "
-    "target, and if you stretch the term a bit the Tundra opens up "
-    "as a bigger truck. Would you rather look at a longer term or "
-    "flexible drivetrain?\"\n"
+    "  \"The lead pick is really close at about $517/mo. If you're "
+    "flexible on drivetrain the second card actually slips under "
+    "your target, and if you stretch the term a bit the third card "
+    "opens up as a bigger option. Would you rather look at a longer "
+    "term or flexible drivetrain?\"\n"
     "\n"
     "BAD examples (NEVER write replies in any of these shapes — "
     "they all duplicate what the cards already show). The numeric "
@@ -4866,14 +4866,14 @@ def _term_narrowing_line(term_months: int) -> str:
         return (
             f"Term-extension wording (use verbatim if you pick the term angle): "
             f"\"Would a longer term — say {longer} — be acceptable?\" Other "
-            f"valid angles: trade-in, larger down payment, smaller vehicle "
-            f"(Maverick / Bronco Sport / Escape), or used inventory."
+            f"valid angles: trade-in, larger down payment, a smaller / less-expensive "
+            f"vehicle from inventory, or a used option."
         )
     return (
         f"DO NOT suggest a longer loan term — the customer is already at "
         f"{term_months} months, at or beyond the practical maximum. Pick "
-        f"another angle: trade-in, larger down payment, smaller vehicle "
-        f"(Maverick / Bronco Sport / Escape), or used inventory."
+        f"another angle: trade-in, larger down payment, a smaller / "
+        f"less-expensive vehicle from inventory, or a used option."
     )
 
 
@@ -4956,8 +4956,8 @@ def _format_cash_mode_block(matched: List[Vehicle]) -> str:
         "  Wrong: \"For a cash purchase, let's compare the top "
         "three options: The Honda Accord LX has a great balance "
         "of price and fuel efficiency, with an estimated 28 MPG "
-        "in the city. The Ford Fusion SE also offers decent fuel "
-        "economy, with 23 MPG…\" (no pick, no recommendation, "
+        "in the city. The Toyota Camry LE also offers decent fuel "
+        "economy, with 26 MPG…\" (no pick, no recommendation, "
         "reads like a spec sheet).",
         "",
         "Close with ONE next-step question — the customer should "
