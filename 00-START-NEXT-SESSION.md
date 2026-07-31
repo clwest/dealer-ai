@@ -1,246 +1,223 @@
 ---
 state: active
 date: 2026-07-31
-last_session_shipped: SESSION_031
-next_session: SESSION_032
+last_session_shipped: SESSION_032
+next_session: SESSION_033
 ---
 
-# Next session — SESSION_032 · post-pivot open work
+# Next session — SESSION_033 · surface indie profile in UI + open cleanups
 
-> **Pivot status:** ✅ **Full pivot shipped.** All 5 phases complete
-> across SESSION_030 (Phases 1–3, 19 commits `1a03a39` → `3e812ba`,
-> baseline 1218 → 1281) and SESSION_031 (Phase 4 rename `0ec372a`
-> + Phase 5 docs refresh, baseline held at 1281). Copper Canyon
-> Auto is the shipped default persona; franchise config preserved
-> as a supported alternate via env overrides. Living plan +
-> per-phase status: `docs/INDEPENDENT_DEALER_PIVOT.md`. Formal
-> handoffs at
-> `docs/handoffs/SESSION_030_independent_dealer_pivot.md` and
-> `docs/handoffs/SESSION_031_pivot_phase4_5.md`.
+> **Pivot status:** ✅ shipped end-to-end across SESSION_030
+> (Phases 1–3), SESSION_031 (Phases 4–5), and SESSION_032
+> (indie-onboarding migration). Copper Canyon Auto is the shipped
+> default persona; franchise config preserved via env overrides;
+> `DealerOnboardingProfile` now persists all 8 indie
+> shape-of-business fields; `useDealerProfile()` hook exposes them
+> to frontend consumers.
 
-## What just shipped (SESSION_031)
+## What just shipped (SESSION_032)
 
-Two discrete phases in one session — see the handoff for full
-per-file detail:
+The `DealerOnboardingProfile` indie-fields migration + form + hook.
+See `docs/handoffs/SESSION_032_indie_onboarding_migration.md` for
+full per-file detail.
 
-### Phase 4 — Django package rename (`0ec372a`, 1 commit)
+### Backend (6 files, 4 subsystems)
 
-- `git mv backend/freedom_ford backend/dealer_kit` (7 files,
-  history preserved).
-- 11-line edits across `dealer_kit/{settings,wsgi,asgi}.py`,
-  `manage.py`, `smoke_drift_audit.py`, `render.yaml` to swap
-  `freedom_ford.*` → `dealer_kit.*` module paths.
-- Test baseline held: **1281 pass, 1 skipped, 0 fail** (no drift).
-- `prod_settings.py` uses relative imports — no edits needed.
-- `.env.example` had no matching refs.
-- Two `freedom_ford` references remain in
-  `backend/dealer_ai/tests/test_post_llm_safety.py` — both are
-  test *method names* about response content, not module paths.
-  They run correctly under the new module and stay untouched.
+1. **Migration `0006_dealeronboardingprofile_bhph_configured_and_more`** —
+   8 new columns on `DealerOnboardingProfile`: `dealer_type`,
+   `bhph_enabled`, `bhph_configured`, `subprime_lenders`,
+   `floor_plan_lender`, `warranty_offering`, `credit_range_served`,
+   `makes_carried`.
+2. **Serializer + `ONBOARDING_DEFAULTS`** — 8 fields exposed via
+   `DealerOnboardingProfileSerializer` + defaults. Invalid
+   `dealer_type` values rejected 400.
+3. **Resolver `dealer_config.get_dealer_profile()`** — rewritten to
+   read `DealerOnboardingProfile.objects.first()` lazily, with
+   per-field resolution order (DB → env where applicable → Copper
+   Canyon default). New `_parse_lines` / `_parse_csv` helpers.
+   Module docstring documents the order.
+4. **Tests** — 15 new dealer_config tests + 4 new onboarding-profile
+   tests. Backend baseline **1281 → 1300 pass** (+19), 1 skipped
+   preserved, zero regressions.
 
-### Phase 5 — Docs, `CLAUDE.md`, handoff (this commit)
+### Frontend (3 files)
 
-- Renamed 3 anchor docs via `git mv`:
-  - `docs/FREEDOM_FORD_SESSION_START.md` → `docs/DEALER_KIT_SESSION_START.md` (full rewrite)
-  - `docs/FREEDOM_FORD_BEHAVIOR_LAYER.md` → `docs/DEALER_KIT_BEHAVIOR_LAYER.md` (surgical reframe; contracts preserved verbatim)
-  - `docs/FREEDOM_FORD_TRANSLATION_LAYER.md` → `docs/DEALER_KIT_TRANSLATION_LAYER.md` (surgical reframe; personas, worked examples, Live Chat Mode contract preserved verbatim)
-- Refreshed adopt-managed docs via
-  `context-kit adopt . --write --project-summary ... --next-task ... --notes ...`:
-  - `docs/PROJECT_WHAT_IT_IS.md` + hand-filled Why/Who
-  - `docs/BUILD_PLAN.md`
-  - `CLAUDE.md` adopt block (hand-written frontend stack notes
-    below markers preserved unchanged; **Brand tokens** paragraph
-    hand-edited to describe `brand.*` palette + Copper Canyon
-    hex values + franchise-override callout).
-- Cross-reference updates in `docs/CAPABILITY_MATRIX.md`,
-  `docs/CONTEXT_KIT_INVENTORY.md`, `docs/DEALER_DUPLICATION_GUIDE.md`,
-  `docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md`, and
-  `docs/INDEPENDENT_DEALER_PIVOT.md` (frontmatter status → shipped;
-  Phase 4/5 status snapshot filled in).
-- Wrote formal handoff `docs/handoffs/SESSION_031_pivot_phase4_5.md`.
-- Overwrote this file for SESSION_032.
+5. **`OnboardingProfilePayload`** in `frontend/src/lib/api.ts` —
+   8 new fields with JSDoc-documented "blank = unset" semantics.
+6. **`useDealerProfile()`** hook in `frontend/src/lib/brand.ts` —
+   sibling of `useBrand()`. Returns typed `DealerProfile` with
+   Copper Canyon fallbacks. Kept separate from `useBrand()` so
+   display consumers don't fetch business shape they never use.
+7. **"Business shape" section** on `/dealer-ai-onboarding` —
+   dealer-type radio, BHPH toggle, floor-plan-lender / warranty /
+   credit-range text fields, subprime-lender + makes-carried
+   textareas. `SECTION_COUNT` bumped 5 → 6. tsc + vite build clean.
 
-`context-kit adopt` correctly **skipped** `00-START-NEXT-SESSION.md`
-because the file has no adopt markers — the hand-written
-SESSION_032 priorities below are preserved.
+### Design decisions locked (per user sign-off before implementation)
 
-## Recommended SESSION_032 — indie onboarding migration
+- List fields stored as TextField, one entry per line (mirrors
+  `approved_phrases` / `banned_phrases` convention).
+- `makes_carried` added alongside legacy `main_brands`; resolver
+  prefers new field, falls back to CSV parse of legacy for old
+  profiles.
+- Two separate hooks (`useBrand` + `useDealerProfile`) instead of
+  one merged hook.
+- `bhph_configured` sentinel gates whether resolver trusts the
+  `bhph_enabled` toggle vs falling back to Copper Canyon default
+  (True). Distinguishes "user explicitly toggled" from "migration
+  default".
 
-Full pivot is shipped; nothing here is blocked on prior pivot
-work. Pick the highest-value item that fits the session length.
+## Recommended SESSION_033 — surface indie profile in UI
 
-### Top candidate — `DealerOnboardingProfile` indie-fields migration
+Backend + form work is done; SESSION_033 is where the persisted
+values actually shape user-facing UI (customer + admin).
 
-**Why:** the `DealerProfile` resolver in
-`backend/dealer_ai/services/dealer_config.py` returns 7 indie
-fields (`dealer_type`, `bhph_enabled`, `subprime_lenders`,
-`floor_plan_lender`, `warranty_offering`, `credit_range_served`,
-`makes_carried`) but they resolve only from env / hardcoded
-Copper Canyon defaults today. A real dealer running the kit
-can't currently customize them via the onboarding UI —
-onboarding still only saves the dealer *name* + the original
-Freedom-Ford-era voice fields.
+### Top candidate — conditional UI + prompt threading
 
-**Scope (probably a full session on its own):**
+Concrete opportunities in priority order:
 
-1. `DealerOnboardingProfile` migration — add the 7 columns +
-   their sensible indie defaults.
-2. Serializer + view — accept + return the new fields.
-3. Onboarding form (`/dealer-ai-onboarding`) — add inputs (form
-   sections: dealer type radio; BHPH toggle; subprime-lender
-   list editor; floor-plan-lender text; warranty text; credit
-   range text; makes-carried multi-select or text).
-4. `dealer_config.get_dealer_profile()` — resolution order
-   updated to prefer `DealerOnboardingProfile` field values over
-   env / hardcoded defaults (mirroring the existing
-   `get_dealer_name()` resolution pattern).
-5. `useBrand()` — extend to expose the full profile, not just
-   name / tagline / logo. Frontend consumers can then read
-   `useBrand().dealerType`, etc. for conditional UI.
-6. Tests — model, serializer, view, resolution-order, form
-   integration. Target: 1281 + N pass.
+1. **Admin panel gating.** Show a "BHPH portfolio" card on
+   `/dealer-ai-admin` only when
+   `useDealerProfile().bhphEnabled === true`. Add a
+   "Franchise config" indicator badge when
+   `dealerType === "franchise"`.
+2. **Ad-copy generator prompt.** Thread
+   `useDealerProfile().warrantyOffering` and `creditRangeServed`
+   into the ad-copy prompt so generated drafts reference real
+   dealer terms instead of the assistant's generic phrasing.
+   Test — invented-promotion scrub still fires for anything not
+   grounded in these fields.
+3. **Assistant persona line** in the public homepage / embed
+   header — display makes carried ("Yuma's used-car home for
+   Toyota, Honda, Ford, Chevy, Nissan, and Kia") from
+   `useDealerProfile().makesCarried`.
+4. **Backend prompt scaffolding.** Update the
+   `INDIE_MODE_HINT` fragment to interpolate concrete
+   `floor_plan_lender` / `warranty_offering` / `credit_range_served`
+   into the system prompt when a real profile is configured.
 
-### Also open (lower urgency, not blocking)
+### Also open (lower urgency)
 
 - **`react-router-dom` 6 → 7 migration.** Clears 2 security
-  advisories. Small blast radius but does need a routing-migration
-  review; deferred during pivot work is now unblocked.
-- **Indie counterpart of `seed_phase3_demo`** (admin dashboard
-  population variant). Non-blocking — the 4 hand-crafted Copper
-  Canyon scenarios (`seed_copper_canyon_scenarios`) cover the
-  manager demo needs; this would only enrich admin-dashboard views
-  with more indie-flavored data.
-- **Freedom Ford legacy JPG asset** —
-  `public/sams-freedom-ford-logo.jpg` still lives at the top of
-  `public/`. SESSION_030's own guardrail forbade deletion in
-  Phase 3. Cleanest move: `git mv` it under
-  `public/branding/franchise/` with a small README noting it's
-  an alternate-config asset.
-- **Cosmetic tech-debt (adopt-generated titles).**
-  `docs/PROJECT_WHAT_IT_IS.md` and `docs/BUILD_PLAN.md` still
-  say `# Freedom Ford — …` in their titles because
-  `context-kit adopt` derives project name from the git working
-  directory. Full fix requires either a git-repo rename (large,
-  out of scope) or `context-kit adopt` growing a
-  `--project-name` override flag. Leave alone for now.
+  advisories. Small blast radius. Standalone commit.
+- **Indie counterpart of `seed_phase3_demo`.** Dashboard-data
+  enrichment.
+- **Move `public/sams-freedom-ford-logo.jpg`** → `public/branding/franchise/`.
+- **Data migration** to copy `main_brands` → `makes_carried` and
+  deprecate the CSV column (once we're confident no external
+  consumers read `main_brands` from the API).
+
+### Cosmetic tech-debt (deferred)
+
+- Adopt-generated titles in `docs/PROJECT_WHAT_IT_IS.md` /
+  `docs/BUILD_PLAN.md` still say `# Freedom Ford — …`. Full fix
+  requires git-repo rename or `context-kit adopt --project-name`
+  flag.
+- `bhph_configured` sentinel field is a UX hack; cleaner design
+  would use a nullable BooleanField, but Django's nullable-bool
+  support is awkward. Current design works and is testable.
 
 ## NEXT TASK
 
-Start SESSION_032 with the **indie onboarding migration** if a
-full session is available. If shorter, `react-router-dom 6 → 7`
-is a self-contained afternoon.
+Start SESSION_033 with the **admin panel gating + ad-copy prompt
+threading** — smallest scoped wins that let a real dealer see their
+saved indie profile influence the UI. Save the persona-line + full
+prompt-scaffolding for a follow-up if time allows.
 
-**Strict guardrails carried forward (per `docs/INDEPENDENT_DEALER_PIVOT.md`):**
+**Strict guardrails carried forward:**
 
-- ❌ Do NOT delete the franchise config path. Franchise stays a
-  supported *configuration* via
-  `DEALER_AI_DEALER_TYPE=franchise` +
-  `DEALER_AI_PRIMARY_MAKE=<OEM>` +
-  `DEALER_AI_DEALER_NAME=<name>`.
+- ❌ Do NOT delete the franchise config path.
 - ❌ Do NOT reintroduce hardcoded "Sam Wampler" / "Freedom Ford" /
   Ford-model strings in default paths.
-- ❌ Do NOT change chat behavior contracts. 1281-test baseline
-  must stay green (plus new tests for anything added).
+- ❌ Do NOT change chat behavior contracts. 1300-test baseline
+  must stay green.
 - ❌ Do NOT delete `docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md` or
-  `public/sams-freedom-ford-logo.jpg` (may move the JPG — see
-  above — but do not delete).
-- ❌ Do NOT do dep-major upgrades concurrent with other feature
-  work. If picking the react-router-dom 6→7 migration, do that
-  as its own commit / session.
+  `public/sams-freedom-ford-logo.jpg`.
+- ❌ Do NOT do dep-major upgrades concurrent with feature work.
 - ❌ Do NOT commit any real `OPENAI_API_KEY`.
 
 ---
 
-## Agent launch prompt for SESSION_032
+## Agent launch prompt for SESSION_033
 
 Paste into Claude Code / Cursor / any AI coding agent as the
 session opener.
 
 ```text
-You are picking up SESSION_032 on the Dealer AI Kit. The
-independent-dealer pivot shipped end-to-end across SESSION_030
-(Phases 1–3, backend + seed data + frontend tokens) and
-SESSION_031 (Phase 4 Django backend/freedom_ford → backend/dealer_kit
-rename, Phase 5 docs + CLAUDE.md refresh). Copper Canyon Auto is
-the default persona; franchise supported via env overrides. Full
-plan + status: docs/INDEPENDENT_DEALER_PIVOT.md.
+You are picking up SESSION_033 on the Dealer AI Kit. The
+independent-dealer pivot shipped across SESSION_030 (backend +
+seed + frontend tokens), SESSION_031 (Django rename + docs), and
+SESSION_032 (DealerOnboardingProfile persistence for the 8 indie
+shape-of-business fields + useDealerProfile hook + onboarding form
+section). Copper Canyon Auto is the default; franchise config
+preserved via env overrides.
 
 Read first:
 - context-kit orient
 - 00-START-NEXT-SESSION.md
 - docs/DEALER_KIT_SESSION_START.md
-- docs/handoffs/SESSION_031_pivot_phase4_5.md
+- docs/handoffs/SESSION_032_indie_onboarding_migration.md
 - docs/INDEPENDENT_DEALER_PIVOT.md
 
-Goal (top candidate): DealerOnboardingProfile indie-fields
-migration. The DealerProfile resolver in
-backend/dealer_ai/services/dealer_config.py returns 7 indie
-fields but they only resolve from env / hardcoded defaults. Add
-the columns + form inputs + resolution order + tests so a real
-dealer can customize their profile via the onboarding UI.
+Goal: surface the saved indie profile in the actual UI. Top
+candidates in priority order (from the handoff):
+1. Admin panel gating — show "BHPH portfolio" card only when
+   useDealerProfile().bhphEnabled === true; add "Franchise
+   config" badge when dealerType === "franchise".
+2. Ad-copy generator prompt — thread warrantyOffering +
+   creditRangeServed into the ad-copy prompt so generated drafts
+   reference real dealer terms. Verify invented-promotion scrub
+   still fires for anything not grounded in these fields.
+3. Backend prompt scaffolding — update INDIE_MODE_HINT to
+   interpolate concrete floor_plan_lender / warranty_offering /
+   credit_range_served when a real profile is configured.
 
-Alternate goals (if shorter session):
-- react-router-dom 6 → 7 migration (clears 2 security advisories).
-- Indie counterpart of seed_phase3_demo (admin dashboard data).
-- Move public/sams-freedom-ford-logo.jpg to public/branding/franchise/.
-
-Local dev setup:
-1. LLM provider is OpenAI gpt-5-mini — API key in repo-root
-   .env (untracked).
-2. Django on :8001, Vite on :5173. Start both if not running.
-3. Backend baseline: python3 manage.py test dealer_ai → 1281
-   pass, 1 skipped.
-4. Django project package is backend/dealer_kit/ (as of
-   SESSION_031 Phase 4).
+Local dev:
+- LLM = OpenAI gpt-5-mini (API key in repo-root .env).
+- Django on :8001, Vite on :5173.
+- Backend baseline: python3 manage.py test dealer_ai → 1300
+  pass, 1 skipped. Django project package = backend/dealer_kit/
+  (SESSION_031 Phase 4).
+- Frontend: 6-section onboarding form; use useDealerProfile()
+  for shape-of-business, useBrand() for display strings.
 
 Do NOT:
-- Delete the franchise config path (franchise is still
-  supported via DEALER_AI_DEALER_TYPE=franchise +
-  DEALER_AI_PRIMARY_MAKE=<OEM>).
-- Reintroduce hardcoded "Sam Wampler" / "Freedom Ford" strings
-  in default paths.
-- Change chat behavior contracts. Keep 1281-test baseline.
+- Delete the franchise config path.
+- Change chat behavior contracts. Keep 1300 baseline green.
 - Do dep-major upgrades concurrent with feature work.
 - Commit any real API keys.
 ```
 
 ---
 
-## Operational state carried from SESSION_031
+## Operational state carried from SESSION_032
 
-- **Backend (local):** Django on `:8001`. Package path
-  `backend/dealer_kit/` (as of SESSION_031 Phase 4). LLM
-  provider = OpenAI `gpt-5-mini` (API key in repo-root `.env`).
+- **Backend (local):** Django on `:8001`. Package
+  `backend/dealer_kit/`. Migration `0006` applied.
+  LLM = OpenAI `gpt-5-mini` (repo-root `.env`).
 - **Backend (prod):** `vehicle-match-api.onrender.com` — **NOT
-  active**. `render.yaml` updated with new `dealer_kit.*` paths
-  and ready to deploy.
-- **Frontend (local):** Vite on `:5173`. `useBrand()` returns
-  `DEFAULT_DEALER` = Copper Canyon Auto values (no
-  `OnboardingProfile` yet — that's SESSION_032's top candidate).
+  active**.
+- **Frontend (local):** Vite on `:5173`. `/dealer-ai-onboarding`
+  has 6 sections. `useBrand()` unchanged; `useDealerProfile()`
+  available.
 - **Frontend (prod):** **NONE**.
-- **Public routes:** `/`, `/assistant`, `/showroom`,
-  `/embed/assistant` — all render Copper Canyon persona from
-  the shipped default.
-- **Operator routes:** `/dealer-ai-overview`,
-  `/dealer-ai-live-assistant`, `/dealer-ai-inventory`,
-  `/dealer-ai-leads`, `/dealer-ai-manager-chat`,
-  `/dealer-ai-admin`, `/dealer-ai-admin/team`,
-  `/dealer-ai-onboarding`, `/dealer-ai-demo` (legacy),
-  `/dealer-ai-advisor/:slug`.
-- **Test baseline:** 1281 pass, 1 skipped, 0 fail.
-- **Env overrides available for franchise config:**
+- **Test baseline:** 1300 pass, 1 skipped, 0 fail.
+- **Env overrides for franchise config still work:**
   `DEALER_AI_DEALER_TYPE=franchise`,
   `DEALER_AI_PRIMARY_MAKE=<OEM>`,
   `DEALER_AI_DEALER_NAME=<name>`.
+  DB values override env for the 8 indie fields.
 
 ## Anchors that win on conflict
 
 If anything here disagrees with reality:
 
 1. `docs/INDEPENDENT_DEALER_PIVOT.md` — pivot living plan.
-2. `docs/handoffs/SESSION_031_pivot_phase4_5.md` — most recent handoff.
-3. `docs/handoffs/SESSION_030_independent_dealer_pivot.md` — pivot Phases 1–3.
-4. `git log --oneline -25` (what actually shipped).
-5. `git show HEAD:<path>` (current source).
+2. `docs/handoffs/SESSION_032_indie_onboarding_migration.md` —
+   most recent handoff.
+3. `docs/handoffs/SESSION_031_pivot_phase4_5.md` — Phase 4/5.
+4. `docs/handoffs/SESSION_030_independent_dealer_pivot.md` — Phases 1–3.
+5. `git log --oneline -25` (what actually shipped).
+6. `git show HEAD:<path>` (current source).
 
 Narrative docs are claims. Code and handoffs are facts.
