@@ -441,19 +441,77 @@ resolve advisor identity from the authenticated user. Django admin
 registration for both. Zero endpoint auth changes. Migration +
 model tests only.
 
+*Design note (recorded post-implementation, SESSION_039).* The
+shipped `UserDealershipRole.unique_together = (user, dealership,
+role)` **permits multiple concurrent roles for a single user at a
+single dealership** (e.g. an indie owner who also acts as sales
+manager). This is an intentional architectural decision, not an
+accident of the uniqueness constraint. Rationale:
+
+1. **Business reality of small indie dealerships.** Copper Canyon
+   Auto (the default persona) and the wider indie market routinely
+   run with owner-operators wearing multiple hats. Collapsing
+   `dealer_owner` + `sales_manager` into a single row would either
+   force artificial choice or require a "primary role" concept
+   that doesn't exist in the roadmap.
+2. **Role composition, not role hierarchy.** The seven roles in
+   §Milestone 1 name **responsibilities** (owns credit apps, owns
+   recon queue, etc.), not seniority tiers. Multiple
+   responsibilities per person is the natural business shape.
+3. **Authorization is additive.** Increments 4C/4D check "does
+   this user hold role X at this dealership?" — a set-membership
+   query. Multi-role is expressible as `roles.filter(role__in=...)`
+   without any active-role selection.
+4. **Reversibility.** If a future increment needs "the single
+   active role" (e.g. for a UI badge), it can layer that concept
+   on top — either via role priority (`dealer_owner` wins), an
+   explicit user preference persisted elsewhere, or a session-
+   scoped active-role selection. None of those require altering
+   4A's uniqueness constraint. The reverse — retrofitting
+   multi-role onto a "one active role per dealership" schema —
+   would break every historical row where the constraint was
+   satisfied by dropping data.
+
+**Trade-off accepted.** The resolver in 4B
+(`get_active_membership`) must therefore choose deterministically
+when a user holds multiple memberships at the same dealership.
+Documented in 4B below as a distinct concern with its own
+extension seam.
+
 **4B — DRF authentication classes + request-context tenancy.**
 Populate `REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]` with
 `SessionAuthentication` (customer chat stays cookie-friendly for
-the embed frame) plus `TokenAuthentication` for API clients.
-`DEFAULT_PERMISSION_CLASSES` stays permissive at the framework
-level — endpoint-level tightening lands in 4C/4D so this
-increment does not silently break any currently-public endpoint.
-Extend `services/tenancy.py` with `get_current_dealership(request)`
-that resolves in this order: (1) `request.user.memberships.first().dealership`
-when authenticated and a membership row exists, (2) header
-`X-Dealership-Slug` matched against a live `Dealership`, (3)
-`get_default_dealership()` — the single-tenant fallback. Resolver
-tests only; no endpoint changes.
+the embed frame) plus `TokenAuthentication` for API clients. Add
+`rest_framework.authtoken` to `INSTALLED_APPS` and run its
+migration. **`DEFAULT_PERMISSION_CLASSES` is not set** — the
+framework default (`AllowAny`) stands. Enforcement is 4C/4D; 4B
+only establishes that requests *carry* identity when credentials
+are present.
+
+Extend `services/tenancy.py` with two helpers, split so that the
+layers separate cleanly:
+
+1. `get_active_membership(user)` — the **which of this user's
+   memberships is active?** helper. Increment 4B ships the
+   single-membership implementation (returns the sole
+   `UserDealershipRole` when there is exactly one; deterministic
+   `.first()` by ordering when there are several; `None` when
+   there are none). This helper is the extension seam — future
+   dealership-switching UI replaces its body with an explicit
+   session-persisted selection, without altering
+   `get_current_dealership`.
+2. `get_current_dealership(request)` — the request-context
+   resolver. Composes three orthogonal signals in priority order:
+   authenticated identity (via `get_active_membership`), explicit
+   request signal (`X-Dealership-Slug` header matched against a
+   live `Dealership`), then `get_default_dealership()` as the
+   terminal fallback. Never returns `None`.
+
+Resolver tests only; no endpoint changes. The layering — Identity
+(authentication result) → Authorization (which dealership is
+this user acting within) → Business permissions (what may they
+do) — is preserved as three separate concerns; 4B does not touch
+Business permissions.
 
 **4C — Advisor workspace slug-obscurity replacement.**
 Replace the slug-only access check on
