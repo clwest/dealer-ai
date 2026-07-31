@@ -4,7 +4,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+# Both .env files loaded with override=True so edits are picked up on
+# every Django autoreload — otherwise stale os.environ values from a
+# previous process keep winning. Repo root loaded last so secrets kept
+# there (like OPENAI_API_KEY) trump anything in backend/.env.
+load_dotenv(BASE_DIR / ".env", override=True)
+load_dotenv(BASE_DIR.parent / ".env", override=True)
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-secret-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
