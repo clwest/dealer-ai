@@ -16,13 +16,13 @@ import SiteNav from "@/components/dealership/SiteNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  FREEDOM_FORD_SAMPLE_INVENTORY,
-  type FreedomFordSampleVehicle,
-} from "@/data/freedomFordInventorySample";
+  SAMPLE_INVENTORY,
+  type SampleInventoryVehicle,
+} from "@/data/sampleInventory";
 import { useBrand } from "@/lib/brand";
 import { formatCurrency } from "@/lib/utils";
 
-const FEATURED = FREEDOM_FORD_SAMPLE_INVENTORY.slice(0, 3);
+const FEATURED = SAMPLE_INVENTORY.slice(0, 3);
 
 export default function DealershipHomePage() {
   const brand = useBrand();
@@ -166,7 +166,7 @@ function InventoryTeaser() {
   );
 }
 
-function FeaturedVehicle({ vehicle }: { vehicle: FreedomFordSampleVehicle }) {
+function FeaturedVehicle({ vehicle }: { vehicle: SampleInventoryVehicle }) {
   return (
     <article className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
       <div className="aspect-[16/10] overflow-hidden bg-muted">

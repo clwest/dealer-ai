@@ -2,7 +2,7 @@
 //
 // Lives outside the OS shell, used by the customer-facing
 // `/`, `/showroom`, and `/assistant` routes. Mirrors the
-// pattern Hudiburg + samsfreedomford.com use: a thin info
+// pattern typical modern dealer sites use: a thin info
 // strip (sales / service / hours) above a primary nav row
 // with the dealer's logo, anchor links, and a single high-
 // contrast "Talk to AI" CTA on the right.
@@ -33,10 +33,12 @@ const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/#about", label: "About" },
 ];
 
-// Demo-only contact info, sourced from the dealer's public
-// marketing site (samsfreedomford.com) on 2026-05-02. In a
-// real install these would flow from the onboarding profile.
-const DEMO_SALES_PHONE = "(918) 426-2031";
+// Demo-only contact info. In a real install these flow from
+// the onboarding profile (dealership sales phone / hours). The
+// SESSION_030 Copper Canyon persona uses a Yuma, AZ area code
+// placeholder; SESSION_029's franchise config used a McAlester,
+// OK number. Both are demo placeholders.
+const DEMO_SALES_PHONE = "(928) 555-0100";
 
 export default function SiteNav() {
   const brand = useBrand();

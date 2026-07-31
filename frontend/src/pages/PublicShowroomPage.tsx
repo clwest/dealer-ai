@@ -14,11 +14,11 @@ import SiteNav from "@/components/dealership/SiteNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  FREEDOM_FORD_SAMPLE_CAPTURED_AT,
-  FREEDOM_FORD_SAMPLE_INVENTORY,
-  type FreedomFordSampleVehicle,
+  SAMPLE_INVENTORY_CAPTURED_AT,
+  SAMPLE_INVENTORY,
+  type SampleInventoryVehicle,
   type VehicleCondition,
-} from "@/data/freedomFordInventorySample";
+} from "@/data/sampleInventory";
 import { formatCurrency } from "@/lib/utils";
 
 type FilterKey = "all" | VehicleCondition | "hybrid" | "awd";
@@ -44,7 +44,7 @@ export default function PublicShowroomPage() {
 
   const vehicles = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return FREEDOM_FORD_SAMPLE_INVENTORY.filter((vehicle) => {
+    return SAMPLE_INVENTORY.filter((vehicle) => {
       const matchesQuery =
         !normalized ||
         [
@@ -82,7 +82,7 @@ export default function PublicShowroomPage() {
                   Browse the lot, then ask the assistant to narrow it.
                 </h1>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Demo inventory captured {FREEDOM_FORD_SAMPLE_CAPTURED_AT}.
+                  Demo inventory captured {SAMPLE_INVENTORY_CAPTURED_AT}.
                   Use the AI assistant for budget and fit questions.
                 </p>
               </div>
@@ -151,7 +151,7 @@ export default function PublicShowroomPage() {
   );
 }
 
-function ShowroomCard({ vehicle }: { vehicle: FreedomFordSampleVehicle }) {
+function ShowroomCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
   return (
     <article className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
       <a

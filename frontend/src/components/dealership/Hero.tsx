@@ -11,7 +11,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Bot, Car, ShieldCheck, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { FREEDOM_FORD_SAMPLE_INVENTORY } from "@/data/freedomFordInventorySample";
+import { SAMPLE_INVENTORY } from "@/data/sampleInventory";
 import { useBrand } from "@/lib/brand";
 
 const TRUST_POINTS = [
@@ -28,7 +28,7 @@ const INTENT_CHIPS = [
   "Trade-in value",
 ];
 
-const HERO_VEHICLE = FREEDOM_FORD_SAMPLE_INVENTORY[5];
+const HERO_VEHICLE = SAMPLE_INVENTORY[5];
 
 export default function Hero() {
   const brand = useBrand();

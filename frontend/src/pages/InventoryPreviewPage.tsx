@@ -1,11 +1,11 @@
 // SESSION_014 — Inventory preview / stub page.
+// SESSION_030 pivot — data source renamed to `sampleInventory.ts`
+// and pointed at the Copper Canyon Auto persona (mixed-make used).
 //
 // Read-only visual surface that demos how the OS surfaces inventory.
-// Source is the captured sample at
-// `frontend/src/data/freedomFordInventorySample.ts` — public, demo-
-// only data extracted from the dealer's marketing site for visual
-// realism. The Live Assistant page still uses real backend
-// matched_vehicles; this page is intentionally separate.
+// Source is the sample at `frontend/src/data/sampleInventory.ts`
+// (public, demo-only). The Live Assistant page still uses real
+// backend matched_vehicles; this page is intentionally separate.
 //
 // When CRM/DMS feed integration lands, replace the data import with
 // the live source and delete the sample module.
@@ -23,12 +23,12 @@ import {
 } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import {
-  FREEDOM_FORD_SAMPLE_CAPTURED_AT,
-  FREEDOM_FORD_SAMPLE_INVENTORY,
-  FREEDOM_FORD_SAMPLE_SOURCE_URL,
-  type FreedomFordSampleVehicle,
+  SAMPLE_INVENTORY_CAPTURED_AT,
+  SAMPLE_INVENTORY,
+  SAMPLE_INVENTORY_HOMEPAGE_URL,
+  type SampleInventoryVehicle,
   type VehicleCondition,
-} from "@/data/freedomFordInventorySample";
+} from "@/data/sampleInventory";
 
 const CONDITION_STYLES: Record<VehicleCondition, string> = {
   new: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -43,8 +43,8 @@ const CONDITION_LABEL: Record<VehicleCondition, string> = {
 };
 
 export default function InventoryPreviewPage() {
-  const totalCount = FREEDOM_FORD_SAMPLE_INVENTORY.length;
-  const newCount = FREEDOM_FORD_SAMPLE_INVENTORY.filter(
+  const totalCount = SAMPLE_INVENTORY.length;
+  const newCount = SAMPLE_INVENTORY.filter(
     (v) => v.condition === "new",
   ).length;
   const usedCount = totalCount - newCount;
@@ -64,7 +64,7 @@ export default function InventoryPreviewPage() {
       <DemoBanner />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {FREEDOM_FORD_SAMPLE_INVENTORY.map((v) => (
+        {SAMPLE_INVENTORY.map((v) => (
           <InventoryCard key={v.vin} vehicle={v} />
         ))}
       </div>
@@ -79,15 +79,15 @@ function DemoBanner() {
       <div className="space-y-0.5">
         <div className="font-semibold">Demo data</div>
         <div className="text-xs text-amber-800">
-          Sample of {FREEDOM_FORD_SAMPLE_INVENTORY.length} vehicles captured
-          on {FREEDOM_FORD_SAMPLE_CAPTURED_AT} from{" "}
+          Sample of {SAMPLE_INVENTORY.length} vehicles refreshed on{" "}
+          {SAMPLE_INVENTORY_CAPTURED_AT}. Browse the full lot at{" "}
           <a
-            href={FREEDOM_FORD_SAMPLE_SOURCE_URL}
+            href={SAMPLE_INVENTORY_HOMEPAGE_URL}
             target="_blank"
             rel="noreferrer"
             className="underline underline-offset-2"
           >
-            samsfreedomford.com
+            the dealership's inventory page
           </a>
           . Used here for visual realism only — the Live Assistant uses real
           backend inventory. Will be replaced by the CRM/DMS feed when that
@@ -98,7 +98,7 @@ function DemoBanner() {
   );
 }
 
-function InventoryCard({ vehicle }: { vehicle: FreedomFordSampleVehicle }) {
+function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
   const hasMsrp = vehicle.msrp !== null && vehicle.msrp > vehicle.price;
   return (
     <Card className="overflow-hidden p-0">
@@ -107,7 +107,7 @@ function InventoryCard({ vehicle }: { vehicle: FreedomFordSampleVehicle }) {
         target="_blank"
         rel="noreferrer"
         className="block"
-        aria-label={`Open ${vehicle.display_name} on samsfreedomford.com`}
+        aria-label={`Open ${vehicle.display_name} details`}
       >
         <div className="relative aspect-video w-full overflow-hidden bg-muted">
           <img
