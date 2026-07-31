@@ -52,6 +52,7 @@ from .services.handoff_service import build_handoff_packet, packet_to_text
 from .services.lead_service import create_lead_from_session
 from .services.manager_chat_response import enforce_coaching_shape
 from .services.pipeline import pipeline_snapshot
+from .services.tenancy import get_default_dealership
 from .services.trends import trends_snapshot
 from .services.vehicle_assistant import analyze_vehicle, answer_vehicle_question
 
@@ -88,6 +89,7 @@ def start_chat(request):
     data = serializer.validated_data
 
     session = ChatSession.objects.create(
+        dealership=get_default_dealership(),
         customer_name=data.get("customer_name", ""),
         customer_email=data.get("customer_email", ""),
         customer_phone=data.get("customer_phone", ""),
@@ -844,6 +846,7 @@ def manager_chat(request):
         )
 
     session = ChatSession.objects.create(
+        dealership=get_default_dealership(),
         metadata={"channel": "manager_test"},
     )
     engine = ChatEngine(session=session)
@@ -883,7 +886,10 @@ def onboarding_profile(request):
         (validates every field). PATCH allows partial updates and only
         validates the keys present in the body.
     """
-    profile = DealerOnboardingProfile.objects.first()
+    dealership = get_default_dealership()
+    profile = (
+        DealerOnboardingProfile.objects.filter(dealership=dealership).first()
+    )
 
     if request.method == "GET":
         if profile is None:
@@ -904,7 +910,7 @@ def onboarding_profile(request):
             profile, data=request.data, partial=partial
         )
     serializer.is_valid(raise_exception=True)
-    profile = serializer.save()
+    profile = serializer.save(dealership=dealership)
     return Response(
         DealerOnboardingProfileSerializer(profile).data, status=status.HTTP_200_OK
     )
@@ -951,7 +957,10 @@ def onboarding_logo_upload(request):
     )
     logo_url = request.build_absolute_uri(f"{settings.MEDIA_URL}{path}")
 
-    profile = DealerOnboardingProfile.objects.first()
+    dealership = get_default_dealership()
+    profile = (
+        DealerOnboardingProfile.objects.filter(dealership=dealership).first()
+    )
     if profile is None:
         serializer = DealerOnboardingProfileSerializer(
             data={**ONBOARDING_DEFAULTS, "logo_url": logo_url}
@@ -961,7 +970,7 @@ def onboarding_logo_upload(request):
             profile, data={"logo_url": logo_url}, partial=True
         )
     serializer.is_valid(raise_exception=True)
-    profile = serializer.save()
+    profile = serializer.save(dealership=dealership)
     return Response(
         DealerOnboardingProfileSerializer(profile).data, status=status.HTTP_200_OK
     )

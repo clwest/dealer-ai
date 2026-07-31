@@ -22,6 +22,7 @@ from .intent_parser import merge_profile
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
 from .payment_engine import affordable_max_price
+from .tenancy import get_default_dealership
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +124,20 @@ def create_lead_from_session(
         profile=(session.extracted_profile if session else {}),
     )
 
+    # Tenant inheritance: prefer the parent session's dealership so lead
+    # + handoff message stay tenant-consistent with the originating
+    # session. When there's no session (direct lead creation, e.g. from
+    # a walk-in form), fall through to the default. The pre_save
+    # tenancy signal would also cover this case; passing it explicitly
+    # here keeps intent visible for future request-context callers.
+    lead_dealership = (
+        session.dealership if session is not None and session.dealership_id
+        else get_default_dealership()
+    )
+
     with transaction.atomic():
         lead = CustomerLead.objects.create(
+            dealership=lead_dealership,
             session=session,
             name=payload.get("name", "").strip(),
             phone=payload.get("phone", "").strip(),
@@ -150,6 +163,7 @@ def create_lead_from_session(
             session.save(update_fields=list(set(update_fields)))
 
             ChatMessage.objects.create(
+                dealership=lead_dealership,
                 session=session,
                 role="system",
                 content=_format_handoff_message(lead),

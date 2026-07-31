@@ -18,7 +18,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import Vehicle
+from ..models import Dealership, Vehicle
+from .tenancy import get_default_dealership
 
 logger = logging.getLogger(__name__)
 
@@ -290,9 +291,20 @@ def import_rows(
     source: str,
     dry_run: bool = False,
     mark_missing_unavailable: bool = True,
+    dealership: Optional[Dealership] = None,
 ) -> ImportSummary:
     """Persist (or simulate) the import. Always runs inside a transaction; if
-    `dry_run` is True the transaction is rolled back at the end."""
+    `dry_run` is True the transaction is rolled back at the end.
+
+    ``dealership`` scopes the created rows to a specific tenant. When
+    omitted, the default tenancy resolver picks the single-tenant
+    Dealership row — the same behavior every existing caller sees. The
+    pre_save signal would also cover the unset case, but plumbing it
+    through here keeps intent visible for future request-context
+    callers and lets ``mark_missing_unavailable`` scope its stale-row
+    query to the correct tenant.
+    """
+    tenant = dealership if dealership is not None else get_default_dealership()
     started_at = timezone.now()
     summary = ImportSummary(
         source=source,
@@ -312,6 +324,7 @@ def import_rows(
             existing = _find_existing(cleaned["stock_number"], cleaned["vin"])
             if existing is None:
                 vehicle = Vehicle(**cleaned)
+                vehicle.dealership = tenant
                 vehicle.source = source
                 vehicle.last_seen_at = started_at
                 vehicle.imported_at = started_at
@@ -332,8 +345,15 @@ def import_rows(
         summary.seen_stock_numbers = seen_stock_numbers
 
         if mark_missing_unavailable and seen_stock_numbers:
+            # Scope the stale-row sweep to the tenant we're importing
+            # into so a multi-tenant future never marks another
+            # dealer's inventory unavailable based on this import.
             stale = (
-                Vehicle.objects.filter(source=source, is_available=True)
+                Vehicle.objects.filter(
+                    dealership=tenant,
+                    source=source,
+                    is_available=True,
+                )
                 .exclude(stock_number__in=seen_stock_numbers)
             )
             summary.marked_unavailable = stale.count()
@@ -351,6 +371,7 @@ def import_csv(
     source: Optional[str] = None,
     dry_run: bool = False,
     mark_missing_unavailable: bool = True,
+    dealership: Optional[Dealership] = None,
 ) -> ImportSummary:
     path = Path(file_path)
     if not path.is_file():
@@ -361,4 +382,5 @@ def import_csv(
         source=derived_source,
         dry_run=dry_run,
         mark_missing_unavailable=mark_missing_unavailable,
+        dealership=dealership,
     )

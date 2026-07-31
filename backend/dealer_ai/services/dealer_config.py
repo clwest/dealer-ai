@@ -6,14 +6,22 @@ hardcode dealer-specific strings now formats its prompt/response with
 shape-of-business questions) and resolves the value at call time via
 :func:`get_dealer_name` / :func:`get_dealer_profile`.
 
+Both resolvers accept an optional ``dealership`` argument (Milestone 1
+· Increment 3). When omitted, they resolve the tenancy target via
+:func:`services.tenancy.get_default_dealership`, which returns the
+deterministically-seeded default row. Callers with an explicit tenant
+in hand (future request-context resolution) pass it directly and
+bypass the default lookup. The env-override + Copper Canyon default
+layers are unchanged by the tenancy plumbing.
+
 Resolution order for ``name`` (first non-empty wins):
 
 1. ``settings.DEALER_AI_DEALER_NAME`` (env-driven —
    ``DEALER_AI_DEALER_NAME=...`` in ``backend/.env`` or repo-root
    ``.env``).
-2. ``DealerOnboardingProfile.dealership_name`` (the singleton persisted
-   via the Setup UI — matches the source-of-truth ``useBrand()`` uses on
-   the frontend).
+2. ``DealerOnboardingProfile.dealership_name`` (persisted via the
+   Setup UI — matches the source-of-truth ``useBrand()`` uses on the
+   frontend). Scoped to ``dealership`` when supplied.
 3. ``"the dealership"`` — a bland but sentence-safe fallback so
    generated copy stays coherent when nothing is configured yet.
 
@@ -50,9 +58,12 @@ Django app registry to be ready, so DB access is lazy and swallowed.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, Optional
 
 from django.conf import settings
+
+if TYPE_CHECKING:  # pragma: no cover — typing-only import
+    from ..models import Dealership
 
 _FALLBACK_DEALER_NAME = "the dealership"
 
@@ -124,26 +135,48 @@ _COPPER_CANYON_DEFAULTS = DealerProfile(
 )
 
 
-def get_dealer_name() -> str:
-    """Return the display name for the currently-configured dealer."""
+def _load_onboarding_profile(dealership: Optional["Dealership"]):
+    """Return the ``DealerOnboardingProfile`` for the current tenant, or
+    ``None`` if the DB is unreachable / pre-migrate / no profile exists.
+
+    When ``dealership`` is supplied, the lookup is scoped to that tenant.
+    When omitted, the default tenancy resolver picks the tenant — which
+    is the single-tenant path used by every caller today. Both paths
+    preserve the ``"most recently updated wins"`` semantics that the
+    pre-tenancy ``.objects.first()`` call had (Meta.ordering =
+    ``["-updated_at"]``).
+    """
+    try:
+        # Lazy import so this module is safe to import at settings-load time.
+        from ..models import DealerOnboardingProfile
+        from .tenancy import get_default_dealership
+
+        target = dealership if dealership is not None else get_default_dealership()
+        return DealerOnboardingProfile.objects.filter(dealership=target).first()
+    except Exception:
+        # Table doesn't exist yet (fresh install pre-migrate), DB is
+        # offline, the default Dealership row hasn't been seeded yet
+        # (pre-0009 migration), or the model import failed. Fall
+        # through to the bland default rather than crash any caller.
+        return None
+
+
+def get_dealer_name(dealership: Optional["Dealership"] = None) -> str:
+    """Return the display name for the currently-configured dealer.
+
+    When ``dealership`` is supplied, the DB layer of the fallback chain
+    is scoped to that tenant. Env override and bland-fallback layers
+    are unchanged.
+    """
     env_name = (getattr(settings, "DEALER_AI_DEALER_NAME", "") or "").strip()
     if env_name:
         return env_name
 
-    try:
-        # Lazy import so this module is safe to import at settings-load time.
-        from ..models import DealerOnboardingProfile
-
-        profile = DealerOnboardingProfile.objects.first()
-        if profile:
-            name = (profile.dealership_name or "").strip()
-            if name:
-                return name
-    except Exception:
-        # Table doesn't exist yet (fresh install pre-migrate), DB is
-        # offline, or the model import fails. Fall through to the
-        # bland default rather than crash any caller.
-        pass
+    profile = _load_onboarding_profile(dealership)
+    if profile:
+        name = (profile.dealership_name or "").strip()
+        if name:
+            return name
 
     return _FALLBACK_DEALER_NAME
 
@@ -171,24 +204,21 @@ def _parse_csv(raw: str) -> tuple[str, ...]:
     )
 
 
-def get_dealer_profile() -> DealerProfile:
+def get_dealer_profile(
+    dealership: Optional["Dealership"] = None,
+) -> DealerProfile:
     """Return the full shape of the currently-configured dealer.
 
     Every field has a documented resolution order — see this module's
     docstring. DB access is lazy + exception-swallowed so importing
     this module never requires a ready app registry, and a fresh
     install pre-migrate still returns the Copper Canyon defaults.
-    """
-    profile = None
-    try:
-        # Lazy import so this module stays safe at settings-load time.
-        from ..models import DealerOnboardingProfile
 
-        profile = DealerOnboardingProfile.objects.first()
-    except Exception:
-        # Table missing (pre-migrate), DB offline, or import failure.
-        # Fall through — every field below has a hardcoded fallback.
-        profile = None
+    When ``dealership`` is supplied, the ``DealerOnboardingProfile``
+    lookup is scoped to that tenant; every non-DB layer (env, Copper
+    Canyon defaults) is unchanged.
+    """
+    profile = _load_onboarding_profile(dealership)
 
     # dealer_type: DB → env → default.
     if profile and (profile.dealer_type or "").strip():
@@ -263,7 +293,7 @@ def get_dealer_profile() -> DealerProfile:
 
     return replace(
         _COPPER_CANYON_DEFAULTS,
-        name=get_dealer_name(),
+        name=get_dealer_name(dealership=dealership),
         dealer_type=dealer_type,
         primary_make=primary_make,
         bhph_enabled=bhph_enabled,

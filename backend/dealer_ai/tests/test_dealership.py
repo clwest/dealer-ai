@@ -1,15 +1,14 @@
-"""Milestone 1 · Increments 1 & 2 — Dealership + tenant-carrier FKs.
+"""Milestone 1 · Increments 1, 2 & 3 — Dealership + tenant-carrier FKs.
 
 Increment 1 (model): tests the `Dealership` shape in isolation.
 Increment 2 (FKs + backfill): tests that the six tenant-carrying
 models expose a `dealership` FK, that the data migration seeded a
 deterministic default row (slug=`default`), and that the fallback
 name-resolution ladder produced a valid name.
-
-NOT NULL enforcement is deferred to Increment 3 (bundled with the
-write-path tenancy propagation), so the FK is nullable in this
-increment. Tests locking that boundary live here so a premature NOT
-NULL flip fails loudly.
+Increment 3 (write-path plumbing + NOT NULL): tests that the six FKs
+are now NOT NULL, that :func:`services.tenancy.get_default_dealership`
+returns the seeded row, and that the ``pre_save`` fallback attaches
+the default when the caller leaves ``dealership`` unset.
 """
 
 from __future__ import annotations
@@ -105,8 +104,9 @@ class TenancyFkAttachment(TestCase):
     """New rows can attach to a Dealership via the FK.
 
     Locks the FK's presence + related_name so future refactors don't
-    silently rename them. FK is nullable in this increment (NOT NULL
-    flip deferred to Increment 3 with write-path plumbing).
+    silently rename them. FK is NOT NULL as of Increment 3 — the
+    write-path plumbing in :mod:`services.tenancy` guarantees no
+    caller can produce a null.
     """
 
     def setUp(self):
@@ -151,12 +151,11 @@ class TenancyFkAttachment(TestCase):
         )
         self.assertIn(profile, self.default.onboarding_profiles.all())
 
-    def test_fk_is_nullable_in_this_increment(self):
-        # Guard: a future NOT NULL flip must land together with the
-        # write-path tenancy plumbing in Increment 3. If this assertion
-        # ever fails, it means the flip landed early — the write callers
-        # (views, chat_engine, inventory_import) still don't know about
-        # tenancy and will 500 in production.
+    def test_fk_is_now_not_null(self):
+        # Milestone 1 · Increment 3 — the six FKs are NOT NULL. Every
+        # write path either passes ``dealership=`` explicitly or gets
+        # the default attached by the pre_save fallback in
+        # :mod:`services.tenancy`, so a null can never reach the DB.
         for model in (
             Vehicle,
             Salesperson,
@@ -165,9 +164,9 @@ class TenancyFkAttachment(TestCase):
             CustomerLead,
             DealerOnboardingProfile,
         ):
-            self.assertTrue(
+            self.assertFalse(
                 model._meta.get_field("dealership").null,
-                f"{model.__name__}.dealership should be nullable in Increment 2",
+                f"{model.__name__}.dealership should be NOT NULL in Increment 3",
             )
 
 
@@ -185,3 +184,93 @@ class BackfillDefaultNameResolution(TestCase):
         # the only cross-env invariant is: non-empty + string.
         self.assertIsInstance(default.name, str)
         self.assertGreater(len(default.name.strip()), 0)
+
+
+class TenancyPrimitive(TestCase):
+    """Milestone 1 · Increment 3 — the default-tenancy resolver.
+
+    Locks the contract every future write path depends on: there is
+    exactly one canonical default Dealership, it's discoverable by
+    ``slug='default'``, and the module-level cache round-trips
+    consistently across calls.
+    """
+
+    def test_get_default_dealership_returns_the_seeded_row(self):
+        from dealer_ai.services.tenancy import get_default_dealership
+
+        default = get_default_dealership()
+        self.assertEqual(default.slug, "default")
+
+    def test_get_default_dealership_is_stable_across_calls(self):
+        from dealer_ai.services.tenancy import get_default_dealership
+
+        first = get_default_dealership()
+        second = get_default_dealership()
+        self.assertEqual(first.pk, second.pk)
+
+    def test_reset_cache_forces_fresh_lookup(self):
+        from dealer_ai.services.tenancy import (
+            get_default_dealership,
+            reset_default_dealership_cache,
+        )
+
+        first = get_default_dealership()
+        reset_default_dealership_cache()
+        # Post-reset the resolver hits the DB again but still returns
+        # the same seeded row (the reset drops the cached PK, not the
+        # row itself).
+        second = get_default_dealership()
+        self.assertEqual(first.pk, second.pk)
+
+
+class WritePathFallback(TestCase):
+    """Milestone 1 · Increment 3 — the ``pre_save`` fallback attaches
+    the default Dealership when the caller leaves ``dealership`` unset.
+
+    This is the guarantee that lets NOT NULL be safe without every
+    existing caller (management commands, tests, seed scripts) knowing
+    about tenancy.
+    """
+
+    def test_chat_session_autofill_from_default(self):
+        session = ChatSession.objects.create()
+        self.assertIsNotNone(session.dealership_id)
+        self.assertEqual(session.dealership.slug, "default")
+
+    def test_vehicle_autofill_from_default(self):
+        v = Vehicle.objects.create(
+            stock_number="INC3-AUTOFILL",
+            year=2024,
+            model="Bronco",
+            price=Decimal("42000.00"),
+        )
+        self.assertEqual(v.dealership.slug, "default")
+
+    def test_customer_lead_autofill_from_default_when_no_session(self):
+        lead = CustomerLead.objects.create(name="Walk-in Wanda")
+        self.assertEqual(lead.dealership.slug, "default")
+
+    def test_explicit_dealership_short_circuits_fallback(self):
+        # Explicit tenant assignment must never be overwritten by the
+        # fallback — this is the seam future request-context tenancy
+        # relies on.
+        other = Dealership.objects.create(name="Other Store", slug="other")
+        session = ChatSession.objects.create(dealership=other)
+        self.assertEqual(session.dealership_id, other.pk)
+
+    def test_chat_message_inherits_parent_session_dealership(self):
+        # Parent-record inheritance: ChatMessage without an explicit
+        # dealership picks up the parent ChatSession's tenant, not the
+        # default. This keeps parent + child rows tenant-consistent.
+        other = Dealership.objects.create(name="Other Store", slug="other2")
+        session = ChatSession.objects.create(dealership=other)
+        msg = ChatMessage.objects.create(
+            session=session, role="user", content="hi"
+        )
+        self.assertEqual(msg.dealership_id, other.pk)
+
+    def test_customer_lead_inherits_parent_session_dealership(self):
+        other = Dealership.objects.create(name="Other Store", slug="other3")
+        session = ChatSession.objects.create(dealership=other)
+        lead = CustomerLead.objects.create(name="Session-linked", session=session)
+        self.assertEqual(lead.dealership_id, other.pk)
