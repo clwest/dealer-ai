@@ -1,8 +1,8 @@
 ---
 title: "Dealer AI Kit — Verified Capability Matrix"
 status: living
-last_verified: 2026-07-30
-verified_against_commit: 7a91255
+last_verified: 2026-07-31
+verified_against_commit: 0ec372a
 ---
 
 # Dealer AI Kit — Verified Capability Matrix
@@ -37,8 +37,8 @@ dealership.
 
 ## Objective baseline
 
-- **Backend test suite:** `python3 manage.py test` → **1218 pass, 1
-  skipped**. ~2.7s. Run from `backend/`.
+- **Backend test suite:** `python3 manage.py test dealer_ai` → **1281 pass, 1
+  skipped**. ~3.6s. Run from `backend/`.
 - **Frontend typecheck:** `npx tsc --noEmit` → clean. Run from `frontend/`.
 - **Frontend build:** `npx vite build` → clean, ~490 kB bundle / ~134 kB
   gzip.
@@ -275,7 +275,7 @@ questions) or Shape B (coaching directive). Rejects free-form monologues.
 - **Trending-signal ad recommendations.** The admin dashboard surfaces
   ad-copy opportunities based on which models/types customers actually
   asked about, then generates compliant ad drafts on demand.
-- **1218 tests passing.**
+- **1281 tests passing.**
 
 ## Honest gaps to flag when pitching
 
@@ -295,17 +295,22 @@ questions) or Shape B (coaching directive). Rejects free-form monologues.
   prompt occasionally misreads context (heard "$22k trade" as "$22k
   budget" in a smoke test). Fixable with prompt work; not a broken
   capability.
-- **Seed inventory is still 100% Ford** (Tier 2 rebrand pending). The
-  visible demo still reads as a Ford dealer even though dealer identity
-  is templated.
+- **Default seed inventory pivoted to Copper Canyon Auto** (Yuma, AZ —
+  indie, mixed-make used only) as of SESSION_030 Phases 1–3. The
+  Freedom Ford franchise seed + demo script are preserved as an
+  alternate-config reference (`docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`)
+  and remain runnable via `DEALER_AI_DEALER_TYPE=franchise` +
+  `DEALER_AI_PRIMARY_MAKE=Ford`. The Django project package rename
+  `backend/freedom_ford/` → `backend/dealer_kit/` shipped in
+  SESSION_031 Phase 4.
 
 ## Where the runtime detail lives
 
 - `docs/PROJECT_PIPELINE.md` — request-flow map: entry points, guard
   order, scrub order, state surfaces, retrieval paths, asymmetries.
-- `docs/FREEDOM_FORD_BEHAVIOR_LAYER.md` — voice / tone contract,
+- `docs/DEALER_KIT_BEHAVIOR_LAYER.md` — voice / tone contract,
   constraint preservation across turns, reply-rule branch matrix.
-- `docs/FREEDOM_FORD_TRANSLATION_LAYER.md` — audience contract per
+- `docs/DEALER_KIT_TRANSLATION_LAYER.md` — audience contract per
   persona (Builder / Operator / Executive / Tester).
-- Backend tests under `backend/dealer_ai/tests/` — 1218 tests are the
+- Backend tests under `backend/dealer_ai/tests/` — 1281 tests are the
   authoritative behavior contract.

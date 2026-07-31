@@ -349,9 +349,9 @@ without a fork. That's the contract.
   Read this first if you haven't.
 - `docs/handoffs/SESSION_019_platform_reframe_dealer_ai_kit.md`
   — the session that introduced the reframe.
-- `docs/FREEDOM_FORD_SESSION_START.md` — historical project
-  walkthrough, preserved verbatim. Now leads with a reframe
-  callout.
+- `docs/DEALER_KIT_SESSION_START.md` — the hand-written session
+  orientation index (renamed from `FREEDOM_FORD_SESSION_START.md`
+  in SESSION_031 Phase 5, updated for the Copper Canyon default).
 - `frontend/src/config/defaultDealer.ts` — the config module
   this guide references throughout.
 - `frontend/src/lib/brand.ts` — the `useBrand()` hook every

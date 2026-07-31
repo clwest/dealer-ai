@@ -1,11 +1,13 @@
 ---
 title: "Independent Dealer Pivot — Scoping & Execution Plan"
-status: active
+status: shipped
 last_updated: 2026-07-31
 baseline_commit: 2286557
 phase_1_completed_commit: 3460414  # INDIE_MODE_HINT injection
 phase_2_completed_commit: 5f2e537  # Copper Canyon scenarios seed
 phase_3_completed_commit: 8e969d9  # inventory sample swap
+phase_4_completed_commit: 0ec372a  # Django backend/freedom_ford → backend/dealer_kit rename
+phase_5_completed_commit: TBD  # SESSION_031 doc + CLAUDE.md refresh (this commit)
 target_persona: Copper Canyon Auto (Yuma, AZ)
 ---
 
@@ -49,12 +51,24 @@ target_persona: Copper Canyon Auto (Yuma, AZ)
   dependency. The Freedom Ford legacy asset
   `public/sams-freedom-ford-logo.jpg` is intentionally not
   deleted (guardrail: pivot doc forbids Tier 3 asset removal).
-- **Phase 4–5:** Not started. Django package rename
-  `backend/freedom_ford/` → `backend/dealer_kit/` (contained-
-  blast-radius commit); docs renames (`docs/FREEDOM_FORD_*.md`
-  → `docs/DEALER_KIT_*.md`), rewrites for Copper Canyon anchor;
-  `CLAUDE.md` adopt block + frontend stack notes refresh;
-  formal SESSION_030 handoff.
+- **Phase 4 (Django package rename):** ✅ shipped in SESSION_031
+  as a single contained-blast-radius commit `0ec372a`.
+  `backend/freedom_ford/` → `backend/dealer_kit/` via `git mv`
+  (7 files, history preserved) + 11-line edits across
+  `dealer_kit/{settings,wsgi,asgi}.py`, `manage.py`,
+  `smoke_drift_audit.py`, `render.yaml`. Test baseline
+  1281 → 1281, 1 skipped preserved, zero drift.
+- **Phase 5 (docs + CLAUDE.md + handoff):** ✅ shipped in SESSION_031.
+  Renamed and reframed `docs/FREEDOM_FORD_{SESSION_START,BEHAVIOR_LAYER,TRANSLATION_LAYER}.md`
+  → `docs/DEALER_KIT_*.md` with Copper Canyon anchor (contracts +
+  worked examples preserved verbatim as historical franchise
+  reference implementation). Refreshed `docs/PROJECT_WHAT_IT_IS.md`,
+  `docs/BUILD_PLAN.md`, `docs/CAPABILITY_MATRIX.md`,
+  `docs/CONTEXT_KIT_INVENTORY.md`. Updated `CLAUDE.md` adopt-managed
+  block via `context-kit adopt` re-run + hand-edit of the
+  frontend-stack-notes brand-tokens paragraph. Formal handoff
+  at `docs/handoffs/SESSION_031_pivot_phase4_5.md`;
+  `00-START-NEXT-SESSION.md` rewritten for SESSION_032.
 
 
 

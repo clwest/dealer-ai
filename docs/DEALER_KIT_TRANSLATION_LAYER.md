@@ -1,21 +1,32 @@
 ---
-title: "Freedom Ford — Translation Layer"
+title: "Dealer AI Kit — Translation Layer"
 status: project-owned
 generated: 2026-05-02
+last_reframed: 2026-07-31
 companion_docs:
-  - "FREEDOM_FORD_SESSION_START.md"
+  - "DEALER_KIT_SESSION_START.md"
   - "PROJECT_WHAT_IT_IS.md"
   - "CONTEXT_KIT_INVENTORY.md"
   - "PROJECT_PIPELINE.md"
-  - "FREEDOM_FORD_BEHAVIOR_LAYER.md"
+  - "DEALER_KIT_BEHAVIOR_LAYER.md"
   - "onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md"
 ---
 
-# Freedom Ford — Translation Layer
+# Dealer AI Kit — Translation Layer
 
 > **Project-owned, hand-written.** Not auto-generated. `context-kit
 > adopt`, `seed`, or `inventory --write` must not overwrite it. Edit
 > freely; if you delete it, `orient` silently omits this section.
+>
+> **Reference implementation note (2026-07-31 pivot):** the shipped
+> default dealer is Copper Canyon Auto (Yuma, AZ — indie). The three
+> Example Translations below are drawn from SESSION_008–010, which
+> pre-date the pivot and were captured against the Freedom Ford
+> franchise reference implementation. **The truth-preservation
+> contract and Live Chat Mode rules are identical for the Copper
+> Canyon default** — those examples remain accurate as *historical
+> worked cases*. The personas, translation modes, and refusal rules
+> in this doc are dealer-agnostic and apply to any configured dealer.
 
 ---
 
@@ -24,11 +35,12 @@ companion_docs:
 > **Core rule:** *Same truth → different explanation layer → zero
 > distortion.*
 
-Freedom Ford's AI assistant has multiple stakeholders who read the same
-project state through different lenses: the builder (Chris), the
-operator/tester (Jessica), the dealer owner, the sales manager, and
-eventually individual salespeople. They each need a different framing
-of the same facts. This document is the contract that says:
+The Dealer AI Kit has multiple stakeholders who read the same project
+state through different lenses: the builder (Chris), the operator /
+tester (Jessica), the dealer owner (any configured dealership), the
+sales manager, and eventually individual salespeople. They each need
+a different framing of the same facts. This document is the contract
+that says:
 
 - The assistant **may** simplify, reframe, reorder, change examples,
   and adjust vocabulary for the audience.
@@ -50,7 +62,7 @@ If a fact is not in the source-of-truth inputs below, the assistant
 In `orient` read order. The translation layer reads from these
 anchors; it never adds new facts.
 
-1. `docs/FREEDOM_FORD_SESSION_START.md` — hand-written entry point.
+1. `docs/DEALER_KIT_SESSION_START.md` — hand-written entry point.
    Current baseline (test counts, demo-readiness, what's persisted).
 2. `docs/PROJECT_WHAT_IT_IS.md` — narrative anchor: one-paragraph
    description of the system.
@@ -58,14 +70,16 @@ anchors; it never adds new facts.
    this repo shape; trust `context/INVENTORY.md` instead).
 4. `docs/PROJECT_PIPELINE.md` — runtime flow map: how a chat request
    moves through pre-LLM guards → LLM → post-LLM scrub stack.
-5. `docs/FREEDOM_FORD_BEHAVIOR_LAYER.md` — voice / display / constraint
+5. `docs/DEALER_KIT_BEHAVIOR_LAYER.md` — voice / display / constraint
    contract for the customer-facing assistant.
-6. `docs/onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md` — onboarding
+6. `docs/INDEPENDENT_DEALER_PIVOT.md` — the 2026-07-31 pivot plan +
+   phase-by-phase status snapshot (persona, deltas, guardrails).
+7. `docs/onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md` — onboarding
    architecture; SESSION_008 persistence, SESSION_009 wiring,
    SESSION_010 manager chat.
-7. Latest `docs/handoffs/SESSION_NNN_*.md` — what last session shipped
+8. Latest `docs/handoffs/SESSION_NNN_*.md` — what last session shipped
    (definitive on shipped status / test count / known gaps).
-8. `00-START-NEXT-SESSION.md` — current session priority; the
+9. `00-START-NEXT-SESSION.md` — current session priority; the
    hand-written section below the adopt-managed block is canonical.
 
 If any document above says "X is shipped" or "Y is broken", the
@@ -139,8 +153,8 @@ The assistant **must not**:
 
 1. **Invent features.** No "we now support multi-store" unless a
    handoff says so.
-2. **Invent test results.** "1189 tests pass" requires that to be
-   the current baseline in `FREEDOM_FORD_SESSION_START.md`.
+2. **Invent test results.** "1281 tests pass" requires that to be
+   the current baseline in `DEALER_KIT_SESSION_START.md`.
 3. **Invent customer value.** Don't promote a feature as solving a
    problem the source-of-truth didn't claim it solves.
 4. **Invent business outcomes.** No "this saves the dealer $X/month"
@@ -564,12 +578,19 @@ When was this doc last reconciled with actual source-of-truth?
 Update the line below when you re-read the anchors and confirm
 the translations / examples / next-actions still hold.
 
-- **Last verified:** 2026-05-02 — by Chris against handoff
-  `SESSION_010_manager_chat_tester.md` (coaching-reframe
+- **Last verified (contracts):** 2026-05-02 — by Chris against
+  handoff `SESSION_010_manager_chat_tester.md` (coaching-reframe
   appendix) plus the in-flight SESSION_011 structural-coaching
   enforcement work and the Live Chat Mode contract validated
   with Jessica the same day. Backend baseline **1210 pass /
   1 skip / 0 fail** post-SESSION_011 (was 1189 pre).
+- **Last verified (pivot reframing):** 2026-07-31 — SESSION_031
+  Phase 5 updated title, companion docs, source-of-truth doc
+  paths, and "Chris/Jessica" identity references from Freedom
+  Ford scope to the kit scope. Personas, translation modes,
+  truth-preservation rules, Live Chat Mode contract, and the
+  three worked examples all preserved verbatim. Backend baseline
+  now **1281 pass / 1 skip / 0 fail** post-SESSION_030+031.
 
 If this line is more than a few sessions old, treat the
 translations above as suggestive, not authoritative. Re-read the

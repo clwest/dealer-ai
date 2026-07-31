@@ -23,7 +23,7 @@ do not rush a giant ORM refactor.
 
 The chat engine today builds its system prompt from:
 
-- A static voice contract (`docs/FREEDOM_FORD_BEHAVIOR_LAYER.md`).
+- A static voice contract (`docs/DEALER_KIT_BEHAVIOR_LAYER.md`).
 - Deterministic backend math (payment / budget classification).
 - Per-vehicle metadata (drivetrain, body style, etc.).
 

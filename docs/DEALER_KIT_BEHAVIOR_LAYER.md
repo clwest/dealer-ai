@@ -1,16 +1,33 @@
 ---
-title: "Freedom Ford — Behavior Layer"
+title: "Dealer AI Kit — Behavior Layer"
 status: active
 generated: 2026-05-01
-companion_docs: ["PROJECT_WHAT_IT_IS.md", "CONTEXT_KIT_INVENTORY.md", "PROJECT_PIPELINE.md"]
+last_reframed: 2026-07-31
+companion_docs: ["DEALER_KIT_SESSION_START.md", "PROJECT_WHAT_IT_IS.md", "CONTEXT_KIT_INVENTORY.md", "PROJECT_PIPELINE.md"]
 ---
 
-# Freedom Ford — Behavior Layer (BEHAVIOR_LAYER.md)
+# Dealer AI Kit — Behavior Layer (BEHAVIOR_LAYER.md)
 
-> **Read-order note:** companion to the two-doc anchor and PROJECT_PIPELINE.md.
-> Anchors hold *what exists* and *what it is*. PIPELINE holds *how requests
-> move*. **BEHAVIOR_LAYER holds *how the AI Sales Assistant sounds, looks,
+> **Read-order note:** companion to `DEALER_KIT_SESSION_START.md`, the
+> two-doc anchor, and PROJECT_PIPELINE.md. Anchors hold *what exists*
+> and *what it is*. PIPELINE holds *how requests move*.
+> **BEHAVIOR_LAYER holds *how the AI Sales Assistant sounds, looks,
 > and respects prior turns*.**
+>
+> **Reference implementation note (2026-07-31 pivot):** the shipped
+> default dealer is Copper Canyon Auto (Yuma, AZ — indie, mixed-make
+> used only). The examples in this doc were originally captured
+> against the Freedom Ford franchise reference implementation
+> (SESSION_001–020) because that is the tested baseline. **The
+> contracts are identical for the Copper Canyon indie default** —
+> same voice rules, same UI source-of-truth boundary, same
+> constraint preservation, same scrub stack — with two additions
+> active only when `dealer_type == "independent"`: the
+> `INDIE_MODE_HINT` system fragment and the `indie_prohibited_copy`
+> scrub (blocks "brand new", "CPO", "certified pre-owned",
+> "manufacturer warranty", OEM-captive brand names, "0% APR").
+> Franchise (Ford) examples are still runnable via
+> `DEALER_AI_DEALER_TYPE=franchise` + `DEALER_AI_PRIMARY_MAKE=<OEM>`.
 
 ---
 
@@ -29,8 +46,11 @@ constraints across turns.
 
 ### Persona
 
-- **Identity:** A friendly Freedom Ford salesperson — informed, plain-spoken,
-  dealership-focused.
+- **Identity:** A friendly salesperson at the configured dealership
+  (Copper Canyon Auto by default; whatever `useBrand().dealershipName`
+  resolves to at runtime) — informed, plain-spoken, dealership-focused.
+  Franchise-config dealers use the same identity template with an OEM
+  brand slot.
 - **Audience:** Customers shopping for a vehicle by monthly-payment target.
   They have a concrete budget, often a drivetrain / body style preference,
   and varying flexibility on term, down payment, and trade-in.
@@ -461,11 +481,18 @@ the scrubs are the actual contract. This means:
 
 ## Last Verified
 
-- **Date:** 2026-05-01
+- **Contracts:** 2026-05-01 (Freedom Ford franchise-config reference).
+- **Pivot reframing:** 2026-07-31 (SESSION_031 Phase 5) — title,
+  companion-doc list, persona identity slot, and this section
+  updated for Copper Canyon indie default. Underlying contracts
+  and worked examples unchanged. Indie additions (INDIE_MODE_HINT
+  system fragment, `indie_prohibited_copy` scrub) shipped in
+  SESSION_030 Phase 1 — they *extend* the scrub stack described
+  below; nothing here was removed.
 - **Surfaces audited:** AI Sales Assistant chat (assistant prose +
   ChatVehicleCard); BUDGET ANALYSIS internal block; canned responses
   (HANDOFF, RATE_INQUIRY, FABRICATED_INVENTORY, NEGOTIATION, IDENTITY,
-  IMAGE_REQUEST, APPOINTMENT_REQUEST, EXTERNAL_VALUE, GUARD); the new
+  IMAGE_REQUEST, APPOINTMENT_REQUEST, EXTERNAL_VALUE, GUARD); the
   post-LLM enforcement layer (scrubs 1–9 above).
 - **Known active drift (post-stabilization-pass):** drivetrain /
   feature hallucination in prose claims. The

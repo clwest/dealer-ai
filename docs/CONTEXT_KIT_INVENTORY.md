@@ -7,11 +7,11 @@ status: auto
 
 > **LOW-SIGNAL for this project.** This inventory generator is designed
 > for context-kit-style repositories (cli/, templates/, starter/,
-> tests/test_*.py at the repo root). Freedom Ford has a different
-> shape (`backend/dealer_ai/`, `frontend/src/`), so the auto-counts
-> below do not reflect this codebase.
+> tests/test_*.py at the repo root). The Dealer AI Kit has a different
+> shape (`backend/dealer_kit/`, `backend/dealer_ai/`, `frontend/src/`),
+> so the auto-counts below do not reflect this codebase.
 >
-> For Freedom Ford, the authoritative runtime state is documented in:
+> For the Dealer AI Kit, the authoritative runtime state is documented in:
 >
 > - `context/INVENTORY.md` — current behavior matrix (term math, budget
 >   classification, payment-copy consistency, pre/post-LLM safety,
@@ -20,7 +20,7 @@ status: auto
 > - `docs/PROJECT_PIPELINE.md` — runtime flow map (entry points, guards,
 >   retrieval paths, post-LLM scrub stack, state surfaces, decision
 >   authority).
-> - `docs/FREEDOM_FORD_BEHAVIOR_LAYER.md` — behavior layer (voice / tone
+> - `docs/DEALER_KIT_BEHAVIOR_LAYER.md` — behavior layer (voice / tone
 >   contract, UI / source-of-truth contract, constraint preservation
 >   across turns, reply-rule branch matrix).
 >
