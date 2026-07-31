@@ -17,20 +17,31 @@ Resolution order for ``name`` (first non-empty wins):
 3. ``"the dealership"`` — a bland but sentence-safe fallback so
    generated copy stays coherent when nothing is configured yet.
 
-Resolution order for the rest of the profile:
+Resolution order for the rest of the profile (SESSION_032 threaded
+``DealerOnboardingProfile`` values through here — persistence lives on
+the singleton row managed by ``/dealer-ai-onboarding``):
 
-- ``settings.DEALER_AI_DEALER_TYPE`` env override for
-  :attr:`DealerProfile.dealer_type` (``"independent"`` /
-  ``"franchise"``).
-- Otherwise the Copper Canyon Auto independent-dealer defaults below.
+- ``dealer_type``: ``DealerOnboardingProfile.dealer_type`` when
+  non-empty → ``settings.DEALER_AI_DEALER_TYPE`` env override →
+  Copper Canyon default ``"independent"``.
+- ``primary_make``: ``settings.DEALER_AI_PRIMARY_MAKE`` env override →
+  Copper Canyon default (``None`` for indie mixed-lot).
+- ``bhph_enabled``: ``DealerOnboardingProfile.bhph_enabled`` **only
+  when** ``bhph_configured`` is ``True`` (that flag flips the first
+  time the profile is saved via the Setup UI, distinguishing "user
+  explicitly toggled" from "migration default"). Otherwise Copper
+  Canyon default (``True``).
+- ``subprime_lenders``, ``makes_carried``: newline-separated
+  ``DealerOnboardingProfile`` text field → parsed into a tuple.
+  Empty → Copper Canyon default tuple. ``makes_carried`` falls back
+  to the legacy CSV ``main_brands`` field when both new and
+  ``main_brands`` are populated but ``makes_carried`` is blank.
+- ``floor_plan_lender``, ``warranty_offering``,
+  ``credit_range_served``: ``DealerOnboardingProfile`` string when
+  non-empty → Copper Canyon default.
 
-The Phase 3 pivot work extends ``DealerOnboardingProfile`` with the
-rest of the fields (``bhph_enabled``, ``subprime_lenders``,
-``floor_plan_lender``, ``warranty_offering``, ``credit_range_served``,
-``makes_carried``) and threads them through this resolver. Until that
-migration lands, the defaults represent the shipped Copper Canyon Auto
-demo persona; env overrides are the escape hatch for franchise or
-alternate-config testing.
+Env overrides remain the escape hatch for franchise / alternate-config
+testing without touching the DB row.
 
 Keep this module *dependency-light*: importing it must not require the
 Django app registry to be ready, so DB access is lazy and swallowed.
@@ -137,31 +148,128 @@ def get_dealer_name() -> str:
     return _FALLBACK_DEALER_NAME
 
 
+def _parse_lines(raw: str) -> tuple[str, ...]:
+    """Split a newline-separated TextField value into a tuple of
+    trimmed non-empty strings. Matches the convention used by the
+    ``approved_phrases`` / ``banned_phrases`` scrub loaders."""
+    return tuple(
+        line.strip()
+        for line in (raw or "").splitlines()
+        if line.strip()
+    )
+
+
+def _parse_csv(raw: str) -> tuple[str, ...]:
+    """Split the legacy ``main_brands`` CSV field. Kept separate from
+    :func:`_parse_lines` so a future migration that copies
+    ``main_brands`` → ``makes_carried`` can pick either parser
+    explicitly."""
+    return tuple(
+        item.strip()
+        for item in (raw or "").split(",")
+        if item.strip()
+    )
+
+
 def get_dealer_profile() -> DealerProfile:
     """Return the full shape of the currently-configured dealer.
 
-    For the SESSION_030 pivot, ``name``, ``dealer_type``, and
-    ``primary_make`` have real dynamic resolution paths. The rest come
-    from the Copper Canyon Auto independent-dealer defaults until
-    Phase 3 extends ``DealerOnboardingProfile`` with the remaining
-    fields.
+    Every field has a documented resolution order — see this module's
+    docstring. DB access is lazy + exception-swallowed so importing
+    this module never requires a ready app registry, and a fresh
+    install pre-migrate still returns the Copper Canyon defaults.
     """
-    dealer_type_env = (
-        getattr(settings, "DEALER_AI_DEALER_TYPE", "") or ""
-    ).strip().lower()
-    if dealer_type_env in ("independent", "franchise"):
-        dealer_type: DealerType = dealer_type_env  # type: ignore[assignment]
-    else:
-        dealer_type = _COPPER_CANYON_DEFAULTS.dealer_type
+    profile = None
+    try:
+        # Lazy import so this module stays safe at settings-load time.
+        from ..models import DealerOnboardingProfile
 
+        profile = DealerOnboardingProfile.objects.first()
+    except Exception:
+        # Table missing (pre-migrate), DB offline, or import failure.
+        # Fall through — every field below has a hardcoded fallback.
+        profile = None
+
+    # dealer_type: DB → env → default.
+    if profile and (profile.dealer_type or "").strip():
+        dealer_type: DealerType = profile.dealer_type  # type: ignore[assignment]
+    else:
+        dealer_type_env = (
+            getattr(settings, "DEALER_AI_DEALER_TYPE", "") or ""
+        ).strip().lower()
+        if dealer_type_env in ("independent", "franchise"):
+            dealer_type = dealer_type_env  # type: ignore[assignment]
+        else:
+            dealer_type = _COPPER_CANYON_DEFAULTS.dealer_type
+
+    # primary_make: env → default (no DB field; franchise config is
+    # environment-driven for the primary-make ranking key).
     primary_make_env = (
         getattr(settings, "DEALER_AI_PRIMARY_MAKE", "") or ""
     ).strip()
     primary_make = primary_make_env or _COPPER_CANYON_DEFAULTS.primary_make
+
+    # bhph_enabled: DB when explicitly configured → default. The
+    # `bhph_configured` sentinel flips True on the first save via the
+    # Setup UI so we can distinguish "user toggled off" from
+    # "migration default of True".
+    if profile and profile.bhph_configured:
+        bhph_enabled = profile.bhph_enabled
+    else:
+        bhph_enabled = _COPPER_CANYON_DEFAULTS.bhph_enabled
+
+    # subprime_lenders: DB newline-separated → default tuple. Empty DB
+    # value means "not yet configured, use demo defaults"; a dealer
+    # who truly has no subprime panel should be represented by the
+    # onboarding form storing a single sentinel entry (future
+    # enhancement) or via env override.
+    if profile:
+        subprime_lenders = _parse_lines(profile.subprime_lenders) \
+            or _COPPER_CANYON_DEFAULTS.subprime_lenders
+    else:
+        subprime_lenders = _COPPER_CANYON_DEFAULTS.subprime_lenders
+
+    # floor_plan_lender, warranty_offering, credit_range_served:
+    # DB non-empty → default.
+    def _prefer_profile(attr: str, fallback: str) -> str:
+        if profile and (getattr(profile, attr, "") or "").strip():
+            return getattr(profile, attr).strip()
+        return fallback
+
+    floor_plan_lender = _prefer_profile(
+        "floor_plan_lender", _COPPER_CANYON_DEFAULTS.floor_plan_lender
+    )
+    warranty_offering = _prefer_profile(
+        "warranty_offering", _COPPER_CANYON_DEFAULTS.warranty_offering
+    )
+    credit_range_served = _prefer_profile(
+        "credit_range_served", _COPPER_CANYON_DEFAULTS.credit_range_served
+    )
+
+    # makes_carried: DB newline-separated → legacy main_brands CSV
+    # fallback → Copper Canyon default tuple. The two-level fallback
+    # lets legacy profiles that only populated `main_brands` (the
+    # pre-SESSION_032 franchise-oriented CSV field) continue to
+    # surface their brand mix through the new API contract without a
+    # data-migration commit.
+    if profile:
+        makes_carried = (
+            _parse_lines(profile.makes_carried)
+            or _parse_csv(profile.main_brands)
+            or _COPPER_CANYON_DEFAULTS.makes_carried
+        )
+    else:
+        makes_carried = _COPPER_CANYON_DEFAULTS.makes_carried
 
     return replace(
         _COPPER_CANYON_DEFAULTS,
         name=get_dealer_name(),
         dealer_type=dealer_type,
         primary_make=primary_make,
+        bhph_enabled=bhph_enabled,
+        subprime_lenders=subprime_lenders,
+        floor_plan_lender=floor_plan_lender,
+        warranty_offering=warranty_offering,
+        credit_range_served=credit_range_served,
+        makes_carried=makes_carried,
     )

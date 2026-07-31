@@ -281,3 +281,72 @@ class OnboardingRoundTripTests(TestCase):
         self.client.put(URL, data=json.dumps(second), content_type="application/json")
         self.assertEqual(DealerOnboardingProfile.objects.count(), 1)
         self.assertEqual(DealerOnboardingProfile.objects.get().dealership_name, "Second")
+
+
+class OnboardingIndieFieldsTests(TestCase):
+    """SESSION_032 — the eight indie shape-of-business fields
+    (dealer_type, bhph_enabled, bhph_configured, subprime_lenders,
+    floor_plan_lender, warranty_offering, credit_range_served,
+    makes_carried) are accepted by the serializer, round-trip through
+    GET, and use safe defaults when omitted."""
+
+    def test_defaults_returned_when_no_profile(self):
+        DealerOnboardingProfile.objects.all().delete()
+        r = self.client.get(URL)
+        self.assertEqual(r.status_code, 200, r.content)
+        data = r.json()
+        self.assertEqual(data["dealer_type"], "")
+        self.assertTrue(data["bhph_enabled"])  # matches Copper Canyon default
+        self.assertFalse(data["bhph_configured"])
+        self.assertEqual(data["subprime_lenders"], "")
+        self.assertEqual(data["floor_plan_lender"], "")
+        self.assertEqual(data["warranty_offering"], "")
+        self.assertEqual(data["credit_range_served"], "")
+        self.assertEqual(data["makes_carried"], "")
+
+    def test_put_saves_indie_fields(self):
+        body = {
+            **ONBOARDING_DEFAULTS,
+            "dealer_type": "independent",
+            "bhph_enabled": False,
+            "bhph_configured": True,
+            "subprime_lenders": "Sonoran Credit\nDesert Auto Finance",
+            "floor_plan_lender": "NextGear",
+            "warranty_offering": "30-day / 1000-mile powertrain",
+            "credit_range_served": "580+ with strong down; BHPH below",
+            "makes_carried": "Toyota\nHonda\nFord",
+        }
+        save = self.client.put(URL, data=json.dumps(body), content_type="application/json")
+        self.assertEqual(save.status_code, 200, save.content)
+
+        row = DealerOnboardingProfile.objects.get()
+        self.assertEqual(row.dealer_type, "independent")
+        self.assertFalse(row.bhph_enabled)
+        self.assertTrue(row.bhph_configured)
+        self.assertIn("Sonoran", row.subprime_lenders)
+        self.assertEqual(row.floor_plan_lender, "NextGear")
+        self.assertIn("Toyota", row.makes_carried)
+
+    def test_indie_fields_round_trip_through_get(self):
+        body = {
+            **ONBOARDING_DEFAULTS,
+            "dealer_type": "franchise",
+            "bhph_enabled": True,
+            "bhph_configured": True,
+            "makes_carried": "Ford\nLincoln",
+        }
+        self.client.put(URL, data=json.dumps(body), content_type="application/json")
+
+        r = self.client.get(URL)
+        data = r.json()
+        self.assertEqual(data["dealer_type"], "franchise")
+        self.assertTrue(data["bhph_enabled"])
+        self.assertTrue(data["bhph_configured"])
+        self.assertEqual(data["makes_carried"], "Ford\nLincoln")
+
+    def test_invalid_dealer_type_rejected(self):
+        body = {**ONBOARDING_DEFAULTS, "dealer_type": "nonsense"}
+        r = self.client.put(URL, data=json.dumps(body), content_type="application/json")
+        # Django REST framework's ChoiceField returns 400 for values
+        # outside the choices list.
+        self.assertEqual(r.status_code, 400, r.content)

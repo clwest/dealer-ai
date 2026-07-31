@@ -264,6 +264,43 @@ class DealerOnboardingProfile(models.Model):
     demo_prompts_tested = models.BooleanField(default=False)
     pilot_approved = models.BooleanField(default=False)
 
+    # Indie shape-of-business (SESSION_032). Persists the seven fields
+    # exposed by services/dealer_config.DealerProfile so a real dealer
+    # can customize them via the Setup UI instead of relying on env
+    # overrides + Copper Canyon hardcoded defaults. Resolution order
+    # for each field: DB value (when non-empty for strings, or `False`
+    # for the bool via `bhph_configured` sentinel) → env override
+    # (dealer_type only) → Copper Canyon default in
+    # services/dealer_config._COPPER_CANYON_DEFAULTS.
+    #
+    # `dealer_type` blank = "unset, resolver falls back to env/default".
+    # `bhph_configured` is a separate flag so we can distinguish "user
+    # explicitly saved this profile" from "form never touched" for the
+    # bool field (matters because the resolver's DB-default of True
+    # would otherwise mask a franchise dealer who wants BHPH off).
+    # `subprime_lenders` and `makes_carried` store one entry per line,
+    # matching the existing `approved_phrases` / `banned_phrases`
+    # convention. `makes_carried` supersedes the older `main_brands`
+    # field; the resolver reads `makes_carried` first and falls back
+    # to `main_brands` for legacy profiles.
+    DEALER_TYPE_CHOICES = [
+        ("independent", "Independent"),
+        ("franchise", "Franchise"),
+    ]
+    dealer_type = models.CharField(
+        max_length=20,
+        choices=DEALER_TYPE_CHOICES,
+        blank=True,
+        default="",
+    )
+    bhph_enabled = models.BooleanField(default=True)
+    bhph_configured = models.BooleanField(default=False)
+    subprime_lenders = models.TextField(blank=True, default="")
+    floor_plan_lender = models.CharField(max_length=128, blank=True, default="")
+    warranty_offering = models.CharField(max_length=255, blank=True, default="")
+    credit_range_served = models.CharField(max_length=255, blank=True, default="")
+    makes_carried = models.TextField(blank=True, default="")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

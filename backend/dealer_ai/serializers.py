@@ -373,11 +373,22 @@ ONBOARDING_DEFAULTS: dict = {
     "salespeople_added": False,
     "demo_prompts_tested": False,
     "pilot_approved": False,
+    # Indie shape-of-business (SESSION_032). Blank / False defaults
+    # here mean "unset — resolver falls back to env or Copper Canyon
+    # default"; see docstring on the model.
+    "dealer_type": "",
+    "bhph_enabled": True,
+    "bhph_configured": False,
+    "subprime_lenders": "",
+    "floor_plan_lender": "",
+    "warranty_offering": "",
+    "credit_range_served": "",
+    "makes_carried": "",
 }
 
 
 class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
-    """Flat snake_case payload mirroring all 27 onboarding fields."""
+    """Flat snake_case payload mirroring all 35 onboarding fields (27 pre-SESSION_032 + 8 indie shape-of-business)."""
 
     class Meta:
         model = DealerOnboardingProfile
@@ -409,6 +420,14 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
             "salespeople_added",
             "demo_prompts_tested",
             "pilot_approved",
+            "dealer_type",
+            "bhph_enabled",
+            "bhph_configured",
+            "subprime_lenders",
+            "floor_plan_lender",
+            "warranty_offering",
+            "credit_range_served",
+            "makes_carried",
             "created_at",
             "updated_at",
         ]
