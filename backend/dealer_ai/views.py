@@ -3,8 +3,9 @@ from typing import Optional
 from uuid import uuid4
 
 from rest_framework import status
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from django.conf import settings
@@ -43,6 +44,7 @@ from django.utils import timezone
 from .services.ad_copy import generate_ad_copy
 from .services.audit import audit_events_snapshot
 from .services.chat_engine import ChatEngine
+from .permissions import IsAdvisorForSlug, IsDealerOwnerForAdvisorSlug
 from .services.follow_up import (
     SUPPORTED_CHANNELS as FOLLOW_UP_CHANNELS,
     SUPPORTED_TONES as FOLLOW_UP_TONES,
@@ -452,14 +454,23 @@ _WORKSPACE_RECENT_DAYS = 30
 
 
 @api_view(["GET"])
+@permission_classes(
+    [IsAuthenticated & (IsAdvisorForSlug | IsDealerOwnerForAdvisorSlug)]
+)
 def advisor_workspace(request, slug):
     """Salesperson workspace: profile + open leads + contacted leads.
 
     Open = assigned + handed_off=false.
     Contacted = assigned + handed_off=true within the last 30 days.
 
-    404 when the slug is unknown or the advisor is inactive (the URL
-    is slug-by-obscurity in v1; real auth lands in Phase 5).
+    Milestone 1 · Increment 4C — access is real DRF authorization now.
+    Authenticated advisor for this slug OR authenticated dealer_owner
+    at the same dealership can view. Everyone else gets 401 (unauth)
+    or 403 (auth but not authorized). URL shape and response body
+    preserved; the slug-obscurity mechanism (previously documented
+    here as v1) is replaced. Post-permission 404 still fires when a
+    legitimately-authorized caller hits a slug whose Salesperson is
+    inactive — that's the same data-lifecycle check as before.
     """
     try:
         sp = Salesperson.objects.get(slug=slug, is_active=True)
@@ -500,6 +511,9 @@ def advisor_workspace(request, slug):
 
 
 @api_view(["POST"])
+@permission_classes(
+    [IsAuthenticated & (IsAdvisorForSlug | IsDealerOwnerForAdvisorSlug)]
+)
 def advisor_follow_up(request, slug, lead_id):
     """Generate AI follow-up drafts for an assigned lead.
 
@@ -510,8 +524,16 @@ def advisor_follow_up(request, slug, lead_id):
           "tone":    "warm" | "direct"    # default warm
         }
 
-    The lead must currently be assigned to the salesperson identified
-    by ``slug`` — prevents cross-advisor draft generation in v1.
+    Milestone 1 · Increment 4C — authorization is DRF-based (see
+    :func:`advisor_workspace`). The 403 lead-ownership check below
+    (``lead.assigned_to_id != sp.pk``) is preserved verbatim — it is
+    the data-scoping layer's manifestation on this endpoint and
+    remains distinct from the authorization layer. A dealer_owner
+    accessing an advisor's URL still fails the lead-ownership check
+    for leads not assigned to that advisor, which is the correct
+    behavior: owners can *see* an advisor's queue via the workspace
+    endpoint, but drafting on behalf of an advisor is scoped to that
+    advisor's own leads.
     """
     try:
         sp = Salesperson.objects.get(slug=slug, is_active=True)

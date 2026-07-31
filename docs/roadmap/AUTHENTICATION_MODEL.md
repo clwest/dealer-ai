@@ -164,14 +164,36 @@ person is the natural business shape for indie shops (see
 
 ## 7. Business permissions
 
-- Enforced by DRF permission classes per endpoint. Milestone 1
-  introduces two families:
-  - `AdvisorForSlug + SameDealership` (Increment 4C) — advisor
-    workspace.
-  - `IsSalesManagerOrOwner + SameDealership` (Increment 4D) —
-    admin endpoints.
-  - `IsDealerOwner + SameDealership` (Increment 4D) — onboarding
-    profile mutation.
+- Enforced by DRF permission classes per endpoint. Classes live in
+  `dealer_ai/permissions.py`. Compose them at the view layer via
+  DRF's `&` and `|` operators — prefer composition over adding
+  logic to a single class.
+- **Shipped classes (Increment 4C — advisor workspace):**
+  - `IsAdvisorForSlug` — the authenticated user *is* the
+    Salesperson identified by the URL kwarg `slug` (via the
+    `Salesperson.user` OneToOne link from 4A).
+  - `IsDealerOwnerForAdvisorSlug` — the authenticated user holds
+    `dealer_owner` at the dealership that owns the Salesperson
+    identified by the URL kwarg `slug`. Cross-dealership
+    ownership does not grant access.
+  - Applied composition (both advisor views):
+    `[IsAuthenticated & (IsAdvisorForSlug | IsDealerOwnerForAdvisorSlug)]`.
+- **Planned classes (Increment 4D — admin gating, not yet
+  implemented):**
+  - `IsSalesManagerOrOwnerAtActiveDealership` — for admin/pipeline
+    endpoints.
+  - `IsDealerOwnerAtActiveDealership` — for onboarding profile
+    mutation.
+  - Both consult `get_current_dealership(request)` for tenant
+    scope rather than a URL kwarg — different URL-shape family,
+    different focused class.
+- **Layer separation on the advisor endpoint.** The 403 lead-
+  ownership check inside `advisor_follow_up`
+  (`lead.assigned_to_id != sp.pk`) is preserved verbatim in 4C. It
+  is the data-scoping layer's manifestation — orthogonal to the
+  authorization layer. A dealer_owner authorized to access an
+  advisor's URL still cannot draft on leads assigned to a
+  different advisor.
 - Customer-facing chat + vehicle Q&A remain `AllowAny` at the
   permission layer per `MILESTONE_1_PLANNING.md` §1.2. Tenant
   scoping still applies via `get_current_dealership` (layer 2 does
@@ -181,6 +203,14 @@ person is the natural business shape for indie shops (see
   global default without per-endpoint whitelisting would silently
   break every currently-public endpoint. Each endpoint declares its
   own permission classes.
+- **No information leakage via differential status codes.** Unknown
+  slugs return 403 to authenticated non-privileged callers — the
+  same status a known slug returns to an unauthorized caller. This
+  invariant is locked by
+  `AdvisorWorkspaceAuthorizationDoesNotLeakUnknownSlugs` and
+  extends to deactivated Salesperson rows (an authorized owner
+  cannot distinguish "deactivated advisor slug" from "unknown
+  slug"; both are 403).
 
 ---
 

@@ -8,6 +8,8 @@ from django.test import TestCase
 from django.urls import reverse
 
 from dealer_ai.models import CustomerLead, Salesperson
+from dealer_ai.services.tenancy import get_default_dealership
+from dealer_ai.tests._auth_helpers import authenticated_client, make_user
 
 
 def _make_advisor(slug: str = "maria-cortez", **extra) -> Salesperson:
@@ -185,8 +187,21 @@ class SalespeopleEndpointTests(TestCase):
 
 
 class AdvisorWorkspaceEndpointTests(TestCase):
+    """Milestone 1 · Increment 4C — advisor workspace happy paths under
+    real authorization. Negative-path / cross-tenant coverage lives in
+    ``test_advisor_workspace_auth.py``; this class exercises the
+    business behavior that must still hold once the correct advisor
+    has been authorized (own leads only, inactive-advisor lifecycle).
+    """
+
     def setUp(self):
         self.maria = _make_advisor(slug="maria-cortez")
+        # Link Maria to an auth user so IsAdvisorForSlug passes for her.
+        self.maria_user = make_user(username="maria")
+        self.maria.user = self.maria_user
+        self.maria.save(update_fields=["user"])
+        self.client = authenticated_client(self.maria_user)
+
         self.dave = _make_advisor(slug="dave-okafor", name="Dave Okafor")
         self.open_lead = _make_lead(
             name="Open One",
@@ -220,21 +235,27 @@ class AdvisorWorkspaceEndpointTests(TestCase):
         self.assertEqual(contacted_names, {"Contacted One"})
         self.assertNotIn("Dave's Lead", open_names | contacted_names)
 
-    def test_workspace_404_for_unknown_slug(self):
-        url = reverse("dealer_ai:advisor-workspace", args=["nope"])
-        res = self.client.get(url)
-        self.assertEqual(res.status_code, 404)
+    def test_workspace_deactivated_advisor_is_not_leaked_to_owners(self):
+        # Under real authorization a deactivated advisor's URL is
+        # indistinguishable from an unknown slug — both return 403 to
+        # an authenticated caller. The pre-4C behavior returned 404
+        # via slug-obscurity, which leaked existence; the new behavior
+        # aligns with the "no information leakage via differential
+        # status codes" invariant locked in
+        # test_advisor_workspace_auth.
+        from dealer_ai.models import ROLE_DEALER_OWNER, UserDealershipRole
 
-    def test_workspace_404_for_inactive_advisor(self):
-        inactive = _make_advisor(slug="gone", name="Gone", is_active=False)
-        _make_lead(
-            name="Old Lead",
-            assigned_to=inactive,
-            handed_off=False,
+        default = get_default_dealership()
+        gone = _make_advisor(slug="gone", name="Gone", is_active=False)
+        _make_lead(name="Old Lead", assigned_to=gone, handed_off=False)
+        owner = make_user(username="owner-for-gone")
+        UserDealershipRole.objects.create(
+            user=owner, dealership=default, role=ROLE_DEALER_OWNER
         )
+        client = authenticated_client(owner)
         url = reverse("dealer_ai:advisor-workspace", args=["gone"])
-        res = self.client.get(url)
-        self.assertEqual(res.status_code, 404)
+        res = client.get(url)
+        self.assertEqual(res.status_code, 403)
 
 
 class PipelinePayloadIncludesAssignedToTests(TestCase):

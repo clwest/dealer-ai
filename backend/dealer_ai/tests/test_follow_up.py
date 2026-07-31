@@ -12,6 +12,7 @@ from django.urls import reverse
 from dealer_ai.models import CustomerLead, Salesperson, Vehicle
 from dealer_ai.services import follow_up as follow_up_svc
 from dealer_ai.services.follow_up import generate_follow_up_drafts
+from dealer_ai.tests._auth_helpers import authenticated_client, make_user
 from dealer_ai.tests._mocks import MockLLMProvider
 
 
@@ -411,9 +412,25 @@ class FollowUpScrubTests(TestCase):
 
 
 class FollowUpEndpointTests(TestCase):
+    """Milestone 1 · Increment 4C — follow-up endpoint under real
+    authorization. Post-authorization business behavior only
+    (channel validation, unknown-lead 404, lead-ownership 403).
+    Authorization negative-path coverage lives in
+    ``test_advisor_workspace_auth.py``.
+    """
+
     def setUp(self):
         self.advisor = _make_advisor()
         self.other = _make_advisor(slug="other", name="Other Advisor")
+        # Link both salespeople to auth users so IsAdvisorForSlug
+        # passes for each when they call as themselves.
+        self.advisor_user = make_user(username="advisor-caller")
+        self.advisor.user = self.advisor_user
+        self.advisor.save(update_fields=["user"])
+        self.other_user = make_user(username="other-caller")
+        self.other.user = self.other_user
+        self.other.save(update_fields=["user"])
+        self.client = authenticated_client(self.advisor_user)
         self.lead = _make_lead(self.advisor)
 
         original = follow_up_svc.get_llm_provider
@@ -453,18 +470,9 @@ class FollowUpEndpointTests(TestCase):
         )
         self.assertEqual(res.status_code, 400)
 
-    def test_404_for_unknown_advisor(self):
-        url = reverse(
-            "dealer_ai:advisor-follow-up", args=["nope", self.lead.pk]
-        )
-        res = self.client.post(
-            url,
-            data=json.dumps({"channel": "sms"}),
-            content_type="application/json",
-        )
-        self.assertEqual(res.status_code, 404)
-
     def test_404_for_unknown_lead(self):
+        # Authorized advisor for their own slug hits an unknown lead pk;
+        # post-authorization business logic returns 404.
         url = reverse(
             "dealer_ai:advisor-follow-up",
             args=[self.advisor.slug, 999_999],
@@ -476,12 +484,17 @@ class FollowUpEndpointTests(TestCase):
         )
         self.assertEqual(res.status_code, 404)
 
-    def test_403_when_lead_belongs_to_other_advisor(self):
+    def test_403_when_lead_belongs_to_another_advisor(self):
+        # `other` is authorized for their own slug (IsAdvisorForSlug),
+        # but the lead is assigned to `self.advisor` — the lead-
+        # ownership 403 inside the view fires. This is the data-
+        # scoping layer, orthogonal to authorization.
+        client = authenticated_client(self.other_user)
         url = reverse(
             "dealer_ai:advisor-follow-up",
             args=[self.other.slug, self.lead.pk],
         )
-        res = self.client.post(
+        res = client.post(
             url,
             data=json.dumps({"channel": "sms"}),
             content_type="application/json",
