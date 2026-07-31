@@ -1,6 +1,31 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
+
+
+# Milestone 1 · Increment 4A — role vocabulary. Kept as a module-level
+# constant so subsequent increments (4B request-context tenancy resolver,
+# 4C advisor workspace auth, 4D admin gating) import the canonical list
+# without re-declaring the string literals. Source of truth:
+# ``docs/roadmap/IMPLEMENTATION_ROADMAP.md`` §Milestone 1.
+ROLE_DEALER_OWNER = "dealer_owner"
+ROLE_SALES_MANAGER = "sales_manager"
+ROLE_RECON_MANAGER = "recon_manager"
+ROLE_F_AND_I_MANAGER = "f_and_i_manager"
+ROLE_COLLECTIONS = "collections"
+ROLE_ADVISOR = "advisor"
+ROLE_PORTER = "porter"
+
+ROLE_CHOICES = (
+    (ROLE_DEALER_OWNER, "Dealer owner"),
+    (ROLE_SALES_MANAGER, "Sales manager"),
+    (ROLE_RECON_MANAGER, "Recon manager"),
+    (ROLE_F_AND_I_MANAGER, "F&I manager"),
+    (ROLE_COLLECTIONS, "Collections"),
+    (ROLE_ADVISOR, "Advisor"),
+    (ROLE_PORTER, "Porter"),
+)
 
 
 class Dealership(models.Model):
@@ -187,6 +212,19 @@ class Salesperson(models.Model):
         "Dealership",
         on_delete=models.CASCADE,
         related_name="salespeople",
+    )
+    # Milestone 1 · Increment 4A — optional link to an auth User. Nullable
+    # today because there are no auth users to backfill and Increment 4A
+    # is schema-only. Increment 4C is the increment that requires this
+    # link to be present for authenticated advisor workspace access.
+    # SET_NULL on user delete preserves historical lead attribution
+    # (matches the same rationale as `is_active=False` retention).
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="salesperson",
     )
     name = models.CharField(max_length=128)
     slug = models.SlugField(max_length=64, unique=True)
@@ -396,3 +434,40 @@ class DealerOnboardingProfile(models.Model):
 
     def __str__(self) -> str:
         return self.dealership_name or "Dealer onboarding profile"
+
+
+class UserDealershipRole(models.Model):
+    """Milestone 1 · Increment 4A — User↔Dealership membership + role.
+
+    A single user may hold roles at multiple dealerships and may hold
+    more than one role at a single dealership (owner + sales_manager is
+    a realistic combination in an indie shop). The ``unique_together``
+    constraint prevents duplicate (user, dealership, role) rows while
+    permitting the many-to-many-plus-role shape.
+
+    Increment 4A is schema-only: no view uses this table yet. Increment
+    4B introduces the ``get_current_dealership(request)`` resolver that
+    reads ``request.user.memberships.first().dealership``; Increments
+    4C/4D introduce endpoint-level authorization that consults ``role``.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+    )
+    dealership = models.ForeignKey(
+        Dealership,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+    )
+    role = models.CharField(max_length=32, choices=ROLE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("user", "dealership", "role"),)
+        ordering = ("user", "dealership", "role")
+
+    def __str__(self) -> str:
+        return f"{self.user} @ {self.dealership} ({self.role})"

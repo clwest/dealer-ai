@@ -5,9 +5,23 @@ from .models import (
     ChatSession,
     CustomerLead,
     DealerOnboardingProfile,
+    Dealership,
     Salesperson,
+    UserDealershipRole,
     Vehicle,
 )
+
+
+@admin.register(Dealership)
+class DealershipAdmin(admin.ModelAdmin):
+    """Milestone 1 · Increment 4A — enables autocomplete targeting
+    from `UserDealershipRoleAdmin` and `SalespersonAdmin`. Read-mostly
+    surface; the seeded `slug=default` row is created by migration 0009.
+    """
+
+    list_display = ("name", "slug", "created_at", "updated_at")
+    search_fields = ("name", "slug")
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(Salesperson)
@@ -25,6 +39,7 @@ class SalespersonAdmin(admin.ModelAdmin):
     search_fields = ("name", "slug", "title", "email", "phone", "bio")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("user",)
 
 
 @admin.register(Vehicle)
@@ -125,4 +140,19 @@ class DealerOnboardingProfileAdmin(admin.ModelAdmin):
     inspection and emergency edits."""
 
     list_display = ("dealership_name", "store_location", "pilot_approved", "updated_at")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(UserDealershipRole)
+class UserDealershipRoleAdmin(admin.ModelAdmin):
+    """Milestone 1 · Increment 4A — bootstrap path for the first
+    dealer_owner. A superuser creates the initial membership row here
+    before Increment 4C ships endpoint auth. No custom forms; the
+    default ModelAdmin surface is sufficient for the bootstrap window.
+    """
+
+    list_display = ("user", "dealership", "role", "created_at", "updated_at")
+    list_filter = ("role", "dealership")
+    search_fields = ("user__username", "user__email", "dealership__name", "dealership__slug")
+    autocomplete_fields = ("user", "dealership")
     readonly_fields = ("created_at", "updated_at")
