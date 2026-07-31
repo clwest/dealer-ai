@@ -6,7 +6,7 @@ date: 2026-07-31
 session: 045
 milestone: 2
 milestone_status: planning
-commit: (pending)
+commit: 0b89687
 ---
 
 # SESSION_045 — Milestone 2 · Increment 0 (planning pass)
