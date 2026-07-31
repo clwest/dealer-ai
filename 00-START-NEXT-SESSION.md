@@ -1,181 +1,198 @@
 ---
 state: active
 date: 2026-07-31
-last_session_shipped: SESSION_037
-next_session: SESSION_038
+last_session_shipped: SESSION_038
+next_session: SESSION_039
 ---
 
-# Next session — SESSION_038 · Milestone 1 · Increment 3 (write-path tenancy + NOT NULL)
+# Next session — SESSION_039 · Milestone 1 · Increment 4 (endpoint authentication + request-context tenancy)
 
-> **Milestone 1 is in progress.** SESSION_037 shipped Increments
-> 1 and 2 (the `Dealership` model + nullable FKs on six
-> tenant-carrying models + verified backfill of the default
-> Dealership row). Handoff at
-> `docs/handoffs/SESSION_037_milestone_1_tenancy_foundation.md`.
+> **Milestone 1 is in progress.** SESSION_038 completed the tenancy
+> *foundation*: the ``Dealership`` model (037), nullable FKs +
+> verified backfill (037), and now (038) write-path plumbing +
+> ``NOT NULL`` on all six tenant carriers. Handoff at
+> ``docs/handoffs/SESSION_038_milestone_1_write_path_tenancy.md``.
 >
-> **SESSION_038 continues Milestone 1 with Increment 3.**
+> **SESSION_039 opens the authentication half of Milestone 1.**
 >
 > **All governance layers apply:**
 >
-> - `docs/PROJECT_RULES.md` — six project-work rules.
-> - `docs/DOC_GOVERNANCE.md` — documentation rules.
-> - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 1 —
+> - ``docs/PROJECT_RULES.md`` — six project-work rules.
+> - ``docs/DOC_GOVERNANCE.md`` — documentation rules.
+> - ``docs/roadmap/IMPLEMENTATION_ROADMAP.md`` §Milestone 1 —
 >   scope boundary.
-> - `docs/roadmap/MILESTONE_1_PLANNING.md` — acceptance
+> - ``docs/roadmap/MILESTONE_1_PLANNING.md`` — acceptance
 >   contract (§3 compatibility checklist must still verify
->   true after Increment 3).
+>   true after Increment 4).
 
 ## What just shipped
 
-- **SESSION_037 (this session)** — Milestone 1 Increments 1 & 2.
-  Two commits (`36a4d74`, `0e7e710`). Test baseline moved from
-  1,300 → 1,313. NOT NULL flip on the six new FKs was
-  deferred from Increment 2 to Increment 3 (see the handoff's
-  "Deviation from plan" section for rationale).
-- **SESSION_036** — Documentation governance
-  (`docs/DOC_GOVERNANCE.md`), CLAUDE.md governance section,
-  auto-memory feedback entries. Handoff at
-  `docs/handoffs/SESSION_036_doc_governance_and_repo_org.md`.
+- **SESSION_038 (this session)** — Milestone 1 Increment 3.
+  New ``services/tenancy.py`` primitive (``get_default_dealership``
+  + ``pre_save`` autofill signal wired via ``DealerAiConfig.ready``),
+  ``dealer_config.py`` resolvers extended with optional ``dealership=``
+  arg, explicit write-path sweeps in ``views.py`` /
+  ``services/lead_service.py`` / ``services/inventory_import.py``,
+  migration ``0010_dealership_fks_not_null.py`` flipping all six FKs
+  to NOT NULL. Test baseline moved 1,313 → 1,322 (+9). See handoff
+  ``docs/handoffs/SESSION_038_milestone_1_write_path_tenancy.md`` for
+  the full contract-verification narrative + the note about the dev
+  DB re-seed that happened during migration verification.
+- **SESSION_037** — Increments 1 & 2 (``Dealership`` model + nullable
+  FKs + verified backfill).
 
-## What SESSION_038 should do — Increment 3
+## What SESSION_039 should do — Increment 4
 
-**Goal:** propagate tenancy through the write path so every
-code path that creates a `Vehicle` / `Salesperson` /
-`ChatSession` / `ChatMessage` / `CustomerLead` /
-`DealerOnboardingProfile` sets `dealership=`, then flip all
-six FKs to `NOT NULL`.
+**Goal:** propagate authenticated request context through the API so
+tenancy is derived from the authenticated user (or a public header
+where operator auth doesn't apply) instead of always defaulting to
+the ``slug="default"`` row.
 
 ### Recommended step sequence
 
 1. **Read first (in this order):**
-   - `docs/handoffs/SESSION_037_milestone_1_tenancy_foundation.md`
-     — full context on what shipped and why NOT NULL was
-     deferred.
-   - `docs/roadmap/MILESTONE_1_PLANNING.md` §3.9 (resolver
-     extension pattern) and §2 rows 1, 4, 5, 6, 7, 10 (the
-     per-system impact table for the write-path callers).
-   - `backend/dealer_ai/tests/test_dealership.py::
-     TenancyFkAttachment.test_fk_is_nullable_in_this_increment`
-     — this guard must be inverted (or removed) as part of
-     the NOT NULL flip.
+   - ``docs/handoffs/SESSION_038_milestone_1_write_path_tenancy.md``
+     — the tenancy primitive contract that Increment 4 extends,
+     including the "parent-session inheritance" nuance in the
+     ``pre_save`` handler.
+   - ``docs/roadmap/MILESTONE_1_PLANNING.md`` §1.2, §1.3, §1.4, §2
+     rows 3, 5, 6, 8, 9, 10, 11, 12 — the per-system impact table
+     for endpoint auth work.
+   - ``backend/dealer_ai/services/tenancy.py`` — the primitive to
+     extend, **not parallel**.
+   - ``backend/dealer_kit/settings.py`` — inspect the (currently
+     empty) ``REST_FRAMEWORK`` ``DEFAULT_AUTHENTICATION_CLASSES`` /
+     ``DEFAULT_PERMISSION_CLASSES`` config.
 
-2. **Implement in this order** (each step verifiable
-   independently):
+2. **Implement in this order** (each step verifiable independently):
 
-   1. Introduce `backend/dealer_ai/services/tenancy.py::
-      get_default_dealership()` — runtime lookup,
-      cache-once, raises if missing. Import-safe (no
-      top-level DB access).
-   2. Extend `services/dealer_config.py`:
-      `get_dealer_name()` and `get_dealer_profile()` gain an
-      optional `dealership` argument; when omitted, resolve
-      via `get_default_dealership()`. Env-override layer
-      and Copper Canyon defaults preserved.
-   3. Sweep write-path callers to pass `dealership=` on
-      model creation (defaults-only — no request-context
-      tenant resolution yet):
-      - `services/inventory_import.py`
-      - `services/chat_engine.py`
-      - `services/lead_service.py`
-      - `services/follow_up.py`
-      - `services/handoff_service.py`
-      - `views.py` (DealerOnboardingProfile upsert;
-        Salesperson admin create if any)
-   4. Add a shared test helper — a base `TestCase` mixin
-      or `setUpTestData` pattern — that surfaces
-      `self.default_dealership` and passes it into every
-      model constructor. Sweep existing tests that construct
-      the six tenant carriers.
-   5. Generate migration `0010_dealership_fks_not_null.py`
-      (Django will prompt about non-nullable; answer 2 =
-      "handled manually" since the backfill in 0009 covered
-      it).
-   6. Invert the `test_fk_is_nullable_in_this_increment`
-      guard into a `test_fk_is_now_not_null` assertion.
+   1. **DRF auth config** in ``settings.py``. Pick session-or-token
+      per the planning memo — either is fine, the point is to use
+      Django's built-ins.
+   2. **User → dealership + role mapping.** Django ``Group`` /
+      ``Permission`` is preferred if the mapping is clean; a small
+      ``UserRole`` (or ``UserDealershipRole``) table is fine when it
+      isn't. Roles per ``IMPLEMENTATION_ROADMAP.md`` §Milestone 1:
+      ``dealer_owner``, ``sales_manager``, ``recon_manager``,
+      ``f_and_i_manager``, ``collections``, ``advisor``, ``porter``.
+   3. **Extend the tenancy primitive.** Add a
+      ``get_current_dealership(request)`` (or equivalent) that
+      resolves from ``request.user.dealership`` when authenticated,
+      or a public header (``X-Dealership-Slug``) for customer-facing
+      endpoints. Falls back to ``get_default_dealership()`` for
+      single-tenant local dev.
+   4. **Advisor workspace auth.** Replace the slug-obscurity check
+      in ``views.py::advisor_workspace`` / ``advisor_follow_up``
+      with ``IsAuthenticated + AdvisorForSlug + SameDealership``.
+      Keep the URL shape.
+   5. **Admin endpoint auth.** Every ``/api/dealer-ai/admin/*``
+      endpoint gains ``IsAuthenticated + IsSalesManagerOrOwner +
+      SameDealership`` plus queryset scoping by ``request.user.dealership``.
+   6. **Customer-facing scoping.** Chat / vehicle Q&A endpoints stay
+      ``AllowAny`` (customer is not a platform user). But
+      ``ChatSession`` / ``ChatMessage`` / matched-vehicle queries
+      resolve tenancy from the incoming header or default. Chat/vehicle
+      scrub stack **untouched**.
+   7. **Frontend login page + auth header propagation.** Greenfield
+      ``frontend/src/pages/Login.tsx`` (or equivalent). Shared
+      ``authFetch()`` helper. Every operator page (leads, admin,
+      coaching) uses it; public pages (``/``, ``/assistant``,
+      ``/showroom``, ``/embed/assistant``) do not.
 
-3. **Verify continuously.** After each of steps 1–6, run
-   `python3 manage.py test dealer_ai` and confirm zero
-   regressions. The final baseline should be ≥ 1,313 pass
-   (Increment 3 is expected to *add* tests, not remove any).
+3. **Verify continuously.** After each step run the backend suite
+   (``python3 manage.py test dealer_ai``) plus the frontend
+   type-check and build. The 1,322-pass baseline must be preserved
+   — Increment 4 is expected to *add* auth/permission tests, not
+   remove existing ones.
 
-4. **Verify the compatibility checklist** (§3 of the
-   planning memo) after Increment 3 is complete. Every
-   pre-existing item must still verify true.
+4. **Verify the compatibility checklist** (§3 of the planning memo)
+   after each step. Every pre-existing item must still verify true.
+   The frontend-side items in particular ("public routes render
+   unauthenticated") are the ones most likely to regress if auth
+   propagates too aggressively.
 
 5. **Preserve the franchise config path.** Env overrides
-   (`DEALER_AI_DEALER_TYPE`, `DEALER_AI_PRIMARY_MAKE`,
-   `DEALER_AI_DEALER_NAME`) must continue to work for
-   single-tenant local dev.
+   (``DEALER_AI_DEALER_TYPE``, ``DEALER_AI_PRIMARY_MAKE``,
+   ``DEALER_AI_DEALER_NAME``) must continue to work for single-tenant
+   local dev.
 
 6. **Close the session** with:
-   - Handoff at `docs/handoffs/SESSION_038_<slug>.md`.
-   - Update `docs/CAPABILITY_MATRIX.md` only if
-     Increment 3 shifts what the software *actually does*
-     visibly (probably not — this is plumbing).
-   - Overwrite this file (`00-START-NEXT-SESSION.md`) with
-     the SESSION_039 priority (Increment 4 — probably real
-     authentication, per planning memo §1.2).
+   - Handoff at ``docs/handoffs/SESSION_039_<slug>.md``.
+   - Update ``docs/CAPABILITY_MATRIX.md`` §7/§8 (auth model, roles)
+     — this is the increment that visibly changes what the software
+     does. Update ``IMPLEMENTATION_ROADMAP.md`` §2.7 if Milestone 1
+     is complete at session close.
+   - Overwrite this file (``00-START-NEXT-SESSION.md``) with the
+     SESSION_040 priority (either Milestone 1 wrap-up if Increment 4
+     spans multiple sessions, or Milestone 2 kickoff).
 
-## Explicit non-goals for SESSION_038
+## Explicit non-goals for SESSION_039
 
-- ❌ Do NOT introduce request-context tenant resolution
-  (header / domain / authenticated-user). That's Increment 4+.
-- ❌ Do NOT add endpoint auth / DRF authentication classes /
-  permission classes. That's Increment 4.
 - ❌ Do NOT introduce tenant-scoped unique constraints
-  (`(dealership, stock_number)`, `(dealership, slug)`,
-  `DealerOnboardingProfile` OneToOne). Those come with the
+  (``(dealership, stock_number)``, ``(dealership, slug)``,
+  ``DealerOnboardingProfile`` OneToOne). Those come with the
   increment that needs them.
-- ❌ Do NOT touch the frontend.
+- ❌ Do NOT introduce SSO / MFA. Explicitly out-of-scope per the
+  planning memo §5.
+- ❌ Do NOT build a user-management UI beyond sign-in. Out-of-scope.
+- ❌ Do NOT add per-role UI polish (dashboards, sidebars) beyond
+  what auth strictly requires. Each future milestone applies role
+  scoping to its own surfaces.
 - ❌ Do NOT touch the 16-stage safety pipeline.
-- ❌ Do NOT delete the franchise config path or Freedom
-  Ford demo assets.
-- ❌ Do NOT commit any real `OPENAI_API_KEY`.
-- ❌ Do NOT create parallel docs (per `DOC_GOVERNANCE.md`
-  §7.2). Update `MILESTONE_1_PLANNING.md` only if
-  implementation reveals a real deviation from the contract.
+- ❌ Do NOT delete the franchise config path or Freedom Ford demo
+  assets.
+- ❌ Do NOT commit any real ``OPENAI_API_KEY``.
+- ❌ Do NOT create parallel docs (per ``DOC_GOVERNANCE.md`` §7.2).
+  Update the existing planning memo only if implementation reveals
+  a real deviation from the contract.
 
 ## NEXT TASK
 
-Start SESSION_038 with the read-first list above, then
-implement Increment 3 in the six-step sequence.
+Start SESSION_039 with the read-first list above, then implement
+Increment 4 in the seven-step sequence.
 
 ---
 
 ## Anchors that win on conflict
 
-1. `docs/PROJECT_RULES.md`
-2. `docs/DOC_GOVERNANCE.md`
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-4. `docs/roadmap/MILESTONE_1_PLANNING.md`
-5. `docs/BUSINESS_DOMAIN_MAP.md`
-6. `docs/research/*_MAPPING.md` + `*_PIVOT.md`
-7. `docs/CAPABILITY_MATRIX.md`
-8. Most recent handoffs (`SESSION_037_*.md`,
-   `SESSION_036_*.md`).
-9. `git log --oneline -25`; `git show HEAD:<path>`.
+1. ``docs/PROJECT_RULES.md``
+2. ``docs/DOC_GOVERNANCE.md``
+3. ``docs/roadmap/IMPLEMENTATION_ROADMAP.md``
+4. ``docs/roadmap/MILESTONE_1_PLANNING.md``
+5. ``docs/BUSINESS_DOMAIN_MAP.md``
+6. ``docs/research/*_MAPPING.md`` + ``*_PIVOT.md``
+7. ``docs/CAPABILITY_MATRIX.md``
+8. Most recent handoffs (``SESSION_038_*.md``,
+   ``SESSION_037_*.md``).
+9. ``git log --oneline -25``; ``git show HEAD:<path>``.
 
 Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_037)
+## Operational state (post-SESSION_038)
 
-- **Backend (local):** Django on `:8001`. Package
-  `backend/dealer_ai/`. Migrations `0001`–`0009` applied.
-  Default `Dealership` row exists (`slug='default'`,
-  `name='Default Dealership'`).
-- **Backend (prod):** `vehicle-match-api.onrender.com` —
-  NOT active. Milestone 1 does not require prod.
-- **Frontend (local):** Vite on `:5173`. Unchanged this
-  session; `/dealer-ai-onboarding` still has 6 sections.
+- **Backend (local):** Django on ``:8001``. Package
+  ``backend/dealer_ai/``. Migrations ``0001``–``0010`` applied.
+  Default ``Dealership`` row exists (``slug='default'``,
+  ``name='Default Dealership'``). All six tenant FKs enforce NOT
+  NULL at the schema layer. Write-path fallback via ``pre_save``
+  signal registered in ``DealerAiConfig.ready``.
+- **Backend (prod):** ``vehicle-match-api.onrender.com`` — NOT
+  active. Milestone 1 does not require prod.
+- **Frontend (local):** Vite on ``:5173``. Unchanged this session;
+  ``/dealer-ai-onboarding`` still has 6 sections.
 - **Frontend (prod):** NONE.
-- **Test baseline:** 1,313 pass, 1 skipped, 0 fail.
+- **Test baseline:** 1,322 pass, 1 skipped, 0 fail.
 - **Env overrides for franchise config still work:**
-  `DEALER_AI_DEALER_TYPE=franchise`,
-  `DEALER_AI_PRIMARY_MAKE=<OEM>`,
-  `DEALER_AI_DEALER_NAME=<name>`.
-- **`docs/roadmap/DEFERRED_IDEAS.md`** does not yet exist.
-  Create it the first time an idea surfaces during
-  Milestone 1 that doesn't fit inside an existing
-  milestone plan doc.
+  ``DEALER_AI_DEALER_TYPE=franchise``,
+  ``DEALER_AI_PRIMARY_MAKE=<OEM>``,
+  ``DEALER_AI_DEALER_NAME=<name>``.
+- **``docs/roadmap/DEFERRED_IDEAS.md``** — still does not exist.
+  Create it the first time an idea surfaces during Milestone 1
+  that doesn't fit inside an existing milestone plan doc.
+- **Dev DB note:** the SESSION_037 ``DealerOnboardingProfile``
+  singleton was wiped during SESSION_038's migration-cycle
+  verification and not regenerated. Visit
+  ``/dealer-ai-onboarding`` once and save to restore if the
+  demo relies on a persisted profile.
