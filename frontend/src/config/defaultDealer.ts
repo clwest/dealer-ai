@@ -99,22 +99,37 @@ export interface ProductConfig {
 }
 
 /**
- * The kit's neutral default dealer. Edit this block to point the
- * kit at a real dealer, or leave neutral and drive branding
- * entirely through the OnboardingProfile via Setup.
+ * The kit's shipped default dealer.
+ *
+ * Post-SESSION_030 pivot, this ships the Copper Canyon Auto
+ * (Yuma, AZ) invented independent-dealer persona. See
+ * docs/INDEPENDENT_DEALER_PIVOT.md for the full persona and
+ * docs/demo/COPPER_CANYON_DEMO_SCRIPT.md for the demo flow.
+ *
+ * Real dealers still override this via the OnboardingProfile
+ * (Setup UI at /dealer-ai-onboarding) — that path is unchanged.
+ * When the profile is empty (fresh install pre-Setup, embed
+ * surface loaded before the OS booted), the values below fill
+ * in so the shell reads coherently rather than showing blank
+ * strings.
  *
  * Do not edit chat behavior, prompt strings, scrub layer, or
  * inventory logic to swap the dealer — those concerns are
- * already brand-agnostic.
+ * already brand-agnostic and drive from the backend's
+ * DealerProfile resolver.
  */
 export const DEFAULT_DEALER: DealerConfig = {
-  dealershipName: "Your Dealership",
-  storeLocation: "",
-  tagline: "",
+  dealershipName: "Copper Canyon Auto",
+  storeLocation: "Yuma, AZ",
+  tagline: "Yuma's trusted lot since 1987.",
+  // Mixed-make used lot — no single primary brand. Franchise
+  // configs set this to their OEM ("Ford", "Toyota", etc.).
   brand: "",
-  logoPath: "",
+  logoPath: "/branding/copper-canyon-logo.svg",
   primaryColorNote:
-    "Configure primary color in tailwind.config.js. Ships neutral.",
+    "brand.blue = #3f6b90 (desert-sky). brand.accent = #c76b3a " +
+    "(copper terracotta). Configure in tailwind.config.js + " +
+    "src/index.css for palette swaps.",
 };
 
 /**
