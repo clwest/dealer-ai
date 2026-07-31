@@ -57,6 +57,18 @@ to gitignore (`d0e80fc`), refreshed context-kit docs (`9754830`).
 - Live grep confirms zero "Sam Wampler" / "Freedom Ford" text
   in user-visible surfaces.
 
+### Late-session follow-ups (after handoff was first written)
+
+- **`7a91255` `feat: surface /dealer-ai-admin in sidebar`** — Added
+  "Admin" nav entry so the full ops dashboard (trends, pipeline,
+  handoff queue, audit panel, recommended actions with
+  trending-signal ad-copy generator, demo reset) is reachable
+  without direct URLs.
+- **`2e0977c` `docs: add CAPABILITY_MATRIX.md`** — Durable record
+  of what the platform actually does today with runtime-verified
+  evidence. Read this before pitching / demoing so claims stay
+  grounded. Frontmatter tracks last-verified commit.
+
 ### Deployment state (unchanged during this session)
 
 - Vercel frontend at `vehicle-match-pi.vercel.app` — **deleted**
@@ -156,6 +168,7 @@ Read first:
 - context-kit orient
 - 00-START-NEXT-SESSION.md
 - docs/handoffs/SESSION_029_audit_openai_and_tier1_rebrand.md
+- docs/CAPABILITY_MATRIX.md (durable record of what works, with runtime-verified evidence)
 - docs/FREEDOM_FORD_SESSION_START.md
 - backend/dealer_ai/services/dealer_config.py
 

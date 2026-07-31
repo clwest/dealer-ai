@@ -266,3 +266,29 @@ ad-copy generator).
   `docs/BUILD_PLAN.md`.
 - `render.yaml` CORS hostname update if/when a new frontend gets
   deployed.
+
+---
+
+## Post-handoff follow-ups (same session, after this doc was first written)
+
+- **`7a91255` `feat: surface /dealer-ai-admin in sidebar`** — The
+  `DealerAdmin` page (trends, sales pipeline, handoff queue, audit
+  panel, recommended actions with **trending-signal-driven ad-copy
+  generator**, demo reset) was previously reachable only via direct
+  URL. Added an "Admin" sidebar entry between "Coaching Mode" and
+  "Team" with `end: true` so the active-link styling doesn't stick
+  when the Team sub-route is open.
+
+- **`2e0977c` `docs: add CAPABILITY_MATRIX.md`** — New durable
+  artifact at `docs/CAPABILITY_MATRIX.md`. Records what the platform
+  actually does today, backed by runtime evidence rather than
+  narrative claims. Covers 12 capability areas + honest gaps. Has
+  frontmatter tracking (`last_verified`, `verified_against_commit`)
+  so future sessions know when to re-walk the doc.
+
+  **The trending-signal ad-copy flow is documented explicitly in
+  Section 6.** Recommendations are computed by `pipeline.py`'s
+  `recommended_actions()` from `trends_snapshot()` — top requested
+  models, top vehicle types, most-selected units. Cards with
+  `category` in `{inventory, marketing}` get a "Generate ad" button
+  that opens `GenerateAdModal` (POSTs to `/admin/ad-copy/`).
