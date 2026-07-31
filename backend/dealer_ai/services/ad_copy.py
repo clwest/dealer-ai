@@ -31,11 +31,24 @@ from typing import Any, Dict, List, Optional
 from django.db.models import QuerySet
 
 from ..models import Vehicle
+from .dealer_config import get_dealer_name
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
 from .llm_safety import apply_post_llm_scrubs
 
 logger = logging.getLogger(__name__)
+
+
+def _render(template: str) -> str:
+    """Format a dealer-templated string with the current dealer name.
+
+    The ad-copy prompt embeds a literal JSON schema (real ``{`` / ``}``
+    braces) so :py:meth:`str.format` would misfire. We instead use a
+    distinctive ``{{DEALER_NAME}}`` token and substitute via
+    :py:meth:`str.replace` — the same convention ``follow_up.py`` uses
+    for its ``{{TONE_NOTE}}`` / ``{{DRAFT_COUNT}}`` tokens.
+    """
+    return template.replace("{{DEALER_NAME}}", get_dealer_name())
 
 
 SUPPORTED_CATEGORIES: tuple[str, ...] = ("inventory", "marketing")
@@ -177,9 +190,9 @@ def _ford_first_top(qs: QuerySet[Vehicle], limit: int) -> List[Vehicle]:
 # ---- Prompt construction ----------------------------------------------------
 
 
-_AD_SYSTEM_PROMPT = """You are a marketing copywriter for Freedom Ford, a Ford
-dealership in Oklahoma. You write short, honest ad drafts that a manager will
-review and edit before posting.
+_AD_SYSTEM_PROMPT = """You are a marketing copywriter for {{DEALER_NAME}}.
+You write short, honest ad drafts that a manager will review and edit
+before posting.
 
 Hard rules — these are non-negotiable, the system will reject violations:
 - Use ONLY facts from the CONTEXT block below. Never invent specs, financing
@@ -267,7 +280,7 @@ def build_messages(rec: dict, vehicles: List[Vehicle]) -> List[Dict[str, str]]:
         "Generate the JSON array of ad variants now. 3 variants. Real data only."
     )
     return [
-        {"role": "system", "content": _AD_SYSTEM_PROMPT},
+        {"role": "system", "content": _render(_AD_SYSTEM_PROMPT)},
         {"role": "system", "content": _format_recommendation_block(rec)},
         {"role": "system", "content": _format_vehicle_block(vehicles)},
         {"role": "user", "content": user_request},

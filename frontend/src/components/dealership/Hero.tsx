@@ -59,7 +59,7 @@ export default function Hero() {
           </div>
 
           <h1 className="mt-5 text-balance text-4xl font-semibold leading-[1.05] sm:text-5xl lg:text-6xl">
-            Find your next Ford with{" "}
+            Find your next ride with{" "}
             help, not pressure.
           </h1>
           <p className="mt-5 max-w-xl text-base text-white/80 sm:text-lg">
@@ -116,13 +116,13 @@ export default function Hero() {
           </div>
         </div>
 
-        <HeroVisual />
+        <HeroVisual dealershipName={brand.dealershipName} />
       </div>
     </section>
   );
 }
 
-function HeroVisual() {
+function HeroVisual({ dealershipName }: { dealershipName: string }) {
   // Simulated chat preview — purely decorative, conveys what the
   // real assistant does without spinning up a session on every page
   // load. Real chat is the next section below.
@@ -135,7 +135,7 @@ function HeroVisual() {
           </div>
           <div className="flex-1 leading-tight">
             <div className="text-xs font-semibold text-white">
-              Freedom Ford Assistant
+              {`${dealershipName} Assistant`}
             </div>
             <div className="text-[10.5px] text-white/60">
               Current inventory · Payment-aware

@@ -11,8 +11,8 @@
 // SESSION_018: brand strings (dealership name, location, footer
 // disclaimer, welcome line) now flow from the existing
 // onboarding profile via `useBrand()`. Hard-coded fallbacks
-// preserve the verified Sam Wampler's Freedom Ford McAlester
-// identity when the profile is missing or empty.
+// use the kit's neutral default dealer when the profile is
+// missing or empty.
 
 import { useEffect, useState } from "react";
 import { CircleCheck, RotateCcw } from "lucide-react";
@@ -153,7 +153,7 @@ function Footer({ brand }: { brand: Brand }) {
 
 function initials(name: string): string {
   // Two-letter chip fallback when the logo image fails. Walks the
-  // first words; "Sam Wampler's Freedom Ford" → "SF".
+  // first words; "Downtown Motors" → "DM".
   const parts = name
     .split(/\s+/)
     .map((s) => s.replace(/[^A-Za-z]/g, ""))

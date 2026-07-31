@@ -15,9 +15,8 @@
 //
 // **Hard fallbacks.** When the fetch fails or fields are empty, we
 // fall back to `DEFAULT_DEALER` from `config/defaultDealer.ts`
-// (currently Sam Wampler's Freedom Ford McAlester). The embed
-// surface in particular can load before the OS ever boots —
-// graceful degradation matters.
+// (a neutral default dealer). The embed surface in particular can
+// load before the OS ever boots — graceful degradation matters.
 
 import { useEffect, useState } from "react";
 
@@ -67,8 +66,8 @@ export interface Brand {
 /**
  * Compose the user-facing brand strings from a (possibly partial)
  * onboarding profile. Any missing field falls through to the
- * verified Sam Wampler's identity. Pure function — easy to call
- * from non-hook contexts (tests, SSR, etc.) if needed later.
+ * neutral default identity. Pure function — easy to call from
+ * non-hook contexts (tests, SSR, etc.) if needed later.
  */
 export function brandFromProfile(
   profile: OnboardingProfilePayload | null | undefined,
@@ -132,11 +131,11 @@ export function useBrand(): Brand {
 }
 
 /**
- * "Sam Wampler's Freedom Ford" → "Sam Wampler's Freedom Ford's"
- * "Freedom Ford" → "Freedom Ford's"
+ * "Downtown Motors" → "Downtown Motors's"
+ * "Sam's Auto Center" → "Sam's Auto Center" (unchanged)
  *
  * If the name already ends in "'s" (apostrophe-s) we leave it as-is
- * so we don't produce double possessives like "Sam's's Freedom Ford".
+ * so we don't produce double possessives like "Sam's's Auto Center".
  */
 function toPossessive(name: string): string {
   const trimmed = name.trim();

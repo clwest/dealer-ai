@@ -379,9 +379,9 @@ export default function GenerateAdModal({
 
           <div className="border-t border-slate-100 pt-3 text-[11px] text-slate-500">
             Drafts only — the manager reviews and posts manually. Numbers
-            (payments, prices, stock #s) come from real Freedom Ford
-            inventory; rate / discount / dealer-cost language is auto-scrubbed
-            before drafts reach you.
+            (payments, prices, stock #s) come from real inventory; rate /
+            discount / dealer-cost language is auto-scrubbed before drafts
+            reach you.
           </div>
         </div>
       </div>

@@ -59,7 +59,7 @@ export default function AssistantChat({
   placeholder = "Ask about budget, body style, payments, trim…",
   className,
   // SESSION_019 — defaults are kept brand-neutral so a leak on a
-  // newly-installed kit doesn't display Freedom-Ford-specific copy.
+  // newly-installed kit doesn't display any specific dealer copy.
   // Both call sites override these via props with brand-aware text.
   welcomeTitle = "Hi — I'm your dealership's sales assistant.",
   welcomeBody = "Tell me what you're looking for and I'll show you what we have. Try one of these to start, or type your own.",

@@ -155,6 +155,7 @@ export default function SiteNav() {
 }
 
 function InfoStrip() {
+  const brand = useBrand();
   return (
     <div className="hidden bg-ford-ink text-[11px] text-white/80 md:block">
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6 lg:px-8">
@@ -166,7 +167,7 @@ function InfoStrip() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden sm:inline">Sam Wampler · Make It Happen</span>
+          <span className="hidden sm:inline">{brand.tagline}</span>
           <span className="inline-flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />

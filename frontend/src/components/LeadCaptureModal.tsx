@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 
 import type { LeadInput, Vehicle } from "@/lib/api";
+import { useBrand } from "@/lib/brand";
 
 interface Props {
   open: boolean;
@@ -29,6 +30,7 @@ export default function LeadCaptureModal({
   defaultEmail = "",
   defaultPhone = "",
 }: Props) {
+  const brand = useBrand();
   const [name, setName] = useState(defaultName);
   const [phone, setPhone] = useState(defaultPhone);
   const [email, setEmail] = useState(defaultEmail);
@@ -84,7 +86,7 @@ export default function LeadCaptureModal({
         <div className="flex items-start justify-between">
           <div>
             <div className="text-lg font-bold text-ford-ink">
-              Connect with a Freedom Ford advisor
+              {`Connect with a ${brand.dealershipName} advisor`}
             </div>
             <div className="mt-1 text-sm text-slate-500">
               We'll prepare a real quote and reach out shortly.
@@ -177,7 +179,7 @@ export default function LeadCaptureModal({
               className="input"
               value={tradeIn}
               onChange={(e) => setTradeIn(e.target.value)}
-              placeholder="2018 Ford Escape, ~75,000 miles, good condition"
+              placeholder="2018 SUV, ~75,000 miles, good condition"
             />
           </label>
 

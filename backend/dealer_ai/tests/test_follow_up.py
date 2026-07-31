@@ -6,7 +6,7 @@ import json
 from decimal import Decimal
 from typing import List
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from dealer_ai.models import CustomerLead, Salesperson, Vehicle
@@ -211,6 +211,7 @@ class FollowUpServiceTests(TestCase):
         self.assertTrue(any("LLM call failed" in w for w in result.warnings))
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class FollowUpParserResilienceTests(TestCase):
     """Phase 4 hardening: the layered parser must recover usable drafts
     when Ollama returns prose around the JSON, a single object instead

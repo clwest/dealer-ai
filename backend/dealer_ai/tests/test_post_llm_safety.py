@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from dealer_ai.models import ChatMessage, ChatSession, Vehicle
 from dealer_ai.services.chat_engine import (
@@ -27,6 +27,7 @@ from dealer_ai.services.chat_engine import (
     _format_budget_block,
     _format_discovery_block,
     _format_vehicle_block,
+    _render,
     _should_enter_discovery_mode,
     build_negotiation_response,
     detect_appointment_request,
@@ -737,6 +738,7 @@ class DetectExternalValueInquiryTests(TestCase):
             )
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class ChatEngineExternalValueGuardTests(TestCase):
     """End-to-end: BBV/KBB/trade-in-value questions short-circuit pre-LLM
     and never expose a fabricated dollar value to the customer."""
@@ -754,7 +756,7 @@ class ChatEngineExternalValueGuardTests(TestCase):
             "What's the Blue Book value of a 2018 Camry?"
         )
         self.assertEqual(
-            result.assistant_message.content, EXTERNAL_VALUE_RESPONSE
+            result.assistant_message.content, _render(EXTERNAL_VALUE_RESPONSE)
         )
         # No LLM call.
         self.assertEqual(provider.calls, [])
@@ -768,7 +770,7 @@ class ChatEngineExternalValueGuardTests(TestCase):
         engine, _, _, provider = self._setup()
         result = engine.handle_user_message("What's my trade-in worth?")
         self.assertEqual(
-            result.assistant_message.content, EXTERNAL_VALUE_RESPONSE
+            result.assistant_message.content, _render(EXTERNAL_VALUE_RESPONSE)
         )
         self.assertEqual(provider.calls, [])
         self.assertEqual(
@@ -977,7 +979,7 @@ class FormatDiscoveryBlockTests(TestCase):
     def test_convertible_block_acknowledges_no_inventory(self):
         block = _format_discovery_block("I want a convertible", {})
         self.assertIn("convertible", block.lower())
-        self.assertIn("does not currently have", block.lower())
+        self.assertIn("do not currently have", block.lower())
         self.assertIn("Mustang", block)
         # Still asks clarifying questions before recommending.
         self.assertIn("clarifying question", block.lower())
@@ -1410,6 +1412,7 @@ class DetectHandoffRequestTests(TestCase):
             )
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class HandoffResponseShapeTests(TestCase):
     """The canned HANDOFF_RESPONSE must be honest, ask for the three
     contact-info pieces, and contain NO transfer-mechanic language or
@@ -1419,7 +1422,7 @@ class HandoffResponseShapeTests(TestCase):
         # Phase 8o: identity disclosure moved to the dedicated
         # IDENTITY_RESPONSE. The handoff response is now the simpler
         # advisor-connection text.
-        body = HANDOFF_RESPONSE.lower()
+        body = _render(HANDOFF_RESPONSE).lower()
         self.assertIn("freedom ford", body)
         self.assertIn("advisor", body)
 
@@ -1491,6 +1494,7 @@ class HandoffResponseShapeTests(TestCase):
         self.assertNotIn("immediately", body)
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class ChatEngineHandoffGuardTests(TestCase):
     """End-to-end: handoff requests short-circuit pre-LLM, return the
     canned response, never invoke the model, and surface
@@ -1511,7 +1515,7 @@ class ChatEngineHandoffGuardTests(TestCase):
             "I want to talk to a live person"
         )
         self.assertEqual(
-            result.assistant_message.content, HANDOFF_RESPONSE
+            result.assistant_message.content, _render(HANDOFF_RESPONSE)
         )
         self.assertEqual(provider.calls, [], "LLM must not be invoked")
         self.assertEqual(
@@ -1528,7 +1532,7 @@ class ChatEngineHandoffGuardTests(TestCase):
             "Can I speak to a salesperson?"
         )
         self.assertEqual(
-            result.assistant_message.content, HANDOFF_RESPONSE
+            result.assistant_message.content, _render(HANDOFF_RESPONSE)
         )
         self.assertEqual(provider.calls, [])
         self.assertEqual(
@@ -2021,6 +2025,7 @@ class DetectAppointmentRequestTests(TestCase):
             )
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class ChatEngineAppointmentGuardTests(TestCase):
     def test_appointment_with_current_vehicle_asks_name_phone_time(self):
         v = Vehicle.objects.create(
@@ -2093,7 +2098,7 @@ class ChatEngineAppointmentGuardTests(TestCase):
         self.assertEqual(provider.calls, [])
         self.assertEqual(
             result.assistant_message.content,
-            APPOINTMENT_REQUEST_NEEDS_VEHICLE_RESPONSE,
+            _render(APPOINTMENT_REQUEST_NEEDS_VEHICLE_RESPONSE),
         )
         self.assertEqual(
             result.assistant_message.metadata.get("flag"),
@@ -2252,9 +2257,10 @@ class DetectIdentityRequestTests(TestCase):
             )
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class IdentityResponseShapeTests(TestCase):
     def test_response_identifies_as_freedom_ford_ai(self):
-        body = IDENTITY_RESPONSE.lower()
+        body = _render(IDENTITY_RESPONSE).lower()
         self.assertIn("freedom ford", body)
         self.assertIn("ai", body)
 
@@ -2270,6 +2276,7 @@ class IdentityResponseShapeTests(TestCase):
         self.assertNotIn("i am human", body)
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class ChatEngineIdentityGuardTests(TestCase):
     def _setup(self):
         session = ChatSession.objects.create()
@@ -2282,7 +2289,7 @@ class ChatEngineIdentityGuardTests(TestCase):
         engine, _, _, provider = self._setup()
         result = engine.handle_user_message("are you real?")
         self.assertEqual(
-            result.assistant_message.content, IDENTITY_RESPONSE
+            result.assistant_message.content, _render(IDENTITY_RESPONSE)
         )
         self.assertEqual(provider.calls, [])
         self.assertEqual(
@@ -2297,7 +2304,7 @@ class ChatEngineIdentityGuardTests(TestCase):
         engine, _, _, provider = self._setup()
         result = engine.handle_user_message("Is this a bot?")
         self.assertEqual(
-            result.assistant_message.content, IDENTITY_RESPONSE
+            result.assistant_message.content, _render(IDENTITY_RESPONSE)
         )
         self.assertEqual(provider.calls, [])
         self.assertEqual(
@@ -2367,16 +2374,18 @@ class DetectNegotiationRequestTests(TestCase):
             )
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class NegotiationResponseShapeTests(TestCase):
     def test_response_acknowledges_request(self):
-        body = NEGOTIATION_RESPONSE.lower()
+        body = _render(NEGOTIATION_RESPONSE).lower()
         self.assertIn("get what you're trying to do", body)
 
     def test_response_redirects_to_advisor(self):
-        # Phase 8p: redirect target is now "Freedom Ford advisor"
-        # (named) rather than the generic "sales advisor".
-        body = NEGOTIATION_RESPONSE.lower()
-        self.assertIn("freedom ford advisor", body)
+        # Phase 8p: redirect target is now the named Freedom Ford
+        # advisor (via {dealer_name} template) rather than a generic
+        # "sales advisor".
+        body = _render(NEGOTIATION_RESPONSE).lower()
+        self.assertIn("advisor from freedom ford", body)
 
     def test_response_does_not_quote_numbers(self):
         # No dollar figures in the canned response.
@@ -2412,6 +2421,7 @@ class NegotiationResponseShapeTests(TestCase):
         self.assertIn("time", body)
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class ChatEngineNegotiationGuardTests(TestCase):
     def _setup(self):
         session = ChatSession.objects.create()
@@ -2424,7 +2434,7 @@ class ChatEngineNegotiationGuardTests(TestCase):
         engine, _, _, provider = self._setup()
         result = engine.handle_user_message("Will you match this price?")
         self.assertEqual(
-            result.assistant_message.content, NEGOTIATION_RESPONSE
+            result.assistant_message.content, _render(NEGOTIATION_RESPONSE)
         )
         self.assertEqual(provider.calls, [])
         self.assertEqual(
@@ -2441,7 +2451,7 @@ class ChatEngineNegotiationGuardTests(TestCase):
             "Can you do 25k out the door?"
         )
         self.assertEqual(
-            result.assistant_message.content, NEGOTIATION_RESPONSE
+            result.assistant_message.content, _render(NEGOTIATION_RESPONSE)
         )
         self.assertEqual(provider.calls, [])
         self.assertEqual(
@@ -2496,6 +2506,7 @@ class ChatEngineHandoffPhase8oFlagTests(TestCase):
             self.assertNotIn(fake, body)
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class ScrubPostLLMOverrideTests(TestCase):
     """Wholesale-replace replies that contain forbidden negotiation /
     fake-transfer phrasings."""
@@ -2505,49 +2516,49 @@ class ScrubPostLLMOverrideTests(TestCase):
             "Yes, I can match that price for you."
         )
         self.assertEqual(kind, "negotiation")
-        self.assertEqual(cleaned, NEGOTIATION_RESPONSE)
+        self.assertEqual(cleaned, _render(NEGOTIATION_RESPONSE))
 
     def test_we_can_do_dollar_amount_replaced_with_negotiation(self):
         cleaned, kind = scrub_post_llm_override(
             "We can do $25,000 out the door."
         )
         self.assertEqual(kind, "negotiation")
-        self.assertEqual(cleaned, NEGOTIATION_RESPONSE)
+        self.assertEqual(cleaned, _render(NEGOTIATION_RESPONSE))
 
     def test_knock_off_replaced_with_negotiation(self):
         cleaned, kind = scrub_post_llm_override(
             "I'll knock off $2000 today."
         )
         self.assertEqual(kind, "negotiation")
-        self.assertEqual(cleaned, NEGOTIATION_RESPONSE)
+        self.assertEqual(cleaned, _render(NEGOTIATION_RESPONSE))
 
     def test_out_the_door_for_amount_replaced_with_negotiation(self):
         cleaned, kind = scrub_post_llm_override(
             "Out the door for $28000."
         )
         self.assertEqual(kind, "negotiation")
-        self.assertEqual(cleaned, NEGOTIATION_RESPONSE)
+        self.assertEqual(cleaned, _render(NEGOTIATION_RESPONSE))
 
     def test_connecting_you_to_name_replaced_with_handoff(self):
         cleaned, kind = scrub_post_llm_override(
             "I'm connecting you to Sarah now."
         )
         self.assertEqual(kind, "handoff")
-        self.assertEqual(cleaned, HANDOFF_RESPONSE)
+        self.assertEqual(cleaned, _render(HANDOFF_RESPONSE))
 
     def test_stay_on_the_line_replaced_with_handoff(self):
         cleaned, kind = scrub_post_llm_override(
             "Stay on the line while I get someone."
         )
         self.assertEqual(kind, "handoff")
-        self.assertEqual(cleaned, HANDOFF_RESPONSE)
+        self.assertEqual(cleaned, _render(HANDOFF_RESPONSE))
 
     def test_transferring_you_now_replaced_with_handoff(self):
         cleaned, kind = scrub_post_llm_override(
             "transferring you now to a sales rep"
         )
         self.assertEqual(kind, "handoff")
-        self.assertEqual(cleaned, HANDOFF_RESPONSE)
+        self.assertEqual(cleaned, _render(HANDOFF_RESPONSE))
 
     def test_clean_reply_unchanged(self):
         clean = "Here's the F-150 — happy to set up a real conversation."
@@ -2556,6 +2567,7 @@ class ScrubPostLLMOverrideTests(TestCase):
         self.assertEqual(cleaned, clean)
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class ChatEnginePostLLMOverrideTests(TestCase):
     """End-to-end: when the LLM returns negotiation or fake-transfer
     text, the engine wholesale-replaces the reply with the corresponding
@@ -2579,7 +2591,7 @@ class ChatEnginePostLLMOverrideTests(TestCase):
         # LLM goes off-script. Pick a benign question.
         result = engine.handle_user_message("Tell me about the F-150")
         self.assertEqual(
-            result.assistant_message.content, NEGOTIATION_RESPONSE
+            result.assistant_message.content, _render(NEGOTIATION_RESPONSE)
         )
         self.assertEqual(
             result.assistant_message.metadata.get("flag"),
@@ -2606,7 +2618,7 @@ class ChatEnginePostLLMOverrideTests(TestCase):
         engine = ChatEngine(session=session, provider=provider)
         result = engine.handle_user_message("Tell me about the F-150")
         self.assertEqual(
-            result.assistant_message.content, HANDOFF_RESPONSE
+            result.assistant_message.content, _render(HANDOFF_RESPONSE)
         )
         self.assertEqual(
             result.assistant_message.metadata.get("flag"),
@@ -2719,6 +2731,7 @@ class NegotiationGuardLiveBugReportPhrasingsTests(TestCase):
 # ---- Phase 8o+: per-vehicle endpoint pre-LLM guards ---------------------
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class VehicleAskPreLLMGuardTests(TestCase):
     """The /vehicles/<id>/ask/ path used to bypass every guard. Phase 8o+
     routes it through the same pre-LLM checks the chat path uses, so
@@ -2743,7 +2756,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
             v, "what's the lowest you'll take?", provider=provider
         )
         # Core safety phrasing intact.
-        self.assertIn("freedom ford advisor", reply.lower())
+        self.assertIn("advisor from freedom ford", reply.lower())
         self.assertIn("number and time", reply.lower())
         # Context-aware: references the focus vehicle.
         self.assertIn(v.display_name, reply)
@@ -2754,7 +2767,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
         reply = answer_vehicle_question(
             v, "give me your best price", provider=provider
         )
-        self.assertIn("freedom ford advisor", reply.lower())
+        self.assertIn("advisor from freedom ford", reply.lower())
         self.assertIn(v.display_name, reply)
         self.assertEqual(provider.calls, [])
 
@@ -2764,7 +2777,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
             v, "what kind of discounts do you usually give?",
             provider=provider,
         )
-        self.assertIn("freedom ford advisor", reply.lower())
+        self.assertIn("advisor from freedom ford", reply.lower())
         self.assertIn(v.display_name, reply)
         self.assertEqual(provider.calls, [])
 
@@ -2774,7 +2787,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
         reply = answer_vehicle_question(
             v, "are you real?", provider=provider
         )
-        self.assertEqual(reply, IDENTITY_RESPONSE)
+        self.assertEqual(reply, _render(IDENTITY_RESPONSE))
         self.assertEqual(provider.calls, [])
 
     def test_handoff_question_returns_canned(self):
@@ -2783,7 +2796,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
         reply = answer_vehicle_question(
             v, "I want to talk to a real person", provider=provider
         )
-        self.assertEqual(reply, HANDOFF_RESPONSE)
+        self.assertEqual(reply, _render(HANDOFF_RESPONSE))
         self.assertEqual(provider.calls, [])
 
     def test_rate_inquiry_returns_canned(self):
@@ -2802,7 +2815,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
             v, "what's the Blue Book value of my 2018 Camry?",
             provider=provider,
         )
-        self.assertEqual(reply, EXTERNAL_VALUE_RESPONSE)
+        self.assertEqual(reply, _render(EXTERNAL_VALUE_RESPONSE))
         self.assertEqual(provider.calls, [])
 
     def test_unsafe_request_returns_guard_response(self):
@@ -2865,7 +2878,7 @@ def _safe_negotiation_assertions(testcase, reply: str):
     """Shared safety assertions for any negotiation-guard reply."""
     body = reply.lower()
     # Core safe phrasing must be present.
-    testcase.assertIn("freedom ford advisor", body)
+    testcase.assertIn("advisor from freedom ford", body)
     testcase.assertRegex(body, r"\bnumber\b")
     testcase.assertRegex(body, r"\btime\b")
     # Banned: any agreement / quote / discount-authority phrasing.
@@ -2896,6 +2909,7 @@ def _safe_negotiation_assertions(testcase, reply: str):
         )
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class BuildNegotiationResponseHelperTests(TestCase):
     """Pure-function tests for build_negotiation_response. Verifies it
     pulls context from session+profile and falls back to the generic
@@ -2904,13 +2918,13 @@ class BuildNegotiationResponseHelperTests(TestCase):
     def test_no_context_returns_generic_constant(self):
         # No session, no profile.
         self.assertEqual(
-            build_negotiation_response(None), NEGOTIATION_RESPONSE
+            build_negotiation_response(None), _render(NEGOTIATION_RESPONSE)
         )
         # Empty session, empty profile.
         session = ChatSession.objects.create()
         self.assertEqual(
             build_negotiation_response(session, profile={}),
-            NEGOTIATION_RESPONSE,
+            _render(NEGOTIATION_RESPONSE),
         )
 
     def test_truck_and_500_budget_from_profile_references_both(self):
@@ -3043,6 +3057,7 @@ class BuildNegotiationResponseHelperTests(TestCase):
         _safe_negotiation_assertions(self, reply)
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class ChatEngineNegotiationContextAwareTests(TestCase):
     """End-to-end: chat path uses build_negotiation_response so the
     canned reply references the customer's prior context."""
@@ -3101,7 +3116,7 @@ class ChatEngineNegotiationContextAwareTests(TestCase):
         result = engine.handle_user_message("Will you match this price?")
         # Empty profile → generic constant verbatim.
         self.assertEqual(
-            result.assistant_message.content, NEGOTIATION_RESPONSE
+            result.assistant_message.content, _render(NEGOTIATION_RESPONSE)
         )
         self.assertEqual(provider.calls, [])
 
@@ -3133,6 +3148,7 @@ class ChatEngineNegotiationContextAwareTests(TestCase):
         _safe_negotiation_assertions(self, body)
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class VehicleAskNegotiationContextAwareTests(TestCase):
     """End-to-end: /vehicles/<id>/ask/ negotiation guard uses the same
     helper, with the input vehicle pinned as the focus."""

@@ -17,6 +17,7 @@ from typing import Iterable, List, Optional
 from django.db import transaction
 
 from ..models import ChatMessage, ChatSession, CustomerLead, Vehicle
+from .dealer_config import get_dealer_name
 from .intent_parser import merge_profile
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
@@ -25,7 +26,16 @@ from .payment_engine import affordable_max_price
 logger = logging.getLogger(__name__)
 
 
-SUMMARY_PROMPT = """You are summarizing a Freedom Ford dealership chat for a salesperson.
+def _render(template: str) -> str:
+    """Format a dealer-templated string with the current dealer name.
+
+    Prompt / signature constants use ``{dealer_name}`` as a placeholder
+    resolved at call time via :func:`dealer_config.get_dealer_name`.
+    """
+    return template.format(dealer_name=get_dealer_name())
+
+
+SUMMARY_PROMPT = """You are summarizing a chat at {dealer_name} for a salesperson.
 
 Write a tight, factual handoff brief — 3 to 5 sentences — that captures:
 - What the customer is looking for (vehicle type, model, condition).
@@ -208,7 +218,7 @@ def _generate_conversation_summary(
     try:
         text = provider.chat(
             [
-                {"role": "system", "content": SUMMARY_PROMPT},
+                {"role": "system", "content": _render(SUMMARY_PROMPT)},
                 {"role": "user", "content": user_payload},
             ],
             temperature=0.2,
@@ -245,7 +255,7 @@ def _generate_conversation_summary(
         parts.append(f"Trade-in: {payload['trade_in']}.")
     if payload.get("urgency"):
         parts.append(f"Timing: {payload['urgency'].replace('_', ' ')}.")
-    return " ".join(parts) or "Customer requested a Freedom Ford follow-up."
+    return " ".join(parts) or f"Customer requested a {get_dealer_name()} follow-up."
 
 
 def _recommend_next_action(

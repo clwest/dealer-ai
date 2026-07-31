@@ -175,8 +175,9 @@ function VehicleImage({ vehicle }: { vehicle: Vehicle }) {
 }
 
 function ImageFallback() {
-  // Calm Ford-blue tint so the missing-photo state still reads as
-  // "this is a real vehicle from the lot" — not as broken UI.
+  // Calm brand-blue tint (via the `primary` token) so the missing-
+  // photo state still reads as "this is a real vehicle from the
+  // lot" — not as broken UI.
   return (
     <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/5 to-primary/15 text-primary/40">
       <CarFront className="h-8 w-8" aria-hidden />

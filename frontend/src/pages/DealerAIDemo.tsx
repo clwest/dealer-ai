@@ -15,6 +15,7 @@ import {
   type LeadInput,
   type Vehicle,
 } from "@/lib/api";
+import { useBrand } from "@/lib/brand";
 
 // Demo openers — match the verified scenarios in
 // `docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`. Two are the canonical
@@ -30,6 +31,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export default function DealerAIDemo() {
+  const brand = useBrand();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [matchedVehicles, setMatchedVehicles] = useState<Vehicle[]>([]);
@@ -132,7 +134,7 @@ export default function DealerAIDemo() {
     await createDealerLead(payload);
     setLeadOpen(false);
     setLeadConfirmation(
-      "Thanks — a Freedom Ford advisor has your details and will follow up shortly.",
+      `Thanks — a ${brand.dealershipName} advisor has your details and will follow up shortly.`,
     );
   }
 
@@ -173,7 +175,7 @@ export default function DealerAIDemo() {
             </div>
             <div>
               <div className="text-sm font-bold text-ford-ink">
-                Ask the Freedom Ford sales assistant
+                {`Ask the ${brand.dealershipName} sales assistant`}
               </div>
               <div className="text-xs text-slate-500">
                 Inventory · Payments · Comparisons · Handoff to sales
@@ -199,10 +201,7 @@ export default function DealerAIDemo() {
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500">
               <Sparkles className="h-6 w-6 text-ford-accent" />
               <div className="max-w-md text-sm">
-                Welcome to Freedom Ford. Tell me what you're shopping for —
-                a payment, a body style, a must-have feature. I'll pull
-                live inventory, sketch realistic numbers, and hand you
-                off to a real advisor when you're ready.
+                {`Welcome to ${brand.dealershipName}. Tell me what you're shopping for — a payment, a body style, a must-have feature. I'll pull live inventory, sketch realistic numbers, and hand you off to a real advisor when you're ready.`}
               </div>
               <div className="mt-2 flex flex-wrap justify-center gap-2">
                 {SUGGESTED_PROMPTS.map((p) => (
@@ -270,8 +269,7 @@ export default function DealerAIDemo() {
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
             <span>
-              Payments shown are estimates. A Freedom Ford advisor confirms real
-              numbers.
+              {`Payments shown are estimates. A ${brand.dealershipName} advisor confirms real numbers.`}
             </span>
             <button
               type="button"

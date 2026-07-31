@@ -123,3 +123,9 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+# Dealer identity. Prompts + reply templates format themselves with
+# `{dealer_name}` and resolve the value at call time via
+# `dealer_ai.services.dealer_config.get_dealer_name()`, which prefers
+# this env var over the persisted DealerOnboardingProfile.
+DEALER_AI_DEALER_NAME = os.getenv("DEALER_AI_DEALER_NAME", "")

@@ -34,6 +34,7 @@ from .chat_engine import (
     detect_rate_inquiry,
     detect_unsafe_request,
 )
+from .dealer_config import get_dealer_name
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
 from .llm_safety import apply_post_llm_scrubs
@@ -46,12 +47,22 @@ from .payment_engine import (
 logger = logging.getLogger(__name__)
 
 
+def _render(template: str) -> str:
+    """Format a dealer-templated string with the current dealer name.
+
+    Mirrors the ``chat_engine._render`` helper — prompt and response
+    constants use ``{dealer_name}`` as a placeholder that resolves at
+    call time via :func:`dealer_config.get_dealer_name`.
+    """
+    return template.format(dealer_name=get_dealer_name())
+
+
 PAYMENT_TERMS = (60, 72, 84)
 SIMILAR_LIMIT = 4
 PRICE_BAND = 0.20  # ±20% — what counts as a comparable alternative
 
 
-VEHICLE_ASSISTANT_PROMPT = """You are Freedom Ford's AI concierge answering a question about ONE specific vehicle.
+VEHICLE_ASSISTANT_PROMPT = """You are the AI concierge for {dealer_name} answering a question about ONE specific vehicle.
 
 Your job:
 - Answer plainly and helpfully, using only the facts in the VEHICLE block, the SIMILAR INVENTORY block, and PAYMENT MATH.
@@ -138,9 +149,9 @@ def _check_pre_llm_guards(
     if detect_rate_inquiry(question):
         return RATE_INQUIRY_RESPONSE, "rate_inquiry"
     if detect_external_value_inquiry(question):
-        return EXTERNAL_VALUE_RESPONSE, "external_value_inquiry"
+        return _render(EXTERNAL_VALUE_RESPONSE), "external_value_inquiry"
     if detect_identity_request(question):
-        return IDENTITY_RESPONSE, "identity_request"
+        return _render(IDENTITY_RESPONSE), "identity_request"
     if detect_negotiation_request(question):
         # Build a context-aware reply. When the per-vehicle endpoint
         # supplies a vehicle, treat it as the current focus.
@@ -158,7 +169,7 @@ def _check_pre_llm_guards(
             "negotiation_request",
         )
     if detect_handoff_request(question):
-        return HANDOFF_RESPONSE, "handoff_request"
+        return _render(HANDOFF_RESPONSE), "handoff_request"
     return None, None
 
 
@@ -218,7 +229,7 @@ def answer_vehicle_question(
     analysis = analyze_vehicle(vehicle, profile=profile)
 
     messages = [
-        {"role": "system", "content": VEHICLE_ASSISTANT_PROMPT},
+        {"role": "system", "content": _render(VEHICLE_ASSISTANT_PROMPT)},
         {"role": "system", "content": _vehicle_block(vehicle)},
         {
             "role": "system",
@@ -241,8 +252,9 @@ def answer_vehicle_question(
     if not reply:
         reply = (
             f"I can pull up most details on this {vehicle.display_name}, but I "
-            "want to double-check before I answer that — a Freedom Ford advisor "
-            "can confirm in a minute. Want me to flag the question for them?"
+            f"want to double-check before I answer that — an advisor from "
+            f"{get_dealer_name()} can confirm in a minute. Want me to flag the "
+            "question for them?"
         )
 
     # Phase 4 — close PIPELINE.md §6.1: per-vehicle replies now run through
@@ -268,7 +280,9 @@ def answer_vehicle_question(
             vehicle.stock_number,
             kind,
         )
-        reply = NEGOTIATION_RESPONSE if kind == "negotiation" else HANDOFF_RESPONSE
+        reply = _render(
+            NEGOTIATION_RESPONSE if kind == "negotiation" else HANDOFF_RESPONSE
+        )
         safety_flag = "post_llm_override"
     else:
         reply = cleaned_reply.strip() or reply

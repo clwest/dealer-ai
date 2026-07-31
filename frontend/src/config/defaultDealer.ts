@@ -4,12 +4,13 @@
 // for the full operator workflow.
 //
 // This codebase is the **Dealer AI Kit** — a reusable dealer
-// AI platform. Sam Wampler's Freedom Ford McAlester is Dealer #1,
-// the default configuration shipped with the kit.
+// AI platform. It ships with a neutral default dealer; real
+// dealers are configured either by editing this file or by
+// filling in the OnboardingProfile via Setup.
 //
-// Future dealers (Chevy, Toyota, etc.) are added as additional
-// dealer configs **inside this same repo**, not as forks. Single
-// codebase, many configurations.
+// Additional dealers (Chevy, Toyota, etc.) are added as
+// additional dealer configs **inside this same repo**, not as
+// forks. Single codebase, many configurations.
 //
 // **Do not fork the repo to add a dealer.** Every fork
 // duplicates every future bug fix, every chat-behavior
@@ -83,14 +84,14 @@ export interface DealerConfig {
    *  uploaded URL and fall back to this static asset. */
   logoPath: string;
   /** Hex / token note describing the brand's primary color. The
-   *  OS shell already uses Ford-blue tokens via Tailwind; this
+   *  OS shell uses the `ford.blue` Tailwind token by default; this
    *  field is informational for future skinning sessions. */
   primaryColorNote: string;
 }
 
 export interface ProductConfig {
-  /** Platform / kit name. Replaces "Dealer OS" / "Freedom Ford AI"
-   *  as the user-facing product label in the OS shell. */
+  /** Platform / kit name. The user-facing product label used in
+   *  the OS shell, independent of any specific dealer. */
   productName: string;
   /** Customer-facing product subtitle ("Powered by …", footer
    *  attributions, etc.). */
@@ -98,23 +99,22 @@ export interface ProductConfig {
 }
 
 /**
- * Sam Wampler's Freedom Ford McAlester — the kit's first dealer
- * and the active default configuration.
+ * The kit's neutral default dealer. Edit this block to point the
+ * kit at a real dealer, or leave neutral and drive branding
+ * entirely through the OnboardingProfile via Setup.
  *
- * Edit this block to point the kit at a different default dealer
- * (or rename Freedom Ford if the dealership changes its name).
  * Do not edit chat behavior, prompt strings, scrub layer, or
  * inventory logic to swap the dealer — those concerns are
  * already brand-agnostic.
  */
 export const DEFAULT_DEALER: DealerConfig = {
-  dealershipName: "Sam Wampler's Freedom Ford",
-  storeLocation: "McAlester",
-  tagline: "Sam Wampler Make It Happen",
-  brand: "Ford",
-  logoPath: "/branding/sams-freedom-ford-logo.jpg",
+  dealershipName: "Your Dealership",
+  storeLocation: "",
+  tagline: "",
+  brand: "",
+  logoPath: "",
   primaryColorNote:
-    "Tailwind 'ford.blue' token (oklch ~0.30 0.13 264). See tailwind.config.js.",
+    "Configure primary color in tailwind.config.js. Ships neutral.",
 };
 
 /**

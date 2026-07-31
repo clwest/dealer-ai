@@ -14,13 +14,23 @@ from typing import Any, Dict, List, Optional
 from django.utils import timezone
 
 from ..models import CustomerLead
+from .dealer_config import get_dealer_name
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
 
 logger = logging.getLogger(__name__)
 
 
-SUGGESTED_MESSAGE_PROMPT = """You are drafting a short, friendly first message from a Freedom Ford salesperson to a customer who just asked the AI concierge for help.
+def _render(template: str) -> str:
+    """Format a dealer-templated string with the current dealer name.
+
+    Prompt / signature constants use ``{dealer_name}`` as a placeholder
+    resolved at call time via :func:`dealer_config.get_dealer_name`.
+    """
+    return template.format(dealer_name=get_dealer_name())
+
+
+SUGGESTED_MESSAGE_PROMPT = """You are drafting a short, friendly first message from a salesperson at {dealer_name} to a customer who just asked the AI concierge for help.
 
 Write 3-5 sentences. Cover:
 - A warm, no-pressure hello using the customer's first name.
@@ -32,7 +42,7 @@ Style:
 - Friendly, professional, dealership-appropriate. Plain English.
 - No emojis. No exclamation overload (one max).
 - Don't quote financing terms. Don't promise approval or rebates.
-- Sign off as "Freedom Ford".
+- Sign off as "{dealer_name}".
 """
 
 
@@ -186,7 +196,7 @@ def _generate_suggested_message(
     try:
         text = provider.chat(
             [
-                {"role": "system", "content": SUGGESTED_MESSAGE_PROMPT},
+                {"role": "system", "content": _render(SUGGESTED_MESSAGE_PROMPT)},
                 {"role": "user", "content": user_payload},
             ],
             temperature=0.4,
@@ -203,7 +213,7 @@ def _generate_suggested_message(
     # Deterministic fallback so handoffs never block on LLM availability.
     pieces: List[str] = [
         f"Hi {_first_name(lead.name)},",
-        "Thanks for reaching out to Freedom Ford — I saw the notes from our AI concierge.",
+        f"Thanks for reaching out to {get_dealer_name()} — I saw the notes from our AI concierge.",
     ]
     if interested:
         names = ", ".join(v.display_name for v in interested[:2])
@@ -219,5 +229,5 @@ def _generate_suggested_message(
             "Whenever you're ready, I can pull together a real quote and "
             "answer any questions."
         )
-    pieces.append("Talk soon,\nFreedom Ford")
+    pieces.append(f"Talk soon,\n{get_dealer_name()}")
     return " ".join(pieces[:3]) + "\n\n" + " ".join(pieces[3:])

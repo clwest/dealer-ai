@@ -29,11 +29,21 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..models import CustomerLead, Salesperson
+from .dealer_config import get_dealer_name
 from .llm.base import LLMProvider
 from .llm.factory import get_llm_provider
 from .llm_safety import apply_post_llm_scrubs
 
 logger = logging.getLogger(__name__)
+
+
+def _render(template: str) -> str:
+    """Format a dealer-templated string with the current dealer name.
+
+    Prompt / signature constants use ``{dealer_name}`` as a placeholder
+    resolved at call time via :func:`dealer_config.get_dealer_name`.
+    """
+    return template.format(dealer_name=get_dealer_name())
 
 
 SUPPORTED_CHANNELS: tuple[str, ...] = ("sms", "email")
@@ -52,7 +62,7 @@ class FollowUpResult:
 # ---- Prompt construction ----------------------------------------------------
 
 
-_SYSTEM_PROMPT = """You are a personal-message drafter for a Freedom Ford
+_SYSTEM_PROMPT = """You are a personal-message drafter for a {{DEALER_NAME}}
 salesperson. The salesperson will edit your draft before sending it; your job
 is to produce one short, honest first draft per request.
 
@@ -75,7 +85,7 @@ Hard rules — these are non-negotiable:
   the advisor confirms appointments, not the AI.
 - NEVER promise a specific approval, financing decision, or numeric
   trade-in valuation. Defer those to the dealership.
-- Sign with the advisor's first name + Freedom Ford on email; on SMS,
+- Sign with the advisor's first name + {{DEALER_NAME}} on email; on SMS,
   the advisor's first name is enough.
 
 Tone: {{TONE_NOTE}}
@@ -188,9 +198,9 @@ def build_messages(
     draft_count: int,
 ) -> List[Dict[str, str]]:
     system = (
-        _SYSTEM_PROMPT.replace("{{TONE_NOTE}}", _TONE_NOTES[tone]).replace(
-            "{{DRAFT_COUNT}}", str(draft_count)
-        )
+        _SYSTEM_PROMPT.replace("{{TONE_NOTE}}", _TONE_NOTES[tone])
+        .replace("{{DRAFT_COUNT}}", str(draft_count))
+        .replace("{{DEALER_NAME}}", get_dealer_name())
     )
     user = (
         f"Channel: {channel}. Generate {draft_count} draft(s) now. "
@@ -443,7 +453,7 @@ def _build_fallback_draft(
                 "your options."
             )
         body = (
-            f"Hi {first_name} — {advisor_first} from Freedom Ford. "
+            f"Hi {first_name} — {advisor_first} from {get_dealer_name()}. "
             f"{middle} What time works to chat? — {advisor_first}"
         ).strip()
         return {
@@ -453,7 +463,7 @@ def _build_fallback_draft(
             "source": "fallback",
         }
 
-    subject = "Following up from Freedom Ford"
+    subject = f"Following up from {get_dealer_name()}"
     if vehicle_phrase:
         middle = f"I wanted to follow up on{vehicle_phrase}."
     else:
@@ -461,12 +471,13 @@ def _build_fallback_draft(
             "I wanted to check in and see if you'd like to talk through "
             "your options."
         )
+    dealer = get_dealer_name()
     body = (
         f"Hi {first_name},\n\n"
-        f"This is {advisor_first} from Freedom Ford. "
+        f"This is {advisor_first} from {dealer}. "
         f"{middle} "
         "Whenever works for you, I'll line up a time to talk.\n\n"
-        f"Thanks,\n{advisor_first}\nFreedom Ford"
+        f"Thanks,\n{advisor_first}\n{dealer}"
     )
     return {
         "channel": "email",

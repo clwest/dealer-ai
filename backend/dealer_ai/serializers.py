@@ -344,9 +344,9 @@ class AdminChatSessionListSerializer(serializers.ModelSerializer):
 # defaults the v0 frontend page used to seed its local state so the UI
 # behaves identically before the first save.
 ONBOARDING_DEFAULTS: dict = {
-    "dealership_name": "Freedom Ford",
+    "dealership_name": "",
     "store_location": "",
-    "main_brands": "Ford (new) + multi-brand used",
+    "main_brands": "",
     "sales_phone": "",
     "website": "",
     "logo_url": "",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from dealer_ai.models import ChatMessage, ChatSession, CustomerLead, Vehicle
@@ -56,6 +56,7 @@ def _make_lead_with_session(**lead_kwargs) -> CustomerLead:
 # ---- handoff_service unit tests --------------------------------------------
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class HandoffServiceTests(TestCase):
     def test_packet_includes_all_required_fields(self):
         v = _make_vehicle()

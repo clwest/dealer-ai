@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from dealer_ai.models import ChatSession, Vehicle
@@ -84,6 +84,7 @@ class AnalyzeVehicleTests(TestCase):
         self.assertNotIn(anchor.id, ids)
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class AnswerVehicleQuestionTests(TestCase):
     def test_uses_provider_and_returns_text(self):
         v = _make_vehicle("Q-1", "60000.00")
@@ -114,7 +115,7 @@ class AnswerVehicleQuestionTests(TestCase):
         answer = vehicle_assistant.answer_vehicle_question(
             v, "Tell me about the warranty", provider=provider
         )
-        self.assertIn("Freedom Ford advisor", answer)
+        self.assertIn("advisor from Freedom Ford", answer)
 
     def test_writes_to_session_when_provided(self):
         v = _make_vehicle("Q-1", "60000.00")
@@ -236,6 +237,7 @@ class VehicleAskEndpointTests(TestCase):
 # post-LLM scrub stack on the LLM's draft reply.
 
 
+@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
 class VehicleAssistantPostLLMSafetyTests(TestCase):
     """Confirms PROJECT_PIPELINE.md §6.1 is closed: per-vehicle Q&A
     replies now run through ``apply_post_llm_scrubs(kind="vehicle_ask")``,
@@ -291,7 +293,7 @@ class VehicleAssistantPostLLMSafetyTests(TestCase):
 
     def test_negotiation_phrase_replaced_with_negotiation_response(self):
         from dealer_ai.services import vehicle_assistant as va
-        from dealer_ai.services.chat_engine import NEGOTIATION_RESPONSE
+        from dealer_ai.services.chat_engine import NEGOTIATION_RESPONSE, _render
 
         v = _make_vehicle("SCRUB-3", "47000.00", model="Ranger")
         provider = MockLLMProvider(
@@ -300,4 +302,4 @@ class VehicleAssistantPostLLMSafetyTests(TestCase):
         reply = va.answer_vehicle_question(
             v, "How does this Ranger compare to the F-150?", provider=provider
         )
-        self.assertEqual(reply, NEGOTIATION_RESPONSE)
+        self.assertEqual(reply, _render(NEGOTIATION_RESPONSE))
