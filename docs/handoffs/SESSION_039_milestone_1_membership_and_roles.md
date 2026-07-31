@@ -5,7 +5,7 @@ type: handoff
 date: 2026-07-31
 session: 039
 commits:
-  - <fill after commit>  # Increment 4A — UserDealershipRole model + Salesperson.user link + admin + tests
+  - 92e3c48  # Increment 4A — UserDealershipRole model + Salesperson.user link + admin + tests
 ---
 
 # SESSION_039 — Milestone 1 · Increment 4A

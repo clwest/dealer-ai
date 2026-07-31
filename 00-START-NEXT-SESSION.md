@@ -30,7 +30,7 @@ next_session: SESSION_040
 ## What just shipped
 
 - **SESSION_039** — Increment 4A. Test baseline 1,322 → 1,333. Commit
-  `<fill after commit>`. Handoff at
+  `92e3c48`. Handoff at
   `docs/handoffs/SESSION_039_milestone_1_membership_and_roles.md`.
 - **SESSION_038** — Increment 3 (write-path tenancy plumbing +
   `NOT NULL` flip).
