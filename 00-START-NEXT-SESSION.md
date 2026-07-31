@@ -1,39 +1,46 @@
 ---
 state: active
 date: 2026-07-31
-last_session_shipped: SESSION_042
-next_session: SESSION_043
+last_session_shipped: SESSION_043
+next_session: SESSION_044
 ---
 
-# Next session — SESSION_043 · Milestone 1 · Increment 4E (frontend login + shared authFetch)
+# Next session — SESSION_044 · Milestone 1 · Increment 4F (Milestone 1 close)
 
-> **Milestone 1 is in progress.** SESSION_042 shipped Increment 4D
-> (admin endpoint gating + first request-context data scoping + 84
-> focused authorization/scoping tests). Handoff at
-> `docs/handoffs/SESSION_042_milestone_1_admin_authorization_and_scoping.md`.
+> **Milestone 1 is nearly complete.** SESSION_043 shipped Increment
+> 4E (browser auth flow — three new endpoints, `authFetch`,
+> `AuthContext`, `RequireAuth`, `LoginPage`, `CSRF_TRUSTED_ORIGINS`,
+> operator/public route split, browser smoke of all 8 required
+> steps). Handoff at
+> `docs/handoffs/SESSION_043_milestone_1_frontend_auth_flow.md`.
 >
-> Increment 4 is split across six sub-sessions (4A–4F). SESSION_043
-> opens **Increment 4E** — the frontend counterpart to the backend
-> auth surface 4B–4D shipped.
+> Increment 4 is split across six sub-sessions (4A–4F). SESSION_044
+> opens **Increment 4F** — the compatibility sweep, documentation
+> flips, and Milestone 1 close.
 >
 > **All governance layers apply:**
 >
 > - `docs/PROJECT_RULES.md` — six project-work rules.
 > - `docs/DOC_GOVERNANCE.md` — documentation rules.
-> - `docs/roadmap/AUTHENTICATION_MODEL.md` — canonical layer
->   separation. §7 lists the shipped 4C+4D permission classes; §8b
->   documents the tenant-scoped query patterns.
+> - `docs/roadmap/AUTHENTICATION_MODEL.md` — canonical model
+>   (§1–§9). Should require no updates in 4F unless the compat
+>   sweep uncovers a real refinement.
 > - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 1 — scope
->   boundary.
-> - `docs/roadmap/MILESTONE_1_PLANNING.md` §3 — acceptance contract.
-> - `docs/roadmap/MILESTONE_1_PLANNING.md` §7 · 4E — this session's
+>   boundary; §2.7 flips to "Y" at 4F close.
+> - `docs/roadmap/MILESTONE_1_PLANNING.md` §3 — the acceptance
+>   contract 4F verifies end-to-end.
+> - `docs/roadmap/MILESTONE_1_PLANNING.md` §7 · 4F — this session's
 >   contract.
 
 ## What just shipped
 
-- **SESSION_042** — Increment 4D. Test baseline 1,361 → 1,445.
-  Commits `17333af` (feat), `91b634c` (handoff). Handoff at
-  `docs/handoffs/SESSION_042_milestone_1_admin_authorization_and_scoping.md`.
+- **SESSION_043** — Increment 4E. Test baseline 1,445 → 1,466 +
+  clean frontend typecheck + clean vite build + browser smoke
+  through all 8 required steps. Commits `0935ed6` (feat),
+  `<fill after docs>` (handoff). Handoff at
+  `docs/handoffs/SESSION_043_milestone_1_frontend_auth_flow.md`.
+- **SESSION_042** — Increment 4D. Commits `17333af`, `91b634c`,
+  `7ab2571`.
 - **SESSION_041** — Increment 4C. Commits `76d625b`, `b1816a9`,
   `6c7cc49`.
 - **SESSION_040** — Increment 4B. Commits `dc24ab6`, `7fc415f`,
@@ -48,105 +55,99 @@ next_session: SESSION_043
 - **4B** ✅ (SESSION_040) — DRF auth defaults + `get_current_dealership`.
 - **4C** ✅ (SESSION_041) — Advisor workspace: slug-obscurity → auth.
 - **4D** ✅ (SESSION_042) — Admin endpoint gating + queryset scoping.
-- **4E** (this session) — Frontend login page + shared `authFetch()`
-  helper.
-- **4F** — Full compatibility sweep + hardening + Milestone 1 close
-  (update `CAPABILITY_MATRIX` §7/§8 + roadmap §2.7).
+- **4E** ✅ (SESSION_043) — Frontend login + shared `authFetch()`.
+- **4F** (this session) — Full compatibility sweep + hardening +
+  Milestone 1 close.
 
-## What SESSION_043 should do — Increment 4E
+## What SESSION_044 should do — Increment 4F
 
-**Goal:** ship the frontend so real users can drive the authenticated
-operator surfaces 4C/4D now gate. Public pages must continue to
-render unauthenticated — no regression on `useBrand()`, embed frame,
-customer chat, showroom.
+**Goal:** ship the compatibility sweep, doc flips, and Milestone 1
+close in one focused session. No new features. Verify every §3 item
+in one place; move `CAPABILITY_MATRIX.md` §7/§8 + roadmap §2.7
+from "N" to "Y"; identify Milestone 2 kickoff scope in the handoff.
 
 ### Recommended step sequence
 
 1. **Read first (in this order):**
-   - `docs/roadmap/AUTHENTICATION_MODEL.md` — the canonical model
-     4E must serve without altering.
-   - `docs/handoffs/SESSION_042_milestone_1_admin_authorization_and_scoping.md`
-     — the backend gate 4E logs users into.
-   - `docs/roadmap/MILESTONE_1_PLANNING.md` §7 · 4E — the contract.
-   - `frontend/src/App.tsx` (or the equivalent router entry point)
-     — the routing surface 4E extends.
-   - `frontend/src/lib/*` — existing fetch helpers; extend the
-     existing surface, do not parallel it.
+   - `docs/roadmap/MILESTONE_1_PLANNING.md` §3 — the acceptance
+     contract.
+   - `docs/roadmap/AUTHENTICATION_MODEL.md` — verify the shipped
+     model still matches the doc claim.
+   - `docs/handoffs/SESSION_043_milestone_1_frontend_auth_flow.md`
+     — the last-session state.
+   - `docs/CAPABILITY_MATRIX.md` §7 (auth) + §8 (roles) — the
+     entries that flip in 4F.
+   - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §2.7 — the
+     cross-cutting foundations table.
 
-2. **Implement in this order:**
+2. **Do the sweep:**
 
-   1. **Backend login/logout view pair** in `backend/dealer_ai/views.py`
-      + URL patterns. Simple `POST /api/dealer-ai/auth/login/`
-      accepting `{"username", "password"}`, returning 200 with
-      user + memberships payload on success and 401 on failure;
-      `POST /api/dealer-ai/auth/logout/` accepting session cookie
-      and clearing it. Use Django's `authenticate` + `login`
-      / `logout` — do not roll a custom auth backend. Add
-      permission-class `AllowAny` explicitly on the login endpoint;
-      logout requires `IsAuthenticated`.
-   2. **Focused tests** for the two auth endpoints — happy path,
-      bad credentials 401, logout clears session. Reuse
-      `_auth_helpers.py`.
-   3. **Frontend `Login.tsx` page** (or the equivalent named path
-      under `frontend/src/pages/`). Simple form: username +
-      password + submit. On success, redirect to `/dealer-ai-admin/`
-      (or wherever the operator lands post-login). On 401 render
-      an inline error.
-   4. **Shared `authFetch()` helper** in `frontend/src/lib/`.
-      Wraps `fetch()`; includes `credentials: "include"` for
-      cookie propagation; handles 401 by redirecting to `/login`.
-      Every operator page (leads admin, coaching, onboarding,
-      advisor workspace) uses `authFetch`.
-   5. **React auth context / hook** — lightweight (`useAuth()`
-      returning `{user, memberships, login, logout}`). Do NOT
-      add a heavyweight state library.
-   6. **Wire existing operator pages to `authFetch`.** Public
-      pages (`/`, `/assistant`, `/showroom`, `/embed/assistant`)
-      keep using plain `fetch` for their public endpoints. The
-      onboarding profile GET stays public; only its PUT/PATCH
-      needs auth.
+   1. **Walk §3 of `MILESTONE_1_PLANNING.md` end-to-end.** Every
+      item verified true, checked off in the handoff. If an item
+      requires a test that does not yet exist and represents an
+      obvious gap, add the focused test in this session (do not
+      broaden to full integration coverage — 4F is close, not
+      expansion).
+   2. **Consider one integration test** spanning login → tenant
+      scoping → advisor workspace end-to-end IF the focused
+      per-layer suite leaves a gap. If the focused suite already
+      exercises every layer, do not add integration coverage —
+      the risk is duplicating what is already covered.
+   3. **Update `docs/CAPABILITY_MATRIX.md` §7 (auth) + §8 (roles):**
+      change "N (not implemented)" → "Y (Milestone 1)" with
+      pointers to `dealer_ai/permissions.py`,
+      `dealer_ai/models.py::UserDealershipRole`,
+      `services/tenancy.py::get_current_dealership`, and the
+      three `/auth/*` endpoints.
+   4. **Update `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §2.7** —
+      Milestone 1 row: flip to "Y" with a short note pointing at
+      the Milestone 1 planning artifact + the shipped increments.
+   5. **Full backend test suite + frontend typecheck + vite build
+      + browser smoke of the 8 steps in the 4E handoff.** Baseline
+      must not decrease.
 
-3. **Verify continuously:**
-   - `python3 manage.py test dealer_ai` after each backend step.
-   - `npx tsc --noEmit` and `npx vite build` in `frontend/` after
-     each frontend step.
-   - **Browser smoke** at session close: log in → open leads
-     admin → verify data renders → open advisor workspace →
-     verify → log out → verify a 401 redirect to `/login`.
+3. **Close the milestone** with:
+   - Handoff at `docs/handoffs/SESSION_044_<slug>.md` recording:
+     - Every §3 item verified.
+     - Every doc flipped.
+     - Milestone 1 total test-baseline delta (1,300 → 1,466 across
+       SESSION_037–043, with 4F possibly nudging further).
+     - Milestone 2 kickoff scope (see below).
+   - Overwrite this file with the SESSION_045 = Milestone 2
+     Increment 1 priority.
 
-4. **Update `AUTHENTICATION_MODEL.md` §2** to record the login/
-   logout endpoint paths and the fact that the frontend uses
-   session cookies. Do NOT create parallel docs.
+### Milestone 2 kickoff scope (for the handoff to identify)
 
-5. **Close the session** with:
-   - Handoff at `docs/handoffs/SESSION_043_<slug>.md`.
-   - Overwrite this file with the SESSION_044 = Increment 4F
-     priority.
-   - `docs/CAPABILITY_MATRIX.md` update **not required** —
-     Milestone 1 close is 4F.
+Per `IMPLEMENTATION_ROADMAP.md` §Milestone 2 — **Vehicle investment
+ledger.** Business objective: for any stock number, answer two
+questions — "what did we pay to get this vehicle to a saleable
+state?" and "what is the true net cost basis?" — with every ledger
+row tenant-scoped and every mutation auditable.
 
-## Explicit non-goals for SESSION_043 (Increment 4E)
+Requires Milestone 1 (this session closes it). Recommended
+Increment 1: introduce the `VehicleInvestmentEntry` model + the
+first two entry kinds (`acquisition_cost`, `reconditioning_cost`).
+The 4F handoff should identify this precisely so SESSION_045 opens
+with a clear read-first list.
 
-- ❌ Do NOT ship password-reset / password-change flows. Add if
-  research surfaces the need; not in the roadmap today.
-- ❌ Do NOT ship SSO or MFA (§5 deferred).
-- ❌ Do NOT introduce a heavyweight state library (Redux, Zustand,
-  Jotai, etc.). React context + `useState` is sufficient for auth
-  state today.
-- ❌ Do NOT touch backend permission classes or admin views. 4C/4D
-  are done.
-- ❌ Do NOT gate the `demo/*` endpoints — that decision belongs to
-  a separate scope pass (see SESSION_042 handoff §Deferred).
-- ❌ Do NOT introduce tenant-scoped uniqueness on any model.
+## Explicit non-goals for SESSION_044 (Increment 4F)
+
+- ❌ Do NOT add new features on any surface.
+- ❌ Do NOT introduce tenant-scoped uniqueness. Deferred.
+- ❌ Do NOT gate `demo/*` endpoints — separate scope decision
+  (recorded in SESSION_042 handoff).
 - ❌ Do NOT touch the 16-stage safety pipeline.
+- ❌ Do NOT ship SSO / MFA / password reset.
+- ❌ Do NOT split the frontend bundle (chunk-size warning is not a
+  Milestone 1 concern).
 - ❌ Do NOT commit any real `OPENAI_API_KEY` or user credentials.
-- ❌ Do NOT create parallel docs. Update `AUTHENTICATION_MODEL.md`
-  only if implementation meaningfully refines the model.
+- ❌ Do NOT create parallel docs. Update `CAPABILITY_MATRIX.md`
+  and `IMPLEMENTATION_ROADMAP.md` in place.
 
 ## NEXT TASK
 
-Start SESSION_043 with the read-first list above, then implement
-Increment 4E in the six-step sequence.
+Start SESSION_044 with the read-first list above, then walk the
+sweep in three steps.
 
 ---
 
@@ -156,51 +157,48 @@ Increment 4E in the six-step sequence.
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/MILESTONE_1_PLANNING.md` (§7 = increment
-   sub-sequencing)
+   sub-sequencing; §3 = the acceptance contract 4F verifies)
 5. `docs/roadmap/AUTHENTICATION_MODEL.md` (canonical model)
 6. `docs/BUSINESS_DOMAIN_MAP.md`
 7. `docs/research/*_MAPPING.md` + `*_PIVOT.md`
 8. `docs/CAPABILITY_MATRIX.md`
-9. Most recent handoffs (`SESSION_042_*.md`, `SESSION_041_*.md`).
+9. Most recent handoffs (`SESSION_043_*.md`, `SESSION_042_*.md`).
 10. `git log --oneline -25`; `git show HEAD:<path>`.
 
 Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_042)
+## Operational state (post-SESSION_043)
 
 - **Backend (local):** Django on `:8001`. Migrations `0001`–`0011`
   applied; `authtoken` migrations applied. Default `Dealership`
-  row exists (`slug='default'`). No `Token` rows in dev DB; no
-  live `UserDealershipRole` rows (authorization surface is
-  exercised entirely by focused tests).
+  row exists.
+- **Dev DB seeded users** (from SESSION_043 browser smoke; safe to
+  keep for 4F re-verification): `smoke_owner` (`dealer_owner`) +
+  `smoke_advisor` (`advisor`, linked to
+  `Salesperson.slug=smoke-advisor-slug`). Password `smoke-pass-4e`
+  for both. Not committed to source.
 - **Backend (prod):** `vehicle-match-api.onrender.com` — NOT active.
-- **Frontend (local):** Vite on `:5173`. Unchanged since SESSION_038.
+- **Frontend (local):** Vite on `:5173`. Auth flow wired end-to-end.
 - **Frontend (prod):** NONE.
-- **Test baseline:** 1,445 pass, 1 skipped, 0 fail.
+- **Test baseline:** 1,466 pass, 1 skipped, 0 fail.
 - **DRF defaults:** `SessionAuthentication` + `TokenAuthentication`
-  installed at framework level; `DEFAULT_PERMISSION_CLASSES` is
-  unset.
-- **Endpoint-level permission classes shipped:**
-  - Advisor workspace + follow-up (4C):
-    `[IsAuthenticated & (IsAdvisorForSlug | IsDealerOwnerForAdvisorSlug)]`.
-  - Admin endpoints + manager-chat (4D):
-    `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`.
-  - Onboarding profile PUT/PATCH + logo upload (4D):
-    `[IsAuthenticated & IsDealerOwnerAtActiveDealership]`.
-  - Onboarding profile GET (4D): public via
-    `[ReadOnly | (IsAuthenticated & IsDealerOwnerAtActiveDealership)]`.
-  Every other endpoint still uses the DRF default (`AllowAny`).
-- **Service-layer tenant threading:** `trends`, `pipeline`,
-  `audit`, `ad_copy` all accept `dealership=` at each entry
-  point; `None` resolves to the seeded default for backwards
-  compat with pre-4D tests.
+  installed; `DEFAULT_PERMISSION_CLASSES` unset (locked by
+  `test_default_permission_classes_remain_unset`).
+- **CSRF trust origins:** localhost:5173, 127.0.0.1:5173,
+  localhost:3000, 127.0.0.1:3000 (env-configurable via
+  `CSRF_TRUSTED_ORIGINS`).
+- **Endpoint-level permission classes shipped:** advisor (4C) +
+  admin (4D) surfaces.
+- **Auth endpoints:** `/auth/login/`, `/auth/logout/`, `/auth/me/`.
+- **Frontend auth primitives:** `lib/authFetch.ts`, `lib/auth.ts`,
+  `lib/AuthContext.tsx`, `components/RequireAuth.tsx`,
+  `pages/LoginPage.tsx`. Sign-out button in the topbar.
+- **Public / protected route split** in `src/main.tsx`:
+  public = `/`, `/assistant`, `/showroom`, `/embed/assistant`,
+  `/login`. Everything else is under `RequireAuth`.
 - **Env overrides for franchise config still work:**
-  `DEALER_AI_DEALER_TYPE=franchise`,
-  `DEALER_AI_PRIMARY_MAKE=<OEM>`,
+  `DEALER_AI_DEALER_TYPE=franchise`, `DEALER_AI_PRIMARY_MAKE=<OEM>`,
   `DEALER_AI_DEALER_NAME=<name>`.
 - **`docs/roadmap/DEFERRED_IDEAS.md`** — still does not exist.
-  Ungated `demo/*` endpoints recorded in SESSION_042 handoff.
-- **Dev DB note (unchanged from SESSION_038 handoff):**
-  `DealerOnboardingProfile` count = 0.
