@@ -186,3 +186,91 @@ class VehicleAskKindTests(TestCase):
         text = "Our dealer cost is around $52,000."
         _, _, dropped = apply_post_llm_scrubs(text, kind="vehicle_ask")
         self.assertEqual(dropped, "dealer_cost_safety")
+
+
+class IndieProhibitedCopyTests(TestCase):
+    """SESSION_030 pivot: independent-dealer prohibited copy scrub.
+
+    Fires whenever ``get_dealer_profile().dealer_type == "independent"``
+    (the shipped default post-pivot). Franchise deployments must not be
+    affected — the OEM / brand-new / captive-finance language is legal
+    for them.
+    """
+
+    def test_brand_new_is_softened(self):
+        # No override_settings — indie is the shipped default.
+        cleaned, scrubs, _ = apply_post_llm_scrubs(
+            "This Camry is brand new.", kind="chat"
+        )
+        self.assertNotIn("brand new", cleaned.lower())
+        self.assertIn("indie_prohibited_copy", scrubs)
+
+    def test_certified_pre_owned_is_stripped(self):
+        cleaned, scrubs, _ = apply_post_llm_scrubs(
+            "Consider this Certified Pre-Owned Tundra.", kind="chat"
+        )
+        self.assertNotIn("certified pre-owned", cleaned.lower())
+        self.assertIn("indie_prohibited_copy", scrubs)
+
+    def test_manufacturer_warranty_becomes_limited_powertrain(self):
+        cleaned, scrubs, _ = apply_post_llm_scrubs(
+            "It still has the manufacturer warranty.", kind="chat"
+        )
+        self.assertIn("limited powertrain warranty", cleaned)
+        self.assertIn("indie_prohibited_copy", scrubs)
+
+    def test_factory_warranty_becomes_limited_powertrain(self):
+        cleaned, _, _ = apply_post_llm_scrubs(
+            "Factory warranty is still active.", kind="chat"
+        )
+        self.assertIn("limited powertrain warranty", cleaned)
+
+    def test_oem_captive_lenders_become_lending_partners(self):
+        for phrase in (
+            "Ford Credit",
+            "Toyota Financial Services",
+            "Honda Financial",
+            "GM Financial",
+            "Nissan Motor Acceptance",
+            "Chrysler Capital",
+        ):
+            with self.subTest(phrase=phrase):
+                cleaned, scrubs, _ = apply_post_llm_scrubs(
+                    f"You can finance through {phrase}.", kind="chat"
+                )
+                self.assertNotIn(phrase, cleaned)
+                self.assertIn("our lending partners", cleaned)
+                self.assertIn("indie_prohibited_copy", scrubs)
+
+    def test_zero_percent_apr_variants_are_stripped(self):
+        for phrase in ("0% APR", "0 % APR", "zero percent financing"):
+            with self.subTest(phrase=phrase):
+                cleaned, _, _ = apply_post_llm_scrubs(
+                    f"We can offer {phrase} today.", kind="chat"
+                )
+                self.assertNotIn(phrase.lower(), cleaned.lower())
+
+    def test_scrub_runs_on_ad_and_follow_up_kinds_too(self):
+        for kind in ("ad", "follow_up", "vehicle_ask"):
+            with self.subTest(kind=kind):
+                _, scrubs, _ = apply_post_llm_scrubs(
+                    "This unit is brand new.", kind=kind
+                )
+                self.assertIn("indie_prohibited_copy", scrubs)
+
+    def test_no_indie_scrub_when_dealer_type_is_franchise(self):
+        with self.settings(DEALER_AI_DEALER_TYPE="franchise"):
+            cleaned, scrubs, _ = apply_post_llm_scrubs(
+                "This F-150 is brand new with Ford Credit financing.",
+                kind="chat",
+            )
+            # Franchise deployment — original OEM/new phrasing is legal.
+            self.assertIn("brand new", cleaned.lower())
+            self.assertIn("Ford Credit", cleaned)
+            self.assertNotIn("indie_prohibited_copy", scrubs)
+
+    def test_no_scrub_fires_when_text_has_no_prohibited_phrases(self):
+        text = "That truck has a tow package and clean history."
+        cleaned, scrubs, _ = apply_post_llm_scrubs(text, kind="chat")
+        self.assertEqual(cleaned, text)
+        self.assertNotIn("indie_prohibited_copy", scrubs)

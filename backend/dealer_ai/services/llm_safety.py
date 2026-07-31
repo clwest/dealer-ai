@@ -59,9 +59,107 @@ from .chat_engine import (
     scrub_post_llm_override,
     scrub_rate_language,
 )
+from .dealer_config import get_dealer_profile
 
 
 SafetyKind = str  # "chat" | "vehicle_ask" | "ad" | "follow_up"
+
+
+# ---- Indie-only scrub: OEM / new-inventory / captive-finance leaks ----------
+#
+# Independent used lots don't sell "brand new" units, don't offer
+# manufacturer CPO programs, don't have OEM-captive lenders (Ford Credit,
+# Toyota Financial, etc.), and rarely offer 0% APR promotions. These
+# scrubs strip that copy so the assistant can't accidentally imply
+# franchise-style benefits to a customer. Only active when the
+# configured dealer profile reports ``dealer_type == "independent"`` —
+# franchise deployments keep the full range of options.
+
+_INDIE_PROHIBITED_PATTERNS: List[Tuple[re.Pattern[str], str]] = [
+    # Brand-new claims — indie lots sell used only.
+    (re.compile(r"\bbrand[- ]new\b", re.IGNORECASE), "great-condition"),
+    # Manufacturer CPO programs are OEM-issued; indies can't offer them.
+    (re.compile(r"\bcertified\s+pre[- ]owned\b", re.IGNORECASE), ""),
+    (re.compile(r"\bCPO\b"), ""),  # case-sensitive to avoid stock-number
+                                    # false positives; LLM writes "CPO"
+                                    # or "cpo" only for the acronym.
+    (re.compile(r"\bcpo\b"), ""),
+    # OEM warranty language — indies offer their own limited warranty,
+    # not the manufacturer's remaining coverage.
+    (
+        re.compile(r"\bmanufacturer'?s?\s+warranty\b", re.IGNORECASE),
+        "limited powertrain warranty",
+    ),
+    (
+        re.compile(r"\bfactory\s+warranty\b", re.IGNORECASE),
+        "limited powertrain warranty",
+    ),
+    # OEM captive lenders — indie financing runs through subprime /
+    # prime lender panels + in-house BHPH, not manufacturer captives.
+    (
+        re.compile(r"\bford\s+credit\b", re.IGNORECASE),
+        "our lending partners",
+    ),
+    (
+        re.compile(
+            r"\btoyota\s+financial(?:\s+services?)?\b", re.IGNORECASE
+        ),
+        "our lending partners",
+    ),
+    (
+        re.compile(
+            r"\bhonda\s+financial(?:\s+services?)?\b", re.IGNORECASE
+        ),
+        "our lending partners",
+    ),
+    (
+        re.compile(r"\bgm\s+financial\b", re.IGNORECASE),
+        "our lending partners",
+    ),
+    (
+        re.compile(
+            r"\bnissan\s+motor\s+acceptance(?:\s+corp(?:oration)?)?\b",
+            re.IGNORECASE,
+        ),
+        "our lending partners",
+    ),
+    (
+        re.compile(r"\bchrysler\s+capital\b", re.IGNORECASE),
+        "our lending partners",
+    ),
+    # 0% APR promotions — captive-lender territory, not indie.
+    (re.compile(r"\b0\s*%\s*apr\b", re.IGNORECASE), ""),
+    (
+        re.compile(
+            r"\bzero\s+percent\s+(?:apr|financing|interest)\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+]
+
+
+def _scrub_indie_prohibited(text: str) -> Tuple[str, bool]:
+    """Strip OEM / new-inventory / captive-finance copy from a reply.
+
+    No-op for franchise deployments. Callers should gate on
+    ``get_dealer_profile().dealer_type == "independent"`` before
+    invoking (kept as a separate concern so the scrub is testable in
+    isolation with any input).
+    """
+    if not text:
+        return text, False
+    cleaned = text
+    changed = False
+    for pattern, replacement in _INDIE_PROHIBITED_PATTERNS:
+        if pattern.search(cleaned):
+            cleaned = pattern.sub(replacement, cleaned)
+            changed = True
+    if changed:
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
+        cleaned = cleaned.strip()
+    return cleaned, changed
 
 
 # ---- Marketing / ad-only scrub: invented promotions -------------------------
@@ -293,5 +391,14 @@ def apply_post_llm_scrubs(
         cleaned, appt_changed = _scrub_invented_appointment(cleaned)
         if appt_changed:
             scrubs.append("invented_appointment")
+
+    # 4. Independent-dealer-only scrub. Runs on every kind (chat,
+    #    vehicle_ask, ad, follow_up) because the prohibited copy is
+    #    equally wrong in every surface. Gated on the runtime dealer
+    #    profile so franchise deployments are unaffected.
+    if get_dealer_profile().dealer_type == "independent":
+        cleaned, indie_changed = _scrub_indie_prohibited(cleaned)
+        if indie_changed:
+            scrubs.append("indie_prohibited_copy")
 
     return cleaned, scrubs, None
