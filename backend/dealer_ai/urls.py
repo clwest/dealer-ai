@@ -93,4 +93,8 @@ urlpatterns = [
         views.manager_chat,
         name="manager-chat",
     ),
+    # Milestone 1 · Increment 4E — browser auth flow.
+    path("auth/login/", views.auth_login, name="auth-login"),
+    path("auth/logout/", views.auth_logout, name="auth-logout"),
+    path("auth/me/", views.auth_me, name="auth-me"),
 ]

@@ -23,6 +23,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { PRODUCT } from "@/config/defaultDealer";
+import { useAuth } from "@/lib/AuthContext";
 import { useBrand, type Brand } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
@@ -232,8 +233,36 @@ function TopBar({
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <PublicPreviewDialog />
         <AIActiveIndicator />
+        <SignedInBadge />
       </div>
     </header>
+  );
+}
+
+/** Small chip showing the signed-in operator + a sign-out button.
+ *  Rendered inside the operator shell (App), which is only reachable
+ *  via <RequireAuth>, so `status` is always "authenticated" here.
+ *  Guards against the "loading" branch anyway — during the first
+ *  React commit the context may still be resolving. */
+function SignedInBadge() {
+  const { status, user, logout } = useAuth();
+  if (status !== "authenticated" || !user) return null;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden text-xs text-muted-foreground min-[540px]:inline">
+        {user.display_name}
+      </span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          void logout();
+        }}
+      >
+        Sign out
+      </Button>
+    </div>
   );
 }
 

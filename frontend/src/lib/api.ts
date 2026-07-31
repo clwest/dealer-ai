@@ -2,6 +2,21 @@
 // Vite dev server proxies /api → http://127.0.0.1:8000 (see vite.config.ts).
 // Override with VITE_API_PROXY_TARGET in frontend/.env.local, or set
 // VITE_API_BASE to bypass the proxy entirely (requires CORS).
+//
+// Milestone 1 · Increment 4E — operator endpoints (admin/*, advisor/*,
+// manager-chat, onboarding mutation, logo upload) go through
+// `authFetch` from `./authFetch` so session cookies + CSRF are
+// handled uniformly and 401 / 403 propagate as typed errors. Public
+// endpoints (customer chat, vehicle Q&A, public team page, and the
+// branding GET on /onboarding/profile/) stay on plain fetch so a
+// broken session can never break a customer-facing page.
+
+import {
+  authGetJSON,
+  authPostForm,
+  authPostJSON,
+  authPutJSON,
+} from "@/lib/authFetch";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/dealer-ai";
 
@@ -104,31 +119,6 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${path} failed (${res.status}): ${text}`);
-  }
-  return res.json() as Promise<T>;
-}
-
-async function putJSON<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${path} failed (${res.status}): ${text}`);
-  }
-  return res.json() as Promise<T>;
-}
-
-async function postForm<T>(path: string, body: FormData): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    body,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -279,7 +269,7 @@ export function fetchAdminLeads(opts: AdminLeadsQuery | number = {}) {
   if (o.since) params.set("since", o.since);
   if (o.ordering) params.set("ordering", o.ordering);
   const qs = params.toString();
-  return getJSON<ListResponse<AdminLead>>(
+  return authGetJSON<ListResponse<AdminLead>>(
     `/admin/leads/${qs ? `?${qs}` : ""}`,
   );
 }
@@ -336,19 +326,19 @@ export function fetchAuditEvents(
   if (opts.since) params.set("since", opts.since);
   if (opts.limit != null) params.set("limit", String(opts.limit));
   const qs = params.toString();
-  return getJSON<AuditEventsResponse>(
+  return authGetJSON<AuditEventsResponse>(
     `/admin/audit-events/${qs ? `?${qs}` : ""}`,
   );
 }
 
 export function fetchAdminChatSessions(limit = 25) {
-  return getJSON<ListResponse<AdminChatSessionRow>>(
+  return authGetJSON<ListResponse<AdminChatSessionRow>>(
     `/admin/chat-sessions/?limit=${limit}`,
   );
 }
 
 export function fetchAdminTrends() {
-  return getJSON<TrendsResponse>(`/admin/trends/`);
+  return authGetJSON<TrendsResponse>(`/admin/trends/`);
 }
 
 // ---- Manager Phase 2: sales pipeline + recommended actions ----------------
@@ -440,7 +430,7 @@ export interface PipelineResponse {
 }
 
 export function fetchAdminPipeline() {
-  return getJSON<PipelineResponse>(`/admin/pipeline/`);
+  return authGetJSON<PipelineResponse>(`/admin/pipeline/`);
 }
 
 // ---- Manager Phase 3: ad-copy generation ----------------------------------
@@ -472,7 +462,7 @@ export interface AdCopyRequest {
 }
 
 export function generateAdCopy(req: AdCopyRequest) {
-  return postJSON<AdCopyResponse>(`/admin/ad-copy/`, {
+  return authPostJSON<AdCopyResponse>(`/admin/ad-copy/`, {
     recommendation: req.recommendation,
     vehicle_id: req.vehicle_id ?? null,
   });
@@ -537,7 +527,7 @@ export interface FollowUpResponse {
 
 export function fetchAdminSalespeople(opts: { activeOnly?: boolean } = {}) {
   const qs = opts.activeOnly ? "?active=true" : "";
-  return getJSON<{ count: number; results: SalespersonAdmin[] }>(
+  return authGetJSON<{ count: number; results: SalespersonAdmin[] }>(
     `/admin/salespeople/${qs}`,
   );
 }
@@ -556,13 +546,13 @@ export function assignLead(
   leadId: number,
   salespersonId: number | null,
 ) {
-  return postJSON<AdminLead>(`/admin/lead/${leadId}/assign/`, {
+  return authPostJSON<AdminLead>(`/admin/lead/${leadId}/assign/`, {
     salesperson_id: salespersonId,
   });
 }
 
 export function fetchAdvisorWorkspace(slug: string) {
-  return getJSON<AdvisorWorkspaceResponse>(`/advisor/${slug}/`);
+  return authGetJSON<AdvisorWorkspaceResponse>(`/advisor/${slug}/`);
 }
 
 export function generateFollowUpDrafts(
@@ -570,7 +560,7 @@ export function generateFollowUpDrafts(
   leadId: number,
   body: { channel?: "sms" | "email"; tone?: "warm" | "direct" } = {},
 ) {
-  return postJSON<FollowUpResponse>(
+  return authPostJSON<FollowUpResponse>(
     `/advisor/${slug}/lead/${leadId}/follow-up/`,
     {
       channel: body.channel ?? "sms",
@@ -694,14 +684,14 @@ export interface DemoResetResponse {
 }
 
 export function fetchLeadDetail(leadId: number) {
-  return getJSON<LeadDetailResponse>(`/admin/lead/${leadId}/`);
+  return authGetJSON<LeadDetailResponse>(`/admin/lead/${leadId}/`);
 }
 
 export function buildLeadHandoff(
   leadId: number,
   opts: { markHandedOff?: boolean } = {},
 ) {
-  return postJSON<HandoffPacket>(`/admin/lead/${leadId}/handoff/`, {
+  return authPostJSON<HandoffPacket>(`/admin/lead/${leadId}/handoff/`, {
     mark_handed_off: opts.markHandedOff ?? false,
   });
 }
@@ -789,13 +779,16 @@ export function fetchOnboardingProfile() {
 }
 
 export function saveOnboardingProfile(payload: OnboardingProfilePayload) {
-  return putJSON<OnboardingProfilePayload>(`/onboarding/profile/`, payload);
+  return authPutJSON<OnboardingProfilePayload>(`/onboarding/profile/`, payload);
 }
 
 export function uploadOnboardingLogo(file: File) {
   const body = new FormData();
   body.set("logo", file);
-  return postForm<OnboardingProfilePayload>(`/onboarding/profile/logo/`, body);
+  return authPostForm<OnboardingProfilePayload>(
+    `/onboarding/profile/logo/`,
+    body,
+  );
 }
 
 // ---- SESSION_010: stateless manager-chat tester ---------------------------
@@ -805,5 +798,5 @@ export interface ManagerChatResponse {
 }
 
 export function sendManagerChat(message: string) {
-  return postJSON<ManagerChatResponse>(`/manager-chat/`, { message });
+  return authPostJSON<ManagerChatResponse>(`/manager-chat/`, { message });
 }

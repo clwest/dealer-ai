@@ -134,6 +134,22 @@ CORS_ALLOWED_ORIGINS = [
     if o.strip()
 ]
 
+# Milestone 1 · Increment 4E — Django's CsrfViewMiddleware (and DRF's
+# SessionAuthentication.enforce_csrf) require the request's Origin
+# header to match one of these entries when validating unsafe methods
+# on cookie-backed sessions. In dev, the browser talks to the Vite
+# dev server (:5173) which proxies to Django (:8001); the Origin the
+# browser sends is the vite URL, not the Django one. Configurable via
+# env so prod (single-origin behind one domain) can override.
+CSRF_TRUSTED_ORIGINS = [
+    o.strip()
+    for o in os.getenv(
+        "CSRF_TRUSTED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
+    if o.strip()
+]
+
 DEALER_AI_EMBED_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv("DEALER_AI_EMBED_ALLOWED_ORIGINS", "").split(",")

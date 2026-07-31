@@ -59,20 +59,111 @@ will substitute for it.
   `SessionAuthentication` first, then `TokenAuthentication`.
   Both installed at framework level; individual views inherit both
   unless they override `authentication_classes`.
-  - `SessionAuthentication` — the customer-facing chat + embed frame
-    are cookie-friendly. Also the mechanism the frontend uses
-    (Increment 4E lands the login form).
-  - `TokenAuthentication` — for scripted / API-client / integration
-    access. Tokens are managed by `django.contrib.authtoken` (the
-    `authtoken` app) and provisioned per-user via
-    `python3 manage.py drf_create_token <username>` or the standard
-    `Token.objects.create(user=…)`.
+  - `SessionAuthentication` drives the browser flow. Cookie-backed
+    Django sessions; CSRF enforcement (see §2b below).
+  - `TokenAuthentication` is reserved for scripted / API-client /
+    integration access. Tokens are managed by
+    `django.contrib.authtoken` and provisioned via
+    `python3 manage.py drf_create_token <username>` or
+    `Token.objects.create(user=…)`. **The browser never stores a
+    DRF token in localStorage** — session cookies are the browser
+    contract. This is an intentional constraint on the frontend.
 - **`request.user`** is populated after authentication succeeds.
   Anonymous requests carry `AnonymousUser` — always truthy for
   `is_authenticated == False`.
+- **Browser auth endpoints** (Increment 4E):
+  - `POST /api/dealer-ai/auth/login/` — `{username, password}`;
+    200 with `me` payload on success, 401 with `{"detail": "Invalid
+    credentials."}` on bad credentials (identical body for unknown
+    user vs. wrong password — no user enumeration), 400 for missing
+    fields.
+  - `POST /api/dealer-ai/auth/logout/` — clears the session.
+    Idempotent — 200 whether or not one existed. Frontend calls it
+    on ambiguous state without pre-flighting.
+  - `GET /api/dealer-ai/auth/me/` — decorated with
+    `@ensure_csrf_cookie`. Returns
+    `{authenticated: false}` for anonymous callers and
+    `{authenticated: true, user, dealership, roles}` for signed-in
+    ones. Dealership + roles are resolved via
+    `services.tenancy.get_current_dealership(request)` +
+    `UserDealershipRole.objects.filter(user, dealership)` — never
+    parallel identity resolvers.
 - **What Identity does not decide.** Identity does not decide which
   dealership the user is acting within, and it does not decide what
   the user is permitted to do. Both are separate layers.
+
+## 2b. CSRF contract
+
+Session cookies without CSRF protection are a live XSRF footgun.
+The kit's contract:
+
+- Every unsafe method (`POST`, `PUT`, `PATCH`, `DELETE`) issued by
+  an authenticated caller against a `SessionAuthentication`-backed
+  endpoint MUST include a valid `X-CSRFToken` header matching the
+  `csrftoken` cookie. DRF's `SessionAuthentication.enforce_csrf`
+  applies Django's CSRF check on every authenticated request.
+- The browser bootstraps its `csrftoken` cookie by calling
+  `/auth/me/` on mount — the endpoint is decorated with
+  `@ensure_csrf_cookie` for exactly this purpose. Django rotates
+  the token on `login()` per its default; the frontend re-reads the
+  cookie for every unsafe request via `authFetch` so the current
+  value is always used.
+- `settings.CSRF_TRUSTED_ORIGINS` must include the browser's
+  observed `Origin` — for dev that is `http://localhost:5173` (Vite
+  dev server proxying to Django on `:8001`). Configurable via env
+  (`CSRF_TRUSTED_ORIGINS=...`) for prod.
+- **`DEFAULT_PERMISSION_CLASSES` remains unset.** Do not weaken
+  `SessionAuthentication` to simplify frontend work — enforce
+  every operator mutation via `X-CSRFToken`.
+
+Focused tests (`tests/test_auth_endpoints.py::CsrfEnforcedOnAuthenticatedMutations`)
+lock: authenticated POST without `X-CSRFToken` → 403; same request
+with the header → passes CSRF and reaches the view.
+
+## 2c. Frontend auth primitives (Increment 4E)
+
+- **`lib/authFetch.ts`** — the one operator-fetch primitive.
+  Includes `credentials: "same-origin"` (session cookie), reads
+  `csrftoken` from `document.cookie` and attaches `X-CSRFToken` on
+  unsafe methods, and throws typed errors so callers preserve the
+  401 vs 403 vs 4xx distinction:
+  - `UnauthenticatedError` → the request layer's boundary for "must
+    sign in".
+  - `ForbiddenError` → "signed in but not authorized". Never
+    redirects to `/login`.
+  - `ApiError(status, body)` → everything else.
+- **`lib/auth.ts`** — thin wrapper around the three endpoints
+  (`fetchMe`, `loginRequest`, `logoutRequest`) plus
+  `InvalidCredentialsError`. `fetchMe` never throws on
+  `Unauthenticated` — it returns `{authenticated: false}` so
+  bootstrap always terminates.
+- **`lib/AuthContext.tsx`** — small `<AuthProvider>` +
+  `useAuth()`. Fields: `status ("loading" | "authenticated" |
+  "anonymous")`, `user`, `dealership`, `roles`, `hasRole(...)`,
+  `login`, `logout`, `refresh`. Bootstraps once on mount via
+  `fetchMe()`. No heavyweight state library.
+- **`components/RequireAuth.tsx`** — route wrapper. `loading` →
+  render nothing (avoid login-flash); `anonymous` → `<Navigate to="/login?next=..." replace />`;
+  `authenticated` → `<Outlet />`. **Does not** enforce role checks
+  — those live server-side, propagate as `ForbiddenError`, and each
+  page surfaces the message in its own error state.
+- **`pages/LoginPage.tsx`** — username + password + submit. Reads
+  `?next=` and validates it (must start with `/[^/]` — rejects
+  protocol-relative URLs like `//attacker.example.com` to block
+  open redirects). Redirects to `/dealer-ai-overview` when `next` is
+  absent or unsafe.
+- **Public / protected route split** (see `src/main.tsx`):
+  - **Public** (outside `RequireAuth`): `/`, `/assistant`,
+    `/showroom`, `/embed/assistant`, `/login`.
+  - **Protected** (inside `RequireAuth`): every operator surface
+    under the App shell (overview, live assistant, inventory,
+    leads, coaching, admin, team, setup, advisor workspace).
+- **`lib/api.ts` boundary** — every operator API function goes
+  through `authFetch`; public endpoints (customer chat,
+  `/vehicles/*`, `/salespeople/*`, `/leads/` POST, and the
+  branding GET on `/onboarding/profile/`) stay on plain `fetch`.
+  A broken session on a customer-facing page can never cause a
+  redirect to `/login`.
 
 ---
 

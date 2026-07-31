@@ -3,14 +3,20 @@ from typing import Optional
 from uuid import uuid4
 
 from rest_framework import status
-from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    parser_classes,
+    permission_classes,
+)
 from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from django.conf import settings
+from django.contrib.auth import authenticate, login as django_login, logout as django_logout
 from django.core.files.storage import default_storage
 from django.core.management import call_command
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .models import (
     ChatMessage,
@@ -1055,3 +1061,133 @@ def onboarding_logo_upload(request):
     return Response(
         DealerOnboardingProfileSerializer(profile).data, status=status.HTTP_200_OK
     )
+
+
+# ---- Milestone 1 · Increment 4E — browser auth flow -----------------------
+#
+# Three endpoints implementing the minimal browser-side session flow:
+#
+#   POST /api/dealer-ai/auth/login/   — authenticate + open Django session
+#   POST /api/dealer-ai/auth/logout/  — close the Django session (idempotent)
+#   GET  /api/dealer-ai/auth/me/      — current session probe + CSRF primer
+#
+# Design constraints (see docs/roadmap/AUTHENTICATION_MODEL.md §2):
+#
+# 1. Session cookies (Django session middleware) drive the browser flow.
+#    TokenAuthentication remains configured for non-browser clients but
+#    the browser never stores a DRF token in localStorage.
+# 2. Login errors return a generic message — never confirm username
+#    existence.
+# 3. Logout is safe to call when already anonymous — the frontend
+#    invokes it on ambiguous state without needing to check first.
+# 4. `/me/` uses `@ensure_csrf_cookie` so the very first bootstrap
+#    call sets the `csrftoken` cookie the frontend needs for the
+#    subsequent login POST.
+# 5. `/me/` returns identity + active-dealership + roles minimally.
+#    It resolves both via the existing `services.tenancy` primitives —
+#    no parallel identity resolver.
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def auth_login(request):
+    """Authenticate a user + open a Django session.
+
+    Body: ``{"username": "...", "password": "..."}``. Returns 200 with
+    the same shape as :func:`auth_me` when successful, 400 for a
+    missing field, 401 with a generic message otherwise.
+    """
+    body = request.data or {}
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    if not username or not password:
+        return Response(
+            {"detail": "Username and password are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user = authenticate(request, username=username, password=password)
+    if user is None:
+        # Generic message — never distinguish "no such user" from
+        # "wrong password". This is a login-CSRF and enumeration
+        # defense at once.
+        return Response(
+            {"detail": "Invalid credentials."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    django_login(request, user)
+    return Response(_me_payload(request), status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def auth_logout(request):
+    """End the active Django session.
+
+    Idempotent: returns 200 whether or not a session existed. The
+    frontend can call this on ambiguous state (e.g. session expired
+    server-side) without a pre-flight check.
+    """
+    django_logout(request)
+    return Response({"detail": "Signed out."}, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@ensure_csrf_cookie
+def auth_me(request):
+    """Return the current session state.
+
+    Also primes the ``csrftoken`` cookie via ``@ensure_csrf_cookie`` —
+    the frontend calls this once on boot so subsequent unsafe requests
+    (login, logout, admin mutations) have the token to include in
+    the ``X-CSRFToken`` header.
+
+    Response shape is intentionally minimal (username +
+    active dealership + roles) — enough for the frontend to route,
+    not enough to become a general user-profile endpoint.
+    """
+    return Response(_me_payload(request), status=status.HTTP_200_OK)
+
+
+def _me_payload(request) -> dict:
+    """Compose the ``/auth/me/`` response body.
+
+    Delegates to :func:`services.tenancy.get_current_dealership` for
+    the active dealership and to the membership model for roles.
+    Never invents parallel resolvers; downstream code changes here
+    only when those primitives change.
+    """
+    user = getattr(request, "user", None)
+    if user is None or not getattr(user, "is_authenticated", False):
+        return {"authenticated": False}
+
+    dealership = get_current_dealership(request)
+    # Pull every role the user holds at the active dealership. Multiple
+    # concurrent roles at one dealership are supported per the 4A
+    # design note.
+    from .models import UserDealershipRole  # local import to avoid cycles
+
+    roles = sorted(
+        UserDealershipRole.objects.filter(
+            user=user, dealership=dealership
+        ).values_list("role", flat=True)
+    )
+
+    salesperson = getattr(user, "salesperson", None)
+    return {
+        "authenticated": True,
+        "user": {
+            "id": user.pk,
+            "username": user.get_username(),
+            "display_name": (user.get_full_name() or user.get_username()),
+            "salesperson_slug": salesperson.slug if salesperson else None,
+        },
+        "dealership": {
+            "id": dealership.pk,
+            "slug": dealership.slug,
+            "name": dealership.name,
+        },
+        "roles": roles,
+    }
