@@ -7,7 +7,7 @@ session: 040
 commits:
   - dc24ab6  # docs — record multi-role design rationale + refine 4B contract
   - 7fc415f  # Increment 4B — DRF auth defaults + get_current_dealership + tests
-  - <fill after docs commit>  # AUTHENTICATION_MODEL.md + SESSION_040 handoff + SESSION_041 pointer
+  - aa02bc6  # AUTHENTICATION_MODEL.md + SESSION_040 handoff + SESSION_041 pointer
 ---
 
 # SESSION_040 — Milestone 1 · Increment 4B

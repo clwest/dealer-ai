@@ -33,7 +33,7 @@ next_session: SESSION_041
 
 - **SESSION_040** — Increment 4B. Test baseline 1,333 → 1,349.
   Commits `dc24ab6` (docs refinement), `7fc415f` (feat),
-  `<fill after docs>` (handoff + AUTHENTICATION_MODEL.md).
+  `aa02bc6` (handoff + AUTHENTICATION_MODEL.md).
   Handoff at
   `docs/handoffs/SESSION_040_milestone_1_auth_defaults_and_request_context.md`.
 - **SESSION_039** — Increment 4A. Commit `92e3c48`.
