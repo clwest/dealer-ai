@@ -1,226 +1,241 @@
 ---
 state: active
 date: 2026-07-30
-last_session_shipped: SESSION_028
-next_session: SESSION_029
+last_session_shipped: SESSION_029
+next_session: SESSION_030
 ---
 
-# Next session — Dealer AI Kit / VehicleMatch
+# Next session — Dealer AI Kit (rebrand in progress)
 
-> **Platform + brand reframe:** The codebase is the **Dealer AI Kit** — a
-> reusable dealer AI platform. Sam Wampler's Freedom Ford McAlester is
-> Dealer #1 and the default configuration. The **public brand is
-> VehicleMatch** (`clwest/vehicle-match` on GitHub, live at
-> https://vehicle-match-pi.vercel.app), the Vertical VI · Match entry
-> in the 24/7 Global AI portfolio. Local repo path is still
-> `freedom-ford/`. See `docs/PLATFORM_REFRAME.md` for identity hierarchy
-> and `docs/DEALER_DUPLICATION_GUIDE.md` for the onboard-a-second-dealer
-> workflow.
+> **Rebrand status:** The kit is mid-rebrand. Tier 1 (all
+> user-visible "Sam Wampler" / "Freedom Ford" text) shipped in
+> SESSION_029 via runtime templating. Tier 2 (seed data — every
+> demo vehicle is still a Ford) and Tier 3 (identifiers — Tailwind
+> tokens, module path, logo asset, filename) are open. See
+> `docs/handoffs/SESSION_029_audit_openai_and_tier1_rebrand.md`.
 
-## What just shipped
+## What just shipped (SESSION_029)
 
-### SESSION_028 (2026-05-20) — VehicleMatch rename + deploy configs
+Three phases in one session — see the full handoff at
+`docs/handoffs/SESSION_029_audit_openai_and_tier1_rebrand.md`:
 
-- New repo `clwest/vehicle-match`; frontend live on Vercel at
-  `vehicle-match-pi.vercel.app`.
-- Deploy configs added: `render.yaml`, `backend/freedom_ford/prod_settings.py`,
-  `backend/render-requirements.txt`, `vercel.json`, `frontend/.env.production`.
-- **Backend Render Blueprint is queued but NOT activated.** The
-  frontend points at `vehicle-match-api.onrender.com`, which currently
-  returns `x-render-routing: no-server` (no service exists at that
-  hostname). Activate at:
-  https://render.com/deploy?repo=https://github.com/clwest/vehicle-match
+### 1. Cleanup audit (5 commits)
 
-Full handoff: `docs/handoffs/SESSION_028_vehicle_match_rename_and_deploy.md`.
+Verified prior handoff claims against runtime state. Landed
+uncommitted SESSION_024 UI polish (`4d9bac3`), backfilled untracked
+handoff docs 024–027 (`d8f6af9`), normalized dev host to
+`127.0.0.1` (`d516958`), added `redesign/` + `frontend/.vercel/`
+to gitignore (`d0e80fc`), refreshed context-kit docs (`9754830`).
 
-### Between-sessions cleanup (2026-07-30, unnumbered maintenance)
+### 2. LLM provider swap → OpenAI `gpt-5-mini` (`76a5f2e`)
 
-Audit found that the SESSION_024 handoff claimed a "Presentation-only
-matched-vehicle deck" was shipped, but the deck (+ softer public copy)
-was still uncommitted in the working tree. Cleanup shipped four commits
-on top of `dd08d47`:
+- `openai_provider.py` gained reasoning-model branch: gpt-5 /
+  o1 / o3 / o4 use `max_completion_tokens` (not `max_tokens`),
+  drop non-default `temperature`, and get a larger budget to
+  leave room for reasoning tokens.
+- Django `settings.py` now loads both `backend/.env` and
+  repo-root `.env` with `override=True`. `OPENAI_API_KEY` lives
+  in the untracked repo-root `.env`.
+- Live-tested: chat responds with real OpenAI content and the
+  deterministic vehicle matcher still returns matched trucks.
 
-- `4d9bac3` — **feat: land SESSION_024 public assistant polish** —
-  belatedly commits the `VehicleMatchDeck` (3-card stack, prev/next
-  controls) in `AssistantChat`, the "current inventory / payment-aware"
-  copy in `AssistantBand` + `Hero`, and the `min-w-0` guard on
-  `PublicAssistantPage`.
-- `d8f6af9` — **docs: backfill session handoffs 024-027** — commits the
-  four handoff docs that had been left untracked when `c2c2067` shipped.
-- `d516958` — **chore: normalize dev host to 127.0.0.1 + expand CORS
-  defaults** — Vite proxy target + CORS defaults now use `127.0.0.1`
-  instead of `localhost` (avoids IPv6 resolution breaking the /api
-  proxy). Reverted a WIP `api.ts` change that would have bypassed the
-  Vite proxy and pinned port 8000 while Django runs on `:8001`.
-- `d0e80fc` — **chore: ignore redesign/ scratch dir and vercel-link
-  artifacts** — `/redesign/` (before/after competitor screenshots) and
-  `frontend/.vercel/` are now gitignored.
+### 3. Tier 1 rebrand (`71f5d48`)
 
-Verification during cleanup:
+- New `backend/dealer_ai/services/dealer_config.py` exposes
+  `get_dealer_name()` — resolution order:
+  `settings.DEALER_AI_DEALER_NAME` → `DealerOnboardingProfile
+  .dealership_name` → `"the dealership"`.
+- Every LLM prompt + hardcoded response constant in 6 backend
+  services now contains `{dealer_name}` and is rendered at call
+  time via a per-module `_render()` helper.
+- Frontend components interpolate `brand.dealershipName` via
+  `useBrand()`. `DEFAULT_DEALER` neutralized. `index.html`
+  `<title>` de-branded.
+- 46 tests fixed via `@override_settings(DEALER_AI_DEALER_NAME=
+  "Freedom Ford")` + `_render(...)` wraps — **1218 pass, 1
+  skipped preserved.**
+- Live grep confirms zero "Sam Wampler" / "Freedom Ford" text
+  in user-visible surfaces.
 
-- `python3 manage.py test dealer_ai.tests.test_embed_frame_policy
-  dealer_ai.tests.test_onboarding_profile` — **18 tests pass** (matches
-  SESSION_026/027 claims).
-- `npx tsc --noEmit` — pass (once `npm install` ran; `node_modules` was
-  missing).
-- `npx vite build` — pass, 488.61 kB bundle / 133.78 kB gzip.
-- `curl -sI https://vehicle-match-pi.vercel.app/` — 200, SPA HTML with
-  correct `<title>`.
-- `curl -sI https://vehicle-match-api.onrender.com/` — 404,
-  `x-render-routing: no-server` (blueprint not activated).
+### Deployment state (unchanged during this session)
+
+- Vercel frontend at `vehicle-match-pi.vercel.app` — **deleted**
+  mid-session (via dashboard) to remove Sam-branded live URL
+  during rebrand.
+- Render backend — still not activated.
+- Local dev only. GitHub repo `clwest/vehicle-match` intact.
 
 ---
 
-## Recommended next session — SESSION_029
+## Recommended next session — SESSION_030
 
-**Activate the Render backend and unblock end-to-end demo.**
+Three sensible tracks — pick one, or plug in a real dealer name
+first (option A) and evaluate visually before committing to
+scope.
 
-The live frontend at `vehicle-match-pi.vercel.app` currently has
-nothing to call. Every API request fails silently against a Render
-placeholder. Highest-value next step is turning the backend on and
-fixing the CORS mismatch that will hit the moment it comes up.
+### Option A — Configure a dealer name and evaluate
 
-### Scope
+Fastest path to seeing the templating live. Two ways:
 
-1. **Fix `render.yaml` CORS before activation.** It allowlists
-   `https://vehicle-match.vercel.app` — the real live host is
-   `https://vehicle-match-pi.vercel.app` (note the `-pi` suffix Vercel
-   appended when the project was linked). Same fix needed for
-   `CSRF_TRUSTED_ORIGINS`.
-2. **Click the Render Blueprint deploy button** for the fixed config.
-3. **Smoke-test** once the service reports Live:
-   - `GET /api/dealer-ai/inventory/` returns real seed data.
-   - Frontend at `vehicle-match-pi.vercel.app` loads inventory cards
-     and the assistant page without console errors.
-   - Chat returns the expected Ollama-fallback message ("trouble
-     reaching the AI model right now") since Ollama isn't on Render.
-4. **Decide LLM story for the live demo.** Options:
-   - Leave Ollama fallback in place (chat is degraded but everything
-     else works).
-   - Set `DEALER_AI_LLM_PROVIDER=openai` + `OPENAI_API_KEY` in Render
-     dashboard for real chat (~$5/mo).
+1. Set `DEALER_AI_DEALER_NAME=<name>` in `backend/.env` (or repo
+   root `.env`), restart Django, done.
+2. Open `/dealer-ai-onboarding` in the UI, fill in the
+   `Dealership name` field, save.
 
-### Deferred (call these out at end of SESSION_029)
+Then walk `/`, `/assistant`, `/dealer-ai-overview`,
+`/dealer-ai-admin` to see how the interpolated copy reads.
 
-- **Inventory data quality cleanup** — originally the SESSION_028 plan
-  that got pivoted to rename/deploy. Still relevant for demo polish
-  once backend is up.
-- **Adopt placeholders** in `docs/PROJECT_WHAT_IT_IS.md` (Why it
-  exists / Who it's for) and `docs/BUILD_PLAN.md`. Doctor still warns.
-- **Missing handoffs SESSION_004–007.** Either they never existed and
-  the numbering skipped, or the docs were lost. Worth annotating
-  explicitly.
-- **Live brand broadcast on Setup save** — deferred from earlier.
+**Time:** ~15 min. No code changes required.
+
+### Option B — Tier 2 rebrand (seed data)
+
+Neutralize the demo vehicle inventory. Every seeded vehicle is
+still a Ford (Maverick, Ranger, F-150, Bronco, Escape…). The
+demo still visibly reads as a Ford dealer even though the
+name/tagline are neutralized.
+
+Scope:
+- `backend/dealer_ai/management/commands/seed_demo_vehicles.py`
+- `backend/dealer_ai/management/commands/seed_demo_scenarios.py`
+- `backend/dealer_ai/management/commands/seed_phase3_demo.py`
+- `frontend/src/data/freedomFordInventorySample.ts` (contents,
+  not filename — filename is Tier 3)
+
+Decision needed: replace with mixed-make sample inventory, or
+make seed data configurable per dealer?
+
+### Option C — Focus on the admin dashboard
+
+The original ask that got derailed by the strip-then-revert
+detour. `/dealer-ai-admin` is unreachable from the sidebar; only
+`/dealer-ai-admin/team` is nav-linked. Add "Admin" to the nav,
+then decide what to improve on that page (trends, pipeline,
+handoff queue, audit panel, ad-copy generator, demo reset).
+
+### Deferred (still valid, lower urgency)
+
+- **Tier 3 rebrand** — Tailwind `ford.*` color tokens, backend
+  `freedom_ford/` module path, `sams-freedom-ford-logo.jpg` asset,
+  `freedomFordInventorySample.ts` filename.
+- **SESSION_004–007 handoff gap** — either annotate as
+  "never existed and numbering skipped" or fill placeholders.
+- **Adopt placeholders** in `docs/PROJECT_WHAT_IT_IS.md` and
+  `docs/BUILD_PLAN.md`.
+- **`render.yaml` CORS hostname update** — only relevant if/when a
+  new frontend gets deployed.
 
 ## NEXT TASK
 
-Fix `render.yaml` CORS + activate Render Blueprint + smoke-test the
-live end-to-end pipeline.
+Pick between Option A (evaluate templating with a real dealer
+name), Option B (Tier 2 seed data rebrand), or Option C (admin
+dashboard focus).
 
-**Strict guardrails:**
+**Strict guardrails (all options):**
 
-- ❌ Do not change `DEFAULT_DEALER` / `PRODUCT` / `defaultDealer.ts`.
-- ❌ Do not change chat behavior.
-- ❌ Do not add CRM/email/SMS.
-- ❌ Do not push force / rewrite history on `main`.
-- ❌ Do not commit any real `OPENAI_API_KEY` — set it via the Render
-  dashboard only.
+- ❌ Do not re-introduce hardcoded "Sam Wampler" / "Freedom Ford"
+  strings — everything goes through `useBrand()` / `get_dealer_name()`.
+- ❌ Do not delete or rename `backend/freedom_ford/` (Tier 3).
+- ❌ Do not delete `sams-freedom-ford-logo.jpg` yet (Tier 3).
+- ❌ Do not change chat behavior contracts (pre-LLM guards,
+  post-LLM scrubs — 1218 tests must stay green).
+- ❌ Do not commit any real `OPENAI_API_KEY`.
 
 ---
 
-## Agent launch prompt for SESSION_029
+## Agent launch prompt for SESSION_030
 
-Paste into Claude Code / Cursor / any AI coding agent as the session
-opener.
+Paste into Claude Code / Cursor / any AI coding agent as the
+session opener.
 
 ```text
-You are picking up SESSION_029 on the Dealer AI Kit / VehicleMatch.
-Sam Wampler's Freedom Ford McAlester is Dealer #1 / default.
+You are picking up SESSION_030 on the Dealer AI Kit. The kit is
+mid-rebrand — Tier 1 (user-visible text) shipped last session via
+runtime dealer-name templating.
 
 Read first:
 - context-kit orient
 - 00-START-NEXT-SESSION.md
-- docs/handoffs/SESSION_028_vehicle_match_rename_and_deploy.md
-- render.yaml
-- backend/freedom_ford/prod_settings.py
-- docs/PLATFORM_REFRAME.md
+- docs/handoffs/SESSION_029_audit_openai_and_tier1_rebrand.md
+- docs/FREEDOM_FORD_SESSION_START.md
+- backend/dealer_ai/services/dealer_config.py
 
 Goal:
-Activate the Render backend and unblock end-to-end demo for the live
-frontend at https://vehicle-match-pi.vercel.app.
+Ask the user which track to pursue:
+- Option A: configure a real dealer name and evaluate visually
+- Option B: Tier 2 rebrand (seed data — vehicles + scenarios)
+- Option C: focus on the /dealer-ai-admin dashboard
 
-Tasks:
-1. Fix render.yaml so CORS_ALLOWED_ORIGINS and CSRF_TRUSTED_ORIGINS
-   include https://vehicle-match-pi.vercel.app (not just the un-suffixed
-   vehicle-match.vercel.app). Commit and push.
-2. Ask user to click the Render Blueprint deploy button:
-   https://render.com/deploy?repo=https://github.com/clwest/vehicle-match
-3. Poll vehicle-match-api.onrender.com until it returns Django responses
-   (build takes ~3 min).
-4. Smoke-test /api/dealer-ai/inventory/ returns seed data.
-5. Load https://vehicle-match-pi.vercel.app in a browser (or Playwright)
-   and confirm inventory cards render + assistant page loads without
-   console errors.
-6. Confirm chat returns Ollama-fallback message OR ask user whether to
-   flip DEALER_AI_LLM_PROVIDER=openai in Render dashboard.
+Local dev setup:
+1. Ollama is OFF. LLM provider is OpenAI (gpt-5-mini) — API key
+   in repo-root .env (untracked). Confirmed working end-to-end.
+2. Django on :8001, Vite on :5173.
+3. Backend uses OpenAIProvider with reasoning-model params.
+4. DealerOnboardingProfile is currently empty →
+   get_dealer_name() returns "the dealership" as fallback.
 
 Do NOT:
-- change DEFAULT_DEALER / PRODUCT / defaultDealer.ts
-- change chat behavior
-- add CRM/email/SMS work
-- commit any real API keys
+- Re-introduce hardcoded "Sam Wampler" / "Freedom Ford" strings.
+- Change chat behavior contracts (must keep 1218 tests green).
+- Delete or rename backend/freedom_ford/ (Tier 3 scope).
+- Commit any real API keys.
 
-Verify:
-- curl vehicle-match-api.onrender.com returns Django (not Render 404)
-- vehicle-match-pi.vercel.app loads inventory without CORS errors
+Verify (all options):
+- python3 manage.py test → 1218 pass, 1 skipped
+- npx tsc --noEmit → clean
+- npx vite build → clean
+- grep -rn "Sam Wampler\|Freedom Ford" frontend/src backend/dealer_ai/services
+  → still zero (only historical docstring in dealer_config.py)
 
 When complete:
-- Write docs/handoffs/SESSION_029_<slug>.md.
-- Overwrite 00-START-NEXT-SESSION.md for the following session.
+- Write docs/handoffs/SESSION_030_<slug>.md.
+- Overwrite 00-START-NEXT-SESSION.md for the next session.
 ```
 
 ---
 
 ## Operational state
 
-- **Backend (local)**: Django expected on `:8001`, Ollama llama3.2 on `:11434`.
-- **Backend (prod)**: `vehicle-match-api.onrender.com` — **NOT active**
-  as of 2026-07-30. Blueprint deploy pending.
-- **Frontend (local)**: Vite expected on `:5173`.
-- **Frontend (prod)**: https://vehicle-match-pi.vercel.app — live.
+- **Backend (local)**: Django on `:8001`, LLM provider = OpenAI
+  `gpt-5-mini` (API key in repo-root `.env`).
+- **Backend (prod)**: `vehicle-match-api.onrender.com` — **NOT
+  active**. Blueprint deploy still pending.
+- **Frontend (local)**: Vite on `:5173`. `useBrand()` returns
+  `DEFAULT_DEALER` fallback (`"Your Dealership"`, empty tagline).
+- **Frontend (prod)**: **NONE**. Vercel project was deleted
+  during SESSION_029 to prevent Sam-branded URL from being live
+  during rebrand.
 - **Public routes**:
-  - `/` — assistant-first dealership homepage.
-  - `/assistant` — full-page public assistant.
-  - `/showroom` — public demo showroom.
-  - `/embed/assistant` — standalone embeddable assistant.
+  - `/` — assistant-first dealership homepage (uses `useBrand()`)
+  - `/assistant` — full-page public assistant
+  - `/showroom` — public demo showroom
+  - `/embed/assistant` — standalone embeddable assistant
 - **Operator routes**:
-  - `/dealer-ai-overview`
-  - `/dealer-ai-live-assistant`
-  - `/dealer-ai-inventory`
-  - `/dealer-ai-leads`
-  - `/dealer-ai-manager-chat`
-  - `/dealer-ai-admin/team`
-  - `/dealer-ai-onboarding`
-  - `/dealer-ai-demo` — legacy lab, off-nav.
+  - `/dealer-ai-overview` (in sidebar)
+  - `/dealer-ai-live-assistant` (in sidebar)
+  - `/dealer-ai-inventory` (in sidebar)
+  - `/dealer-ai-leads` (in sidebar)
+  - `/dealer-ai-manager-chat` (in sidebar)
+  - `/dealer-ai-admin` (**not in sidebar** — direct URL only)
+  - `/dealer-ai-admin/team` (in sidebar)
+  - `/dealer-ai-onboarding` (in sidebar)
+  - `/dealer-ai-demo` — legacy lab, off-nav
+  - `/dealer-ai-advisor/:slug` — per-advisor workspace
 
 ## Identity quick-reference
 
-| Layer | Source | Examples |
+| Layer | Source | How it resolves |
 | --- | --- | --- |
-| **Product** | `PRODUCT` in `frontend/src/config/defaultDealer.ts` | Sidebar caption "DEALER AI KIT", embed "Powered by AI Sales Assistant", `<title>` prefix |
-| **Default dealer** (fallback) | `DEFAULT_DEALER` in same file | `logoPath` fallback, name "Sam Wampler's Freedom Ford", location "McAlester", tagline "Sam Wampler Make It Happen" |
-| **Active dealer** (runtime) | `OnboardingProfile` via `useBrand()` | Public nav/header/footer, assistant welcome lines, embed brand bar |
-
-Resolution: `OnboardingProfile.logo_url || DEFAULT_DEALER.logoPath`
-for the logo; `OnboardingProfile.<field> || DEFAULT_DEALER.<field>`
-for supported identity fields.
+| **Product** | `PRODUCT` in `frontend/src/config/defaultDealer.ts` | Sidebar caption "DEALER AI KIT", `<title>` "Dealer AI Kit" |
+| **Default dealer** (fallback) | `DEFAULT_DEALER` in same file | Neutralized: `"Your Dealership"`, empty location/tagline/brand/logo |
+| **Active dealer** (frontend runtime) | `OnboardingProfile` via `useBrand()` | Overrides `DEFAULT_DEALER` field-by-field; currently empty in DB |
+| **Active dealer** (backend runtime, LLM prompts) | `get_dealer_name()` in `dealer_ai.services.dealer_config` | env `DEALER_AI_DEALER_NAME` → `DealerOnboardingProfile.dealership_name` → `"the dealership"` |
 
 ## Anchors that win on conflict
 
 If anything in this file disagrees with reality:
 
-1. The latest handoff (`docs/handoffs/SESSION_028_*.md`).
+1. The latest handoff (`docs/handoffs/SESSION_029_*.md`).
 2. `git log --oneline -10` (what actually shipped).
-3. `git show HEAD:frontend/src/<path>` (current source).
+3. `git show HEAD:<path>` (current source).
 
 Narrative docs are claims. Code and handoffs are facts.
