@@ -45,6 +45,18 @@ class Vehicle(models.Model):
         ("van", "Van"),
     ]
 
+    # Milestone 1 · Increment 2 — tenancy FK. Nullable in this increment
+    # (schema + backfill land here; NOT NULL flip bundled with the
+    # write-path tenancy propagation in Increment 3, so views/importer
+    # never see a null after the flip). Existing unique constraint on
+    # `stock_number` preserved (tenant-scoped `(dealership, stock_number)`
+    # unique is a later increment).
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vehicles",
+        null=True,
+    )
     stock_number = models.CharField(max_length=32, unique=True)
     vin = models.CharField(max_length=32, blank=True)
     year = models.PositiveIntegerField()
@@ -89,6 +101,13 @@ class Vehicle(models.Model):
 
 class ChatSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Milestone 1 · Increment 2 — tenancy FK, nullable during backfill.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="chat_sessions",
+        null=True,
+    )
     customer_name = models.CharField(max_length=128, blank=True)
     customer_email = models.EmailField(blank=True)
     customer_phone = models.CharField(max_length=32, blank=True)
@@ -115,6 +134,14 @@ class ChatMessage(models.Model):
         ("tool", "Tool"),
     ]
 
+    # Milestone 1 · Increment 2 — tenancy FK, denormalized on child rows
+    # for tenant-scoped read paths (nullable during backfill).
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="chat_messages",
+        null=True,
+    )
     session = models.ForeignKey(
         ChatSession, on_delete=models.CASCADE, related_name="messages"
     )
@@ -149,6 +176,15 @@ class Salesperson(models.Model):
     lookups.
     """
 
+    # Milestone 1 · Increment 2 — tenancy FK, nullable during backfill.
+    # Existing `slug` unique constraint preserved (tenant-scoped
+    # `(dealership, slug)` unique is a later increment).
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="salespeople",
+        null=True,
+    )
     name = models.CharField(max_length=128)
     slug = models.SlugField(max_length=64, unique=True)
     title = models.CharField(max_length=128, blank=True)
@@ -179,6 +215,13 @@ class CustomerLead(models.Model):
         ("researching", "Just researching"),
     ]
 
+    # Milestone 1 · Increment 2 — tenancy FK, nullable during backfill.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="customer_leads",
+        null=True,
+    )
     session = models.ForeignKey(
         ChatSession,
         on_delete=models.SET_NULL,
@@ -245,6 +288,18 @@ class DealerOnboardingProfile(models.Model):
     migration can split this into DealerAssistant / SalespersonAgent /
     StorePolicyProfile without renaming columns.
     """
+
+    # Milestone 1 · Increment 2 — tenancy FK, nullable during backfill.
+    # OneToOne conversion (each Dealership has ≤1 onboarding profile) is
+    # deferred to the increment that touches the onboarding endpoint,
+    # per SESSION_037 instruction to preserve existing uniqueness
+    # behavior until deliberately introduced.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="onboarding_profiles",
+        null=True,
+    )
 
     # Dealership profile.
     dealership_name = models.CharField(max_length=255, blank=True, default="")
