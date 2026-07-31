@@ -761,6 +761,24 @@ export interface OnboardingProfilePayload {
   salespeople_added: boolean;
   demo_prompts_tested: boolean;
   pilot_approved: boolean;
+  // SESSION_032 — indie shape-of-business. Blank / false defaults
+  // mean "unset — backend resolver falls back to env or Copper Canyon
+  // default"; see services/dealer_config.get_dealer_profile.
+  dealer_type: "" | "independent" | "franchise";
+  bhph_enabled: boolean;
+  /** Sentinel that gates whether the backend reads `bhph_enabled`.
+   *  Flips true on the first save via the Setup UI. Keep false in
+   *  fresh drafts so the resolver falls back to defaults. */
+  bhph_configured: boolean;
+  /** Newline-separated list of lender names. */
+  subprime_lenders: string;
+  floor_plan_lender: string;
+  warranty_offering: string;
+  credit_range_served: string;
+  /** Newline-separated list of make names. Supersedes `main_brands`
+   *  (CSV, legacy franchise-oriented) — backend prefers this field
+   *  and falls back to `main_brands` for legacy profiles. */
+  makes_carried: string;
   // Server-managed; present on GET, ignored on PUT.
   created_at?: string;
   updated_at?: string;

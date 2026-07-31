@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Circle,
   ClipboardList,
+  Coins,
   Loader2,
   Megaphone,
   Settings,
@@ -77,11 +78,29 @@ interface PilotChecklist {
   pilotApproved: boolean;
 }
 
+// SESSION_032 — shape-of-business fields. Backend resolver
+// (services/dealer_config.get_dealer_profile) reads the same values
+// and threads them into every prompt template. `configured` is a
+// sentinel that flips true on the first save, gating whether the
+// resolver trusts the `bhph_enabled` toggle vs. falling back to the
+// Copper Canyon default (`True`).
+interface IndieBusiness {
+  dealerType: "" | "independent" | "franchise";
+  bhphEnabled: boolean;
+  bhphConfigured: boolean;
+  subprimeLenders: string;
+  floorPlanLender: string;
+  warrantyOffering: string;
+  creditRangeServed: string;
+  makesCarried: string;
+}
+
 interface OnboardingState {
   dealership: DealershipProfile;
   manager: ManagerPreferences;
   salesperson: SalespersonProfile;
   assistant: AssistantBehavior;
+  indie: IndieBusiness;
   checklist: PilotChecklist;
 }
 
@@ -118,7 +137,7 @@ const SALESPERSON_TONE_OPTIONS = [
   "Highly technical",
 ];
 
-const SECTION_COUNT = 5; // dealership, manager, salesperson, assistant, checklist
+const SECTION_COUNT = 6; // dealership, manager, salesperson, assistant, indie, checklist
 
 const EMPTY_STATE: OnboardingState = {
   dealership: {
@@ -150,6 +169,16 @@ const EMPTY_STATE: OnboardingState = {
     bannedPhrases: "",
     escalationRule: "",
     paymentDisclaimer: "",
+  },
+  indie: {
+    dealerType: "",
+    bhphEnabled: true,
+    bhphConfigured: false,
+    subprimeLenders: "",
+    floorPlanLender: "",
+    warrantyOffering: "",
+    creditRangeServed: "",
+    makesCarried: "",
   },
   checklist: {
     inventoryConnected: false,
@@ -193,6 +222,16 @@ function fromApi(payload: OnboardingProfilePayload): OnboardingState {
       escalationRule: payload.escalation_rule,
       paymentDisclaimer: payload.payment_disclaimer,
     },
+    indie: {
+      dealerType: payload.dealer_type,
+      bhphEnabled: payload.bhph_enabled,
+      bhphConfigured: payload.bhph_configured,
+      subprimeLenders: payload.subprime_lenders,
+      floorPlanLender: payload.floor_plan_lender,
+      warrantyOffering: payload.warranty_offering,
+      creditRangeServed: payload.credit_range_served,
+      makesCarried: payload.makes_carried,
+    },
     checklist: {
       inventoryConnected: payload.inventory_connected,
       financeRulesReviewed: payload.finance_rules_reviewed,
@@ -233,6 +272,14 @@ function toApi(state: OnboardingState): OnboardingProfilePayload {
     salespeople_added: state.checklist.salespeopleAdded,
     demo_prompts_tested: state.checklist.demoPromptsTested,
     pilot_approved: state.checklist.pilotApproved,
+    dealer_type: state.indie.dealerType,
+    bhph_enabled: state.indie.bhphEnabled,
+    bhph_configured: state.indie.bhphConfigured,
+    subprime_lenders: state.indie.subprimeLenders,
+    floor_plan_lender: state.indie.floorPlanLender,
+    warranty_offering: state.indie.warrantyOffering,
+    credit_range_served: state.indie.creditRangeServed,
+    makes_carried: state.indie.makesCarried,
   };
 }
 
@@ -270,7 +317,7 @@ export default function DealerOnboardingPage() {
     };
   }, []);
 
-  const { dealership, manager, salesperson, assistant, checklist } = state;
+  const { dealership, manager, salesperson, assistant, indie, checklist } = state;
   const setDealership = (next: DealershipProfile) =>
     setState((s) => ({ ...s, dealership: next }));
   const setManager = (next: ManagerPreferences) =>
@@ -279,6 +326,8 @@ export default function DealerOnboardingPage() {
     setState((s) => ({ ...s, salesperson: next }));
   const setAssistant = (next: AssistantBehavior) =>
     setState((s) => ({ ...s, assistant: next }));
+  const setIndie = (updater: (prev: IndieBusiness) => IndieBusiness) =>
+    setState((s) => ({ ...s, indie: updater(s.indie) }));
   const setChecklist = (
     updater: (prev: PilotChecklist) => PilotChecklist,
   ) => setState((s) => ({ ...s, checklist: updater(s.checklist) }));
@@ -291,10 +340,13 @@ export default function DealerOnboardingPage() {
       Boolean(manager.salesTone && manager.pricingComfort),
       Boolean(salesperson.name && salesperson.role),
       Boolean(assistant.greeting && assistant.escalationRule),
+      // Indie section — complete when dealer type is chosen AND BHPH
+      // is explicitly configured (either enabled or disabled).
+      Boolean(indie.dealerType && indie.bhphConfigured),
       Object.values(checklist).every(Boolean),
     ].filter(Boolean).length;
     return { sectionsDone, total: SECTION_COUNT };
-  }, [dealership, manager, salesperson, assistant, checklist]);
+  }, [dealership, manager, salesperson, assistant, indie, checklist]);
 
   const handleSave = async () => {
     setSaveStatus("saving");
@@ -653,7 +705,143 @@ export default function DealerOnboardingPage() {
         </div>
       </SectionCard>
 
-      {/* Section 6 — Pilot checklist */}
+      {/* Section 6 — Indie business shape (SESSION_032) */}
+      <SectionCard
+        icon={<Coins className="h-4 w-4" />}
+        title="Business shape"
+        subtitle="How this store makes money — drives BHPH math, subprime language, and prohibited-copy scrubs."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Dealer type — radio-style choice */}
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs font-semibold text-slate-600">
+              Dealer type
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {(["independent", "franchise"] as const).map((option) => {
+                const active = indie.dealerType === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() =>
+                      setIndie((i) => ({ ...i, dealerType: option }))
+                    }
+                    className={`rounded-md border px-4 py-2 text-sm font-medium transition ${
+                      active
+                        ? "border-brand-blue bg-brand-blue text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {option === "independent"
+                      ? "Independent (mixed-lot used)"
+                      : "Franchise (OEM-affiliated)"}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-[11px] text-slate-500">
+              Independent = mixed-make used lot. Franchise = OEM-affiliated
+              store. Chat prompts + scrubs adjust automatically.
+            </span>
+          </div>
+
+          {/* BHPH toggle — mirrors the checklist toggle pattern */}
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <span className="text-xs font-semibold text-slate-600">
+              Buy-Here-Pay-Here financing
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setIndie((i) => ({
+                  ...i,
+                  bhphEnabled: !i.bhphEnabled,
+                  bhphConfigured: true,
+                }))
+              }
+              className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition hover:bg-slate-50"
+            >
+              {indie.bhphEnabled ? (
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
+              ) : (
+                <Circle className="h-5 w-5 shrink-0 text-slate-300" />
+              )}
+              <span className="flex-1 text-sm">
+                <span
+                  className={
+                    indie.bhphEnabled
+                      ? "font-semibold text-brand-ink"
+                      : "text-slate-600"
+                  }
+                >
+                  {indie.bhphEnabled ? "Enabled" : "Disabled"}
+                </span>
+                {indie.bhphConfigured ? null : (
+                  <span className="ml-2 text-[11px] text-amber-600">
+                    (Uses default until saved)
+                  </span>
+                )}
+              </span>
+            </button>
+            <span className="text-[11px] text-slate-500">
+              Enables the weekly / biweekly BHPH payment engine variant and
+              matching prompt scaffolding for credit-challenged buyers.
+            </span>
+          </div>
+
+          <Field
+            label="Floor plan lender"
+            value={indie.floorPlanLender}
+            onChange={(v) =>
+              setIndie((i) => ({ ...i, floorPlanLender: v }))
+            }
+            placeholder="e.g., NextGear, Kinetic Advantage, AFC"
+            helperText="Wholesale inventory-financing partner."
+          />
+          <Field
+            label="Warranty offering"
+            value={indie.warrantyOffering}
+            onChange={(v) =>
+              setIndie((i) => ({ ...i, warrantyOffering: v }))
+            }
+            placeholder="30-day / 1000-mile powertrain"
+            helperText="Retail warranty. AS-IS lots leave this blank."
+          />
+          <Field
+            label="Credit range served"
+            value={indie.creditRangeServed}
+            onChange={(v) =>
+              setIndie((i) => ({ ...i, creditRangeServed: v }))
+            }
+            placeholder="580+ with strong down; BHPH below"
+            helperText="Guides the assistant's tone when a customer names their credit tier."
+            className="sm:col-span-2"
+          />
+          <Field
+            label="Subprime lender panel"
+            value={indie.subprimeLenders}
+            onChange={(v) =>
+              setIndie((i) => ({ ...i, subprimeLenders: v }))
+            }
+            placeholder="One lender per line — e.g., Westlake Financial, Global Lending"
+            helperText="Panels used for sub-660 buyers. Assistant references without naming rate ranges."
+            multiline
+            className="sm:col-span-2"
+          />
+          <Field
+            label="Makes carried"
+            value={indie.makesCarried}
+            onChange={(v) => setIndie((i) => ({ ...i, makesCarried: v }))}
+            placeholder="One make per line — e.g., Toyota, Honda, Ford"
+            helperText="Mixed-make used lots list every make they stock. Franchise stores list their OEM + any secondary makes."
+            multiline
+            className="sm:col-span-2"
+          />
+        </div>
+      </SectionCard>
+
+      {/* Section 7 — Pilot checklist */}
       <SectionCard
         icon={<ClipboardList className="h-4 w-4" />}
         title="Next steps checklist"

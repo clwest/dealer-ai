@@ -146,3 +146,162 @@ function toPossessive(name: string): string {
   // that edge in practice. Keep it simple.
   return `${trimmed}'s`;
 }
+
+// ---- SESSION_032: shape-of-business hook ---------------------------------
+//
+// `useBrand()` above is the display-string hook (name / tagline /
+// logo — anything that ends up as chrome copy). `useDealerProfile()`
+// is the shape-of-business hook (dealer type, BHPH toggle, lender
+// panel, warranty / credit range, makes carried). Kept as a separate
+// hook so display consumers don't fetch business shape they never
+// use, and business consumers get typed access without threading
+// through the display API.
+//
+// Both hooks share `fetchOnboardingProfile()` under the hood — React
+// Query would let this hit the network once, but we're consistent
+// with the existing fetch-on-mount pattern until a real cache lands.
+
+const _INDIE_FALLBACK = {
+  dealerType: "independent" as const,
+  bhphEnabled: true,
+  subprimeLenders: [
+    "Sonoran Credit",
+    "Desert Auto Finance",
+    "Vista Lending",
+  ] as readonly string[],
+  floorPlanLender: "NextGear",
+  warrantyOffering: "30-day / 1000-mile powertrain",
+  creditRangeServed: "580+ with strong down; BHPH below",
+  makesCarried: [
+    "Toyota",
+    "Honda",
+    "Ford",
+    "Chevy",
+    "Nissan",
+    "Kia",
+  ] as readonly string[],
+};
+
+export type DealerType = "independent" | "franchise";
+
+export interface DealerProfile {
+  /** Independent (mixed-lot used) or franchise (OEM-affiliated). */
+  dealerType: DealerType;
+  /** Buy-Here-Pay-Here financing offered at this store. */
+  bhphEnabled: boolean;
+  /** True once the profile has been saved via the Setup UI. When
+   *  false, the shape-of-business fields reflect Copper Canyon
+   *  defaults rather than persisted user choices. */
+  configured: boolean;
+  /** Parsed list of subprime lender partner names. */
+  subprimeLenders: readonly string[];
+  /** Primary floor-plan lender (single value). */
+  floorPlanLender: string;
+  /** Human-readable warranty offering. */
+  warrantyOffering: string;
+  /** Human-readable credit-tier range. */
+  creditRangeServed: string;
+  /** Parsed list of makes carried. Prefers new `makes_carried`
+   *  field; falls back to legacy CSV `main_brands`. */
+  makesCarried: readonly string[];
+  /** True once the fetch has resolved (success OR failure). */
+  loaded: boolean;
+}
+
+function splitLines(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function splitCsv(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Compose the shape-of-business fields from a (possibly partial)
+ * onboarding profile. Falls back to the Copper Canyon indie defaults
+ * for any unset field so consumers can always trust the values are
+ * usable. Pure function — mirror of `brandFromProfile`.
+ */
+export function dealerProfileFromPayload(
+  profile: OnboardingProfilePayload | null | undefined,
+): Omit<DealerProfile, "loaded"> {
+  const dealerType: DealerType =
+    profile?.dealer_type === "franchise" || profile?.dealer_type === "independent"
+      ? profile.dealer_type
+      : _INDIE_FALLBACK.dealerType;
+
+  // Only trust `bhph_enabled` when the profile has been explicitly
+  // configured — mirrors the backend resolver's `bhph_configured`
+  // sentinel so display and prompts stay coherent.
+  const bhphEnabled = profile?.bhph_configured
+    ? profile.bhph_enabled
+    : _INDIE_FALLBACK.bhphEnabled;
+
+  const subprimeParsed = splitLines(profile?.subprime_lenders);
+  const subprimeLenders: readonly string[] =
+    subprimeParsed.length > 0 ? subprimeParsed : _INDIE_FALLBACK.subprimeLenders;
+
+  const makesParsed = splitLines(profile?.makes_carried);
+  const makesLegacy = splitCsv(profile?.main_brands);
+  const makesCarried: readonly string[] =
+    makesParsed.length > 0
+      ? makesParsed
+      : makesLegacy.length > 0
+        ? makesLegacy
+        : _INDIE_FALLBACK.makesCarried;
+
+  const floorPlanLender =
+    (profile?.floor_plan_lender?.trim() ?? "") || _INDIE_FALLBACK.floorPlanLender;
+  const warrantyOffering =
+    (profile?.warranty_offering?.trim() ?? "") || _INDIE_FALLBACK.warrantyOffering;
+  const creditRangeServed =
+    (profile?.credit_range_served?.trim() ?? "") || _INDIE_FALLBACK.creditRangeServed;
+
+  return {
+    dealerType,
+    bhphEnabled,
+    configured: Boolean(profile),
+    subprimeLenders,
+    floorPlanLender,
+    warrantyOffering,
+    creditRangeServed,
+    makesCarried,
+  };
+}
+
+/**
+ * React hook that loads the shape-of-business fields on mount.
+ * Cancellation-safe. Consumers that only need display strings
+ * should prefer `useBrand()` instead.
+ */
+export function useDealerProfile(): DealerProfile {
+  const [profile, setProfile] = useState<OnboardingProfilePayload | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchOnboardingProfile()
+      .then((p) => {
+        if (cancelled) return;
+        setProfile(p);
+      })
+      .catch(() => {
+        // Fetch is allowed to fail — Copper Canyon fallbacks render.
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { ...dealerProfileFromPayload(profile), loaded };
+}
