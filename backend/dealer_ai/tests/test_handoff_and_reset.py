@@ -14,6 +14,7 @@ from dealer_ai.services.handoff_service import (
     packet_to_text,
 )
 
+from ._auth_helpers import sales_manager_client_at_default
 from ._mocks import MockLLMProvider
 
 
@@ -133,6 +134,9 @@ class HandoffServiceTests(TestCase):
 
 
 class AdminLeadDetailEndpointTests(TestCase):
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
+
     def test_returns_lead_with_messages_and_vehicles(self):
         v = _make_vehicle()
         lead = _make_lead_with_session()
@@ -167,6 +171,7 @@ class AdminLeadDetailEndpointTests(TestCase):
 
 class AdminLeadHandoffEndpointTests(TestCase):
     def setUp(self):
+        self.client = sales_manager_client_at_default()
         # Patch get_llm_provider used inside handoff_service.
         self._orig = handoff_service.get_llm_provider
         self._mock = MockLLMProvider(replies=["Hi Chris, looking forward to chatting."])

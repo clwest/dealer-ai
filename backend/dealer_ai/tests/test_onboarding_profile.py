@@ -16,6 +16,7 @@ from django.urls import reverse
 
 from dealer_ai.models import DealerOnboardingProfile
 from dealer_ai.serializers import ONBOARDING_DEFAULTS
+from dealer_ai.tests._auth_helpers import dealer_owner_client_at_default
 
 
 URL = reverse("dealer_ai:onboarding-profile")
@@ -44,6 +45,9 @@ class OnboardingDefaultsTests(TestCase):
 
 
 class OnboardingDealershipFieldsTests(TestCase):
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
+
     def test_put_saves_dealership_fields(self):
         body = {
             **ONBOARDING_DEFAULTS,
@@ -74,6 +78,9 @@ class OnboardingLogoUrlTests(TestCase):
     """
 
     LOGO = "https://cdn.example.com/dealer-logo.svg"
+
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
 
     def test_default_logo_url_is_empty_string(self):
         res = self.client.get(URL)
@@ -114,6 +121,9 @@ class OnboardingLogoUrlTests(TestCase):
 
 
 class OnboardingLogoUploadTests(TestCase):
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
+
     def test_upload_logo_creates_profile_and_sets_logo_url(self):
         with tempfile.TemporaryDirectory() as tmp:
             with override_settings(MEDIA_ROOT=tmp, MEDIA_URL="/media/"):
@@ -144,6 +154,9 @@ class OnboardingLogoUploadTests(TestCase):
 
 
 class OnboardingManagerFieldsTests(TestCase):
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
+
     def test_put_saves_manager_preferences(self):
         body = {
             **ONBOARDING_DEFAULTS,
@@ -162,6 +175,9 @@ class OnboardingManagerFieldsTests(TestCase):
 
 
 class OnboardingSalespersonSeedTests(TestCase):
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
+
     def test_put_saves_salesperson_seed(self):
         body = {
             **ONBOARDING_DEFAULTS,
@@ -186,6 +202,9 @@ class OnboardingSalespersonSeedTests(TestCase):
 
 
 class OnboardingAssistantBehaviorTests(TestCase):
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
+
     def test_put_saves_assistant_behavior(self):
         body = {
             **ONBOARDING_DEFAULTS,
@@ -206,6 +225,9 @@ class OnboardingAssistantBehaviorTests(TestCase):
 
 
 class OnboardingChecklistTests(TestCase):
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
+
     def test_put_saves_all_checklist_booleans(self):
         body = {
             **ONBOARDING_DEFAULTS,
@@ -246,6 +268,9 @@ class OnboardingChecklistTests(TestCase):
 class OnboardingRoundTripTests(TestCase):
     """Save then GET-back returns persisted values; multiple PUTs upsert
     the same singleton row instead of creating new rows."""
+
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
 
     def test_get_after_save_returns_persisted_values(self):
         body = {
@@ -289,6 +314,9 @@ class OnboardingIndieFieldsTests(TestCase):
     floor_plan_lender, warranty_offering, credit_range_served,
     makes_carried) are accepted by the serializer, round-trip through
     GET, and use safe defaults when omitted."""
+
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
 
     def test_defaults_returned_when_no_profile(self):
         DealerOnboardingProfile.objects.all().delete()

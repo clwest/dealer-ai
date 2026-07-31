@@ -82,13 +82,19 @@ class AdCopyContext:
 
 
 def _resolve_vehicles_for_recommendation(
-    recommendation: dict, *, vehicle_id: Optional[int]
+    recommendation: dict, *, vehicle_id: Optional[int], dealership
 ) -> List[Vehicle]:
     """Return a small set of real, available vehicles to anchor the ad copy.
 
+    Milestone 1 · Increment 4D — every ``Vehicle.objects`` query is
+    tenant-scoped via ``dealership=``. An owner at Dealership A cannot
+    reference Dealership B's vehicles even when supplying an explicit
+    ``vehicle_id``.
+
     Resolution order:
 
-    1. ``vehicle_id`` → exact match if present and available.
+    1. ``vehicle_id`` → exact match if present, available, and in the
+       caller's dealership.
     2. Inventory recommendation with ``evidence.band_label`` → top
        primary-make-first vehicles whose price falls in the band
        (indie mixed-lot: newest / cheapest first, no OEM bias).
@@ -100,7 +106,9 @@ def _resolve_vehicles_for_recommendation(
     """
     if vehicle_id is not None:
         try:
-            v = Vehicle.objects.get(pk=vehicle_id, is_available=True)
+            v = Vehicle.objects.get(
+                pk=vehicle_id, dealership=dealership, is_available=True
+            )
             return [v]
         except Vehicle.DoesNotExist:
             return []
@@ -121,7 +129,9 @@ def _resolve_vehicles_for_recommendation(
         )
         if price_low is None:
             return []
-        qs: QuerySet[Vehicle] = Vehicle.objects.filter(is_available=True)
+        qs: QuerySet[Vehicle] = Vehicle.objects.filter(
+            dealership=dealership, is_available=True
+        )
         if price_high is not None:
             qs = qs.filter(
                 price__gte=Decimal(str(price_low)),
@@ -137,7 +147,9 @@ def _resolve_vehicles_for_recommendation(
             try:
                 return [
                     Vehicle.objects.get(
-                        stock_number=stock_number, is_available=True
+                        stock_number=stock_number,
+                        dealership=dealership,
+                        is_available=True,
                     )
                 ]
             except Vehicle.DoesNotExist:
@@ -145,7 +157,9 @@ def _resolve_vehicles_for_recommendation(
         model = evidence.get("model") or evidence.get("vehicle_type")
         if model:
             qs = Vehicle.objects.filter(
-                is_available=True, model__icontains=model
+                dealership=dealership,
+                is_available=True,
+                model__icontains=model,
             )
             return _primary_make_first_top(qs, MAX_VEHICLE_CONTEXT)
 
@@ -404,10 +418,21 @@ def generate_ad_copy(
     recommendation: dict,
     vehicle_id: Optional[int] = None,
     provider: Optional[LLMProvider] = None,
+    dealership=None,
 ) -> AdCopyResult:
     """Generate 2–3 ad variants for a recommendation. Pure orchestration —
     raises ValueError on contract violations the caller (the view) is
-    responsible for translating into 4xx responses."""
+    responsible for translating into 4xx responses.
+
+    Milestone 1 · Increment 4D — tenant-scoped. ``dealership=None``
+    resolves to the seeded default (backwards compat for tests
+    predating multi-tenancy); the admin view passes
+    ``dealership=get_current_dealership(request)``.
+    """
+    from .tenancy import get_default_dealership
+
+    d = dealership or get_default_dealership()
+
     if not isinstance(recommendation, dict):
         raise ValueError("recommendation must be an object")
     rec_id = recommendation.get("id")
@@ -421,7 +446,7 @@ def generate_ad_copy(
 
     warnings: List[str] = []
     vehicles = _resolve_vehicles_for_recommendation(
-        recommendation, vehicle_id=vehicle_id
+        recommendation, vehicle_id=vehicle_id, dealership=d
     )
     if vehicle_id is not None and not vehicles:
         warnings.append(

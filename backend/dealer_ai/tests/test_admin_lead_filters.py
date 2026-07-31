@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from dealer_ai.models import CustomerLead
+from dealer_ai.tests._auth_helpers import sales_manager_client_at_default
 
 
 def _make_lead(
@@ -45,6 +46,7 @@ class AdminLeadListFilterTests(TestCase):
     existing /admin/leads/ endpoint without breaking back-compat."""
 
     def setUp(self):
+        self.client = sales_manager_client_at_default()
         # 4 leads spanning urgencies + handoff status + age.
         self.lead_immediate_open = _make_lead(
             name="Alice Buyer",

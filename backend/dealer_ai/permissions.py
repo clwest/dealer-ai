@@ -26,9 +26,15 @@ to the advisor workspace.
 
 from __future__ import annotations
 
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 
-from .models import ROLE_DEALER_OWNER, Salesperson, UserDealershipRole
+from .models import (
+    ROLE_DEALER_OWNER,
+    ROLE_SALES_MANAGER,
+    Salesperson,
+    UserDealershipRole,
+)
+from .services.tenancy import get_current_dealership
 
 
 class IsAdvisorForSlug(BasePermission):
@@ -104,3 +110,92 @@ class IsDealerOwnerForAdvisorSlug(BasePermission):
             dealership_id=target_dealership_id,
             role=ROLE_DEALER_OWNER,
         ).exists()
+
+
+# ---- Increment 4D — admin authorization primitives -------------------------
+#
+# These classes consult :func:`services.tenancy.get_current_dealership` for
+# the active dealership rather than a URL kwarg — a different URL-shape
+# family from the 4C advisor classes. Every /api/dealer-ai/admin/*
+# endpoint and manager coaching / onboarding mutation composes one of
+# these with ``IsAuthenticated``.
+#
+# Do NOT collapse the two concerns (which dealership vs which role).
+# ``get_current_dealership`` is tenant-resolution only; the role check
+# below is authorization only. Data scoping — the .filter(dealership=…)
+# on every admin queryset — is a third concern that stays inside the
+# view (or a service function the view calls) so filtering remains
+# visible and auditable.
+
+
+def _user_holds_any_role_at(user, dealership, roles) -> bool:
+    """Return True when ``user`` holds one of ``roles`` at ``dealership``.
+
+    Small private helper so the individual permission classes stay
+    declarative and every role query goes through one code path.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if dealership is None:
+        return False
+    return UserDealershipRole.objects.filter(
+        user=user, dealership=dealership, role__in=list(roles)
+    ).exists()
+
+
+class IsSalesManagerOrOwnerAtActiveDealership(BasePermission):
+    """Authenticated user holds ``sales_manager`` OR ``dealer_owner`` at
+    ``get_current_dealership(request)``.
+
+    Reusable at any endpoint whose tenant anchor is the caller's active
+    dealership (i.e. the `/api/dealer-ai/admin/*` family and the
+    manager coaching endpoint). Endpoints whose tenant anchor is a URL
+    kwarg (e.g. the 4C advisor classes) should not reuse this class —
+    their target-tenant discovery is different.
+    """
+
+    message = "Requires sales_manager or dealer_owner at the active dealership."
+
+    def has_permission(self, request, view) -> bool:
+        dealership = get_current_dealership(request)
+        return _user_holds_any_role_at(
+            getattr(request, "user", None),
+            dealership,
+            (ROLE_SALES_MANAGER, ROLE_DEALER_OWNER),
+        )
+
+
+class IsDealerOwnerAtActiveDealership(BasePermission):
+    """Authenticated user holds ``dealer_owner`` at
+    ``get_current_dealership(request)``.
+
+    Used for the highest-privilege admin mutations — currently only
+    the onboarding profile upsert + logo upload. Future increments
+    that add owner-only surfaces (deal desk approvals, credit-app
+    decisions, hardship exceptions) will reuse this class unchanged.
+    """
+
+    message = "Requires dealer_owner at the active dealership."
+
+    def has_permission(self, request, view) -> bool:
+        dealership = get_current_dealership(request)
+        return _user_holds_any_role_at(
+            getattr(request, "user", None),
+            dealership,
+            (ROLE_DEALER_OWNER,),
+        )
+
+
+class ReadOnly(BasePermission):
+    """Small method-based primitive. Passes for any HTTP safe method
+    (GET / HEAD / OPTIONS), rejects all others.
+
+    Composable via DRF's ``|`` operator to build "public read,
+    restricted write" gates. Applied on the onboarding profile
+    endpoint so branding continues to render on public pages while
+    upserts require ``IsDealerOwnerAtActiveDealership``. Reusable at
+    any future endpoint with the same public-read shape.
+    """
+
+    def has_permission(self, request, view) -> bool:
+        return request.method in SAFE_METHODS

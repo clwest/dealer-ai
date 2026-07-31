@@ -2,38 +2,66 @@
 
 Pure functions that read from the existing models — nothing here depends on the
 HTTP layer, so each helper is independently testable.
+
+Milestone 1 · Increment 4D — every model query in this module is now
+tenant-scoped via a required-or-defaulted ``dealership`` argument. Passing
+``dealership=None`` resolves to the seeded default dealership for
+backwards compatibility with tests that pre-date multi-tenancy; the
+admin view passes ``dealership=get_current_dealership(request)`` so
+data isolation is explicit at the call site.
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from django.db.models import Avg, Count
 from django.utils import timezone
 
 from ..models import ChatSession, CustomerLead, Vehicle
 from .payment_engine import affordable_max_price
+from .tenancy import get_default_dealership
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..models import Dealership
 
 
 # How much over the affordability ceiling we tolerate before calling it a mismatch.
 BUDGET_MISMATCH_HEADROOM = 1.25
 
 
-def total_chat_sessions() -> int:
-    return ChatSession.objects.count()
+def _resolve_dealership(dealership: Optional["Dealership"]) -> "Dealership":
+    """Return the passed dealership or the seeded default.
+
+    Keeps every helper's signature ergonomic (tests can omit the arg
+    and land on default-only behavior identical to pre-4D) while
+    keeping the resolution visible at the top of each function.
+    """
+    return dealership or get_default_dealership()
 
 
-def total_leads() -> int:
-    return CustomerLead.objects.count()
+def total_chat_sessions(*, dealership: Optional["Dealership"] = None) -> int:
+    d = _resolve_dealership(dealership)
+    return ChatSession.objects.filter(dealership=d).count()
 
 
-def _profile_value_counts(field: str, *, limit: int = 5) -> List[Dict[str, Any]]:
+def total_leads(*, dealership: Optional["Dealership"] = None) -> int:
+    d = _resolve_dealership(dealership)
+    return CustomerLead.objects.filter(dealership=d).count()
+
+
+def _profile_value_counts(
+    field: str, *, limit: int = 5, dealership: Optional["Dealership"] = None
+) -> List[Dict[str, Any]]:
     """Return [{'value': X, 'count': N}, ...] for a key in extracted_profile."""
+    d = _resolve_dealership(dealership)
     counter: Counter[str] = Counter()
-    qs = ChatSession.objects.exclude(extracted_profile={}).values_list(
-        "extracted_profile", flat=True
+    qs = (
+        ChatSession.objects.filter(dealership=d)
+        .exclude(extracted_profile={})
+        .values_list("extracted_profile", flat=True)
     )
     for profile in qs:
         if not profile:
@@ -45,19 +73,29 @@ def _profile_value_counts(field: str, *, limit: int = 5) -> List[Dict[str, Any]]
     return [{"value": v, "count": c} for v, c in counter.most_common(limit)]
 
 
-def top_requested_models(limit: int = 5) -> List[Dict[str, Any]]:
-    return _profile_value_counts("model", limit=limit)
+def top_requested_models(
+    limit: int = 5, *, dealership: Optional["Dealership"] = None
+) -> List[Dict[str, Any]]:
+    return _profile_value_counts("model", limit=limit, dealership=dealership)
 
 
-def top_requested_vehicle_types(limit: int = 5) -> List[Dict[str, Any]]:
-    return _profile_value_counts("vehicle_type", limit=limit)
+def top_requested_vehicle_types(
+    limit: int = 5, *, dealership: Optional["Dealership"] = None
+) -> List[Dict[str, Any]]:
+    return _profile_value_counts(
+        "vehicle_type", limit=limit, dealership=dealership
+    )
 
 
-def average_target_monthly_payment() -> Optional[float]:
+def average_target_monthly_payment(
+    *, dealership: Optional["Dealership"] = None
+) -> Optional[float]:
     """Average across captured leads (authoritative) — falls back to session
     profiles when no leads have a target yet."""
+    d = _resolve_dealership(dealership)
     avg = (
-        CustomerLead.objects.exclude(target_monthly_payment__isnull=True)
+        CustomerLead.objects.filter(dealership=d)
+        .exclude(target_monthly_payment__isnull=True)
         .aggregate(avg=Avg("target_monthly_payment"))
         .get("avg")
     )
@@ -65,8 +103,10 @@ def average_target_monthly_payment() -> Optional[float]:
         return float(avg)
 
     values: List[float] = []
-    for profile in ChatSession.objects.exclude(extracted_profile={}).values_list(
-        "extracted_profile", flat=True
+    for profile in (
+        ChatSession.objects.filter(dealership=d)
+        .exclude(extracted_profile={})
+        .values_list("extracted_profile", flat=True)
     ):
         v = profile.get("target_monthly_payment") if profile else None
         try:
@@ -78,9 +118,13 @@ def average_target_monthly_payment() -> Optional[float]:
     return sum(values) / len(values)
 
 
-def most_selected_vehicles(limit: int = 5) -> List[Dict[str, Any]]:
+def most_selected_vehicles(
+    limit: int = 5, *, dealership: Optional["Dealership"] = None
+) -> List[Dict[str, Any]]:
+    d = _resolve_dealership(dealership)
     qs = (
-        Vehicle.objects.annotate(lead_count=Count("leads"))
+        Vehicle.objects.filter(dealership=d)
+        .annotate(lead_count=Count("leads"))
         .filter(lead_count__gt=0)
         .order_by("-lead_count", "-year")[:limit]
     )
@@ -119,9 +163,11 @@ def _lead_is_budget_mismatch(lead: CustomerLead) -> bool:
     return top_price > max_price * BUDGET_MISMATCH_HEADROOM
 
 
-def budget_mismatch_count() -> int:
+def budget_mismatch_count(*, dealership: Optional["Dealership"] = None) -> int:
+    d = _resolve_dealership(dealership)
     qs = (
-        CustomerLead.objects.exclude(target_monthly_payment__isnull=True)
+        CustomerLead.objects.filter(dealership=d)
+        .exclude(target_monthly_payment__isnull=True)
         .annotate(vehicle_count=Count("interested_vehicles"))
         .filter(vehicle_count__gt=0)
         .prefetch_related("interested_vehicles")
@@ -129,9 +175,13 @@ def budget_mismatch_count() -> int:
     return sum(1 for lead in qs if _lead_is_budget_mismatch(lead))
 
 
-def recent_customer_intents(limit: int = 10) -> List[Dict[str, Any]]:
+def recent_customer_intents(
+    limit: int = 10, *, dealership: Optional["Dealership"] = None
+) -> List[Dict[str, Any]]:
+    d = _resolve_dealership(dealership)
     sessions = (
-        ChatSession.objects.exclude(extracted_profile={})
+        ChatSession.objects.filter(dealership=d)
+        .exclude(extracted_profile={})
         .order_by("-updated_at")[: limit * 2]
     )
     out: List[Dict[str, Any]] = []
@@ -156,22 +206,26 @@ def recent_customer_intents(limit: int = 10) -> List[Dict[str, Any]]:
     return out
 
 
-def trends_snapshot() -> Dict[str, Any]:
+def trends_snapshot(
+    *, dealership: Optional["Dealership"] = None
+) -> Dict[str, Any]:
     """One-shot aggregate used by GET /admin/trends/."""
-    avg = average_target_monthly_payment()
+    d = _resolve_dealership(dealership)
+    avg = average_target_monthly_payment(dealership=d)
     return {
         "generated_at": timezone.now().isoformat(),
-        "total_chat_sessions": total_chat_sessions(),
-        "total_leads": total_leads(),
+        "total_chat_sessions": total_chat_sessions(dealership=d),
+        "total_leads": total_leads(dealership=d),
         "total_leads_last_7d": CustomerLead.objects.filter(
-            created_at__gte=timezone.now() - timedelta(days=7)
+            dealership=d,
+            created_at__gte=timezone.now() - timedelta(days=7),
         ).count(),
         "average_target_monthly_payment": (
             round(avg, 2) if avg is not None else None
         ),
-        "budget_mismatch_count": budget_mismatch_count(),
-        "top_requested_models": top_requested_models(),
-        "top_requested_vehicle_types": top_requested_vehicle_types(),
-        "most_selected_vehicles": most_selected_vehicles(),
-        "recent_customer_intents": recent_customer_intents(),
+        "budget_mismatch_count": budget_mismatch_count(dealership=d),
+        "top_requested_models": top_requested_models(dealership=d),
+        "top_requested_vehicle_types": top_requested_vehicle_types(dealership=d),
+        "most_selected_vehicles": most_selected_vehicles(dealership=d),
+        "recent_customer_intents": recent_customer_intents(dealership=d),
     }

@@ -28,6 +28,7 @@ from django.urls import reverse
 from dealer_ai.models import Vehicle
 from dealer_ai.services import ad_copy as ad_copy_svc
 from dealer_ai.services.ad_copy import generate_ad_copy
+from dealer_ai.tests._auth_helpers import sales_manager_client_at_default
 from dealer_ai.tests._mocks import MockLLMProvider
 
 
@@ -351,6 +352,7 @@ class AdCopyScrubTests(TestCase):
 
 class AdCopyEndpointTests(TestCase):
     def setUp(self):
+        self.client = sales_manager_client_at_default()
         self.v1 = _make_vehicle("FF-2025-002", "30000.00", model="F-150")
         # Patch the factory so the view picks up our scripted provider.
         self._patcher_replies: List[str] = [_good_variants_json()]

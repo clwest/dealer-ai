@@ -22,6 +22,8 @@ from django.utils import timezone
 
 from dealer_ai.models import CustomerLead, Vehicle
 from dealer_ai.services import pipeline as pipeline_svc
+from dealer_ai.services.tenancy import get_default_dealership
+from dealer_ai.tests._auth_helpers import sales_manager_client_at_default
 
 
 def _make_vehicle(stock: str, price: str, *, model: str = "F-150") -> Vehicle:
@@ -118,7 +120,7 @@ class StageAssignmentTests(TestCase):
             name="Contacted", urgency="this_week", handed_off=True
         )
 
-        stages, raw = pipeline_svc._compute_stages(now)
+        stages, raw = pipeline_svc._compute_stages(now, dealership=get_default_dealership())
         total = CustomerLead.objects.count()
         self.assertEqual(sum(s["count"] for s in stages), total)
 
@@ -193,7 +195,7 @@ class DemandVsSupplyTests(TestCase):
                 handed_off=False,
             )
 
-        result = pipeline_svc._compute_demand_vs_supply()
+        result = pipeline_svc._compute_demand_vs_supply(dealership=get_default_dealership())
         bucket = next(
             b for b in result["buckets"] if b["band_label"] == "$500–599/mo"
         )
@@ -214,7 +216,7 @@ class DemandVsSupplyTests(TestCase):
                 target_monthly_payment=Decimal("500"),
                 handed_off=False,
             )
-        result = pipeline_svc._compute_demand_vs_supply()
+        result = pipeline_svc._compute_demand_vs_supply(dealership=get_default_dealership())
         bucket = next(
             b for b in result["buckets"] if b["band_label"] == "$500–599/mo"
         )
@@ -233,7 +235,7 @@ class DemandVsSupplyTests(TestCase):
                 target_monthly_payment=Decimal("500"),
                 handed_off=False,
             )
-        result = pipeline_svc._compute_demand_vs_supply()
+        result = pipeline_svc._compute_demand_vs_supply(dealership=get_default_dealership())
         bucket = next(
             b for b in result["buckets"] if b["band_label"] == "$500–599/mo"
         )
@@ -241,7 +243,7 @@ class DemandVsSupplyTests(TestCase):
 
     def test_zero_lead_zero_vehicle_band_is_omitted(self):
         Vehicle.objects.all().delete()
-        result = pipeline_svc._compute_demand_vs_supply()
+        result = pipeline_svc._compute_demand_vs_supply(dealership=get_default_dealership())
         for b in result["buckets"]:
             self.assertFalse(
                 b["lead_count"] == 0 and b["vehicle_count"] == 0,
@@ -257,7 +259,7 @@ class DemandVsSupplyTests(TestCase):
                 target_monthly_payment=Decimal("500"),
                 handed_off=False,
             )
-        result = pipeline_svc._compute_demand_vs_supply()
+        result = pipeline_svc._compute_demand_vs_supply(dealership=get_default_dealership())
         # The band should appear (lead_count>0) but tier should be "tight"
         # not "mismatch".
         bucket = next(
@@ -277,7 +279,7 @@ class DemandVsSupplyTests(TestCase):
                 target_monthly_payment=Decimal("500"),
                 handed_off=True,
             )
-        result = pipeline_svc._compute_demand_vs_supply()
+        result = pipeline_svc._compute_demand_vs_supply(dealership=get_default_dealership())
         bucket = next(
             (b for b in result["buckets"] if b["band_label"] == "$500–599/mo"),
             None,
@@ -289,6 +291,9 @@ class DemandVsSupplyTests(TestCase):
 
 
 class AdminPipelineEndpointTests(TestCase):
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
+
     def test_endpoint_returns_200_and_expected_keys(self):
         url = reverse("dealer_ai:admin-pipeline")
         res = self.client.get(url)

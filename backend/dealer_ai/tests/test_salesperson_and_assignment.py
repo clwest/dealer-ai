@@ -9,7 +9,11 @@ from django.urls import reverse
 
 from dealer_ai.models import CustomerLead, Salesperson
 from dealer_ai.services.tenancy import get_default_dealership
-from dealer_ai.tests._auth_helpers import authenticated_client, make_user
+from dealer_ai.tests._auth_helpers import (
+    authenticated_client,
+    make_user,
+    sales_manager_client_at_default,
+)
 
 
 def _make_advisor(slug: str = "maria-cortez", **extra) -> Salesperson:
@@ -53,6 +57,7 @@ class SalespersonModelTests(TestCase):
 
 class AssignmentEndpointTests(TestCase):
     def setUp(self):
+        self.client = sales_manager_client_at_default()
         self.maria = _make_advisor(slug="maria-cortez")
         self.dave = _make_advisor(
             slug="dave-okafor", name="Dave Okafor", title="New-Vehicle Advisor"
@@ -144,6 +149,7 @@ class AssignmentEndpointTests(TestCase):
 
 class SalespeopleEndpointTests(TestCase):
     def setUp(self):
+        self.client = sales_manager_client_at_default()
         self.maria = _make_advisor(slug="maria-cortez")
         self.inactive = _make_advisor(
             slug="inactive-staff", name="Inactive Staff", is_active=False

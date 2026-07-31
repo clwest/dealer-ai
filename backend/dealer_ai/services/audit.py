@@ -87,14 +87,18 @@ def _excerpt(text: Optional[str], limit: int = 160) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
-def _preceding_user_message(msg: ChatMessage) -> Optional[ChatMessage]:
+def _preceding_user_message(
+    msg: ChatMessage, *, dealership
+) -> Optional[ChatMessage]:
     """Return the most recent user message in the same session that
     came strictly before this assistant message — i.e., the prompt
-    that triggered the guard."""
+    that triggered the guard. Tenant-scoped so the sibling lookup
+    can never cross dealership boundaries."""
     if msg.session_id is None:
         return None
     return (
         ChatMessage.objects.filter(
+            dealership=dealership,
             session_id=msg.session_id,
             role="user",
             created_at__lt=msg.created_at,
@@ -105,7 +109,10 @@ def _preceding_user_message(msg: ChatMessage) -> Optional[ChatMessage]:
 
 
 def audit_events_snapshot(
-    since: str = "24h", recent_limit: int = 50
+    since: str = "24h",
+    recent_limit: int = 50,
+    *,
+    dealership=None,
 ) -> Dict[str, Any]:
     """Return a snapshot of guard events in the requested time window.
 
@@ -131,12 +138,17 @@ def audit_events_snapshot(
                               assistant_excerpt, scrubs, override_kind}, ...]
         }
     """
+    from .tenancy import get_default_dealership
+
+    d = dealership or get_default_dealership()
     canonical_since, hours = _resolve_window(since)
     cutoff = timezone.now() - timedelta(hours=hours)
 
     # Pull every flagged assistant message in the window. Demo scale.
     flagged_qs = (
-        ChatMessage.objects.filter(role="assistant", created_at__gte=cutoff)
+        ChatMessage.objects.filter(
+            dealership=d, role="assistant", created_at__gte=cutoff
+        )
         .order_by("-created_at")
         .iterator()
     )
@@ -172,7 +184,7 @@ def audit_events_snapshot(
         by_flag_count[flag] = by_flag_count.get(flag, 0) + 1
 
         if len(recent_events) < recent_limit:
-            user_msg = _preceding_user_message(msg)
+            user_msg = _preceding_user_message(msg, dealership=d)
             recent_events.append(
                 {
                     "session_id": str(msg.session_id) if msg.session_id else None,

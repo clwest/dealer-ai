@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from dealer_ai.models import ChatMessage, ChatSession
 from dealer_ai.services.audit import audit_events_snapshot
+from dealer_ai.tests._auth_helpers import sales_manager_client_at_default
 
 
 def _msg(
@@ -332,6 +333,9 @@ class AuditEventsTimeWindowTests(TestCase):
 
 class AuditEventsEndpointTests(TestCase):
     """GET /api/dealer-ai/admin/audit-events/ surface."""
+
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
 
     def test_endpoint_returns_200_when_empty(self):
         url = reverse("dealer_ai:admin-audit-events")

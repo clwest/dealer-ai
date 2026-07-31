@@ -16,10 +16,13 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from dealer_ai.models import (
+    ROLE_DEALER_OWNER,
+    ROLE_SALES_MANAGER,
     Dealership,
     Salesperson,
     UserDealershipRole,
 )
+from dealer_ai.services.tenancy import get_default_dealership
 
 User = get_user_model()
 
@@ -92,3 +95,41 @@ def authenticated_client(user) -> APIClient:
     client = APIClient()
     client.force_authenticate(user=user)
     return client
+
+
+def sales_manager_client_at_default(
+    username: str = "test-sales-manager",
+) -> APIClient:
+    """Authenticated admin client for pre-4D tests that hit the admin
+    surface without caring about role granularity.
+
+    Provisions a User + ``sales_manager`` membership at the migration-
+    seeded default Dealership and returns an authenticated APIClient.
+    Every admin endpoint (leads, pipeline, trends, chat sessions,
+    salespeople, audit, coaching, ad-copy) accepts this client's
+    requests under 4D's IsSalesManagerOrOwnerAtActiveDealership gate.
+
+    Use this in ``setUp`` of test classes that pre-date 4D authorization
+    and were exercising business logic, not auth. Focused authorization
+    tests should build their own users with explicit role/tenant
+    combinations via :func:`make_user` + :func:`make_membership`.
+    """
+    user = make_user(username=username)
+    UserDealershipRole.objects.create(
+        user=user, dealership=get_default_dealership(), role=ROLE_SALES_MANAGER
+    )
+    return authenticated_client(user)
+
+
+def dealer_owner_client_at_default(
+    username: str = "test-dealer-owner",
+) -> APIClient:
+    """Authenticated dealer_owner client for onboarding-profile mutation
+    tests. Same pattern as :func:`sales_manager_client_at_default` but
+    with the ``dealer_owner`` role.
+    """
+    user = make_user(username=username)
+    UserDealershipRole.objects.create(
+        user=user, dealership=get_default_dealership(), role=ROLE_DEALER_OWNER
+    )
+    return authenticated_client(user)

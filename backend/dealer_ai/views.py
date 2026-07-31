@@ -44,7 +44,13 @@ from django.utils import timezone
 from .services.ad_copy import generate_ad_copy
 from .services.audit import audit_events_snapshot
 from .services.chat_engine import ChatEngine
-from .permissions import IsAdvisorForSlug, IsDealerOwnerForAdvisorSlug
+from .permissions import (
+    IsAdvisorForSlug,
+    IsDealerOwnerAtActiveDealership,
+    IsDealerOwnerForAdvisorSlug,
+    IsSalesManagerOrOwnerAtActiveDealership,
+    ReadOnly,
+)
 from .services.follow_up import (
     SUPPORTED_CHANNELS as FOLLOW_UP_CHANNELS,
     SUPPORTED_TONES as FOLLOW_UP_TONES,
@@ -54,7 +60,7 @@ from .services.handoff_service import build_handoff_packet, packet_to_text
 from .services.lead_service import create_lead_from_session
 from .services.manager_chat_response import enforce_coaching_shape
 from .services.pipeline import pipeline_snapshot
-from .services.tenancy import get_default_dealership
+from .services.tenancy import get_current_dealership, get_default_dealership
 from .services.trends import trends_snapshot
 from .services.vehicle_assistant import analyze_vehicle, answer_vehicle_question
 
@@ -239,10 +245,13 @@ def _apply_lead_filters(qs, request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_lead_list(request):
+    dealership = get_current_dealership(request)
     limit = _parse_limit(request)
     base_qs = (
-        CustomerLead.objects.select_related("session")
+        CustomerLead.objects.filter(dealership=dealership)
+        .select_related("session")
         .prefetch_related("interested_vehicles")
     )
     filtered_qs = _apply_lead_filters(base_qs, request)
@@ -275,12 +284,15 @@ def admin_lead_list(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_chat_session_list(request):
+    dealership = get_current_dealership(request)
     limit = _parse_limit(request)
-    qs = ChatSession.objects.order_by("-updated_at")[:limit]
+    scoped = ChatSession.objects.filter(dealership=dealership)
+    qs = scoped.order_by("-updated_at")[:limit]
     return Response(
         {
-            "count": ChatSession.objects.count(),
+            "count": scoped.count(),
             "limit": limit,
             "results": AdminChatSessionListSerializer(qs, many=True).data,
         }
@@ -288,21 +300,25 @@ def admin_chat_session_list(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_trends(request):
-    return Response(trends_snapshot())
+    return Response(trends_snapshot(dealership=get_current_dealership(request)))
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_pipeline(request):
     """Manager Phase 2: sales pipeline + demand-vs-supply + recommended actions.
 
     Pure read aggregate over CustomerLead and Vehicle. No schema changes,
-    no chat-engine touches.
+    no chat-engine touches. Milestone 1 · Increment 4D — tenant-scoped
+    via ``dealership=`` passed into :func:`pipeline_snapshot`.
     """
-    return Response(pipeline_snapshot())
+    return Response(pipeline_snapshot(dealership=get_current_dealership(request)))
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_ad_copy(request):
     """Manager Phase 3: generate 2–3 ad-copy variants for an inventory or
     marketing recommendation. Read-only with respect to system state — no
@@ -343,6 +359,7 @@ def admin_ad_copy(request):
         result = generate_ad_copy(
             recommendation=recommendation,
             vehicle_id=vehicle_id,
+            dealership=get_current_dealership(request),
         )
     except ValueError as exc:
         return Response(
@@ -364,13 +381,20 @@ def admin_ad_copy(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_salespeople(request):
     """List all salespeople (active and inactive). Used by the manager
     dashboard and the assignment dropdown. Phase 4 keeps inactive rows
     visible so historical assignments still resolve, but the frontend
     filters them out of the assignment menu via the ``is_active`` flag.
+
+    Milestone 1 · Increment 4D — tenant-scoped. Admin at Dealership A
+    only sees Dealership A's salespeople.
     """
-    qs = Salesperson.objects.all().order_by("-is_active", "name")
+    dealership = get_current_dealership(request)
+    qs = Salesperson.objects.filter(dealership=dealership).order_by(
+        "-is_active", "name"
+    )
     only_active = request.query_params.get("active")
     if only_active in ("true", "1", "yes"):
         qs = qs.filter(is_active=True)
@@ -409,15 +433,22 @@ def public_salesperson_detail(request, slug):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_lead_assign(request, lead_id):
     """Assign a lead to a salesperson, or clear assignment when
     ``salesperson_id`` is null.
 
     Per the locked Phase 4 decisions: cannot assign to an inactive
     salesperson. Already-assigned leads are silently re-assigned.
+
+    Milestone 1 · Increment 4D — both the lead and the target
+    salesperson must belong to the caller's active dealership. An admin
+    at Dealership A cannot reassign a Dealership B lead, and cannot
+    assign any lead to a Dealership B salesperson.
     """
+    dealership = get_current_dealership(request)
     try:
-        lead = CustomerLead.objects.get(pk=lead_id)
+        lead = CustomerLead.objects.get(pk=lead_id, dealership=dealership)
     except CustomerLead.DoesNotExist:
         return Response(
             {"detail": "Lead not found."}, status=status.HTTP_404_NOT_FOUND
@@ -432,7 +463,7 @@ def admin_lead_assign(request, lead_id):
         lead.assigned_at = None
     else:
         try:
-            sp = Salesperson.objects.get(pk=salesperson_id)
+            sp = Salesperson.objects.get(pk=salesperson_id, dealership=dealership)
         except Salesperson.DoesNotExist:
             return Response(
                 {"detail": "Salesperson not found."},
@@ -589,6 +620,7 @@ def advisor_follow_up(request, slug, lead_id):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_audit_events(request):
     since = request.query_params.get("since", "24h")
     raw_limit = request.query_params.get("limit")
@@ -596,7 +628,13 @@ def admin_audit_events(request):
         recent_limit = max(1, min(int(raw_limit), 200)) if raw_limit else 50
     except (TypeError, ValueError):
         recent_limit = 50
-    return Response(audit_events_snapshot(since=since, recent_limit=recent_limit))
+    return Response(
+        audit_events_snapshot(
+            since=since,
+            recent_limit=recent_limit,
+            dealership=get_current_dealership(request),
+        )
+    )
 
 
 # ---- Vehicle detail / vehicle ask ------------------------------------------
@@ -707,10 +745,13 @@ def _serialize_lead_messages(lead: CustomerLead) -> list:
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_lead_detail(request, lead_id):
+    dealership = get_current_dealership(request)
     try:
         lead = (
-            CustomerLead.objects.select_related("session")
+            CustomerLead.objects.filter(dealership=dealership)
+            .select_related("session")
             .prefetch_related("interested_vehicles")
             .get(id=lead_id)
         )
@@ -734,10 +775,14 @@ def admin_lead_detail(request, lead_id):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def admin_lead_handoff(request, lead_id):
+    dealership = get_current_dealership(request)
     try:
-        lead = CustomerLead.objects.prefetch_related("interested_vehicles").get(
-            id=lead_id
+        lead = (
+            CustomerLead.objects.filter(dealership=dealership)
+            .prefetch_related("interested_vehicles")
+            .get(id=lead_id)
         )
     except CustomerLead.DoesNotExist:
         return Response(
@@ -843,6 +888,7 @@ def demo_load_scenarios(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
 def manager_chat(request):
     """SESSION_010: stateless manager-side chat tester.
 
@@ -868,7 +914,7 @@ def manager_chat(request):
         )
 
     session = ChatSession.objects.create(
-        dealership=get_default_dealership(),
+        dealership=get_current_dealership(request),
         metadata={"channel": "manager_test"},
     )
     engine = ChatEngine(session=session)
@@ -899,16 +945,25 @@ def manager_chat(request):
 
 
 @api_view(["GET", "PUT", "PATCH"])
+@permission_classes(
+    [ReadOnly | (IsAuthenticated & IsDealerOwnerAtActiveDealership)]
+)
 def onboarding_profile(request):
     """Singleton dealer onboarding profile.
 
     GET: returns the current profile, or the default shape if none exists
         yet. Always 200 — the page can render with defaults pre-filled.
+        Public (branding must render on unauthenticated pages per
+        MILESTONE_1_PLANNING.md §3 compatibility checklist).
     PUT/PATCH: upserts the singleton row. PUT requires the full payload
         (validates every field). PATCH allows partial updates and only
         validates the keys present in the body.
+
+    Milestone 1 · Increment 4D — mutation requires ``dealer_owner`` at
+    the caller's active dealership. GET stays public because
+    ``useBrand()`` renders on public pages that never authenticate.
     """
-    dealership = get_default_dealership()
+    dealership = get_current_dealership(request)
     profile = (
         DealerOnboardingProfile.objects.filter(dealership=dealership).first()
     )
@@ -940,11 +995,15 @@ def onboarding_profile(request):
 
 @api_view(["POST"])
 @parser_classes([MultiPartParser, FormParser])
+@permission_classes([IsAuthenticated & IsDealerOwnerAtActiveDealership])
 def onboarding_logo_upload(request):
     """Upload a dealer logo and store its served URL in ``logo_url``.
 
     This keeps ``logo_url`` as the single source of truth for every brand
     surface. Hosted URL paste still uses the JSON profile endpoint.
+
+    Milestone 1 · Increment 4D — requires ``dealer_owner`` at the
+    caller's active dealership.
     """
     upload = request.FILES.get("logo")
     if upload is None:
@@ -979,7 +1038,7 @@ def onboarding_logo_upload(request):
     )
     logo_url = request.build_absolute_uri(f"{settings.MEDIA_URL}{path}")
 
-    dealership = get_default_dealership()
+    dealership = get_current_dealership(request)
     profile = (
         DealerOnboardingProfile.objects.filter(dealership=dealership).first()
     )

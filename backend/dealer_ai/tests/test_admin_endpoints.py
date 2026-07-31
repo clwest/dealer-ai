@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from dealer_ai.models import ChatMessage, ChatSession, CustomerLead, Vehicle
+from dealer_ai.tests._auth_helpers import sales_manager_client_at_default
 
 
 def _make_vehicle(stock="A-1", price="60000.00", model="F-150"):
@@ -45,6 +46,9 @@ class SessionDetailEndpointTests(TestCase):
 
 
 class AdminLeadListEndpointTests(TestCase):
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
+
     def test_returns_leads_with_vehicles(self):
         v = _make_vehicle()
         lead = CustomerLead.objects.create(
@@ -79,6 +83,9 @@ class AdminLeadListEndpointTests(TestCase):
 
 
 class AdminChatSessionListEndpointTests(TestCase):
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
+
     def test_returns_sessions_with_last_message_snippet(self):
         s = ChatSession.objects.create(
             customer_name="Chris",
@@ -109,6 +116,9 @@ class AdminChatSessionListEndpointTests(TestCase):
 
 
 class AdminTrendsEndpointTests(TestCase):
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
+
     def test_returns_full_snapshot_shape(self):
         v = _make_vehicle()
         ChatSession.objects.create(

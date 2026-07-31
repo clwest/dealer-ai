@@ -124,12 +124,14 @@ def _serialize_lead(lead: CustomerLead) -> dict:
     }
 
 
-def _compute_stages(now: datetime) -> tuple[List[dict], Dict[str, List[CustomerLead]]]:
+def _compute_stages(
+    now: datetime, *, dealership
+) -> tuple[List[dict], Dict[str, List[CustomerLead]]]:
     """Bucket every lead into a stage. Returns (serialized stages list,
     raw model instances grouped by stage). The raw map is reused by the
     recommendation engine so we don't double-query."""
     qs = (
-        CustomerLead.objects.all()
+        CustomerLead.objects.filter(dealership=dealership)
         .select_related("assigned_to")
         .prefetch_related("interested_vehicles")
         .order_by("-created_at")
@@ -223,12 +225,12 @@ def _classify_tier(*, lead_count: int, vehicle_count: int) -> tuple[str, float]:
     return "healthy", ratio
 
 
-def _compute_demand_vs_supply() -> dict:
+def _compute_demand_vs_supply(*, dealership) -> dict:
     """Aggregate open-lead targets vs available inventory across the
     fixed payment bands. Bands with zero leads AND zero vehicles are
     omitted from the response to reduce visual noise."""
     open_targets_qs = (
-        CustomerLead.objects.filter(handed_off=False)
+        CustomerLead.objects.filter(dealership=dealership, handed_off=False)
         .exclude(target_monthly_payment__isnull=True)
         .values_list("target_monthly_payment", flat=True)
     )
@@ -240,9 +242,9 @@ def _compute_demand_vs_supply() -> dict:
             continue
 
     vehicle_prices: List[float] = []
-    for raw in Vehicle.objects.filter(is_available=True).values_list(
-        "price", flat=True
-    ):
+    for raw in Vehicle.objects.filter(
+        dealership=dealership, is_available=True
+    ).values_list("price", flat=True):
         try:
             vehicle_prices.append(float(raw))
         except (TypeError, ValueError):
@@ -573,6 +575,7 @@ def _marketing_cards(
     *,
     inventory_cards: List[dict],
     trends: dict,
+    dealership,
 ) -> List[dict]:
     cards: List[dict] = []
     has_inventory_high = any(
@@ -587,7 +590,9 @@ def _marketing_cards(
         # (signal too weak).
         vehicle_count_for_model = (
             Vehicle.objects.filter(
-                is_available=True, model__icontains=top["value"]
+                dealership=dealership,
+                is_available=True,
+                model__icontains=top["value"],
             ).count()
         )
         if vehicle_count_for_model >= 2 and top["count"] >= 2:
@@ -720,47 +725,69 @@ def recommended_actions(
     leads_by_stage: Dict[str, List[CustomerLead]],
     now: Optional[datetime] = None,
     max_cards: int = DEFAULT_MAX_CARDS,
+    dealership=None,
 ) -> List[dict]:
     """Pure function. Returns up to ``max_cards`` recommendations ordered by
     priority then category interleave. Inputs are exactly the data the
     pipeline endpoint already collects — no DB queries from this function
     other than the marketing card's per-model inventory lookup, which is a
-    single ``Vehicle.objects.filter().count()`` and stays consistent with
-    the existing trends.py helpers."""
+    single ``Vehicle.objects.filter().count()`` scoped to ``dealership``.
+    ``dealership=None`` resolves to the seeded default."""
+    from .tenancy import get_default_dealership
+
+    d = dealership or get_default_dealership()
     now = now or timezone.now()
 
     inventory = _inventory_cards(demand_buckets)
     sales = _sales_cards(stages=stages, leads_by_stage=leads_by_stage, now=now)
-    marketing = _marketing_cards(inventory_cards=inventory, trends=trends)
+    marketing = _marketing_cards(
+        inventory_cards=inventory, trends=trends, dealership=d
+    )
 
     return _rank_and_cap(inventory + sales + marketing, max_cards=max_cards)
 
 
-def _trends_for_recommendations() -> dict:
+def _trends_for_recommendations(*, dealership) -> dict:
     """Subset of trends_snapshot the recommendation engine uses. Pulled in
     one place so tests can inject a stub without touching trends.py."""
     return {
-        "top_requested_models": top_requested_models(),
-        "top_requested_vehicle_types": top_requested_vehicle_types(),
-        "most_selected_vehicles": most_selected_vehicles(),
+        "top_requested_models": top_requested_models(dealership=dealership),
+        "top_requested_vehicle_types": top_requested_vehicle_types(
+            dealership=dealership
+        ),
+        "most_selected_vehicles": most_selected_vehicles(dealership=dealership),
     }
 
 
 # ---- Public entry -----------------------------------------------------------
 
 
-def pipeline_snapshot() -> Dict[str, Any]:
-    """One-shot aggregate used by ``GET /admin/pipeline/``."""
+def pipeline_snapshot(*, dealership=None) -> Dict[str, Any]:
+    """One-shot aggregate used by ``GET /admin/pipeline/``.
+
+    Milestone 1 · Increment 4D — tenant-scoped. ``dealership=None``
+    resolves to the seeded default (backwards compat for tests
+    predating multi-tenancy); the admin view passes
+    ``dealership=get_current_dealership(request)`` so isolation is
+    explicit at the call site. Recommendations built by
+    :func:`recommended_actions` do not query models directly — the
+    marketing card's inventory lookup goes through
+    :func:`_marketing_cards`, which now takes ``dealership`` too.
+    """
+    from .tenancy import get_default_dealership
+
+    d = dealership or get_default_dealership()
     now = timezone.now()
-    stages, leads_by_stage = _compute_stages(now)
-    demand = _compute_demand_vs_supply()
-    trends = _trends_for_recommendations()
+    stages, leads_by_stage = _compute_stages(now, dealership=d)
+    demand = _compute_demand_vs_supply(dealership=d)
+    trends = _trends_for_recommendations(dealership=d)
     actions = recommended_actions(
         stages=stages,
         demand_buckets=demand["buckets"],
         trends=trends,
         leads_by_stage=leads_by_stage,
         now=now,
+        dealership=d,
     )
     return {
         "generated_at": now.isoformat(),

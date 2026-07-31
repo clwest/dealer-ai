@@ -21,6 +21,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from dealer_ai.models import ChatSession, DealerOnboardingProfile
+from dealer_ai.tests._auth_helpers import sales_manager_client_at_default
 from dealer_ai.tests._mocks import MockLLMProvider, json_reply
 
 
@@ -59,6 +60,9 @@ class _ProviderInjector:
 
 
 class ManagerChatHappyPathTests(TestCase):
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
+
     def test_post_returns_assistant_reply(self):
         # SESSION_011: mock reply must be coaching-shaped (Shape A) so
         # the structural enforcer leaves it unchanged. Shapeless replies
@@ -127,6 +131,9 @@ class ManagerChatHappyPathTests(TestCase):
 
 
 class ManagerChatValidationTests(TestCase):
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
+
     def test_missing_message_returns_400(self):
         res = self.client.post(
             URL,
@@ -148,6 +155,9 @@ class ManagerChatRespectsOnboardingOverridesTests(TestCase):
     """The whole point of the manager-chat endpoint: changes the manager
     saved on /dealer-ai-onboarding must influence the assistant reply
     here, exactly like they would for a real customer."""
+
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
 
     def test_banned_phrase_scrubbed_from_manager_reply(self):
         # SESSION_011: surviving sentences (after banned-phrase scrub
@@ -212,6 +222,9 @@ class ManagerChatNoCardImplicationTests(TestCase):
     defense: (1) MANAGER_TEST_HINT system message tells the LLM not
     to produce card-implying language; (2) scrub_card_implying_phrases
     in the view strips any sentences that slip through."""
+
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
 
     def test_user_reported_bad_reply_is_repaired(self):
         """The exact pattern reported in the SESSION_010 hotfix issue:
@@ -473,6 +486,9 @@ class ManagerChatStructureEnforcementTests(TestCase):
 
     These tests cover Jessica's reported failure plus the families of
     customer-facing wording the static scrub doesn't catch."""
+
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
 
     def test_jessica_reported_failure_is_repaired(self):
         """The exact reply Jessica saw on the coaching page when she

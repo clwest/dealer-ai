@@ -178,15 +178,23 @@ person is the natural business shape for indie shops (see
     ownership does not grant access.
   - Applied composition (both advisor views):
     `[IsAuthenticated & (IsAdvisorForSlug | IsDealerOwnerForAdvisorSlug)]`.
-- **Planned classes (Increment 4D — admin gating, not yet
-  implemented):**
-  - `IsSalesManagerOrOwnerAtActiveDealership` — for admin/pipeline
-    endpoints.
-  - `IsDealerOwnerAtActiveDealership` — for onboarding profile
-    mutation.
-  - Both consult `get_current_dealership(request)` for tenant
-    scope rather than a URL kwarg — different URL-shape family,
-    different focused class.
+- **Shipped classes (Increment 4D — admin gating):**
+  - `IsSalesManagerOrOwnerAtActiveDealership` — the caller holds
+    `sales_manager` OR `dealer_owner` at
+    `get_current_dealership(request)`. Applied to every
+    `/api/dealer-ai/admin/*` endpoint plus `manager-chat`.
+  - `IsDealerOwnerAtActiveDealership` — the caller holds
+    `dealer_owner` at `get_current_dealership(request)`. Applied
+    to `onboarding/profile/` PUT/PATCH and
+    `onboarding/profile/logo/`.
+  - `ReadOnly` — small method-based primitive. Passes any HTTP
+    safe method. Composed with `IsDealerOwnerAtActiveDealership`
+    on `onboarding/profile/` so branding GETs stay public while
+    upserts require dealer_owner:
+    `[ReadOnly | (IsAuthenticated & IsDealerOwnerAtActiveDealership)]`.
+  - All three consult `get_current_dealership(request)` for tenant
+    scope rather than a URL kwarg — a different URL-shape family
+    from the 4C advisor classes.
 - **Layer separation on the advisor endpoint.** The 403 lead-
   ownership check inside `advisor_follow_up`
   (`lead.assigned_to_id != sp.pk`) is preserved verbatim in 4C. It
@@ -236,6 +244,42 @@ scopes querysets) continues to work unmodified. This is why the
 seam is scoped to the smallest possible helper.
 
 ---
+
+## 8b. Tenant-scoped query patterns (Increment 4D)
+
+Data scoping is the fourth layer (§1 row 4) — separate from
+authorization, separate from tenancy resolution. The rules:
+
+- **Every gated admin queryset carries an explicit
+  `.filter(dealership=…)` at the view layer.** No hidden filtering
+  via custom managers; the filter is right where the reader can see
+  it.
+- **Views resolve tenant once, at the top of the handler.**
+  `dealership = get_current_dealership(request)` produces the
+  `Dealership` instance every subsequent queryset filters against.
+  Never call the resolver twice inside one view — it makes the
+  data flow harder to audit.
+- **Service functions that query models accept
+  `dealership` as a keyword argument.** No service reaches into
+  request state directly. Tenant context is passed from the view.
+  Backwards compatibility for the pre-4D tests is provided via
+  `dealership=None` defaulting to the seeded default via
+  `get_default_dealership()` — the fallback is explicit inside
+  the service, not implicit.
+- **Object-lookup views fail closed on cross-tenant pk.** A pk
+  belonging to another dealership resolves to `.DoesNotExist` and
+  returns 404 — never 200 with cross-tenant data, never 403
+  (which would leak existence).
+- **Mutation views validate any FK in the body against the same
+  tenant.** `admin/lead/<id>/assign/` checks both that the lead
+  belongs to the caller's dealership (404) and that the target
+  salesperson belongs to the caller's dealership (400). One
+  scoping check per FK, one per level of the request graph.
+
+The `manager_chat` endpoint is a special case: it creates a
+throwaway `ChatSession` per request, so tenant scoping there means
+attaching the caller's active dealership to the row it creates
+(not filtering an existing queryset).
 
 ## 9. What this model does NOT cover
 
