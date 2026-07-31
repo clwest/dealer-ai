@@ -5,6 +5,7 @@ import {
   Car,
   GraduationCap,
   LayoutDashboard,
+  LineChart,
   Menu,
   Settings,
   Users,
@@ -38,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-inventory", label: "Inventory", icon: Car, end: false },
   { to: "/dealer-ai-leads", label: "Leads", icon: UserSquare, end: false },
   { to: "/dealer-ai-manager-chat", label: "Coaching Mode", icon: GraduationCap, end: false },
+  { to: "/dealer-ai-admin", label: "Admin", icon: LineChart, end: true },
   { to: "/dealer-ai-admin/team", label: "Team", icon: Users, end: false },
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },
 ];
