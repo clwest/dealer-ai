@@ -1,159 +1,181 @@
 ---
 state: active
-date: 2026-05-03
-last_session_shipped: SESSION_023
-next_session: SESSION_024
+date: 2026-07-30
+last_session_shipped: SESSION_028
+next_session: SESSION_029
 ---
 
-# Next session — Dealer AI Kit
+# Next session — Dealer AI Kit / VehicleMatch
 
-> **Platform reframe note:** This codebase is the **Dealer AI
-> Kit** — a reusable dealer AI platform. Sam Wampler's Freedom
-> Ford McAlester is Dealer #1 and the default configuration. See
-> `docs/PLATFORM_REFRAME.md` for the identity hierarchy and
-> `docs/DEALER_DUPLICATION_GUIDE.md` for the operator workflow
-> to onboard a second dealer without forking.
+> **Platform + brand reframe:** The codebase is the **Dealer AI Kit** — a
+> reusable dealer AI platform. Sam Wampler's Freedom Ford McAlester is
+> Dealer #1 and the default configuration. The **public brand is
+> VehicleMatch** (`clwest/vehicle-match` on GitHub, live at
+> https://vehicle-match-pi.vercel.app), the Vertical VI · Match entry
+> in the 24/7 Global AI portfolio. Local repo path is still
+> `freedom-ford/`. See `docs/PLATFORM_REFRAME.md` for identity hierarchy
+> and `docs/DEALER_DUPLICATION_GUIDE.md` for the onboard-a-second-dealer
+> workflow.
 
-## What just shipped (SESSION_023)
+## What just shipped
 
-**Context-kit refresh + fresh-session prep.** The repo's generated
-orientation state was refreshed so the next clean terminal can use the
-new `start-codex` flows and the current truth/state layer. The root
-start file now has an explicit `## NEXT TASK` section, `docs/CONTEXT_KIT_INVENTORY.md`
-was regenerated, and `start-codex` now resolves a real next task instead
-of falling back to the missing-task message.
+### SESSION_028 (2026-05-20) — VehicleMatch rename + deploy configs
 
-Read the full handoff at
-`docs/handoffs/SESSION_023_CONTEXT_KIT_REFRESH.md`.
+- New repo `clwest/vehicle-match`; frontend live on Vercel at
+  `vehicle-match-pi.vercel.app`.
+- Deploy configs added: `render.yaml`, `backend/freedom_ford/prod_settings.py`,
+  `backend/render-requirements.txt`, `vercel.json`, `frontend/.env.production`.
+- **Backend Render Blueprint is queued but NOT activated.** The
+  frontend points at `vehicle-match-api.onrender.com`, which currently
+  returns `x-render-routing: no-server` (no service exists at that
+  hostname). Activate at:
+  https://render.com/deploy?repo=https://github.com/clwest/vehicle-match
 
-**Verification from SESSION_023:**
+Full handoff: `docs/handoffs/SESSION_028_vehicle_match_rename_and_deploy.md`.
 
-- `context-kit inventory --write` — pass.
-- `context-kit doctor` — pass with 4 warnings.
-- `context-kit orient --short` — pass.
-- `context-kit start-codex --short` — pass, next task resolved.
-- `context-kit start-codex --mode=execute --model=cheap --short` — pass.
-- `npx tsc --noEmit` — pass.
-- `npx vite build` — pass.
+### Between-sessions cleanup (2026-07-30, unnumbered maintenance)
+
+Audit found that the SESSION_024 handoff claimed a "Presentation-only
+matched-vehicle deck" was shipped, but the deck (+ softer public copy)
+was still uncommitted in the working tree. Cleanup shipped four commits
+on top of `dd08d47`:
+
+- `4d9bac3` — **feat: land SESSION_024 public assistant polish** —
+  belatedly commits the `VehicleMatchDeck` (3-card stack, prev/next
+  controls) in `AssistantChat`, the "current inventory / payment-aware"
+  copy in `AssistantBand` + `Hero`, and the `min-w-0` guard on
+  `PublicAssistantPage`.
+- `d8f6af9` — **docs: backfill session handoffs 024-027** — commits the
+  four handoff docs that had been left untracked when `c2c2067` shipped.
+- `d516958` — **chore: normalize dev host to 127.0.0.1 + expand CORS
+  defaults** — Vite proxy target + CORS defaults now use `127.0.0.1`
+  instead of `localhost` (avoids IPv6 resolution breaking the /api
+  proxy). Reverted a WIP `api.ts` change that would have bypassed the
+  Vite proxy and pinned port 8000 while Django runs on `:8001`.
+- `d0e80fc` — **chore: ignore redesign/ scratch dir and vercel-link
+  artifacts** — `/redesign/` (before/after competitor screenshots) and
+  `frontend/.vercel/` are now gitignored.
+
+Verification during cleanup:
+
+- `python3 manage.py test dealer_ai.tests.test_embed_frame_policy
+  dealer_ai.tests.test_onboarding_profile` — **18 tests pass** (matches
+  SESSION_026/027 claims).
+- `npx tsc --noEmit` — pass (once `npm install` ran; `node_modules` was
+  missing).
+- `npx vite build` — pass, 488.61 kB bundle / 133.78 kB gzip.
+- `curl -sI https://vehicle-match-pi.vercel.app/` — 200, SPA HTML with
+  correct `<title>`.
+- `curl -sI https://vehicle-match-api.onrender.com/` — 404,
+  `x-render-routing: no-server` (blueprint not activated).
 
 ---
 
-## Recommended next session — SESSION_024
+## Recommended next session — SESSION_029
 
-**Monday demo hardening for the assistant-first public site.**
+**Activate the Render backend and unblock end-to-end demo.**
 
-The prior Leads pipeline recommendation is still valid, but it is not
-the right next move until the Monday public-site demo is locked. SESSION
-024 should harden the exact visitor journey that will be shown live.
+The live frontend at `vehicle-match-pi.vercel.app` currently has
+nothing to call. Every API request fails silently against a Render
+placeholder. Highest-value next step is turning the backend on and
+fixing the CORS mismatch that will hit the moment it comes up.
 
-**Scope:**
+### Scope
 
-- Walk the Monday demo path across:
-  - `/`
-  - `/assistant`
-  - `/showroom`
-  - `/embed/assistant`
-  - `/dealer-ai-overview`
-- Verify desktop and mobile visual fit with Playwright screenshots.
-- Tighten spacing, sizing, and copy where the public site still reads
-  like a prototype.
-- Decide whether `/assistant?prompt=...` should stay as "starter chip
-  first" or become a controlled auto-send flow.
-- Consider adding a tiny repeatable Playwright smoke script now that
-  `playwright` is installed.
-- Keep the public site assistant-first. Do not drift back to a generic
-  dealership landing page.
+1. **Fix `render.yaml` CORS before activation.** It allowlists
+   `https://vehicle-match.vercel.app` — the real live host is
+   `https://vehicle-match-pi.vercel.app` (note the `-pi` suffix Vercel
+   appended when the project was linked). Same fix needed for
+   `CSRF_TRUSTED_ORIGINS`.
+2. **Click the Render Blueprint deploy button** for the fixed config.
+3. **Smoke-test** once the service reports Live:
+   - `GET /api/dealer-ai/inventory/` returns real seed data.
+   - Frontend at `vehicle-match-pi.vercel.app` loads inventory cards
+     and the assistant page without console errors.
+   - Chat returns the expected Ollama-fallback message ("trouble
+     reaching the AI model right now") since Ollama isn't on Render.
+4. **Decide LLM story for the live demo.** Options:
+   - Leave Ollama fallback in place (chat is degraded but everything
+     else works).
+   - Set `DEALER_AI_LLM_PROVIDER=openai` + `OPENAI_API_KEY` in Render
+     dashboard for real chat (~$5/mo).
+
+### Deferred (call these out at end of SESSION_029)
+
+- **Inventory data quality cleanup** — originally the SESSION_028 plan
+  that got pivoted to rename/deploy. Still relevant for demo polish
+  once backend is up.
+- **Adopt placeholders** in `docs/PROJECT_WHAT_IT_IS.md` (Why it
+  exists / Who it's for) and `docs/BUILD_PLAN.md`. Doctor still warns.
+- **Missing handoffs SESSION_004–007.** Either they never existed and
+  the numbering skipped, or the docs were lost. Worth annotating
+  explicitly.
+- **Live brand broadcast on Setup save** — deferred from earlier.
 
 ## NEXT TASK
 
-Harden the Monday demo path for the assistant-first public site.
-
-Focus on:
-- `/`
-- `/assistant`
-- `/showroom`
-- `/embed/assistant`
-- `/dealer-ai-overview`
+Fix `render.yaml` CORS + activate Render Blueprint + smoke-test the
+live end-to-end pipeline.
 
 **Strict guardrails:**
 
-- ❌ No backend changes unless a real blocker appears.
-- ❌ No chat behavior changes.
-- ❌ No edits to `AssistantChat` unless the demo reveals a purely
-  presentational issue that affects both public assistant and embed.
-- ❌ No edits to `EmbedAssistantPage` unless verifying the Monday path
-  reveals a regression.
-- ❌ No edits to `/dealer-ai-demo`.
-- ❌ No edits to `DEFAULT_DEALER` / `PRODUCT` / `defaultDealer.ts`.
-- ❌ No new public inventory contract; showroom stays on the existing
-  SESSION_014 sample snapshot until CRM/DMS work is explicitly in scope.
-
-**Defer until after the Monday public-site demo is locked:**
-
-- Leads pipeline page.
-- Multipart logo upload.
-- CSP / X-Frame allowlist.
-- Inventory data quality cleanup.
-- Live brand broadcast on Setup save.
+- ❌ Do not change `DEFAULT_DEALER` / `PRODUCT` / `defaultDealer.ts`.
+- ❌ Do not change chat behavior.
+- ❌ Do not add CRM/email/SMS.
+- ❌ Do not push force / rewrite history on `main`.
+- ❌ Do not commit any real `OPENAI_API_KEY` — set it via the Render
+  dashboard only.
 
 ---
 
-## Agent launch prompt for SESSION_024
+## Agent launch prompt for SESSION_029
 
 Paste into Claude Code / Cursor / any AI coding agent as the session
 opener.
 
 ```text
-You are picking up SESSION_024 on the Dealer AI Kit. Sam Wampler's
-Freedom Ford McAlester is Dealer #1 / default.
+You are picking up SESSION_029 on the Dealer AI Kit / VehicleMatch.
+Sam Wampler's Freedom Ford McAlester is Dealer #1 / default.
 
 Read first:
 - context-kit orient
-- docs/FREEDOM_FORD_SESSION_START.md
 - 00-START-NEXT-SESSION.md
-- docs/handoffs/SESSION_022_assistant_first_public_site.md
+- docs/handoffs/SESSION_028_vehicle_match_rename_and_deploy.md
+- render.yaml
+- backend/freedom_ford/prod_settings.py
 - docs/PLATFORM_REFRAME.md
-- docs/FREEDOM_FORD_BEHAVIOR_LAYER.md
-- docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md
 
 Goal:
-Harden the Monday demo path for the assistant-first public dealership
-site shipped in SESSION_022.
-
-Primary routes:
-- /
-- /assistant
-- /showroom
-- /embed/assistant
-- /dealer-ai-overview
+Activate the Render backend and unblock end-to-end demo for the live
+frontend at https://vehicle-match-pi.vercel.app.
 
 Tasks:
-1. Run frontend typecheck/build.
-2. Start Vite and inspect the public routes with Playwright on desktop
-   and mobile viewports.
-3. Fix only visible demo blockers: spacing, layout, awkward copy,
-   responsiveness, route/link issues, or console errors.
-4. Decide whether query prompts on /assistant should remain starter-chip
-   only or safely auto-send. If changing behavior, keep it frontend-only
-   and StrictMode-safe.
-5. Optionally add a small Playwright smoke script if it helps repeat the
-   Monday-demo checks.
+1. Fix render.yaml so CORS_ALLOWED_ORIGINS and CSRF_TRUSTED_ORIGINS
+   include https://vehicle-match-pi.vercel.app (not just the un-suffixed
+   vehicle-match.vercel.app). Commit and push.
+2. Ask user to click the Render Blueprint deploy button:
+   https://render.com/deploy?repo=https://github.com/clwest/vehicle-match
+3. Poll vehicle-match-api.onrender.com until it returns Django responses
+   (build takes ~3 min).
+4. Smoke-test /api/dealer-ai/inventory/ returns seed data.
+5. Load https://vehicle-match-pi.vercel.app in a browser (or Playwright)
+   and confirm inventory cards render + assistant page loads without
+   console errors.
+6. Confirm chat returns Ollama-fallback message OR ask user whether to
+   flip DEALER_AI_LLM_PROVIDER=openai in Render dashboard.
 
 Do NOT:
-- touch backend
+- change DEFAULT_DEALER / PRODUCT / defaultDealer.ts
 - change chat behavior
-- edit the backend prompt/scrub/payment/inventory logic
-- edit /dealer-ai-demo
-- edit DEFAULT_DEALER / PRODUCT / defaultDealer.ts
-- turn this into the deferred Leads pipeline session
+- add CRM/email/SMS work
+- commit any real API keys
 
 Verify:
-- npx tsc --noEmit
-- npx vite build
-- Playwright route smoke with console clean
+- curl vehicle-match-api.onrender.com returns Django (not Render 404)
+- vehicle-match-pi.vercel.app loads inventory without CORS errors
 
 When complete:
-- Write docs/handoffs/SESSION_024_<slug>.md.
+- Write docs/handoffs/SESSION_029_<slug>.md.
 - Overwrite 00-START-NEXT-SESSION.md for the following session.
 ```
 
@@ -161,8 +183,11 @@ When complete:
 
 ## Operational state
 
-- **Backend**: Django expected on `:8001`, Ollama llama3.2 on `:11434`.
-- **Frontend**: Vite expected on `:5173`.
+- **Backend (local)**: Django expected on `:8001`, Ollama llama3.2 on `:11434`.
+- **Backend (prod)**: `vehicle-match-api.onrender.com` — **NOT active**
+  as of 2026-07-30. Blueprint deploy pending.
+- **Frontend (local)**: Vite expected on `:5173`.
+- **Frontend (prod)**: https://vehicle-match-pi.vercel.app — live.
 - **Public routes**:
   - `/` — assistant-first dealership homepage.
   - `/assistant` — full-page public assistant.
@@ -194,7 +219,7 @@ for supported identity fields.
 
 If anything in this file disagrees with reality:
 
-1. The latest handoff (`docs/handoffs/SESSION_022_*.md`).
+1. The latest handoff (`docs/handoffs/SESSION_028_*.md`).
 2. `git log --oneline -10` (what actually shipped).
 3. `git show HEAD:frontend/src/<path>` (current source).
 
