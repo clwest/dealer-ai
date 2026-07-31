@@ -197,3 +197,52 @@ touching consumer code. The Freedom Ford legacy JPG logo at
 `public/sams-freedom-ford-logo.jpg` is preserved as an alternate-config
 asset; the shipped default logo is `public/branding/copper-canyon-logo.svg`.
 
+## Project rules (hand-written; load before implementation)
+
+> Outside the context-kit adopt block above. Hand-edited; survives
+> `context-kit adopt` / `seed` / `inventory` re-runs.
+
+**Read `docs/PROJECT_RULES.md` before starting any implementation
+work.** Adopted 2026-07-31 at the close of the discovery phase.
+The rules constrain every subsequent decision — for AI agents and
+human contributors alike.
+
+Summary of the rules (full text in `docs/PROJECT_RULES.md`):
+
+1. **Discovery Phase Complete** — no new product capabilities
+   unless they solve a problem documented in
+   `docs/research/`. The research corpus is the primary source
+   of business truth.
+2. **Discovery Rule** — every new idea must answer (a) which
+   documented business problem it solves, and (b) whether
+   solving that problem is required to complete the current
+   milestone. If either is No, defer (never discard).
+3. **Research Before Design** — maintain the chain
+   Business Reality → Research → Architecture →
+   Implementation. Implementation must cite architecture;
+   architecture must cite research.
+4. **Scope Discipline** — no feature creep, no "while we're
+   here" development. Ship small complete increments.
+5. **Preserve Existing Code** — first question is always
+   "what already exists that satisfies this business
+   requirement?" (see `docs/CAPABILITY_MATRIX.md`).
+6. **Build Around Operational Problems** — implementation is
+   driven by operational pain points, not by technology
+   interest.
+
+When asked to do something that would violate a rule, push back
+and cite the specific rule. When in doubt, ask for explicit
+approval to proceed against it.
+
+**The research corpus** (all in `docs/research/`, all
+committed at `ff0e986`):
+
+- `FINANCE_DEPARTMENT_MAPPING.md`
+- `ACCOUNTING_DEPARTMENT_MAPPING.md`
+- `SALES_DEPARTMENT_MAPPING.md`
+- `INVENTORY_ACQUISITION_MAPPING.md`
+- `RECON_MAPPING.md`
+- `BHPH_OPERATIONS_MAPPING.md`
+- `VEHICLE_CENTRIC_PIVOT.md` (architectural plan)
+- `INDEPENDENT_DEALER_PIVOT.md` (persona / scope plan)
+
