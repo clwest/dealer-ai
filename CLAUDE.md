@@ -246,3 +246,56 @@ committed at `ff0e986`):
 - `VEHICLE_CENTRIC_PIVOT.md` (architectural plan)
 - `INDEPENDENT_DEALER_PIVOT.md` (persona / scope plan)
 
+## Documentation governance (hand-written; load before touching docs)
+
+> Outside the context-kit adopt block above. Hand-edited; survives
+> `context-kit adopt` / `seed` / `inventory` re-runs.
+
+**Read `docs/DOC_GOVERNANCE.md` before creating, moving, or
+renaming any doc.** Adopted 2026-07-31 at SESSION_036. The rules
+keep the docs tree navigable as sessions accumulate.
+
+Six principles (full text in `docs/DOC_GOVERNANCE.md`):
+
+1. **Keep `/docs` organized continuously**, not through occasional
+   cleanup sessions.
+2. **Prefer updating authoritative documents** over creating
+   parallel versions.
+3. **Avoid duplicate documentation.**
+4. **Keep active references pointing only to authoritative
+   documents.** Historical docs are not linked from active
+   pointers.
+5. **Preserve historical documents as immutable records** unless
+   a factual correction is required.
+6. **Continuously maintain repository organization** as part of
+   normal development.
+
+Practical defaults:
+
+- **Prefer updating an authoritative doc over creating a new one.**
+  New docs are the exception, not the rule.
+- **Folder creation is rare.** Only when scope is genuinely new,
+  ≥5 files expected within 6 months, and grouping helps
+  cross-referencing. Never create a folder to hold one file.
+- **Handoffs are immutable.** Never rewrite older handoffs for
+  editorial reasons; only factual corrections.
+- **Rename with `git mv` + sweep active references in the same
+  commit.** Do not rename historical handoffs.
+- **Session end always produces a handoff at
+  `docs/handoffs/SESSION_NNN_<slug>.md`.** Overwrite
+  `00-START-NEXT-SESSION.md` with the next priority; it is not
+  appended-to.
+
+Terminal output discipline:
+
+- The terminal is an execution interface, not a report generator.
+- Report **what** is being done, **why** (if non-obvious),
+  **decisions**, **blockers**, **completion status** — nothing
+  else.
+- Long-form reasoning belongs in documentation, not in terminal
+  output.
+- End-of-turn summary: 1–2 sentences.
+
+When asked to do something that would violate governance, push
+back and cite the specific rule from `DOC_GOVERNANCE.md`.
+
