@@ -143,10 +143,10 @@ export default function DealerAIDemo() {
       {/* Demo Mode banner — frames the page for non-technical viewers
           so they immediately understand they're looking at the live
           customer-facing assistant. Pure presentational; no state. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ford-blue/20 bg-gradient-to-r from-ford-blue/5 via-white to-ford-accent/5 px-5 py-3 shadow-soft">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-blue/20 bg-gradient-to-r from-brand-blue/5 via-white to-brand-accent/5 px-5 py-3 shadow-soft">
         <div>
-          <div className="flex items-center gap-2 text-base font-bold text-ford-ink">
-            <Sparkles className="h-4 w-4 text-ford-accent" />
+          <div className="flex items-center gap-2 text-base font-bold text-brand-ink">
+            <Sparkles className="h-4 w-4 text-brand-accent" />
             AI Sales Assistant — Live Demo
           </div>
           <div className="text-xs text-slate-500">
@@ -170,11 +170,11 @@ export default function DealerAIDemo() {
       <section className="card flex h-[78vh] flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-ford-blue text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-blue text-white">
               <Sparkles className="h-4 w-4" />
             </div>
             <div>
-              <div className="text-sm font-bold text-ford-ink">
+              <div className="text-sm font-bold text-brand-ink">
                 {`Ask the ${brand.dealershipName} sales assistant`}
               </div>
               <div className="text-xs text-slate-500">
@@ -195,11 +195,11 @@ export default function DealerAIDemo() {
 
         <div
           ref={chatRef}
-          className="flex-1 space-y-4 overflow-y-auto bg-ford-mist/40 px-5 py-4"
+          className="flex-1 space-y-4 overflow-y-auto bg-brand-mist/40 px-5 py-4"
         >
           {messages.length === 0 && !sending && (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500">
-              <Sparkles className="h-6 w-6 text-ford-accent" />
+              <Sparkles className="h-6 w-6 text-brand-accent" />
               <div className="max-w-md text-sm">
                 {`Welcome to ${brand.dealershipName}. Tell me what you're shopping for — a payment, a body style, a must-have feature. I'll pull live inventory, sketch realistic numbers, and hand you off to a real advisor when you're ready.`}
               </div>
@@ -273,7 +273,7 @@ export default function DealerAIDemo() {
             </span>
             <button
               type="button"
-              className="font-semibold text-ford-accent hover:underline"
+              className="font-semibold text-brand-accent hover:underline"
               onClick={() => setLeadOpen(true)}
             >
               Talk to a real advisor →
@@ -292,7 +292,7 @@ export default function DealerAIDemo() {
         <div className="card p-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-bold text-ford-ink">
+              <div className="text-sm font-bold text-brand-ink">
                 Matched vehicles
               </div>
               <div className="text-xs text-slate-500">
@@ -313,8 +313,8 @@ export default function DealerAIDemo() {
           <VehicleSkeletonList />
         ) : matchedVehicles.length === 0 ? (
           <div className="card flex flex-col items-center justify-center gap-3 p-8 text-center text-sm text-slate-500">
-            <Car className="h-7 w-7 text-ford-accent" />
-            <div className="font-semibold text-ford-ink">
+            <Car className="h-7 w-7 text-brand-accent" />
+            <div className="font-semibold text-brand-ink">
               No vehicles matched yet
             </div>
             <p className="max-w-xs text-xs text-slate-500">
@@ -323,7 +323,7 @@ export default function DealerAIDemo() {
             </p>
             <Link
               to="/dealer-ai-admin"
-              className="text-xs font-semibold text-ford-accent hover:underline"
+              className="text-xs font-semibold text-brand-accent hover:underline"
             >
               Manager view: dashboard →
             </Link>

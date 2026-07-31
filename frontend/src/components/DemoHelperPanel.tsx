@@ -105,8 +105,8 @@ export default function DemoHelperPanel({ onPromptClick, onAfterAction }: Props)
         onClick={() => setOpen((o) => !o)}
       >
         <div className="flex items-center gap-2">
-          <Wand2 className="h-4 w-4 text-ford-accent" />
-          <span className="text-sm font-bold text-ford-ink">Demo controls</span>
+          <Wand2 className="h-4 w-4 text-brand-accent" />
+          <span className="text-sm font-bold text-brand-ink">Demo controls</span>
         </div>
         {open ? (
           <ChevronUp className="h-4 w-4 text-slate-400" />
@@ -173,7 +173,7 @@ export default function DemoHelperPanel({ onPromptClick, onAfterAction }: Props)
                     className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
                     title={p.prompt}
                   >
-                    <span className="font-semibold text-ford-ink">
+                    <span className="font-semibold text-brand-ink">
                       {p.label}
                     </span>
                   </button>

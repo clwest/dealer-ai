@@ -179,7 +179,7 @@ export default function LeadDetailModal({
       <div className="card flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-6 py-4">
           <div>
-            <div className="text-sm font-bold text-ford-ink">
+            <div className="text-sm font-bold text-brand-ink">
               Sales handoff packet
             </div>
             <div className="text-xs text-slate-500">
@@ -202,7 +202,7 @@ export default function LeadDetailModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-ford-ink"
+              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-brand-ink"
               aria-label="Close"
             >
               <X className="h-5 w-5" />
@@ -324,7 +324,7 @@ export default function LeadDetailModal({
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Customer
                   </div>
-                  <div className="mt-1 text-base font-bold text-ford-ink">
+                  <div className="mt-1 text-base font-bold text-brand-ink">
                     {packet.customer.name}
                   </div>
                   <div className="text-sm text-slate-600">
@@ -390,14 +390,14 @@ export default function LeadDetailModal({
                             <div className="h-12 w-20 rounded bg-slate-100" />
                           )}
                           <div className="flex-1">
-                            <div className="text-sm font-semibold text-ford-ink">
+                            <div className="text-sm font-semibold text-brand-ink">
                               {v.display_name}
                             </div>
                             <div className="text-xs text-slate-500">
                               Stock #{v.stock_number} · {v.condition}
                             </div>
                           </div>
-                          <div className="text-sm font-bold text-ford-blue">
+                          <div className="text-sm font-bold text-brand-blue">
                             {formatCurrency(v.price)}
                           </div>
                         </li>
@@ -411,7 +411,7 @@ export default function LeadDetailModal({
                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     AI conversation summary
                   </div>
-                  <div className="rounded-lg border border-slate-200 bg-ford-mist/40 p-3 text-sm leading-relaxed text-ford-ink">
+                  <div className="rounded-lg border border-slate-200 bg-brand-mist/40 p-3 text-sm leading-relaxed text-brand-ink">
                     {packet.conversation_summary || "—"}
                   </div>
                 </section>
@@ -447,7 +447,7 @@ export default function LeadDetailModal({
                       {copied === "message" ? "Copied" : "Copy message"}
                     </button>
                   </div>
-                  <div className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-sm leading-relaxed text-ford-ink">
+                  <div className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-sm leading-relaxed text-brand-ink">
                     {packet.suggested_message}
                   </div>
                 </section>
@@ -465,7 +465,7 @@ export default function LeadDetailModal({
                           className={cn(
                             "flex gap-2 text-sm",
                             m.role === "user"
-                              ? "text-ford-ink"
+                              ? "text-brand-ink"
                               : m.role === "system"
                                 ? "text-amber-700"
                                 : "text-slate-700",
@@ -473,7 +473,7 @@ export default function LeadDetailModal({
                         >
                           <span className="mt-0.5 shrink-0">
                             {m.role === "user" ? (
-                              <User className="h-3.5 w-3.5 text-ford-blue" />
+                              <User className="h-3.5 w-3.5 text-brand-blue" />
                             ) : m.role === "system" ? (
                               <span className="text-[10px] font-bold uppercase">
                                 sys

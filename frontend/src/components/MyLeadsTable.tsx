@@ -89,7 +89,7 @@ export default function MyLeadsTable({
                 className="cursor-pointer px-4 py-3"
                 onClick={() => onRowClick(lead.id)}
               >
-                <div className="font-semibold text-ford-ink">
+                <div className="font-semibold text-brand-ink">
                   {lead.name || "Anonymous"}
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs text-slate-500">

@@ -71,7 +71,7 @@ export default function AdvisorWorkspacePage() {
             <ChevronLeft className="h-3 w-3" />
             Back to dashboard
           </Link>
-          <h1 className="mt-2 text-2xl font-bold text-ford-ink">
+          <h1 className="mt-2 text-2xl font-bold text-brand-ink">
             Advisor workspace
           </h1>
           <p className="text-sm text-slate-500">
@@ -111,7 +111,7 @@ export default function AdvisorWorkspacePage() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     Open leads
                   </div>
-                  <div className="text-3xl font-bold text-ford-ink">
+                  <div className="text-3xl font-bold text-brand-ink">
                     {data.counts.open}
                   </div>
                 </div>
@@ -119,7 +119,7 @@ export default function AdvisorWorkspacePage() {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     Contacted (30d)
                   </div>
-                  <div className="text-3xl font-bold text-ford-ink">
+                  <div className="text-3xl font-bold text-brand-ink">
                     {data.counts.contacted}
                   </div>
                 </div>
@@ -134,7 +134,7 @@ export default function AdvisorWorkspacePage() {
 
           <section className="space-y-2">
             <div className="flex items-end justify-between">
-              <h2 className="text-sm font-bold text-ford-ink">
+              <h2 className="text-sm font-bold text-brand-ink">
                 Open leads
               </h2>
               <span className="text-xs text-slate-500">
@@ -151,7 +151,7 @@ export default function AdvisorWorkspacePage() {
 
           <section className="space-y-2">
             <div className="flex items-end justify-between">
-              <h2 className="text-sm font-bold text-ford-ink">
+              <h2 className="text-sm font-bold text-brand-ink">
                 Contacted recently
               </h2>
               <span className="text-xs text-slate-500">

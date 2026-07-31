@@ -132,7 +132,7 @@ function VariantCard({
         <button
           type="button"
           onClick={() => copyAndFlash("full", fullVariantText(variant))}
-          className="ml-auto inline-flex items-center gap-1 rounded-md border border-ford-blue bg-ford-blue px-2 py-1 text-[11px] font-semibold text-white hover:bg-ford-blue/90"
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-brand-blue bg-brand-blue px-2 py-1 text-[11px] font-semibold text-white hover:bg-brand-blue/90"
         >
           {copiedField === "full" ? (
             <Check className="h-3 w-3" />
@@ -152,7 +152,7 @@ function VariantCard({
             onChange={(e) =>
               onChange({ ...variant, edited_headline: e.target.value })
             }
-            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-ford-ink"
+            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-brand-ink"
           />
           <button
             type="button"
@@ -180,7 +180,7 @@ function VariantCard({
             onChange={(e) =>
               onChange({ ...variant, edited_body: e.target.value })
             }
-            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-ford-ink"
+            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-brand-ink"
           />
           <button
             type="button"
@@ -206,7 +206,7 @@ function VariantCard({
             onChange={(e) =>
               onChange({ ...variant, edited_cta: e.target.value })
             }
-            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-ford-ink"
+            className="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-brand-ink"
           />
           <button
             type="button"
@@ -293,7 +293,7 @@ export default function GenerateAdModal({
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Generate ad
             </div>
-            <h2 className="text-lg font-bold text-ford-ink">{action.title}</h2>
+            <h2 className="text-lg font-bold text-brand-ink">{action.title}</h2>
             <div className="mt-1 text-xs text-slate-500">
               {action.action_text}
             </div>

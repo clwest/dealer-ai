@@ -101,11 +101,11 @@ function LeadCard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-md border border-slate-200 bg-white p-3 text-left text-xs shadow-sm transition hover:border-ford-blue hover:shadow"
+      className="w-full rounded-md border border-slate-200 bg-white p-3 text-left text-xs shadow-sm transition hover:border-brand-blue hover:shadow"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
-          <div className="font-semibold text-ford-ink">
+          <div className="font-semibold text-brand-ink">
             {lead.name || "Anonymous"}
           </div>
           <div className="mt-0.5 text-[11px] text-slate-500">
@@ -344,7 +344,7 @@ export default function SalesPipeline({
     <section className="card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
         <div>
-          <h2 className="text-sm font-bold text-ford-ink">Sales pipeline</h2>
+          <h2 className="text-sm font-bold text-brand-ink">Sales pipeline</h2>
           <div className="text-xs text-slate-500">
             {data
               ? `Generated ${timeAgo(data.generated_at)}`
@@ -377,7 +377,7 @@ export default function SalesPipeline({
       <div className="border-t border-slate-200 px-5 py-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-ford-ink">
+            <h3 className="text-sm font-bold text-brand-ink">
               Demand vs supply
             </h3>
             <div className="text-xs text-slate-500">

@@ -5,10 +5,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Existing Ford brand palette — preserved.
-        ford: {
-          blue: "#003478",
-          accent: "#1c69d4",
+        // Brand palette — dealer-agnostic slots (blue = signature cool
+        // color, accent = signature warm color, plus three neutrals).
+        // Post-SESSION_030 pivot values ship the Copper Canyon Auto
+        // (Yuma, AZ) indie persona: softer desert-sky blue in the
+        // signature slot, warm terracotta in the accent slot. Neutrals
+        // unchanged — they're brand-agnostic across dealer configs.
+        //
+        // Franchise deployments swap values here (e.g. Freedom Ford
+        // used blue=#003478 and accent=#1c69d4). Consumers reference
+        // brand.blue / brand.accent by role, not by literal color, so
+        // a palette swap in this file recolors the whole UI without
+        // touching component code.
+        brand: {
+          blue: "#3f6b90",
+          accent: "#c76b3a",
           ink: "#0a0e14",
           ash: "#3b4453",
           mist: "#eef2f8",

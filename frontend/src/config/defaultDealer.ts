@@ -84,7 +84,7 @@ export interface DealerConfig {
    *  uploaded URL and fall back to this static asset. */
   logoPath: string;
   /** Hex / token note describing the brand's primary color. The
-   *  OS shell uses the `ford.blue` Tailwind token by default; this
+   *  OS shell uses the `brand.blue` Tailwind token by default; this
    *  field is informational for future skinning sessions. */
   primaryColorNote: string;
 }

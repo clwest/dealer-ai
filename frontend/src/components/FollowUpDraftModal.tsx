@@ -131,7 +131,7 @@ function DraftCard({
         <button
           type="button"
           onClick={() => copyAndFlash("full", fullDraftText(draft))}
-          className="ml-auto inline-flex items-center gap-1 rounded-md border border-ford-blue bg-ford-blue px-2 py-1 text-[11px] font-semibold text-white hover:bg-ford-blue/90"
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-brand-blue bg-brand-blue px-2 py-1 text-[11px] font-semibold text-white hover:bg-brand-blue/90"
         >
           {copiedField === "full" ? (
             <Check className="h-3 w-3" />
@@ -151,7 +151,7 @@ function DraftCard({
             onChange={(e) =>
               onChange({ ...draft, edited_subject: e.target.value })
             }
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm text-ford-ink"
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm text-brand-ink"
           />
         </label>
       ) : null}
@@ -164,7 +164,7 @@ function DraftCard({
           onChange={(e) =>
             onChange({ ...draft, edited_body: e.target.value })
           }
-          className="rounded-md border border-slate-300 px-2 py-1 text-sm text-ford-ink"
+          className="rounded-md border border-slate-300 px-2 py-1 text-sm text-brand-ink"
         />
       </label>
     </div>
@@ -223,7 +223,7 @@ export default function FollowUpDraftModal({
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Draft follow-up
             </div>
-            <h2 className="text-lg font-bold text-ford-ink">
+            <h2 className="text-lg font-bold text-brand-ink">
               {lead.name || "Lead"}
             </h2>
             <div className="mt-1 text-xs text-slate-500">
@@ -253,7 +253,7 @@ export default function FollowUpDraftModal({
                   className={cn(
                     "rounded px-2.5 py-1 text-xs font-semibold",
                     channel === c
-                      ? "bg-white text-ford-ink shadow"
+                      ? "bg-white text-brand-ink shadow"
                       : "text-slate-500 hover:text-slate-700",
                   )}
                 >
@@ -270,7 +270,7 @@ export default function FollowUpDraftModal({
                   className={cn(
                     "rounded px-2.5 py-1 text-xs font-semibold capitalize",
                     tone === t
-                      ? "bg-white text-ford-ink shadow"
+                      ? "bg-white text-brand-ink shadow"
                       : "text-slate-500 hover:text-slate-700",
                   )}
                 >
@@ -282,7 +282,7 @@ export default function FollowUpDraftModal({
               type="button"
               onClick={generate}
               disabled={loading}
-              className="ml-auto inline-flex items-center gap-1 rounded-md border border-ford-blue bg-ford-blue px-3 py-1 text-xs font-semibold text-white hover:bg-ford-blue/90 disabled:opacity-60"
+              className="ml-auto inline-flex items-center gap-1 rounded-md border border-brand-blue bg-brand-blue px-3 py-1 text-xs font-semibold text-white hover:bg-brand-blue/90 disabled:opacity-60"
             >
               {loading ? (
                 <Loader2 className="h-3 w-3 animate-spin" />

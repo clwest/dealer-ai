@@ -108,7 +108,7 @@ export default function ManagerChatPage() {
         )}
         {status === "sending" ? (
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-ford-blue" />
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-brand-blue" />
             Assistant is replying…
           </div>
         ) : null}
@@ -145,8 +145,8 @@ export default function ManagerChatPage() {
           type="submit"
           disabled={!draft.trim() || status === "sending"}
           className={cn(
-            "inline-flex items-center gap-2 rounded-md bg-ford-blue px-4 py-2 text-sm font-semibold text-white transition",
-            "hover:bg-ford-blue/90 disabled:cursor-not-allowed disabled:bg-slate-300",
+            "inline-flex items-center gap-2 rounded-md bg-brand-blue px-4 py-2 text-sm font-semibold text-white transition",
+            "hover:bg-brand-blue/90 disabled:cursor-not-allowed disabled:bg-slate-300",
           )}
         >
           <Send className="h-4 w-4" />
@@ -185,7 +185,7 @@ function ManagerBubble({ turn }: { turn: Turn }) {
             "whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-soft",
             isUser
               ? "rounded-br-md bg-primary text-primary-foreground"
-              : "rounded-bl-md bg-white text-ford-ink",
+              : "rounded-bl-md bg-white text-brand-ink",
           )}
         >
           {turn.content}

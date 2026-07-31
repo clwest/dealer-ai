@@ -183,7 +183,7 @@ export default function AuditPanel({ refreshKey }: Props) {
             <Shield className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-ford-ink">
+            <h2 className="text-sm font-bold text-brand-ink">
               AI safety &amp; guard events
             </h2>
             <div className="text-xs text-slate-500">
@@ -201,7 +201,7 @@ export default function AuditPanel({ refreshKey }: Props) {
               className={cn(
                 "rounded-md border px-2.5 py-1 text-xs font-medium transition",
                 window === w
-                  ? "border-ford-blue bg-ford-blue text-white"
+                  ? "border-brand-blue bg-brand-blue text-white"
                   : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
               )}
             >
@@ -316,7 +316,7 @@ function AuditDrilldownModal({
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <div>
-            <h3 className="text-sm font-bold text-ford-ink">
+            <h3 className="text-sm font-bold text-brand-ink">
               {flagDisplay(drilldown.flag)}
             </h3>
             <div className="text-xs text-slate-500">

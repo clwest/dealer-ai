@@ -85,7 +85,7 @@ export default function LeadCaptureModal({
       <div className="card w-full max-w-lg p-6">
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-lg font-bold text-ford-ink">
+            <div className="text-lg font-bold text-brand-ink">
               {`Connect with a ${brand.dealershipName} advisor`}
             </div>
             <div className="mt-1 text-sm text-slate-500">
@@ -95,7 +95,7 @@ export default function LeadCaptureModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-ford-ink"
+            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-brand-ink"
             aria-label="Close"
           >
             <X className="h-5 w-5" />

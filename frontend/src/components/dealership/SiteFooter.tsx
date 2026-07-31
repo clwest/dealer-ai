@@ -53,7 +53,7 @@ export default function SiteFooter() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-border bg-ford-ink text-white">
+    <footer className="border-t border-border bg-brand-ink text-white">
       <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-3">
@@ -64,7 +64,7 @@ export default function SiteFooter() {
               {brand.tagline}
             </div>
             <div className="flex items-center gap-2 text-sm text-white/80">
-              <MapPin className="h-4 w-4 text-ford-accent" />
+              <MapPin className="h-4 w-4 text-brand-accent" />
               <span>{DEMO_ADDRESS}</span>
             </div>
             <div className="flex flex-col gap-1.5 text-sm">
@@ -72,14 +72,14 @@ export default function SiteFooter() {
                 href={`tel:${DEMO_SALES_PHONE.replace(/\D/g, "")}`}
                 className="flex items-center gap-2 text-white/80 hover:text-white"
               >
-                <Phone className="h-4 w-4 text-ford-accent" />
+                <Phone className="h-4 w-4 text-brand-accent" />
                 Sales · {DEMO_SALES_PHONE}
               </a>
               <a
                 href={`tel:${DEMO_SERVICE_PHONE.replace(/\D/g, "")}`}
                 className="flex items-center gap-2 text-white/80 hover:text-white"
               >
-                <Phone className="h-4 w-4 text-ford-accent" />
+                <Phone className="h-4 w-4 text-brand-accent" />
                 Service · {DEMO_SERVICE_PHONE}
               </a>
             </div>
@@ -117,7 +117,7 @@ export default function SiteFooter() {
           </div>
           <div className="flex items-center gap-4">
             <span className="inline-flex items-center gap-1.5">
-              <Bot className="h-3.5 w-3.5 text-ford-accent" />
+              <Bot className="h-3.5 w-3.5 text-brand-accent" />
               Powered by {PRODUCT.productName} · {PRODUCT.productSubtitle}
             </span>
             <Link

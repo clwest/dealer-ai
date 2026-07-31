@@ -63,7 +63,7 @@ export default function ChatBubble({ message }: Props) {
       <div
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-          isUser ? "bg-ford-blue text-white" : "bg-slate-900 text-white",
+          isUser ? "bg-brand-blue text-white" : "bg-slate-900 text-white",
         )}
       >
         {isUser ? (
@@ -76,8 +76,8 @@ export default function ChatBubble({ message }: Props) {
         className={cn(
           "max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-soft",
           isUser
-            ? "rounded-br-md bg-ford-blue text-white"
-            : "rounded-bl-md bg-white text-ford-ink",
+            ? "rounded-br-md bg-brand-blue text-white"
+            : "rounded-bl-md bg-white text-brand-ink",
         )}
       >
         {parsed ? (
@@ -119,7 +119,7 @@ export default function ChatBubble({ message }: Props) {
               <div className="whitespace-pre-wrap">{parsed.explanation}</div>
             ) : null}
             {parsed.question ? (
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-ford-ink">
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-brand-ink">
                 {parsed.question}
               </div>
             ) : null}

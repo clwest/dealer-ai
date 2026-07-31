@@ -29,7 +29,7 @@ export default function VehicleCard({
     <div
       className={cn(
         "card group flex w-full flex-col overflow-hidden text-left transition hover:-translate-y-0.5 hover:shadow-lg",
-        selected && "ring-2 ring-ford-accent",
+        selected && "ring-2 ring-brand-accent",
       )}
     >
       <button
@@ -63,7 +63,7 @@ export default function VehicleCard({
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <div className="text-base font-semibold leading-tight text-ford-ink">
+            <div className="text-base font-semibold leading-tight text-brand-ink">
               {vehicle.display_name}
             </div>
             <div className="text-xs text-slate-500">
@@ -72,7 +72,7 @@ export default function VehicleCard({
             </div>
           </div>
           <div className="text-right">
-            <div className="text-base font-bold text-ford-blue">
+            <div className="text-base font-bold text-brand-blue">
               {formatCurrency(vehicle.price)}
             </div>
             {vehicle.msrp && Number(vehicle.msrp) > Number(vehicle.price) ? (
@@ -132,7 +132,7 @@ export default function VehicleCard({
                 "inline-flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition",
                 selected
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                  : "border-slate-200 bg-white text-ford-ink hover:bg-slate-50",
+                  : "border-slate-200 bg-white text-brand-ink hover:bg-slate-50",
               )}
             >
               <CheckCircle2 className="h-4 w-4" />

@@ -137,7 +137,7 @@ export default function HandoffQueue({ refreshKey, onRowClick }: Props) {
             <Inbox className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-ford-ink">
+            <h2 className="text-sm font-bold text-brand-ink">
               Handoff queue
             </h2>
             <div className="text-xs text-slate-500">
@@ -156,7 +156,7 @@ export default function HandoffQueue({ refreshKey, onRowClick }: Props) {
                 className={cn(
                   "rounded-md border px-2.5 py-1 text-xs font-medium transition",
                   preset === p
-                    ? "border-ford-blue bg-ford-blue text-white"
+                    ? "border-brand-blue bg-brand-blue text-white"
                     : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
                 )}
               >
@@ -248,7 +248,7 @@ export default function HandoffQueue({ refreshKey, onRowClick }: Props) {
                   {timeAgo(lead.created_at)}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="font-semibold text-ford-ink">{lead.name}</div>
+                  <div className="font-semibold text-brand-ink">{lead.name}</div>
                   <div className="text-xs text-slate-500">
                     {lead.phone || lead.email || "—"}
                   </div>

@@ -139,7 +139,7 @@ function SpecRow({
       <span className="flex-none text-[10px] uppercase tracking-wide text-slate-500">
         {label}
       </span>
-      <span className="min-w-0 truncate text-xs font-medium text-ford-ink">
+      <span className="min-w-0 truncate text-xs font-medium text-brand-ink">
         {value}
       </span>
     </div>
@@ -183,10 +183,10 @@ export default function ChatVehicleCard({ parsed, matched }: Props) {
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="min-w-0 text-sm font-semibold leading-tight text-ford-ink sm:text-base">
+              <h3 className="min-w-0 text-sm font-semibold leading-tight text-brand-ink sm:text-base">
                 {matched.display_name}
               </h3>
-              <div className="flex-none whitespace-nowrap text-base font-bold text-ford-blue sm:text-lg">
+              <div className="flex-none whitespace-nowrap text-base font-bold text-brand-blue sm:text-lg">
                 {formatCurrency(matched.price)}
               </div>
             </div>
@@ -324,11 +324,11 @@ export default function ChatVehicleCard({ parsed, matched }: Props) {
   return (
     <article className="rounded-md border border-slate-200 bg-white p-2.5 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 truncate text-sm text-ford-ink">
+        <div className="min-w-0 truncate text-sm text-brand-ink">
           {parsed.display_text}
         </div>
         {parsed.price ? (
-          <div className="flex-none text-sm font-bold text-ford-blue">
+          <div className="flex-none text-sm font-bold text-brand-blue">
             {formatCurrency(parsed.price)}
           </div>
         ) : null}

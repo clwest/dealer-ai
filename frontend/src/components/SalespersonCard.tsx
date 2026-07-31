@@ -61,7 +61,7 @@ export default function SalespersonCard({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <div className="text-sm font-bold text-ford-ink">
+            <div className="text-sm font-bold text-brand-ink">
               {advisor.name}
             </div>
             {showInactiveBadge && inactive ? (
@@ -95,7 +95,7 @@ export default function SalespersonCard({
               <Phone className="h-3 w-3 text-slate-400" />
               <a
                 href={`tel:${admin.phone}`}
-                className="hover:text-ford-blue"
+                className="hover:text-brand-blue"
               >
                 {admin.phone}
               </a>
@@ -106,7 +106,7 @@ export default function SalespersonCard({
               <Mail className="h-3 w-3 text-slate-400" />
               <a
                 href={`mailto:${admin.email}`}
-                className="hover:text-ford-blue"
+                className="hover:text-brand-blue"
               >
                 {admin.email}
               </a>
@@ -123,7 +123,7 @@ export default function SalespersonCard({
       {showWorkspaceLink && advisor.is_active ? (
         <Link
           to={`/dealer-ai-advisor/${advisor.slug}`}
-          className="mt-auto inline-flex items-center justify-center rounded-md border border-ford-blue bg-white px-2.5 py-1 text-[11px] font-semibold text-ford-blue hover:bg-ford-blue hover:text-white"
+          className="mt-auto inline-flex items-center justify-center rounded-md border border-brand-blue bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-blue hover:bg-brand-blue hover:text-white"
         >
           Open workspace →
         </Link>

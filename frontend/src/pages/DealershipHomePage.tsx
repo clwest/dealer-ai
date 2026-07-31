@@ -83,7 +83,7 @@ export default function DealershipHomePage() {
         </section>
         <section
           id="trade-in"
-          className="border-b border-border bg-ford-ink py-14 text-white"
+          className="border-b border-border bg-brand-ink py-14 text-white"
         >
           <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
             <div className="max-w-2xl">
@@ -102,7 +102,7 @@ export default function DealershipHomePage() {
             <Button
               asChild
               size="lg"
-              className="h-11 gap-2 bg-white px-4 text-ford-ink hover:bg-ford-mist"
+              className="h-11 gap-2 bg-white px-4 text-brand-ink hover:bg-brand-mist"
             >
               <Link to="/assistant?prompt=I have a trade-in and need a truck">
                 Ask about my trade

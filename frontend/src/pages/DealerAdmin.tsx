@@ -167,7 +167,7 @@ export default function DealerAdmin() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-ford-ink">Manager dashboard</h1>
+          <h1 className="text-2xl font-bold text-brand-ink">Manager dashboard</h1>
           <p className="text-sm text-slate-500">
             Snapshot of customer activity, lead pipeline, and inventory pull.
           </p>
@@ -268,7 +268,7 @@ export default function DealerAdmin() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Top models */}
         <section className="card p-5">
-          <h2 className="mb-3 text-sm font-bold text-ford-ink">
+          <h2 className="mb-3 text-sm font-bold text-brand-ink">
             Top requested models
           </h2>
           {trends && trends.top_requested_models.length > 0 ? (
@@ -292,7 +292,7 @@ export default function DealerAdmin() {
 
         {/* Top vehicle types */}
         <section className="card p-5">
-          <h2 className="mb-3 text-sm font-bold text-ford-ink">
+          <h2 className="mb-3 text-sm font-bold text-brand-ink">
             Top requested vehicle types
           </h2>
           {trends && trends.top_requested_vehicle_types.length > 0 ? (
@@ -316,7 +316,7 @@ export default function DealerAdmin() {
 
         {/* Most selected vehicles */}
         <section className="card p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-ford-ink">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-brand-ink">
             <CarFront className="h-4 w-4" /> Most-selected vehicles
           </h2>
           {trends && trends.most_selected_vehicles.length > 0 ? (
@@ -356,7 +356,7 @@ export default function DealerAdmin() {
       {/* Recent leads table */}
       <section className="card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h2 className="text-sm font-bold text-ford-ink">Recent leads</h2>
+          <h2 className="text-sm font-bold text-brand-ink">Recent leads</h2>
           <span className="text-xs text-slate-500">
             {leads.length} of {trends?.total_leads ?? 0}
           </span>
@@ -394,7 +394,7 @@ export default function DealerAdmin() {
                     {timeAgo(lead.created_at)}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-semibold text-ford-ink">{lead.name}</div>
+                    <div className="font-semibold text-brand-ink">{lead.name}</div>
                     <div className="text-xs text-slate-500">
                       {lead.phone || lead.email || "—"}
                     </div>
@@ -446,7 +446,7 @@ export default function DealerAdmin() {
       {/* Recent sessions table */}
       <section className="card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h2 className="text-sm font-bold text-ford-ink">Recent chat sessions</h2>
+          <h2 className="text-sm font-bold text-brand-ink">Recent chat sessions</h2>
           <span className="text-xs text-slate-500">
             {sessions.length} of {trends?.total_chat_sessions ?? 0}
           </span>
@@ -489,7 +489,7 @@ export default function DealerAdmin() {
                       {timeAgo(s.updated_at)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-ford-ink">
+                      <div className="font-medium text-brand-ink">
                         {s.customer_name || "Anonymous"}
                       </div>
                       <div className="text-xs text-slate-500">
@@ -538,7 +538,7 @@ export default function DealerAdmin() {
       {/* Recent intents */}
       {trends && trends.recent_customer_intents.length > 0 && (
         <section className="card p-5">
-          <h2 className="mb-3 text-sm font-bold text-ford-ink">
+          <h2 className="mb-3 text-sm font-bold text-brand-ink">
             Recent customer intents
           </h2>
           <div className="flex flex-wrap gap-2">

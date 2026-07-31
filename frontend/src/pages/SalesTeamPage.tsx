@@ -54,7 +54,7 @@ export default function SalesTeamPage() {
             <ChevronLeft className="h-3 w-3" />
             Back to dashboard
           </Link>
-          <h1 className="mt-2 text-2xl font-bold text-ford-ink">
+          <h1 className="mt-2 text-2xl font-bold text-brand-ink">
             Sales team
           </h1>
           <p className="text-sm text-slate-500">

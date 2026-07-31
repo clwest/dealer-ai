@@ -77,7 +77,7 @@ function ActionCard({
         </span>
       </div>
 
-      <div className="text-sm font-semibold text-ford-ink">{action.title}</div>
+      <div className="text-sm font-semibold text-brand-ink">{action.title}</div>
       <div className="text-xs text-slate-600">{action.explanation}</div>
       <div className="text-xs font-medium text-slate-800">
         {action.action_text}
@@ -114,7 +114,7 @@ function ActionCard({
               onClick={() =>
                 action.cta && onCTA?.(action.cta, action)
               }
-              className="rounded-md border border-ford-blue bg-ford-blue px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ford-blue/90"
+              className="rounded-md border border-brand-blue bg-brand-blue px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-blue/90"
             >
               {ctaLabel} →
             </button>
@@ -140,7 +140,7 @@ export default function RecommendedActions({
     <section className="card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
         <div>
-          <h2 className="text-sm font-bold text-ford-ink">
+          <h2 className="text-sm font-bold text-brand-ink">
             Recommended actions
           </h2>
           <div className="text-xs text-slate-500">

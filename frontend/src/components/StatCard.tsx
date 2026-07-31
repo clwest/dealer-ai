@@ -9,7 +9,7 @@ interface Props {
 }
 
 const toneStyle: Record<NonNullable<Props["tone"]>, string> = {
-  default: "text-ford-blue",
+  default: "text-brand-blue",
   warn: "text-amber-600",
   good: "text-emerald-600",
 };

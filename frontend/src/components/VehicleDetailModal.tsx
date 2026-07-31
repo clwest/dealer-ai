@@ -111,13 +111,13 @@ export default function VehicleDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
       <div className="card flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <div className="text-sm font-bold text-ford-ink">
+          <div className="text-sm font-bold text-brand-ink">
             Vehicle details
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-ford-ink"
+            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-brand-ink"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -164,12 +164,12 @@ export default function VehicleDetailModal({
                     <div className="text-xs uppercase tracking-wide text-slate-500">
                       Stock #{v.stock_number}
                     </div>
-                    <div className="text-xl font-bold text-ford-ink">
+                    <div className="text-xl font-bold text-brand-ink">
                       {v.display_name}
                     </div>
                   </div>
                   <div className="flex items-baseline gap-3">
-                    <span className="text-2xl font-bold text-ford-blue">
+                    <span className="text-2xl font-bold text-brand-blue">
                       {formatCurrency(v.price)}
                     </span>
                     {v.msrp && Number(v.msrp) > Number(v.price) && (
@@ -248,7 +248,7 @@ export default function VehicleDetailModal({
 
               {/* Payment table */}
               <section>
-                <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-ford-ink">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-ink">
                   <CircleDollarSign className="h-4 w-4" /> Payment estimates
                 </h3>
                 <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -284,7 +284,7 @@ export default function VehicleDetailModal({
               {/* Affordability notes */}
               {detail.affordability_notes.length > 0 && (
                 <section>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-ford-ink">
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-ink">
                     <Sparkles className="h-4 w-4" /> Affordability notes
                   </h3>
                   <ul className="space-y-2 text-sm text-slate-700">
@@ -302,7 +302,7 @@ export default function VehicleDetailModal({
 
               {/* Ask AI */}
               <section>
-                <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-ford-ink">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-ink">
                   <Sparkles className="h-4 w-4" /> Ask about this vehicle
                 </h3>
                 <div className="mb-3 flex flex-wrap gap-2">
@@ -346,7 +346,7 @@ export default function VehicleDetailModal({
                   </button>
                 </form>
                 {answer && (
-                  <div className="mt-3 rounded-lg bg-ford-mist p-4 text-sm leading-relaxed text-ford-ink">
+                  <div className="mt-3 rounded-lg bg-brand-mist p-4 text-sm leading-relaxed text-brand-ink">
                     {answer}
                   </div>
                 )}
@@ -355,7 +355,7 @@ export default function VehicleDetailModal({
               {/* Similar */}
               {detail.similar_vehicles.length > 0 && (
                 <section>
-                  <h3 className="mb-2 text-sm font-bold text-ford-ink">
+                  <h3 className="mb-2 text-sm font-bold text-brand-ink">
                     Similar vehicles
                   </h3>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -380,7 +380,7 @@ export default function VehicleDetailModal({
                           <div className="text-xs text-slate-500">
                             Stock #{sv.stock_number} · {sv.condition}
                           </div>
-                          <div className="text-sm font-semibold text-ford-blue">
+                          <div className="text-sm font-semibold text-brand-blue">
                             {formatCurrency(sv.price)}
                           </div>
                         </div>

@@ -40,7 +40,7 @@ export default function AssistantBand() {
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12">
           <div className="lg:sticky lg:top-32 lg:self-start">
-            <div className="inline-flex items-center gap-2 rounded-full border border-ford-blue/20 bg-ford-blue/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-ford-blue">
+            <div className="inline-flex items-center gap-2 rounded-full border border-brand-blue/20 bg-brand-blue/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-brand-blue">
               <Bot className="h-3.5 w-3.5" />
               The AI difference
             </div>
@@ -49,7 +49,7 @@ export default function AssistantBand() {
               className="mt-4 text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
             >
               Tell us what you need.
-              <span className="block text-ford-blue">
+              <span className="block text-brand-blue">
                 We'll do the homework.
               </span>
             </h2>
@@ -62,21 +62,21 @@ export default function AssistantBand() {
 
             <ul className="mt-6 space-y-3 text-sm text-foreground">
               <li className="flex gap-3">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ford-blue" />
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-blue" />
                 <span>
                   <strong className="font-semibold">Current inventory.</strong>{" "}
                   Pulls from current inventory.
                 </span>
               </li>
               <li className="flex gap-3">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ford-blue" />
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-blue" />
                 <span>
                   <strong className="font-semibold">Payment-aware.</strong>{" "}
                   Payment details stay on the vehicle cards.
                 </span>
               </li>
               <li className="flex gap-3">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-ford-blue" />
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-blue" />
                 <span>
                   <strong className="font-semibold">Live human handoff.</strong>{" "}
                   When you're ready, a real {brand.storeLocation} salesperson
@@ -89,7 +89,7 @@ export default function AssistantBand() {
               asChild
               variant="outline"
               size="lg"
-              className="mt-8 h-11 gap-2 border-ford-blue/30 px-4 text-sm font-semibold text-ford-blue hover:bg-ford-blue/5"
+              className="mt-8 h-11 gap-2 border-brand-blue/30 px-4 text-sm font-semibold text-brand-blue hover:bg-brand-blue/5"
             >
               <Link to="/assistant">
                 Open full assistant
@@ -101,7 +101,7 @@ export default function AssistantBand() {
           <div className="rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-6">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-ford-blue text-white">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-blue text-white">
                   <Bot className="h-4 w-4" />
                 </span>
                 {brand.embedAssistantName}

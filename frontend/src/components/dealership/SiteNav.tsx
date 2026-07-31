@@ -84,7 +84,7 @@ export default function SiteNav() {
           <Button
             asChild
             size="lg"
-            className="h-10 gap-1.5 bg-ford-blue px-4 text-sm font-semibold text-white hover:bg-ford-accent"
+            className="h-10 gap-1.5 bg-brand-blue px-4 text-sm font-semibold text-white hover:bg-brand-accent"
           >
             <Link to="/assistant">
               <Bot className="h-4 w-4" />
@@ -133,7 +133,7 @@ export default function SiteNav() {
             <Button
               asChild
               size="lg"
-              className="h-12 justify-start gap-2 bg-ford-blue text-white hover:bg-ford-accent"
+              className="h-12 justify-start gap-2 bg-brand-blue text-white hover:bg-brand-accent"
             >
               <Link to="/assistant">
                 <MessageCircle className="h-5 w-5" />
@@ -157,7 +157,7 @@ export default function SiteNav() {
 function InfoStrip() {
   const brand = useBrand();
   return (
-    <div className="hidden bg-ford-ink text-[11px] text-white/80 md:block">
+    <div className="hidden bg-brand-ink text-[11px] text-white/80 md:block">
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6 lg:px-8">
         <div className="flex items-center gap-4">
           <span>Sales · Mon–Sat 8:30–7</span>
@@ -223,7 +223,7 @@ function BrandMark({ brand }: { brand: Brand }) {
 
   if (errored) {
     return (
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-ford-blue text-xs font-bold text-white">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-brand-blue text-xs font-bold text-white">
         SF
       </span>
     );

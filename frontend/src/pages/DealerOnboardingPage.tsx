@@ -340,7 +340,7 @@ export default function DealerOnboardingPage() {
     return (
       <div className="card flex items-center gap-3 px-6 py-5 text-sm text-slate-500">
         <span
-          className="inline-block h-3 w-3 animate-pulse rounded-full bg-ford-blue"
+          className="inline-block h-3 w-3 animate-pulse rounded-full bg-brand-blue"
           aria-hidden
         />
         Loading onboarding profile…
@@ -351,7 +351,7 @@ export default function DealerOnboardingPage() {
   if (loadStatus === "error") {
     return (
       <div className="card px-6 py-5">
-        <h1 className="text-lg font-bold text-ford-ink">Dealership Onboarding</h1>
+        <h1 className="text-lg font-bold text-brand-ink">Dealership Onboarding</h1>
         <p className="mt-2 text-sm text-rose-600">
           Failed to load onboarding profile: {loadError ?? "unknown error"}
         </p>
@@ -370,7 +370,7 @@ export default function DealerOnboardingPage() {
                 setLoadError(err instanceof Error ? err.message : String(err));
               });
           }}
-          className="mt-4 rounded-md bg-ford-blue px-4 py-2 text-sm font-semibold text-white hover:bg-ford-blue/90"
+          className="mt-4 rounded-md bg-brand-blue px-4 py-2 text-sm font-semibold text-white hover:bg-brand-blue/90"
         >
           Retry
         </button>
@@ -383,11 +383,11 @@ export default function DealerOnboardingPage() {
       {/* Section 1 — Welcome / setup status */}
       <div className="card flex flex-wrap items-center justify-between gap-4 px-6 py-5">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ford-blue text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-blue text-white">
             <Sparkles className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-ford-ink">
+            <h1 className="text-lg font-bold text-brand-ink">
               Dealership Onboarding
             </h1>
             <p className="text-sm text-slate-500">
@@ -409,7 +409,7 @@ export default function DealerOnboardingPage() {
           </span>
           <Link
             to="/dealer-ai-demo"
-            className="text-sm font-semibold text-ford-accent hover:underline"
+            className="text-sm font-semibold text-brand-accent hover:underline"
           >
             Open customer demo →
           </Link>
@@ -537,7 +537,7 @@ export default function DealerOnboardingPage() {
         right={
           <Link
             to="/dealer-ai-admin/team"
-            className="text-xs font-semibold text-ford-accent hover:underline"
+            className="text-xs font-semibold text-brand-accent hover:underline"
           >
             Manage full team →
           </Link>
@@ -679,7 +679,7 @@ export default function DealerOnboardingPage() {
                   <span
                     className={`text-sm ${
                       checked
-                        ? "font-semibold text-ford-ink"
+                        ? "font-semibold text-brand-ink"
                         : "text-slate-600"
                     }`}
                   >
@@ -712,7 +712,7 @@ export default function DealerOnboardingPage() {
           type="button"
           onClick={handleSave}
           disabled={saveStatus === "saving"}
-          className="rounded-md bg-ford-blue px-5 py-2 text-sm font-semibold text-white transition hover:bg-ford-blue/90 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="rounded-md bg-brand-blue px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-blue/90 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {saveStatus === "saving" ? "Saving…" : "Save changes"}
         </button>
@@ -841,7 +841,7 @@ function StatusRow({
       <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </div>
-      <div className="mt-1 text-sm text-ford-ink">{children}</div>
+      <div className="mt-1 text-sm text-brand-ink">{children}</div>
     </div>
   );
 }
@@ -857,11 +857,11 @@ function SectionCard({
     <section className="card px-6 py-5">
       <header className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ford-blue/10 text-ford-blue">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-blue/10 text-brand-blue">
             {icon}
           </div>
           <div>
-            <h2 className="text-base font-bold text-ford-ink">{title}</h2>
+            <h2 className="text-base font-bold text-brand-ink">{title}</h2>
             {subtitle ? (
               <p className="text-xs text-slate-500">{subtitle}</p>
             ) : null}
@@ -939,11 +939,11 @@ function LogoUploadField({
         className={`flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-4 py-3 transition ${
           uploading
             ? "border-slate-200 bg-slate-50 text-slate-400"
-            : "border-slate-300 bg-white text-ford-ink hover:border-ford-blue/60 hover:bg-ford-blue/5"
+            : "border-slate-300 bg-white text-brand-ink hover:border-brand-blue/60 hover:bg-brand-blue/5"
         }`}
       >
         <span className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-ford-blue/10 text-ford-blue">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-blue/10 text-brand-blue">
             {uploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

@@ -34,7 +34,7 @@ export default function Hero() {
   const brand = useBrand();
 
   return (
-    <section className="relative isolate min-h-[680px] overflow-hidden bg-ford-ink text-white">
+    <section className="relative isolate min-h-[680px] overflow-hidden bg-brand-ink text-white">
       <div
         className="absolute inset-0 -z-20"
         aria-hidden
@@ -45,7 +45,7 @@ export default function Hero() {
           className="h-full w-full object-cover"
         />
       </div>
-      <div className="absolute inset-0 -z-10 bg-ford-ink/75" aria-hidden />
+      <div className="absolute inset-0 -z-10 bg-brand-ink/75" aria-hidden />
       <div className="absolute inset-x-0 bottom-0 -z-10 h-32 bg-gradient-to-t from-background to-transparent" />
 
       <div className="mx-auto grid w-full max-w-7xl items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-20 lg:px-8 lg:py-24">
@@ -73,7 +73,7 @@ export default function Hero() {
             <Button
               asChild
               size="lg"
-              className="h-12 gap-2 bg-white px-5 text-sm font-semibold text-ford-blue shadow-soft hover:bg-ford-mist"
+              className="h-12 gap-2 bg-white px-5 text-sm font-semibold text-brand-blue shadow-soft hover:bg-brand-mist"
             >
               <Link to="/assistant">
                 <Bot className="h-5 w-5" />
@@ -109,7 +109,7 @@ export default function Hero() {
           <div className="mt-10 grid grid-cols-3 gap-4 border-t border-white/10 pt-6 text-xs sm:max-w-md sm:text-sm">
             {TRUST_POINTS.map(({ label, icon: Icon }) => (
               <div key={label} className="flex items-center gap-2 text-white/85">
-                <Icon className="h-4 w-4 text-ford-accent" />
+                <Icon className="h-4 w-4 text-brand-accent" />
                 <span>{label}</span>
               </div>
             ))}
@@ -128,9 +128,9 @@ function HeroVisual({ dealershipName }: { dealershipName: string }) {
   // load. Real chat is the next section below.
   return (
     <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-      <div className="overflow-hidden rounded-lg border border-white/15 bg-ford-ink/90 shadow-2xl shadow-black/40 backdrop-blur">
+      <div className="overflow-hidden rounded-lg border border-white/15 bg-brand-ink/90 shadow-2xl shadow-black/40 backdrop-blur">
         <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-ford-blue">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-blue">
             <Bot className="h-4 w-4 text-white" />
           </div>
           <div className="flex-1 leading-tight">
@@ -187,7 +187,7 @@ function ChatRow({ who, text }: { who: "user" | "ai"; text: string }) {
   if (who === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-lg rounded-br-sm bg-ford-accent px-3 py-2 text-xs text-white">
+        <div className="max-w-[85%] rounded-lg rounded-br-sm bg-brand-accent px-3 py-2 text-xs text-white">
           {text}
         </div>
       </div>
