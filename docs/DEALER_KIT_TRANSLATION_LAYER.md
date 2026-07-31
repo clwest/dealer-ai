@@ -164,7 +164,7 @@ The assistant **must not**:
    active* with real customer traffic.
 6. **Imply auth / multi-store / salesperson-agents exist.** None of
    those exist yet — they are sketched in
-   `ASSISTANT_AGENT_CREATION_ROADMAP.md` as planned, not built.
+   `docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md` as planned, not built.
 7. **Imply manager chat shows real vehicle cards.** It does not —
    manager chat is *coaching/preview mode* (SESSION_010, reframe).
 
@@ -494,7 +494,7 @@ and `docs/onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md` →
 > One-store v0 — singleton enforced via `.first()` + upsert in the
 > view, not a schema constraint, so the migration stays cheap to
 > revisit when `Dealership` lands. Field shapes mirror the future
-> entity split sketched in `ASSISTANT_AGENT_CREATION_ROADMAP.md`
+> entity split sketched in `docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md`
 > (DealerAssistant / SalespersonAgent / StorePolicyProfile) so a
 > later migration splits without renames. Known gap: salesperson
 > seed isn't linked to the `Salesperson` row used by

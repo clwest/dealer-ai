@@ -2,7 +2,7 @@
 // GET|PUT /api/dealer-ai/onboarding/profile/ (singleton).
 //
 // Single store profile only. Multi-tenant boundaries (and the per-entity
-// split sketched in docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md)
+// split sketched in docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md)
 // are deferred. Field shapes mirror the future schema so when the
 // Dealership / DealerAssistant migration lands, columns just split.
 //

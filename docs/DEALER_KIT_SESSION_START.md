@@ -81,7 +81,7 @@ Supporting (read on demand):
 - `docs/CAPABILITY_MATRIX.md` — verified capability matrix per prospect claim
 - `docs/DEALER_KIT_TRANSLATION_LAYER.md` — audience contract per persona
 - `docs/onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md` — onboarding architecture (still Freedom-Ford-flavored file name; content dealer-agnostic)
-- `docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md` — future-entity roadmap
+- `docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md` — future-entity roadmap
 - `docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md` — franchise alternate-config demo
 
 ## Current next task

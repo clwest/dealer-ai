@@ -18,7 +18,7 @@ The matching frontend page lives at `/dealer-ai-onboarding`. As of
 **SESSION_008** the page reads/writes against a backend singleton
 profile (see *Persistence (SESSION_008)* below). The richer entity
 split — DealerAssistant / SalespersonAgent / ManagerAgent / etc. —
-remains a planning sketch in `ASSISTANT_AGENT_CREATION_ROADMAP.md`.
+remains a planning sketch in `docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md`.
 
 ---
 
@@ -124,7 +124,7 @@ onboarding is a subset:
 Salesperson onboarding is intentionally lightweight — most of the
 voice configuration lives at the **store level** in the manager
 flow. Salesperson-level voice overrides are a future extension
-(see `ASSISTANT_AGENT_CREATION_ROADMAP.md` → `VoiceProfile`).
+(see `docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md` → `VoiceProfile`).
 
 ---
 
@@ -149,7 +149,7 @@ defaults if a field is blank.
 
 ## Assistant / agent creation — roadmap
 
-See [`ASSISTANT_AGENT_CREATION_ROADMAP.md`](./ASSISTANT_AGENT_CREATION_ROADMAP.md)
+See [`ASSISTANT_AGENT_CREATION_ROADMAP.md`](../roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md)
 for the full sketch.
 
 Short version:
@@ -222,7 +222,7 @@ The onboarding page now reads from and writes to a singleton
 
 The model is one Django row holding all 27 fields flat, with field
 names mirroring the future entity split sketched in
-`ASSISTANT_AGENT_CREATION_ROADMAP.md`. When the `Dealership` /
+`docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md`. When the `Dealership` /
 `DealerAssistant` / `StorePolicyProfile` migration lands, columns
 move to the new tables without renames.
 
@@ -355,7 +355,7 @@ foundation. Adding any of them is a separate, scoped task.
 - **Route:** `/dealer-ai-onboarding` in `frontend/src/main.tsx`
 - **Nav entry:** `NAV_LINKS` array in `frontend/src/App.tsx`
 - **This plan:** `docs/onboarding/FREEDOM_FORD_ONBOARDING_PLAN.md`
-- **Future entities sketch:** `docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md`
+- **Future entities sketch:** `docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md`
 
 **SESSION_008 update:** persistence shipped as a single Django row
 (`DealerOnboardingProfile` in `backend/dealer_ai/models.py`). The

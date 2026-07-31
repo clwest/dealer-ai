@@ -1075,7 +1075,7 @@ runtime code are facts.
 
 - `docs/PROJECT_RULES.md` — governance layer.
 - `docs/CAPABILITY_MATRIX.md` — verified capability snapshot.
-- `docs/IMPLEMENTATION_ROADMAP.md` — prioritized milestones
+- `docs/roadmap/IMPLEMENTATION_ROADMAP.md` — prioritized milestones
   built on this domain map (produced same session).
 - `docs/PROJECT_PIPELINE.md` — request-flow map of what the
   software does today.

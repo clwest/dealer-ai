@@ -214,7 +214,7 @@ class DealerOnboardingProfile(models.Model):
     Field shapes mirror the frontend onboarding page sections (dealership
     profile, manager preferences, salesperson seed, assistant behavior,
     pilot checklist). Names follow the future schema sketched in
-    docs/onboarding/ASSISTANT_AGENT_CREATION_ROADMAP.md so a future
+    docs/roadmap/ASSISTANT_AGENT_CREATION_ROADMAP.md so a future
     migration can split this into DealerAssistant / SalespersonAgent /
     StorePolicyProfile without renaming columns.
     """
