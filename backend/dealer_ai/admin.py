@@ -15,6 +15,8 @@ from .models import (
     Vehicle,
     VehicleAcquisition,
     VehicleCost,
+    VehicleStage,
+    VehicleStageEvent,
     Vendor,
     VendorCommunication,
     WorkOrder,
@@ -494,6 +496,102 @@ class VendorCommunicationAdmin(admin.ModelAdmin):
         "sent_by",
     )
     readonly_fields = ("created_at", "updated_at")
+
+
+# ----------------------------------------------------------------------------
+# Milestone 5 · Increment 1 (SESSION_075) — vehicle lifecycle admins.
+#
+# Diagnostic surfaces only. Transition workflow lives in M5.4
+# endpoints, not here. Both classes present event-facts and stage state
+# as read-only where possible so admin doesn't inadvertently become the
+# transition-authoring path (which would bypass the M5.2 service and
+# lose the audit-trail invariants).
+#
+# ``VehicleStageEventAdmin`` disables add + delete: events are
+# append-only through the M5.2 service, and hand-editing a historical
+# transition would silently break the timeline.
+# ----------------------------------------------------------------------------
+
+
+@admin.register(VehicleStage)
+class VehicleStageAdmin(admin.ModelAdmin):
+    """Milestone 5 · Increment 1 — current-stage admin.
+
+    Diagnostic; not the transition-authoring surface (that lives in the
+    M5.4 admin API). Every mutable-looking field displays but writes to
+    it here still bypass the M5.2 service state machine — the write
+    path is intentionally the endpoint, not the admin form.
+    """
+
+    list_display = (
+        "vehicle",
+        "current_stage",
+        "entered_at",
+        "trigger",
+        "entered_by",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("current_stage", "trigger", "dealership")
+    search_fields = (
+        "vehicle__stock_number",
+        "vehicle__vin",
+        "last_transition_note",
+    )
+    autocomplete_fields = ("vehicle", "dealership", "entered_by")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(VehicleStageEvent)
+class VehicleStageEventAdmin(admin.ModelAdmin):
+    """Milestone 5 · Increment 1 — append-only event log admin.
+
+    Read-only shape: add + delete disabled. Every field is displayed
+    read-only in the change form. The event log is the durable audit
+    trail M8 aggregates; hand-editing a historical event would silently
+    corrupt aging analytics. Historical rows survive user deletion
+    (``by`` is SET_NULL).
+    """
+
+    list_display = (
+        "vehicle",
+        "from_stage",
+        "to_stage",
+        "entered_at",
+        "trigger",
+        "rule_name",
+        "by",
+        "dealership",
+        "created_at",
+    )
+    list_filter = ("to_stage", "from_stage", "trigger", "dealership")
+    search_fields = (
+        "vehicle__stock_number",
+        "vehicle__vin",
+        "rule_name",
+        "notes",
+    )
+    autocomplete_fields = ("vehicle", "dealership", "by")
+    readonly_fields = (
+        "vehicle",
+        "dealership",
+        "from_stage",
+        "to_stage",
+        "entered_at",
+        "by",
+        "trigger",
+        "rule_name",
+        "notes",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):  # noqa: ARG002
+        # Events are appended by the M5.2 service, not the admin form.
+        return False
+
+    def has_delete_permission(self, request, obj=None):  # noqa: ARG002
+        # Append-only history — refusing delete keeps the timeline honest.
+        return False
 
 
 @admin.register(UserDealershipRole)

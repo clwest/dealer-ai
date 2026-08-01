@@ -3112,16 +3112,38 @@ _CUSTOMER_VISIBLE_DEBUG_PATTERN = (
 
 
 def customer_visible_vehicles():
-    """Return the base ``Vehicle.objects`` queryset with
-    ``is_available=True`` AND debug stock numbers excluded.
+    """Return the base ``Vehicle.objects`` queryset filtered to
+    **retail-eligible** vehicles (``stage='frontline'``) with
+    debug stock numbers excluded.
+
+    **Milestone 5 · Increment 5 refactor (SESSION_079).** Per
+    ``MILESTONE_5_PLANNING.md`` §5.e Option D (SESSION_075
+    refined), retail exposure is now driven by
+    ``VehicleStage.current_stage='frontline'`` — NOT by
+    ``Vehicle.is_available``. The refactor consolidates on
+    this single choke point so every downstream customer-facing
+    consumer (chat matched-vehicles, inventory search, lever-flex
+    pool, etc.) picks up the new semantics automatically.
+
+    ``Vehicle.is_available`` is retained for backwards
+    compatibility (§5.e Option D) but MUST NOT be relied on as a
+    manual override for retail gating (§0.a item 4). Customer
+    lifecycle transitions (``frontline → hold_reserved`` etc.)
+    are the correct mechanism to temporarily withhold a vehicle
+    from retail.
 
     All customer-facing inventory queries (chat, search, lever-
     flex pool, etc.) should funnel through here so dev/test
     vehicles can't leak into the matched_vehicles surface a
-    customer reads.
+    customer reads AND so non-frontline units (in recon /
+    photography / on hold / etc.) are never surfaced.
     """
-    return Vehicle.objects.filter(is_available=True).exclude(
-        stock_number__iregex=_CUSTOMER_VISIBLE_DEBUG_PATTERN
+    from .vehicle_lifecycle import annotate_retail_eligible
+
+    return (
+        annotate_retail_eligible(Vehicle.objects.all())
+        .filter(_lifecycle_retail_eligible=True)
+        .exclude(stock_number__iregex=_CUSTOMER_VISIBLE_DEBUG_PATTERN)
     )
 
 

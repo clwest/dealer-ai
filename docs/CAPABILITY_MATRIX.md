@@ -423,6 +423,74 @@ milestone that first needs it — every item recorded in
 
 ---
 
+## 7f. Vehicle lifecycle stages + retail gating (Milestone 5, shipped)
+
+Milestone 5 (SESSION_074 → SESSION_081) shipped a
+complete vehicle-lifecycle substrate that separates
+"physically in inventory" from "actually retail
+eligible." Every retail-facing surface now gates on
+`VehicleStage.current_stage='frontline'` via a single
+choke-point flip in `services/chat_engine.py::customer_visible_vehicles()`.
+See `docs/roadmap/MILESTONE_5_PLANNING.md` (as amended
+SESSION_075 §0.a) +
+`docs/roadmap/MILESTONE_5_RETROSPECTIVE.md` for what
+shipped vs. deferred.
+
+| Domain | Surface (M5.1 – M5.6) | Notes |
+| --- | --- | --- |
+| Persistence — current stage | `models.VehicleStage` (OneToOne with `Vehicle`; `dealership` FK NOT NULL; `current_stage` from 12-value `VEHICLE_STAGE_CHOICES`; `entered_at`; `entered_by` SET_NULL nullable; `trigger` from 4-value `VEHICLE_STAGE_TRIGGER_CHOICES`; `last_transition_note`; timestamps). Cross-tenant `clean()` mirrors M4 pattern. Admin registration diagnostic-only. | 12 stages per §5.a Modified Option C: 8 retail-preparation (`incoming`, `inspection`, `recon`, `qc`, `detail`, `photography`, `listing`, `frontline`) + 4 operational categories (`wholesale_out`, `hold_reserved`, `company_use`, `off_market`). **`sold` deferred to M9** (no enum constant). |
+| Persistence — event log | `models.VehicleStageEvent` (many-per-Vehicle; `dealership` FK NOT NULL; `from_stage` nullable choices; `to_stage` NOT NULL choices; `entered_at`; `by` SET_NULL nullable; `trigger` choices; `rule_name`; `notes`; `created_at`). Append-only history contract enforced by admin add/delete disabled + M5.1 test suite. | `from_stage=None` legitimate ONLY for bootstrap events. |
+| Migration bootstrap | Migration `0017_vehicle_lifecycle_persistence` creates both tables + RunPython bootstraps a `VehicleStage` + matching `VehicleStageEvent` for every existing Vehicle. `is_available=True` → `frontline`; else → `off_market`. Idempotent, empty-DB safe, reversible. `Vehicle.is_available` values/schema unchanged. | Single `timezone.now()` value per Vehicle so event/stage `entered_at`-match invariant is enforceable in tests. |
+| Tenancy carriers | `_TENANT_CARRIER_MODEL_NAMES` extended 15 → **17** (added `VehicleStage`, `VehicleStageEvent`). Same `pre_save` autofill safety net as M1/M2/M3/M4 carriers. | |
+| Service — state machine | `services/vehicle_lifecycle.py` — 5 public functions: `get_current_stage(vehicle, *, dealership) → Optional[VehicleStage]` pure read; `ensure_current_stage(vehicle, *, dealership, actor=None, trigger='bootstrap', initial_stage='incoming') → VehicleStage` explicit mutating op; `advance_stage(vehicle, *, dealership, to_stage, actor=None, trigger, rule_name='', notes='') → VehicleStage` the ONE transition verb (calls `ensure_current_stage` first as defense-in-depth; `transaction.atomic()` + `select_for_update()` concurrency); `retail_eligible(vehicle, *, dealership) → bool` pure read; `suggest_transitions(vehicle, *, dealership) → list[SuggestedTransition]` per-stage composition. Plus 1 read helper `resolve_hold_reserved_return_target` (walks event log, not notes free-text). | Module-level `_ALLOWED_TRANSITIONS` dict + `_STAGE_ROLE_AUTHORITY` map. Per SESSION_075 §0.a item 6 (no hidden writes from Vehicle properties): read/mutate verbs are split; `Vehicle.current_stage` may return `None`. |
+| Service — deterministic rules (M5.3) | 3 rule evaluators + `SuggestedTransition` dataclass: `_rule_inspection_to_recon` (fires on ≥1 actionable-severity finding); `_rule_recon_to_qc` (fires when zero open WOs AND every must_do decision covered by completed WO); `_rule_photography_to_listing` (always returns structured unmet prerequisite — M6 photo predicate not yet shipped). **No `_rule_listing_to_frontline`** — manual-only in M5 per §5.h. | Rules stay suggestions only; no auto-application in M5 (§5.h Option A). Rule functions `_assert_vehicle_tenant()` at entry for consistent `CrossTenantLifecycleError`. |
+| Service — domain errors | 4 distinct classes (per SESSION_075 §0.a item 5 — do NOT overload): `CrossTenantLifecycleError` → HTTP 404 (fail-closed); `InvalidStageTransitionError` → HTTP 409 (structurally illegal from/to); `UnauthorizedStageTransitionError` → HTTP 403 (role refusal — distinct from Invalid); `StageAlreadyCurrentError` → HTTP 409 (no-op). | Distinct error class → distinct HTTP status → distinct remediation path for the caller. |
+| Vehicle read-model | 2 `@property` accessors on `models.Vehicle`: `current_stage` (delegates to `get_current_stage`; may return `None`); `is_retail_eligible` (delegates to `retail_eligible`; returns `False` when no stage row). Both pure reads with function-local imports per M3.3 pattern. | Locked by `test_vehicle_lifecycle_service::VehiclePropertyAccessorsPureReads`. |
+| Retail-gating refactor | `services/chat_engine.py::customer_visible_vehicles()` (the single funnel every customer-facing surface goes through) flipped from `is_available=True` to `_lifecycle_retail_eligible=True` via new `services/vehicle_lifecycle.py::annotate_retail_eligible(qs)` queryset helper (`Exists(VehicleStage.filter(vehicle=OuterRef, current_stage=frontline))`). Also refactored: `services/vehicle_assistant.py::_similar_vehicles`. | `Vehicle.is_available` schema + values unchanged per §5.e Option D. `is_available` MUST NOT remain a manual override for retail gating (anti-pattern locked out). `ad_copy.py` / `pipeline.py` deliberately unchanged — non-retail consumers migrate on their own schedule. |
+| Vehicle write-path integration | `services/inventory_import.py` (sole production Vehicle creation site) seeds `frontline` with `trigger='import'` via explicit `ensure_current_stage(...)` call after `.save()`. **No `pre_save` signal in production.** | Per SESSION_075 §0.a item 6. |
+| Test-only auto-bootstrap | `apps.py::ready()` registers a `post_save` signal on Vehicle gated on `_is_running_tests()` (checks `sys.argv` for `test`) that auto-seeds `frontline` for every newly saved Vehicle in the test suite. Avoids mechanical sweep of ~150 pre-existing test fixtures. M5.1–M5.4 tests call `wipe_lifecycle_state(vehicle)` in their local `_make_vehicle` helpers to observe pre-seed state. | Test-only affordance; production remains explicit. See `tests/__init__.py` docstring for full rationale. |
+| Admin API (M5.4) | `views_lifecycle.py` — 3 DRF endpoints under `/api/dealer-ai/admin/vehicles/<stock_number>/lifecycle/`: GET dashboard (current stage + recent events + suggested transitions + hold_reserved return target); POST `/transition/` manual transition; POST `/transition/rule/` rule accept (re-evaluates `suggest_transitions` at apply time; refuses 409 when predicate flipped OR when matched suggestion has `unmet_prerequisites`). All three share `IsReconManagerSalesManagerOrOwnerAtActiveDealership` (M4.6 reuse); per-transition role authority happens at the M5.2 service layer. | Domain-error → HTTP mapping via `_map_service_error` helper. 27 permission-matrix tests + 21 flow tests = 48 focused endpoint tests. |
+| Operator UI (M5.6) | `pages/VehicleLifecyclePage.tsx` (~280 lines) inside `<RequireAuth>` at `/dealer-ai-inventory/:stock/lifecycle`. 4 extracted components in `components/lifecycle/`: `StageBadge`, `StageTimeline`, `SuggestedTransitionsPanel` (disables cards with `unmet_prerequisites`), `ManualTransitionForm` (dropdown filtered client-side by `allowedTargetsForRole`). Shared client-side `lib/lifecycle.ts` mirrors backend `_ALLOWED_TRANSITIONS` + `_STAGE_ROLE_AUTHORITY`. 3 typed API helpers in `lib/api.ts`. Distinct 400/401/403/404/409 UX per M5.4 domain-error mapping. | Server is authoritative — stale UI submissions still receive proper 403/409 from the M5.2 service. |
+
+**What is NOT shipped in Milestone 5** (deferred per
+`MILESTONE_5_RETROSPECTIVE.md` §4):
+
+- **§5.i customer-language refactor for
+  `vehicle_detail` / `vehicle_ask`** — the choke-point
+  flip already removes non-frontline units from
+  matched_vehicles + M4.5 scrub prevents recon-detail
+  leaks; full truthful-phrasing refactor for
+  stock-specific direct lookups deferred.
+- **`InventoryPreviewPage` stage-badge + Lifecycle
+  button** — dedicated `/lifecycle` route works
+  standalone; card-level integration deferred to a
+  follow-up.
+- **`ad_copy.py` / `pipeline.py` `is_available`
+  consumer audit** — deliberate per §5.e Option D
+  (non-retail consumers migrate on their own
+  schedule).
+- **`is_available` field removal** — no premature
+  removal date per §5.e SESSION_075 refined; retain
+  until every known consumer has migrated AND a
+  repository-wide audit proves removal safe.
+- **Deterministic `photography → listing` rule** —
+  M6 will provide the `VehiclePhoto.count ≥ N`
+  predicate; M5.3 returns a structured unmet
+  prerequisite in the meantime.
+- **Deterministic `listing → frontline` rule** — M6
+  will provide the `VehicleListing.published`
+  predicate; M5 keeps this transition manual-only per
+  §5.h SESSION_075 refined.
+- **Aging analytics per stage** — M8 aggregates the
+  raw `entered_at` data M5 records.
+- **Bottleneck detection / stuck-vehicle alerts** — M7
+  async infrastructure.
+- **AI-drafted stage-transition suggestions** — no
+  AI role in M5; if a future increment adds one, it
+  routes through the shared safety stack.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

@@ -623,7 +623,17 @@ visible."
 
 ---
 
-### Milestone 5 — Vehicle lifecycle stages + retail gating (next active milestone; planning pass pending)
+### Milestone 5 — Vehicle lifecycle stages + retail gating — SHIPPED at SESSION_081
+
+*Full delivery record: `docs/roadmap/MILESTONE_5_PLANNING.md`
+§7 (annotated SHIPPED per increment; §0.a change-log
+lists the 10 refinements landed inside increments) and
+`docs/roadmap/MILESTONE_5_RETROSPECTIVE.md`. Shipped
+surface enumerated in `docs/CAPABILITY_MATRIX.md` §7f.
+Test baseline delta: 2,518 → 2,754 (+236 tests, zero
+regressions). Sessions 074 → 081. Frontend `tsc
+--noEmit` + `vite build` clean. `sold` stage deferred
+entirely to M9 (no enum constant, no stub).*
 
 **Business objective.** Distinguish "in inventory" from
 "actually retail-eligible" at the data layer, so the retail

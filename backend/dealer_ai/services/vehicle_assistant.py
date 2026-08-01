@@ -402,8 +402,18 @@ def _similar_vehicles(vehicle: Vehicle) -> Iterable[Vehicle]:
     low = price * (1 - PRICE_BAND)
     high = price * (1 + PRICE_BAND)
 
+    # M5.5 (SESSION_079) — route through customer_visible_vehicles
+    # so the "similar" list respects the retail-eligibility gate
+    # (only frontline units surface as recommendations to a
+    # customer). Prior behavior filtered on is_available=True which
+    # could leak a non-frontline unit (e.g. one in recon) into the
+    # customer-facing similar-vehicles carousel.
+    from .chat_engine import customer_visible_vehicles
+
+    base = customer_visible_vehicles()
+
     primary = (
-        Vehicle.objects.filter(is_available=True)
+        base
         .exclude(id=vehicle.id)
         .filter(body_style=vehicle.body_style)
         .filter(price__gte=Decimal(str(low)), price__lte=Decimal(str(high)))
@@ -415,7 +425,7 @@ def _similar_vehicles(vehicle: Vehicle) -> Iterable[Vehicle]:
 
     # Loosen if we don't have enough — include any body style in the price band.
     fill = (
-        Vehicle.objects.filter(is_available=True)
+        base
         .exclude(id=vehicle.id)
         .exclude(id__in=[v.id for v in primary_list])
         .filter(price__gte=Decimal(str(low * 0.85)), price__lte=Decimal(str(high * 1.15)))

@@ -1832,3 +1832,143 @@ export function logVendorComm(body: VendorCommLogPayload) {
     body,
   );
 }
+
+// ----------------------------------------------------------------------------
+// Milestone 5 · Increment 4 — vehicle lifecycle admin API contract.
+// ----------------------------------------------------------------------------
+//
+// Types + helpers for the 3 endpoints under
+// /admin/vehicles/<stock>/lifecycle/*. Every helper uses authFetch.
+// Domain-error → HTTP status mapping (SESSION_075 §0.a item 5 —
+// distinct classes, distinct status codes; do not overload):
+//
+// - 404 → cross-tenant or missing vehicle (fail-closed;
+//   CrossTenantLifecycleError)
+// - 403 → role refusal (UnauthorizedStageTransitionError — e.g.
+//   recon_manager attempting a commercial/disposition target)
+// - 409 → structurally illegal from/to
+//   (InvalidStageTransitionError) OR no-op refused
+//   (StageAlreadyCurrentError) OR rule no longer fires at apply time
+// - 400 → validation / invalid vocabulary
+//
+// Callers surface these distinctly — VehicleLifecyclePage's
+// error-humanizer helpers.
+
+export type VehicleStageKey =
+  | "incoming"
+  | "inspection"
+  | "recon"
+  | "qc"
+  | "detail"
+  | "photography"
+  | "listing"
+  | "frontline"
+  | "wholesale_out"
+  | "hold_reserved"
+  | "company_use"
+  | "off_market";
+
+export type VehicleStageTriggerKey =
+  | "manual"
+  | "rule"
+  | "import"
+  | "bootstrap";
+
+export const VEHICLE_STAGE_CHOICES: Array<{
+  value: VehicleStageKey;
+  label: string;
+}> = [
+  { value: "incoming", label: "Incoming" },
+  { value: "inspection", label: "Inspection" },
+  { value: "recon", label: "Recon" },
+  { value: "qc", label: "QC" },
+  { value: "detail", label: "Detail" },
+  { value: "photography", label: "Photography" },
+  { value: "listing", label: "Listing" },
+  { value: "frontline", label: "Frontline" },
+  { value: "wholesale_out", label: "Wholesale out" },
+  { value: "hold_reserved", label: "Hold / reserved" },
+  { value: "company_use", label: "Company use" },
+  { value: "off_market", label: "Off market" },
+];
+
+export interface LifecycleActor {
+  id: number;
+  username: string;
+}
+
+export interface LifecycleStage {
+  value: VehicleStageKey;
+  label: string;
+  entered_at: string;
+  entered_by: LifecycleActor | null;
+  trigger: VehicleStageTriggerKey;
+  last_transition_note: string;
+}
+
+export interface LifecycleEvent {
+  id: number;
+  from_stage: VehicleStageKey | null;
+  to_stage: VehicleStageKey;
+  entered_at: string;
+  by: LifecycleActor | null;
+  trigger: VehicleStageTriggerKey;
+  rule_name: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface LifecycleSuggestedTransition {
+  to_stage: VehicleStageKey;
+  rule_name: string;
+  evidence: string;
+  unmet_prerequisites: string[];
+}
+
+export interface LifecycleDashboardResponse {
+  stock_number: string;
+  has_stage: boolean;
+  current_stage: LifecycleStage | null;
+  recent_events: LifecycleEvent[];
+  suggested_transitions: LifecycleSuggestedTransition[];
+  hold_reserved_return_target: VehicleStageKey | null;
+}
+
+export interface LifecycleTransitionResponse {
+  current_stage: LifecycleStage;
+}
+
+export interface LifecycleManualTransitionPayload {
+  to_stage: VehicleStageKey;
+  notes?: string;
+}
+
+export interface LifecycleRuleTransitionPayload {
+  rule_name: string;
+}
+
+export function fetchLifecycleDashboard(stock: string) {
+  return authGetJSON<LifecycleDashboardResponse>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/lifecycle/`,
+  );
+}
+
+export function postLifecycleManualTransition(
+  stock: string,
+  body: LifecycleManualTransitionPayload,
+) {
+  return authPostJSON<LifecycleTransitionResponse>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/lifecycle/transition/`,
+    body,
+  );
+}
+
+export function postLifecycleRuleTransition(
+  stock: string,
+  body: LifecycleRuleTransitionPayload,
+) {
+  return authPostJSON<LifecycleTransitionResponse>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/lifecycle/transition/rule/`,
+    body,
+  );
+}

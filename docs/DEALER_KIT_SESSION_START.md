@@ -51,11 +51,13 @@ on OpenAI `gpt-5-mini` (Ollama llama3.2 also supported via
 
 ## Current baseline
 
-Verified 2026-07-31 (after SESSION_031 Phase 4). Update if any row changes.
+Verified 2026-08-01 (after SESSION_081 M5 closeout). Update if any row changes.
 
 | Surface | State |
 |---|---|
-| Backend tests | **1281 passed, 1 skipped, 0 failed** (`cd backend && python3 manage.py test dealer_ai`) |
+| Backend tests | **2754 passed, 1 skipped, 0 failed** (`cd backend && python3 manage.py test dealer_ai`) |
+| Milestones shipped | M1 (multi-tenancy + auth), M2 (investment ledger), M3 (structured condition report), M4 (recon automation), **M5 (vehicle lifecycle stages + retail gating — SESSION_081)** |
+| M5 lifecycle surface | 2 models + migration `0017` (bootstrap seeds every existing Vehicle to `frontline`/`off_market` + matching event) + 12-stage vocabulary + 4-trigger vocabulary + `services/vehicle_lifecycle.py` (5 fns + 4 distinct domain errors + 3 rule evaluators + 1 dataclass + read helper + annotation helper) + 2 Vehicle `@property` accessors + 3 M5.4 admin endpoints + M5.6 operator UI (`/dealer-ai-inventory/:stock/lifecycle`) + `customer_visible_vehicles()` filters on `stage=frontline` (choke-point flip; every retail-side surface inherits) |
 | Frontend | typecheck + build clean (`cd frontend && npx tsc --noEmit && npx vite build`) |
 | LLM | OpenAI `gpt-5-mini` (API key in repo-root `.env`); Ollama llama3.2 supported via provider env |
 | Frontend dev | Vite @ `:5173`, proxy to backend @ `:8001` via `VITE_API_PROXY_TARGET` |

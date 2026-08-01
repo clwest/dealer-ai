@@ -330,6 +330,30 @@ def import_rows(
                 vehicle.imported_at = started_at
                 vehicle.is_available = True
                 vehicle.save()
+
+                # M5.5 (SESSION_079) — vehicle write-path integration.
+                # Per MILESTONE_5_PLANNING.md §5.c + §0.a item 6, every
+                # code path creating a new Vehicle must **explicitly**
+                # seed a VehicleStage row so retail-eligibility is
+                # computable. Imported vehicles historically shipped
+                # ``is_available=True`` (retail-ready); we seed the
+                # equivalent lifecycle stage (``frontline``) with
+                # ``trigger='import'`` so the audit trail records the
+                # provenance. Do NOT rely on a pre-save signal or a
+                # property-read side effect.
+                from ..models import (
+                    VEHICLE_STAGE_FRONTLINE,
+                    VEHICLE_STAGE_TRIGGER_IMPORT,
+                )
+                from .vehicle_lifecycle import ensure_current_stage
+
+                ensure_current_stage(
+                    vehicle,
+                    dealership=tenant,
+                    initial_stage=VEHICLE_STAGE_FRONTLINE,
+                    trigger=VEHICLE_STAGE_TRIGGER_IMPORT,
+                )
+
                 summary.created += 1
             else:
                 changed = _apply_row_to_vehicle(

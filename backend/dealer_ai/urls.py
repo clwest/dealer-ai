@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_recon
+from . import views, views_lifecycle, views_recon
 
 app_name = "dealer_ai"
 
@@ -268,5 +268,31 @@ urlpatterns = [
         "admin/comms/log/",
         views_recon.admin_comm_log,
         name="admin-comm-log",
+    ),
+    # ---- Milestone 5 · Increment 4 — lifecycle admin API -------------
+    #
+    # Three endpoints wrapping the M5.2 + M5.3 service surface for the
+    # M5.6 operator UI. All three share
+    # ``IsReconManagerSalesManagerOrOwnerAtActiveDealership`` (M4.6);
+    # per-transition role authority happens at the service layer.
+    #
+    # Domain-error → HTTP mapping (per SESSION_075 §0.a item 5):
+    # CrossTenantLifecycleError → 404; InvalidStageTransitionError → 409;
+    # UnauthorizedStageTransitionError → 403; StageAlreadyCurrentError
+    # → 409; ValueError → 400.
+    path(
+        "admin/vehicles/<str:stock_number>/lifecycle/",
+        views_lifecycle.admin_lifecycle_dashboard,
+        name="admin-lifecycle-dashboard",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/lifecycle/transition/",
+        views_lifecycle.admin_lifecycle_manual_transition,
+        name="admin-lifecycle-manual-transition",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/lifecycle/transition/rule/",
+        views_lifecycle.admin_lifecycle_rule_transition,
+        name="admin-lifecycle-rule-transition",
     ),
 ]

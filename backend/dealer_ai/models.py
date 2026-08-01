@@ -461,6 +461,66 @@ class Vehicle(models.Model):
             self, dealership=self.dealership
         )
 
+    # ----------------------------------------------------------------
+    # Milestone 5 · Increment 2 (SESSION_076) — vehicle-lifecycle
+    # read-model extension. Two `@property` accessors delegating to
+    # the lifecycle service, mirroring the M3.3 / M4.7 pattern above
+    # (function-local imports; one-line delegation; no caching; no
+    # business logic on the Vehicle side).
+    #
+    # **Pure reads.** Neither property creates a stage row on first
+    # access (SESSION_075 §0.a item 6 — no hidden writes from
+    # Vehicle read-model properties). ``current_stage`` may return
+    # ``None`` when no stage row exists;
+    # ``is_retail_eligible`` returns ``False`` in that case.
+    # Callers who need a stage row to definitely exist invoke
+    # ``ensure_current_stage(...)`` explicitly — that is the M5.2
+    # service's one mutating verb for lifecycle bootstrap.
+    # ----------------------------------------------------------------
+
+    @property
+    def current_stage(self):
+        """This vehicle's :class:`VehicleStage` row, or ``None``.
+
+        **Pure read** — never creates a stage row on first access.
+        Callers must handle the ``None`` case (a vehicle without a
+        stage row is a real state, not an error). Migration
+        ``0017`` bootstraps every Vehicle that existed at M5.1
+        release; the M5.5 write-path integration will seed newly
+        created vehicles with ``incoming`` via an explicit
+        ``ensure_current_stage(...)`` call.
+
+        Tenant scoping resolved via ``self.dealership``. No caching
+        — each attribute read runs a fresh query so callers see
+        the current DB state after a transition.
+        """
+        from .services.vehicle_lifecycle import get_current_stage
+
+        return get_current_stage(self, dealership=self.dealership)
+
+    @property
+    def is_retail_eligible(self):
+        """``True`` iff the vehicle's current lifecycle stage is
+        ``frontline``.
+
+        **Pure read** — returns ``False`` when no stage row exists.
+        The M5.5 retail-gating refactor swaps
+        ``services/chat_engine.py``,
+        ``services/inventory_search.py``, and the public
+        ``/showroom`` endpoint from ``is_available=True`` filters
+        to ``is_retail_eligible=True`` (via a queryset annotation
+        that joins ``VehicleStage.current_stage='frontline'``).
+
+        ``Vehicle.is_available`` is retained for backwards
+        compatibility per MILESTONE_5_PLANNING.md §5.e Option D
+        (SESSION_075 refined) and MUST NOT be used as a manual
+        override for retail gating — customer-facing eligibility
+        comes from lifecycle stage alone.
+        """
+        from .services.vehicle_lifecycle import retail_eligible
+
+        return retail_eligible(self, dealership=self.dealership)
+
 
 class ChatSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -2744,3 +2804,304 @@ class VendorCommunication(models.Model):
                         )
                     }
                 )
+
+
+# ----------------------------------------------------------------------------
+# Milestone 5 · Increment 1 (SESSION_075) — Vehicle lifecycle stage vocabulary.
+#
+# Twelve canonical stages per MILESTONE_5_PLANNING.md §5.a (Modified Option C).
+# The retail-preparation pipeline is eight ordered stages; the operational
+# categories are four unordered dispositions. Order in the tuple below matches
+# the retail-preparation flow followed by the operational categories in the
+# order they were resolved at SESSION_075.
+#
+# The ``sold`` stage is explicitly NOT SHIPPED in M5 — an enum value is a
+# shipped state even if the service always rejects transitions into it, and
+# shipping a state the service refuses is dishonest. M9 will add ``sold``
+# alongside the ``Sale`` model when sale provenance exists.
+# ----------------------------------------------------------------------------
+
+VEHICLE_STAGE_INCOMING = "incoming"
+VEHICLE_STAGE_INSPECTION = "inspection"
+VEHICLE_STAGE_RECON = "recon"
+VEHICLE_STAGE_QC = "qc"
+VEHICLE_STAGE_DETAIL = "detail"
+VEHICLE_STAGE_PHOTOGRAPHY = "photography"
+VEHICLE_STAGE_LISTING = "listing"
+VEHICLE_STAGE_FRONTLINE = "frontline"
+VEHICLE_STAGE_WHOLESALE_OUT = "wholesale_out"
+VEHICLE_STAGE_HOLD_RESERVED = "hold_reserved"
+VEHICLE_STAGE_COMPANY_USE = "company_use"
+VEHICLE_STAGE_OFF_MARKET = "off_market"
+
+VEHICLE_STAGE_CHOICES = (
+    (VEHICLE_STAGE_INCOMING, "Incoming"),
+    (VEHICLE_STAGE_INSPECTION, "Inspection"),
+    (VEHICLE_STAGE_RECON, "Recon"),
+    (VEHICLE_STAGE_QC, "QC"),
+    (VEHICLE_STAGE_DETAIL, "Detail"),
+    (VEHICLE_STAGE_PHOTOGRAPHY, "Photography"),
+    (VEHICLE_STAGE_LISTING, "Listing"),
+    (VEHICLE_STAGE_FRONTLINE, "Frontline"),
+    (VEHICLE_STAGE_WHOLESALE_OUT, "Wholesale out"),
+    (VEHICLE_STAGE_HOLD_RESERVED, "Hold / reserved"),
+    (VEHICLE_STAGE_COMPANY_USE, "Company use"),
+    (VEHICLE_STAGE_OFF_MARKET, "Off market"),
+)
+
+# ----------------------------------------------------------------------------
+# Milestone 5 · Increment 1 (SESSION_075) — Vehicle-stage trigger vocabulary.
+#
+# Four canonical trigger values per MILESTONE_5_PLANNING.md §5.b. Semantics:
+#
+# - ``manual`` — operator initiated (M5.4 endpoint).
+# - ``rule`` — deterministic rule fired and the operator confirmed via the
+#   suggested-transitions panel. Any event with ``trigger='rule'`` should
+#   carry a non-blank ``rule_name``; the M5.2 service enforces this
+#   invariant, not the persistence layer (see class docstrings below).
+# - ``import`` — seeded from an external import (bulk upload, DMS sync).
+# - ``bootstrap`` — created by ``ensure_current_stage`` (M5.2) when no row
+#   exists, or by the M5.1 ``0017`` data migration. ``from_stage=None`` on
+#   ``VehicleStageEvent`` is legitimate ONLY for ``trigger='bootstrap'``;
+#   this too is a service-layer / migration-layer invariant, not a
+#   persistence-layer one.
+# ----------------------------------------------------------------------------
+
+VEHICLE_STAGE_TRIGGER_MANUAL = "manual"
+VEHICLE_STAGE_TRIGGER_RULE = "rule"
+VEHICLE_STAGE_TRIGGER_IMPORT = "import"
+VEHICLE_STAGE_TRIGGER_BOOTSTRAP = "bootstrap"
+
+VEHICLE_STAGE_TRIGGER_CHOICES = (
+    (VEHICLE_STAGE_TRIGGER_MANUAL, "Manual"),
+    (VEHICLE_STAGE_TRIGGER_RULE, "Rule"),
+    (VEHICLE_STAGE_TRIGGER_IMPORT, "Import"),
+    (VEHICLE_STAGE_TRIGGER_BOOTSTRAP, "Bootstrap"),
+)
+
+
+class VehicleStage(models.Model):
+    """Milestone 5 · Increment 1 — current lifecycle stage for one Vehicle.
+
+    OneToOne with :class:`Vehicle`. Records the vehicle's current lifecycle
+    stage and the provenance of the last transition (who, when, and what
+    trigger). The full audit trail lives on :class:`VehicleStageEvent`.
+
+    **Persistence layer is neutral about transitions.** The state machine
+    (allowed from/to transitions, role authority, deterministic rule
+    evaluation) lives in ``services/vehicle_lifecycle.py`` at M5.2. The
+    persistence layer only enforces:
+
+    1. Cross-tenant contamination — ``dealership`` matches
+       ``vehicle.dealership``.
+    2. Enum-membership — ``current_stage`` is one of
+       :data:`VEHICLE_STAGE_CHOICES` values; ``trigger`` is one of
+       :data:`VEHICLE_STAGE_TRIGGER_CHOICES` values.
+
+    **No side effects on save.** ``VehicleStage.save()`` does NOT create a
+    :class:`VehicleStageEvent` row. Event creation is an explicit,
+    service-layer concern — the M5.2 ``advance_stage`` writes both rows
+    atomically inside a ``transaction.atomic()`` block.
+
+    **No auto-bootstrap on read.** Per MILESTONE_5_PLANNING.md §1.6
+    (SESSION_075 refinement), ``Vehicle.current_stage`` @property (M5.2)
+    delegates to a **pure** ``get_current_stage()`` helper that may return
+    ``None``. The mutating side (``ensure_current_stage()``) is a distinct
+    explicit verb, not a property-read side effect.
+
+    Source of truth: ``docs/roadmap/MILESTONE_5_PLANNING.md`` §1.1 + §5.a
+    + §5.c + §0.a (SESSION_075 amendments).
+    """
+
+    vehicle = models.OneToOneField(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="stage",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vehicle_stages",
+    )
+    current_stage = models.CharField(
+        max_length=32,
+        choices=VEHICLE_STAGE_CHOICES,
+    )
+    entered_at = models.DateTimeField()
+    entered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    trigger = models.CharField(
+        max_length=16,
+        choices=VEHICLE_STAGE_TRIGGER_CHOICES,
+    )
+    # The operator's reason for the last transition (populated by the M5.2
+    # service on ``manual``/``rule``/``import`` transitions; blank for
+    # ``bootstrap``). The full audit trail is the event log — this field is
+    # a convenience for surfacing "why is the vehicle here?" in the M5.4
+    # dashboard without walking events.
+    last_transition_note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+        verbose_name = "Vehicle stage"
+        verbose_name_plural = "Vehicle stages"
+
+    def __str__(self) -> str:
+        # Cheap read — vehicle FK is required so we can dereference.
+        return (
+            f"{self.get_current_stage_display()} on "
+            f"#{self.vehicle.stock_number}"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant guard.
+
+        The denormalized ``dealership`` FK must match the parent Vehicle's
+        tenant. Mirrors :meth:`WorkOrder.clean` / :meth:`ReconDecision.clean`
+        / :meth:`VehicleAcquisition.clean`.
+        """
+        super().clean()
+        if self.vehicle_id is None or self.dealership_id is None:
+            return
+        parent_dealership_id = getattr(self.vehicle, "dealership_id", None)
+        if parent_dealership_id is None:
+            return
+        if parent_dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "VehicleStage.dealership must match the parent "
+                        "Vehicle's dealership. Cross-tenant "
+                        "contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+
+
+class VehicleStageEvent(models.Model):
+    """Milestone 5 · Increment 1 — immutable stage-transition event log.
+
+    Many-per-Vehicle. Records every stage transition (or the initial
+    bootstrap event that establishes the vehicle's starting stage). The
+    event log is the durable audit trail M8 aggregates for per-stage
+    aging analytics.
+
+    **Append-only history.** Django technically permits ``.save()`` on an
+    existing row; the M5.1 test suite locks the append-only contract
+    behaviorally (workflow code creates only, never updates), and the M5.2
+    service refuses to expose an event-update surface. Downstream code
+    must NOT edit event rows.
+
+    **``from_stage=None`` is legitimate ONLY for bootstrap events.** The
+    M5.1 persistence layer permits ``from_stage=None`` on any event so
+    the ``0017`` bootstrap data migration can write initial-state events
+    without a synthetic ``from`` value. The invariant "every non-bootstrap
+    event has ``from_stage`` set" is enforced at the M5.2 service layer —
+    ``advance_stage`` never creates an event with ``from_stage=None``.
+
+    **``trigger='rule'`` should carry a non-blank ``rule_name``.** Also a
+    service-layer invariant (M5.2), not a persistence-layer one. A
+    persistence check would need to know M5.3's rule catalog to
+    distinguish a legitimate blank from a service bug.
+
+    **No side effects on save.** Creating a ``VehicleStageEvent`` does
+    NOT mutate the paired :class:`VehicleStage` current stage. The M5.2
+    ``advance_stage`` updates both atomically; direct ORM writes do NOT
+    trigger a cascade.
+
+    Source of truth: ``MILESTONE_5_PLANNING.md`` §1.2 + §5.b + §5.c
+    + §0.a (SESSION_075 amendments).
+    """
+
+    vehicle = models.ForeignKey(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="stage_events",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vehicle_stage_events",
+    )
+    # Nullable at persistence layer for the bootstrap event ONLY. Every
+    # non-bootstrap event carries a from_stage; enforcement lives in the
+    # M5.2 service.
+    from_stage = models.CharField(
+        max_length=32,
+        choices=VEHICLE_STAGE_CHOICES,
+        null=True,
+        blank=True,
+    )
+    to_stage = models.CharField(
+        max_length=32,
+        choices=VEHICLE_STAGE_CHOICES,
+    )
+    entered_at = models.DateTimeField()
+    # SET_NULL so historical events survive user deletion.
+    by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    trigger = models.CharField(
+        max_length=16,
+        choices=VEHICLE_STAGE_TRIGGER_CHOICES,
+    )
+    # When trigger='rule', which specific rule fired. Non-blank enforcement
+    # for rule-trigger events is a service-layer invariant (M5.2).
+    rule_name = models.CharField(max_length=128, blank=True, default="")
+    # Operator's reason (for manual triggers) / rule evidence summary (for
+    # rule triggers) / import payload annotation (for import triggers) /
+    # blank (for bootstrap).
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # -entered_at gives caller-visible reverse chronology; -created_at
+        # is a deterministic tiebreaker for two events recorded with the
+        # same entered_at (e.g. the bootstrap migration writes one
+        # timestamp for every vehicle).
+        ordering = ("-entered_at", "-created_at")
+        verbose_name = "Vehicle stage event"
+        verbose_name_plural = "Vehicle stage events"
+
+    def __str__(self) -> str:
+        from_label = self.get_from_stage_display() if self.from_stage else "∅"
+        return (
+            f"#{self.vehicle_id}: {from_label} → "
+            f"{self.get_to_stage_display()} ({self.get_trigger_display()})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant guard.
+
+        The denormalized ``dealership`` FK must match the parent Vehicle's
+        tenant. Mirrors :meth:`VehicleStage.clean`.
+        """
+        super().clean()
+        if self.vehicle_id is None or self.dealership_id is None:
+            return
+        parent_dealership_id = getattr(self.vehicle, "dealership_id", None)
+        if parent_dealership_id is None:
+            return
+        if parent_dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "VehicleStageEvent.dealership must match the "
+                        "parent Vehicle's dealership. Cross-tenant "
+                        "contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )

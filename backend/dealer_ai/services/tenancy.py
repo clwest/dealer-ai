@@ -281,6 +281,13 @@ _TENANT_CARRIER_MODEL_NAMES = (
     "WorkOrderFinding",
     "WorkOrderPart",
     "VendorCommunication",
+    # Milestone 5 · Increment 1 (SESSION_075) — vehicle lifecycle
+    # persistence layer. Extended per MILESTONE_5_PLANNING.md §2 row 6
+    # and §7 M5.1 (15 → 17). Same safety-net posture as M4: the
+    # M5.2 service will thread ``dealership=`` explicitly on every
+    # write path so the fallback stays a safety net.
+    "VehicleStage",
+    "VehicleStageEvent",
 )
 
 

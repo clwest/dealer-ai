@@ -1,9 +1,12 @@
 ---
 title: "Milestone 5 — Implementation-Planning Pass"
-status: draft
+status: shipped
 type: planning-artifact
 generated: 2026-08-01
 generated_at_session: SESSION_074 (pre-implementation)
+amended_at_session: SESSION_075 (§9 decisions confirmed + no-hidden-writes refinement)
+amended_at: 2026-08-01
+shipped_at_session: SESSION_081 (M5.7 closeout)
 milestone: 5
 milestone_name: "Vehicle lifecycle stages + retail gating"
 sources:
@@ -41,6 +44,142 @@ stage.
 
 **Zero implementation this session.** Planning artifact
 only. SESSION_075 opens M5.1.
+
+---
+
+## 0.a SESSION_075 amendments (2026-08-01)
+
+The four `[NEEDS-DECISION-BEFORE-M5.1]` items were
+resolved at the top of SESSION_075 with the following
+narrow amendments. Every downstream section (§1.6, §5.a,
+§5.b, §5.c, §5.e, §5.f, §5.h, §5.i, §7, §9) was updated
+in-place; this block is the change-log entry.
+
+1. **§5.a stage enum — Modified Option C (12 stages,
+   `sold` deferred entirely to M9, `company_use` added
+   as distinct disposition, `hold_reserved` used
+   consistently, `detail` kept distinct in v1).** Do
+   not ship an enum value the service will always
+   reject. `frontline → sold` is deferred to M9
+   alongside the `Sale` model.
+
+2. **§5.b transition table — approved with two
+   refinements.** (a) The `hold_reserved → previous
+   stage` return resolves the prior stage by reading
+   the most recent `VehicleStageEvent` whose
+   `to_stage == "hold_reserved"` and using its
+   `from_stage`, not by parsing free-text notes. (b)
+   Post-frontline operational transitions are
+   explicitly allowed: `frontline →
+   hold_reserved/off_market/wholesale_out/company_use`.
+   There is no `frontline → sold` transition in M5.
+
+3. **§5.c bootstrap — Option C affirmed.** Migration
+   `0017` must create BOTH the `VehicleStage` row AND
+   a matching bootstrap `VehicleStageEvent` for every
+   existing `Vehicle` (`from_stage=None`,
+   `trigger='bootstrap'`, matching `entered_at`,
+   explicit `dealership`). Not just the current-state
+   row.
+
+4. **§5.e `Vehicle.is_available` — Option D affirmed
+   without a premature M9 removal date.** Keep intact
+   as backwards-compat field. Add
+   `is_retail_eligible` as authoritative predicate.
+   Refactor known retail consumers in M5.5 (customer
+   chat, stock-specific customer vehicle lookup,
+   inventory search, public showroom). Document as
+   *deprecated for retail exposure; retain until
+   every known consumer has migrated and a
+   repository-wide audit proves removal safe*.
+   `is_available` MUST NOT remain a manual override
+   for retail gating — customer-facing eligibility
+   comes from lifecycle stage alone.
+
+5. **§5.f role matrix — refined.** Reuse existing
+   permission classes (no new broad lifecycle class).
+   Recon-adjacent transitions may be performed by
+   dealer_owner + sales_manager + recon_manager.
+   Commercial/disposition transitions
+   (`hold_reserved`, `wholesale_out`, `company_use`,
+   `off_market`) may be performed only by
+   dealer_owner + sales_manager. `recon_manager` may
+   NOT transition into any of the four
+   commercial/disposition stages (parts delays are
+   represented by M4 `WorkOrderPart` blocker data —
+   the vehicle stays in its honest recon stage).
+   Introduce a distinct `UnauthorizedStageTransitionError`
+   for role refusals (maps to HTTP 403). Do NOT
+   overload `InvalidStageTransitionError` (structural
+   from/to illegality → 409).
+
+6. **§1.6 architectural refinement — no hidden writes
+   from Vehicle properties.** The prior planning
+   sketch of `Vehicle.current_stage` delegating to
+   `get_current_stage` (which lazily bootstrapped a
+   missing row) violates the M2–M4 side-effect-free
+   Vehicle-read-model discipline. The M5.2 contract
+   splits:
+   - `get_current_stage(vehicle, *, dealership)` —
+     pure read; returns the existing `VehicleStage`
+     or `None`.
+   - `ensure_current_stage(vehicle, *, dealership,
+     actor=None, trigger="bootstrap")` — explicit
+     mutating op; creates the missing stage row and
+     a bootstrap `VehicleStageEvent`.
+   - `Vehicle.current_stage` — delegates to the pure
+     read function; may return `None`.
+   - `Vehicle.is_retail_eligible` — pure read;
+     returns `False` when no stage row exists.
+   - `advance_stage(...)` may call
+     `ensure_current_stage(...)` inside its
+     transaction before transitioning.
+   Migration `0017` creates stage rows for every
+   existing Vehicle, so missing rows should occur
+   only through an incomplete or future write path.
+   New Vehicle creation paths must be explicitly
+   updated (in the M5.5 write-path integration
+   before retail gating switches) so newly created
+   vehicles receive `incoming` — do NOT rely on a
+   property read or a generic pre-save signal.
+
+7. **§5.h rule evaluator refinements.** M5.3 rules
+   remain suggestions only (no auto-application in
+   M5). `inspection → recon` fires when a completed
+   `ConditionReport` has ≥1 finding requiring work
+   per the final severity vocabulary; a completed
+   report with no actionable findings must NOT be
+   forced into recon (an explicit path toward
+   qc/detail is allowed per the transition table).
+   `recon → qc` requires zero open work orders AND
+   every `must_do` `ReconDecision` addressed by
+   completed `WorkOrder` coverage or explicitly
+   resolved by the decision contract. `photography →
+   listing` is unavailable until M6 provides the
+   photo predicate; return a structured unmet
+   prerequisite, NOT a fake suggestion. `listing →
+   frontline` is **manual-only in M5**; M6 later
+   adds the deterministic published-listing rule
+   once `VehicleListing.published` exists. Do NOT
+   claim a deterministic published-listing gate
+   that cannot be evaluated.
+
+8. **§5.i retail-gating strictness — hard block
+   affirmed with truthful customer language.** A
+   customer-facing request for a specific
+   non-frontline stock number must NOT falsely say
+   the dealership does not possess the vehicle.
+   Truthful semantics: *"That vehicle is not
+   currently available for retail."* Do not expose
+   its internal stage, recon details, completion
+   estimate, vendor status, or expected-ready date.
+   The retrieval filter remains a hard block; this
+   is only a customer-language clarification.
+
+The frontmatter `status:` remains `draft` (flips to
+`shipped` at M5.7 per §7). Every §5.a-§5.i sub-heading
+has been updated in-place with **RESOLVED (SESSION_075)**
+banners citing this change-log entry.
 
 ---
 
@@ -362,18 +501,44 @@ boundary and VCP Phase 4 non-goals):
   the vehicle level ("what stage right now?", "retail-
   eligible?").
 - **Citation.** M2.3 / M3.3 / M4.7 Vehicle-as-read-model
-  precedents.
+  precedents; §0.a item 6 (no-hidden-writes refinement,
+  SESSION_075).
 - **Shape.** Two additional `@property` accessors on
-  `Vehicle`, delegating to the lifecycle service:
-  - `current_stage` — returns the `VehicleStage` row
-    (creates bootstrap on first read).
-  - `is_retail_eligible` — returns `True` iff the current
-    stage is `frontline`.
+  `Vehicle`, delegating to **pure-read** lifecycle
+  helpers (no side effects on read):
+  - `current_stage` — delegates to
+    `get_current_stage(self, dealership=self.dealership)`;
+    returns the existing `VehicleStage` row or `None`.
+    Does NOT lazily bootstrap.
+  - `is_retail_eligible` — delegates to
+    `retail_eligible(self, dealership=self.dealership)`;
+    returns `False` when no stage row exists.
+- **Mutating side of the contract lives in the service,
+  not the property.** `ensure_current_stage(vehicle, *,
+  dealership, actor=None, trigger="bootstrap")` is the
+  one explicit mutating verb that creates a missing
+  `VehicleStage` row + a corresponding bootstrap
+  `VehicleStageEvent`. Callers use it deliberately:
+  - Migration `0017` bootstraps every existing Vehicle
+    (see §5.c).
+  - `advance_stage(...)` calls
+    `ensure_current_stage(...)` inside its
+    `transaction.atomic()` block before evaluating the
+    transition — a defense-in-depth safety net if a
+    write path introduced in a future increment
+    forgets to seed the row.
+  - The M5.5 Vehicle write-path integration seeds a
+    stage row at `incoming` for every newly created
+    Vehicle. This is an **explicit call**, not a
+    pre-save signal or a property-read side effect.
 - **What M5 does NOT add.** No aging computed property
   (M8). No stage-history summary property (M8 / operator
   timeline UI). No "next suggested transition" property
   (the M5.4 endpoint is the surface; a property would
-  suggest we invoke on every render).
+  suggest we invoke on every render). No implicit
+  bootstrap from `@property` reads (SESSION_075 refined
+  contract; would violate the side-effect-free
+  Vehicle-read-model discipline established M2–M4).
 
 ### 1.7 What Milestone 5 enables for future milestones
 
@@ -745,57 +910,143 @@ transitions" implies more granular sub-stages
   operational categorization terminals (`wholesale_out`,
   `hold`, `off_market`, `sold`). Total 12 stages.
 
-**[NEEDS-DECISION-BEFORE-M5.1]** — user review required.
-Recommendation: **Option C**, but with two carve-outs:
+**RESOLVED (SESSION_075) — Modified Option C.** The 12-
+stage enum ships in M5.1 as follows:
 
-- **`sold` is stubbed but not selectable in M5.** Defer
-  to M9 when `Sale` model exists; add the enum value now
-  so the transition table has a target, but block the
-  `frontline → sold` transition at the service layer
-  with a "requires M9 Sale model" error message.
-- **`detail` is stubbed but may collapse into `qc`.**
-  RECON §4.6 and §7.4 treat detail as its own workflow
-  step in some stores but bundled with QC in others.
-  Per-dealer policy is a future concern; ship v1 with
-  `detail` as a distinct stage and let operators skip it
-  via manual transition if their store bundles.
+Retail-preparation pipeline (8 stages):
+- `incoming`
+- `inspection`
+- `recon`
+- `qc`
+- `detail`
+- `photography`
+- `listing`
+- `frontline`
+
+Operational categories (4 stages):
+- `wholesale_out`
+- `hold_reserved`
+- `company_use`
+- `off_market`
+
+Modifications from the original recommendation:
+
+- **`sold` is deferred entirely to M9.** No enum
+  constant, no `VEHICLE_STAGE_SOLD` symbol, no blocked
+  transition stub in M5. An enum value is a shipped
+  state even if the service always rejects transitions
+  into it; shipping a state the service refuses is
+  dishonest. When M9 lands the `Sale` model and sale
+  provenance, M9 will add `sold` to the enum and add
+  the `frontline → sold` transition.
+- **`company_use` is added as a distinct disposition.**
+  Not truthfully equivalent to `off_market`; per
+  `INVENTORY_ACQUISITION_MAPPING.md` §6.5 the two
+  represent operationally distinct decisions (courtesy
+  loaner / dealer-driven inventory vs. removed from
+  active availability with no near-term return
+  planned).
+- **`hold_reserved` used consistently everywhere** in
+  code, tests, docs. Do not alternate with the shorter
+  `hold` label.
+- **`detail` kept distinct in v1.** RECON §4.6 and
+  §7.4 treat detail as its own workflow step in some
+  stores but bundled with QC in others. Per-dealer
+  policy is a future concern; ship v1 with `detail`
+  distinct and let operators skip it via manual
+  `qc → photography` if their store bundles.
 
 Load-bearing consequences:
 - `photography → listing` requires a photo threshold —
-  M5 stubs this rule with a "M6 photo threshold not yet
-  available" evaluation that returns no suggestion.
-- `listing → frontline` requires `price > 0` (available
-  today at M1) — this rule fires.
+  the M6 predicate. M5.3 must return a **structured
+  unmet prerequisite** for this transition, not a
+  fake suggestion (see §5.h refinement).
+- `listing → frontline` is **manual-only in M5**. The
+  M5.3 rule evaluator does NOT ship a deterministic
+  `listing → frontline` rule; `price > 0` alone is
+  insufficient once listing publication matters. M6
+  later adds the deterministic rule when
+  `VehicleListing.published` exists (§5.h).
 
 ### 5.b Load-bearing decision — Allowed transition table + trigger enum
 
 **Question.** Given Option C from §5.a, which
 transitions are permitted? Which fire deterministically?
 
-**Allowed transitions (recommended for user review):**
+**RESOLVED (SESSION_075) — allowed transitions.**
 
-Retail-preparation forward chain (deterministic when
-predicates fire; also manually advanceable):
+Retail-preparation forward chain (each transition is
+manually advanceable; the ones marked *deterministic
+suggestion* also surface via `suggest_transitions()`
+per §5.h refinement):
 - `incoming → inspection` (manual — indicates vehicle
   physically arrived; or auto via a hypothetical M8
   arrival scanner).
-- `inspection → recon` — deterministic when a completed
-  `ConditionReport` has ≥1 finding at severity
-  `recommended` or higher (per VCP; verify against
-  `Vehicle.latest_completed_condition_report`).
-- `recon → qc` — deterministic when all `WorkOrder`
-  rows for the vehicle at any category, where at least
-  one linked finding has severity `required` or
-  `safety`, are in `status=completed`.
+- `inspection → recon` — *deterministic suggestion*
+  when a completed `ConditionReport` has ≥1 finding
+  requiring work per the final severity vocabulary
+  (`recommended` / `required` / `safety`). A completed
+  report with **no actionable findings** must NOT be
+  forced into recon; the operator is instead offered a
+  manual path per the transition table below.
+- `recon → qc` — *deterministic suggestion* when
+  (a) zero open work orders remain AND (b) every
+  `must_do` `ReconDecision` for this vehicle is
+  addressed by completed `WorkOrder` coverage or is
+  explicitly resolved by the decision contract.
 - `qc → detail` — manual (operator confirms QC passed).
+- `qc → photography` — manual (operator bundles
+  detail with QC — the "detail collapse" escape
+  hatch per §5.a).
 - `detail → photography` — manual (operator confirms
   detail complete).
-- `photography → listing` — deterministic when
-  `VehiclePhoto.count ≥ N` (M6 predicate; M5 stubs).
-- `listing → frontline` — deterministic when
-  `Vehicle.price > 0` AND (future) `VehicleListing.published=True`
-  (M6 predicate; M5 stubs the listing check but reads
-  price today).
+- `photography → listing` — no deterministic suggestion
+  in M5; the M5.3 evaluator returns a **structured
+  unmet prerequisite** ("M6 photo predicate not yet
+  available") per §5.h. Manual advancement is
+  permitted.
+- `listing → frontline` — **manual-only in M5** per
+  §5.a. No deterministic suggestion. M6 later adds
+  the deterministic published-listing rule when
+  `VehicleListing.published` exists.
+
+Operational-disposition escapes (manual only; permitted
+from any non-terminal retail-preparation stage —
+`incoming`, `inspection`, `recon`, `qc`, `detail`,
+`photography`, `listing` — AND from `frontline`):
+- `<any retail-preparation or frontline> → wholesale_out`
+  — manual with required reason.
+- `<any retail-preparation or frontline> → hold_reserved`
+  — manual with required reason.
+- `<any retail-preparation or frontline> → company_use`
+  — manual with required reason.
+- `<any retail-preparation or frontline> → off_market`
+  — manual with required reason.
+
+Escape returns (any operational-category stage back to
+retail-preparation; always manual):
+- `hold_reserved → <previous retail-preparation stage>`
+  — manual. The service resolves the prior stage by
+  reading the most recent `VehicleStageEvent` whose
+  `to_stage == "hold_reserved"` and using its
+  `from_stage` as the return target. If no valid prior
+  retail-preparation stage exists (or the resolved
+  `from_stage` is itself operational), the operator
+  must explicitly choose an allowed target. **The
+  prior stage is NOT stored in `notes` free text** —
+  the event log is the durable record.
+- `wholesale_out → inspection` — manual (wholesale
+  cancelled, unit returns to retail pipeline).
+- `company_use → inspection` — manual (company use
+  concluded, unit returns to retail pipeline).
+- `off_market → inspection` — manual (issue resolved,
+  unit returns to retail pipeline).
+
+Terminal:
+- `frontline → sold` — **NOT SHIPPED IN M5** per §5.a
+  (SESSION_075). No enum value, no service stub, no
+  transition entry. M9 introduces `sold` alongside the
+  `Sale` model.
 
 Operational escapes (any nonterminal-retail stage →
 operational category; always manual):
@@ -819,18 +1070,26 @@ Terminal:
   value present but transition raises "M9 not shipped"
   error.
 
-**Trigger enum:** `manual`, `rule`, `import`,
-`bootstrap`. `manual` = operator initiated. `rule` =
-deterministic rule fired + operator confirmed (via
-suggested-transitions panel). `import` = seeded from an
-external import (bulk M6 upload, DMS sync). `bootstrap` =
-the initial `VehicleStage` row created when
-`get_current_stage` finds no row (bootstrap-stage default
-per §5.c).
+**Trigger enum (RESOLVED SESSION_075):** `manual`,
+`rule`, `import`, `bootstrap`.
 
-**[NEEDS-DECISION-BEFORE-M5.1]** — user review required
-on the exact transition table + `sold` deferral +
-`detail` collapse decision.
+- `manual` = operator initiated.
+- `rule` = deterministic rule fired + operator confirmed
+  (via suggested-transitions panel). Any event with
+  `trigger='rule'` should carry a non-blank
+  `rule_name`; the invariant is enforced by the M5.2
+  service, not at the persistence layer (documented in
+  §1.2 and in the M5.1 model docstring so future edits
+  don't split the invariant).
+- `import` = seeded from an external import (bulk
+  upload, DMS sync).
+- `bootstrap` = the initial `VehicleStage` row created
+  by `ensure_current_stage()` when no row exists — or
+  by the `0017` data migration. `from_stage=None` on
+  `VehicleStageEvent` is legitimate ONLY for
+  `trigger='bootstrap'`; the M5.2 service enforces
+  this, not the persistence layer (documented in the
+  M5.1 model docstring).
 
 ### 5.c Load-bearing decision — Bootstrap stage for existing vehicles
 
@@ -856,7 +1115,7 @@ existing dev / prod data, what stage does every existing
   `off_market`; new vehicles created after M5.1 default
   to `incoming` per §5.c decision.
 
-**Chosen: Option C** (recommended; user can override).
+**RESOLVED (SESSION_075) — Option C affirmed.**
 Rationale: preserves the M1 chat behavior for currently-
 available vehicles (they stay retail-eligible on the
 switch-over); currently-unavailable vehicles are
@@ -864,7 +1123,42 @@ declared `off_market` (a manual reclassification path
 exists via `off_market → inspection`); new vehicles
 default to `incoming` because the retail preparation
 pipeline is the correct default for a newly-acquired
-unit. Migration `0017` includes a data-migration step.
+unit.
+
+Migration `0017` MUST create **two rows per existing
+Vehicle**, not just the stage row:
+
+1. **`VehicleStage`** — `current_stage='frontline'` if
+   `Vehicle.is_available=True` else
+   `current_stage='off_market'`. `entered_at=now()`.
+   `trigger='bootstrap'`. `entered_by=None`. Explicit
+   `dealership` from the parent Vehicle.
+2. **Matching `VehicleStageEvent`** —
+   `to_stage=<matching current_stage>`,
+   `from_stage=None`, `entered_at=` same value as the
+   stage row (not merely "close"; use one `timezone.now()`
+   value for both rows in the migration to keep the
+   invariant enforceable in tests). `trigger='bootstrap'`.
+   `by=None`. Explicit `dealership` from the parent
+   Vehicle.
+
+Both rows share `trigger='bootstrap'` and matching
+timestamps; the event row establishes the audit-trail
+provenance ("this Vehicle entered its initial stage via
+the bootstrap migration"). Skipping the event row would
+leave a Vehicle whose current stage has no corresponding
+event and would silently violate the "every stage the
+vehicle occupies has an event" invariant M5.2 relies on
+for aging analytics later.
+
+New Vehicles created **after** M5.1 are NOT handled by
+the persistence layer in this increment — no pre-save
+signal, no bootstrap-on-read side effect (per §1.6
+refinement). The Vehicle write-path integration lands
+in M5.5 alongside the retail-gating refactor and
+explicitly calls `ensure_current_stage(...,
+trigger='...')` for every code path that creates a new
+Vehicle.
 
 ### 5.d Load-bearing decision — State-machine implementation approach
 
@@ -922,16 +1216,47 @@ boolean when `VehicleStage` lands?
   land). Downside: two-track state until every consumer
   migrates.
 
-**[NEEDS-DECISION-BEFORE-M5.1]** — user review required.
-Recommendation: **Option D** with a deprecation note.
-Rationale: (a) minimizes M5.6 blast radius; (b)
-preserves optionality for the case where a store wants
-`is_available` as an override switch (Option C's
-concern is real); (c) each downstream consumer migrates
-on its own schedule via a documented deprecation window.
-`is_available` gets a docstring flag "deprecated —
-prefer `is_retail_eligible`; scheduled for removal in
-M9 or later."
+**RESOLVED (SESSION_075) — Option D affirmed, without a
+premature removal date.**
+
+`Vehicle.is_available` stays as-is for backwards
+compatibility. `Vehicle.is_retail_eligible` (§1.6) is
+introduced as the new authoritative predicate for
+customer-facing inventory exposure. The M5.5 refactor
+migrates the known retail consumers:
+
+- customer chat inventory retrieval
+  (`services/chat_engine.py::_available_vehicles_queryset`)
+- stock-specific customer vehicle lookup
+  (`services/chat_engine.py::_vehicle_ask_target`)
+- inventory search
+  (`services/inventory_search.py::search_vehicles`)
+- public showroom endpoint (`views.py`)
+
+Downstream consumers that are NOT retail exposure
+(admin surfaces, internal reports, seed scripts) may
+continue reading `is_available` — no forced migration.
+
+**Deprecation note (goes in the M5.1
+`Vehicle.is_available` docstring, updated by whichever
+increment first touches Vehicle):** *"Deprecated for
+retail exposure. Retain until every known consumer has
+migrated and a repository-wide audit proves removal
+safe."* Do **not** schedule removal for M9 (or any
+specific future milestone) — the removal date will be
+set by a dedicated audit pass once every downstream
+consumer has been enumerated.
+
+**Anti-pattern locked out:** `is_available` MUST NOT
+remain a manual override for retail gating. The M1
+behavior where an operator could "flip is_available to
+False" as a temporary removal is deprecated by M5;
+customer-facing eligibility comes from lifecycle stage
+alone. If the operator needs to temporarily withhold a
+frontline vehicle, the correct action is a
+`frontline → hold_reserved` transition (§5.b), not an
+`is_available=False` flip. The M5.5 refactor is the
+enforcement point.
 
 ### 5.f Load-bearing decision — Role permission matrix
 
@@ -942,39 +1267,71 @@ and via which surfaces?
 `dealer_owner`, `sales_manager`, `recon_manager`,
 `f_and_i_manager`, `collections`, `advisor`, `porter`.
 
-**Chosen matrix (recommended for user review):**
+**RESOLVED (SESSION_075) — refined matrix.**
 
 | M5 surface | dealer_owner | sales_manager | recon_manager | f_and_i_manager | collections | advisor | porter |
 |---|---|---|---|---|---|---|---|
 | GET lifecycle dashboard (vehicle) | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 | POST manual transition (retail-preparation chain) | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| POST manual transition (→ hold_reserved) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | POST manual transition (→ wholesale_out) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| POST manual transition (→ hold_reserved) | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| POST manual transition (→ company_use) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | POST manual transition (→ off_market) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| POST manual transition (frontline → operational) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | GET suggested transitions | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 
-**Permission class recommendation.** Reuse
-`IsReconManagerSalesManagerOrOwnerAtActiveDealership`
-(M4.6) for the recon-adjacent stage transitions
-(everything except `wholesale_out` + `off_market`, which
-are commercial decisions gated to sales_manager + owner
-only). For `wholesale_out` + `off_market` transitions,
-reuse `IsSalesManagerOrOwnerAtActiveDealership` (M2.6).
+**Refinement rationale (SESSION_075).** The prior draft
+authorized `recon_manager` to mark `hold_reserved` on
+the argument that "recon manager needs to pause a unit
+for parts back-order." Reject that framing:
+`hold_reserved` is a **sales/customer inventory
+commitment** (a specific customer has requested a
+hold), not a parts-delay status. Parts delays remain
+represented by M4 `WorkOrderPart` blocker data
+(`status='backordered'` etc.) while the vehicle stays
+in its honest recon stage — the recon manager does not
+need to move the vehicle out of recon to signal "waiting
+on parts." All four commercial/disposition transitions
+(`hold_reserved`, `wholesale_out`, `company_use`,
+`off_market`) are gated to `dealer_owner` +
+`sales_manager` only.
 
-**No new permission class needed in M5.** The finer-
-grained per-transition gating happens at the service
-layer, not the DRF permission layer — the endpoint
-composes the broader class, and the service refuses
-narrower transitions with `InvalidStageTransitionError`
-that maps to 403 or 409 depending on cause.
+**Permission class approach — reuse; no new broad
+lifecycle class.**
 
-**[NEEDS-DECISION-BEFORE-M5.1]** — user review required
-on the per-transition matrix + reuse-vs-new-class
-choice. Especially: is `recon_manager` authorized to
-mark a vehicle `hold_reserved`? Argue for yes (recon
-manager needs to pause a unit for parts back-order);
-argue for no (that's a sales-management call). Ship
-recommendation is yes.
+- **Retail-preparation transitions AND the GET surfaces**
+  — reuse `IsReconManagerSalesManagerOrOwnerAtActiveDealership`
+  (M4.6). The DRF permission layer admits the endpoint.
+- **Commercial/disposition transitions** — reuse
+  `IsSalesManagerOrOwnerAtActiveDealership` (M2.6). The
+  DRF permission layer admits the endpoint.
+- **Per-transition role refusal is enforced at the
+  service layer.** M5.2's `advance_stage` accepts an
+  `actor` and checks role authority against the target
+  stage; a `recon_manager` attempting
+  `frontline → hold_reserved` raises the new
+  `UnauthorizedStageTransitionError`.
+
+**Distinct domain errors (SESSION_075 refinement):**
+
+- `InvalidStageTransitionError` — structurally illegal
+  from/to (e.g. `incoming → frontline` skipping the
+  pipeline). Maps to HTTP 409.
+- `UnauthorizedStageTransitionError` — valid transition
+  attempted by the wrong role (e.g. `recon_manager`
+  attempting `→ hold_reserved`). Maps to HTTP 403.
+- `StageAlreadyCurrentError` — no-op transition
+  refused. Maps to HTTP 409.
+- `CrossTenantLifecycleError` — cross-tenant refusal.
+  Maps to HTTP 404 (fail-closed).
+
+Overloading `InvalidStageTransitionError` for both
+structural illegality and role refusal is explicitly
+rejected — the two failures have different HTTP
+mappings and different remediation paths for the
+caller. The M5.2 service is the enforcement point;
+M5.4 endpoints just re-raise with the correct HTTP
+status code.
 
 ### 5.g Load-bearing decision — Aging measurement scope
 
@@ -1026,6 +1383,42 @@ Scheduled scanners require M7 async infrastructure
 (not yet). If operator evidence surfaces the need for
 auto-apply, revisit in M7 or later.
 
+**REFINED (SESSION_075) — per-rule boundaries.** The
+M5.3 rule evaluators must remain suggestions only. No
+auto-application in M5. Individual rule contracts:
+
+- **`inspection → recon`** — fires when a completed
+  `ConditionReport` exists AND at least one
+  `ConditionFinding` requires work per the final
+  severity vocabulary (`recommended`, `required`, or
+  `safety`). A completed report with **no actionable
+  findings** must NOT be forced into recon — the
+  operator gets a manual path toward `qc` (via the
+  explicit `qc → detail`/`qc → photography` transitions
+  in §5.b) or another allowed target from the
+  transition table, not a false recon suggestion.
+- **`recon → qc`** — does NOT test only "zero open
+  work orders." Also requires every `must_do`
+  `ReconDecision` for this vehicle is addressed by
+  completed `WorkOrder` coverage OR is explicitly
+  resolved through the decision contract. A vehicle
+  with an unresolved `must_do` decision and no active
+  work order is NOT ready for QC.
+- **`photography → listing`** — unavailable until M6
+  provides the photo predicate. M5.3 returns a
+  **structured unmet prerequisite** describing what
+  M6 will provide, NOT a fake suggestion. Manual
+  advancement is still permitted (per §5.b).
+- **`listing → frontline`** — **manual-only in M5.**
+  `price > 0` alone is insufficient once listing
+  publication matters. Until M6 provides
+  `VehicleListing.published`, either the rule is
+  unavailable (structured prerequisite) or the truthful
+  v1 rule is manual-only. **Chosen: manual-only.** Do
+  not claim a deterministic published-listing gate
+  that cannot be evaluated. M6 adds the deterministic
+  rule.
+
 Option B is documented as a **planned deferred**
 extension: `services/vehicle_lifecycle.py` will expose a
 `_evaluate_and_apply_all_rules(vehicle)` helper that
@@ -1060,6 +1453,27 @@ need to preview upcoming inventory use the operator
 inventory list (which shows every vehicle regardless of
 stage); customer chat gets the truthful "front-line
 only" filter.
+
+**REFINED (SESSION_075) — truthful customer language.**
+A customer-facing request for a specific non-frontline
+stock number must NOT falsely say the dealership does
+not possess the vehicle. The retrieval filter is still
+a hard block; this is a language clarification for the
+customer-facing chat response when a specific stock
+number lookup hits a non-frontline unit:
+
+- **Approved phrasing:** *"That vehicle is not
+  currently available for retail."*
+- **Prohibited:** exposing the internal stage
+  (`"currently in recon"`), recon details, completion
+  estimate, vendor status, or expected-ready date.
+
+The safety-stack scrub layer (`services/llm_safety.py`)
+already enforces the M4.5 no-invented-recon-fact
+contract; the M5.6 customer chat refactor adds a
+truthful "not currently available for retail" fallback
+copy for stock-specific misses instead of the M1
+"we don't have that vehicle" response.
 
 **Deferred:** Option C configurability lands in M6 or
 later IF operator evidence surfaces the need. For M5
@@ -1157,24 +1571,70 @@ refactor). Increment discipline inherited from M4 retro
 
 ### Increment 1 (M5.1) — Core persistence
 
-**Scope.** Two new models (`VehicleStage`,
-`VehicleStageEvent`) + migration `0017` + admin
+**Scope (REFINED SESSION_075).** Two new models
+(`VehicleStage`, `VehicleStageEvent`) + migration
+`0017` (with bootstrap data migration) + admin
 registrations + module-level enum constants
-(`VEHICLE_STAGE_CHOICES`, `VEHICLE_STAGE_TRIGGER_CHOICES`)
-+ cross-tenant `clean()` guards on both models +
-`_TENANT_CARRIER_MODEL_NAMES` tuple extended 15 → 17.
-Data migration in `0017` bootstraps a `VehicleStage`
-row for every existing `Vehicle` per §5.c Option C
-(existing `is_available=True` → `frontline`;
-`is_available=False` → `off_market`).
+(`VEHICLE_STAGE_CHOICES` — 12 values per §5.a
+Modified Option C; `VEHICLE_STAGE_TRIGGER_CHOICES` — 4
+values per §5.b) + cross-tenant `clean()` guards on
+both models + `_TENANT_CARRIER_MODEL_NAMES` tuple
+extended 15 → 17. Data migration in `0017` bootstraps
+BOTH a `VehicleStage` row AND a matching
+`VehicleStageEvent` row for every existing `Vehicle`
+per §5.c Option C (existing `is_available=True` →
+`frontline`; `is_available=False` → `off_market`;
+event has `from_stage=None`, `trigger='bootstrap'`,
+`entered_at` matching the stage row's `entered_at`,
+`by=None`).
 
-**No service module in M5.1.** Persistence layer only.
+**Not in M5.1 (deferred to M5.2 per §1.6 refinement):**
 
-**Tests.** ~40 focused model tests: schema
-(dealership FK NOT NULL, choices validation, OneToOne
-cascade), cross-tenant guards, enum coverage, tenancy-
-carrier registration, bootstrap data migration verifies
-against a seeded fixture.
+- No `services/vehicle_lifecycle.py` module.
+- No `get_current_stage` / `ensure_current_stage` /
+  `advance_stage` / `retail_eligible` /
+  `suggest_transitions` functions.
+- No `Vehicle.current_stage` or
+  `Vehicle.is_retail_eligible` `@property` accessors.
+- No transition validation in `VehicleStage.clean()`
+  or `VehicleStageEvent.clean()` — persistence layer
+  is neutral; the state machine lives in M5.2.
+- No auto-event creation from `VehicleStage.save()`.
+- No pre-save signal that creates a stage row on new
+  Vehicle creation — that write-path integration lands
+  in M5.5 as explicit calls.
+- No domain errors — those land with the M5.2 service
+  (`CrossTenantLifecycleError`,
+  `InvalidStageTransitionError`,
+  `UnauthorizedStageTransitionError` per §5.f,
+  `StageAlreadyCurrentError`).
+
+**Admin surface (M5.1).** Diagnostic only. Both admin
+registrations show `current_stage` visible,
+`vehicle`/`dealership` searchable, events readable.
+Do NOT add transition actions. Where existing admin
+conventions permit read-only event fields for
+append-only history, use them.
+
+**Tests.** ~40 focused model + migration tests:
+schema (dealership FK NOT NULL, choices validation,
+OneToOne cascade), all 12 stage choices and all 4
+trigger choices exercised, cross-tenant `clean()`
+guards, tenancy-carrier registration extends 15 →
+17, deterministic ordering, string representations,
+no side effects on save (VehicleStage.save() creates
+no event; VehicleStageEvent creation does not mutate
+current stage), append-only history invariant (event
+creation is the only supported way to record history
+even though Django technically permits row updates),
+bootstrap data migration verifies: available →
+frontline, unavailable → off_market, one stage per
+Vehicle, one bootstrap event per Vehicle, event
+`from_stage` null, event `to_stage` matches stage,
+matching `entered_at` values, matching `dealership`
+values, empty database safe, rollback + reapply via
+`migration_check`, `Vehicle.is_available` schema and
+values unchanged.
 
 **Boundary.** Test baseline: 2,518 → ~2,558.
 
@@ -1184,19 +1644,48 @@ commit.
 
 ### Increment 2 (M5.2) — Lifecycle service + state machine
 
-**Scope.** `services/vehicle_lifecycle.py` module with:
+**Scope (REFINED SESSION_075).**
+`services/vehicle_lifecycle.py` module with the
+following split per §1.6 (no hidden writes from
+read-model properties):
+
 - `get_current_stage(vehicle, *, dealership) →
-  VehicleStage` (idempotent bootstrap).
+  Optional[VehicleStage]` — **pure read.** Returns the
+  existing `VehicleStage` row or `None`. Does NOT
+  bootstrap.
+- `ensure_current_stage(vehicle, *, dealership,
+  actor=None, trigger="bootstrap") → VehicleStage` —
+  **explicit mutating op.** Creates the missing stage
+  row and a matching bootstrap `VehicleStageEvent`
+  (`from_stage=None`). Idempotent — returns the
+  existing row if present. This is the ONE verb that
+  creates a stage from nothing; property reads must not
+  invoke it implicitly.
 - `advance_stage(vehicle, *, dealership, to_stage,
   actor=None, trigger, rule_name="", notes="") →
   VehicleStage` — the one authoritative transition
-  verb. Validates from → to against the allowed table.
+  verb. Calls `ensure_current_stage(...)` first inside
+  its transaction (defense-in-depth for future write
+  paths that forget to seed the row). Then validates
+  from → to against the allowed table (§5.b) and
+  actor's role authority against the target (§5.f).
   Writes `VehicleStage` update + `VehicleStageEvent` row
   atomically. Uses `transaction.atomic()` +
   `select_for_update()`.
+- `retail_eligible(vehicle, *, dealership) → bool` —
+  **pure read.** Returns `False` when no stage row
+  exists (does NOT bootstrap). Returns True iff the
+  current stage is `frontline`.
 - `suggest_transitions(vehicle, *, dealership) →
   list[SuggestedTransition]` — read-only predicate
   evaluation. Walks the deterministic-rule table.
+- Two `@property` accessors added to `Vehicle` in this
+  increment (M5.2, alongside the service — not M5.1):
+  `current_stage` (delegates to `get_current_stage`;
+  may return `None`), `is_retail_eligible` (delegates
+  to `retail_eligible`; returns `False` when no stage
+  row exists). Function-local imports per M3.3
+  pattern.
 - `retail_eligible(vehicle, *, dealership) → bool` —
   convenience predicate.
 - Domain errors: `CrossTenantLifecycleError`,
@@ -1276,9 +1765,13 @@ predicate.
   apply time and refuses if the predicate has flipped.
 
 Permission classes per §5.f matrix. Domain-error → HTTP
-mapping:
+mapping (REFINED SESSION_075 — role refusal is now a
+distinct error):
 - `CrossTenantLifecycleError` → 404.
-- `InvalidStageTransitionError` → 409.
+- `InvalidStageTransitionError` (structurally illegal
+  from/to) → 409.
+- `UnauthorizedStageTransitionError` (valid transition
+  attempted by the wrong role) → 403.
 - `StageAlreadyCurrentError` → 409.
 - `ValueError` → 400.
 
@@ -1435,38 +1928,102 @@ M4.9:
 
 ---
 
-## 9. Load-bearing decisions summary — items requiring user review before M5.1
+## 9. Load-bearing decisions summary — RESOLVED at SESSION_075
 
-Every `[NEEDS-DECISION-BEFORE-M5.1]` in this document,
-consolidated:
+Every `[NEEDS-DECISION-BEFORE-M5.1]` in this document
+was resolved by the user at SESSION_075 opening. Full
+text of each amendment is in §0.a. Consolidated status:
 
-1. **§5.a — Stage enum vocabulary.** Recommendation:
-   Option C (VCP fine-grained pipeline + INVENTORY
-   operational terminals; 12 stages; `sold` stubbed;
-   `detail` kept distinct). User: confirm or override.
+1. **§5.a — Stage enum vocabulary.** **RESOLVED.**
+   Modified Option C: 12 stages (retail-preparation
+   pipeline `incoming → inspection → recon → qc →
+   detail → photography → listing → frontline` +
+   operational categories `wholesale_out`,
+   `hold_reserved`, `company_use`, `off_market`).
+   `sold` deferred entirely to M9 (no enum constant, no
+   stub). `company_use` added as distinct disposition
+   (not truthfully equivalent to `off_market`). `detail`
+   kept distinct in v1. `hold_reserved` used
+   consistently everywhere.
 
-2. **§5.b — Allowed transition table.** Recommendation:
-   the table as drafted. User: confirm the transition
-   set + the `sold` deferral + the `detail` collapse
-   policy.
+2. **§5.b — Allowed transition table.** **RESOLVED.**
+   Table as drafted, plus two refinements: (a) escape
+   returns from `hold_reserved` resolve the prior stage
+   via the last event's `from_stage`, not free-text
+   `notes`. (b) Post-frontline operational transitions
+   (`frontline → hold_reserved / off_market /
+   wholesale_out / company_use`) are explicitly
+   allowed. There is no `frontline → sold` transition
+   in M5.
 
 3. **§5.e — `Vehicle.is_available` disposition.**
-   Recommendation: Option D (keep + add
-   `is_retail_eligible` as new authoritative; deprecate
-   with a scheduled removal in M9 or later). User:
-   confirm or choose A/B/C.
+   **RESOLVED.** Option D without a premature removal
+   date. `is_available` retained as backwards-compat
+   field; `is_retail_eligible` becomes the
+   authoritative predicate. Deprecation note: *"retain
+   until every known consumer has migrated and a
+   repository-wide audit proves removal safe."* NOT
+   scheduled for M9 or any specific milestone.
+   `is_available` MUST NOT remain a manual override
+   for retail gating — customer-facing eligibility
+   comes from lifecycle stage alone (M5.5 enforcement
+   point).
 
-4. **§5.f — Role permission matrix.** Recommendation:
-   reuse `IsReconManagerSalesManagerOrOwnerAtActiveDealership`
-   (M4.6) for recon-adjacent transitions;
-   `IsSalesManagerOrOwnerAtActiveDealership` (M2.6) for
-   `wholesale_out` + `off_market`. User: confirm the
-   per-transition matrix (especially "is recon_manager
-   authorized to mark `hold_reserved`?").
+4. **§5.f — Role permission matrix.** **RESOLVED.**
+   Reuse existing permission classes (no new broad
+   lifecycle class). Recon-adjacent transitions may be
+   performed by dealer_owner + sales_manager +
+   recon_manager. Commercial/disposition transitions
+   (`hold_reserved`, `wholesale_out`, `company_use`,
+   `off_market`) may be performed only by dealer_owner
+   + sales_manager. `recon_manager` may NOT transition
+   into any of the four commercial/disposition stages —
+   parts delays are represented by M4 `WorkOrderPart`
+   blocker data while the vehicle stays in its honest
+   recon stage. Introduce a distinct
+   `UnauthorizedStageTransitionError` for role
+   refusals (maps to HTTP 403); do NOT overload
+   `InvalidStageTransitionError` (structural
+   from/to illegality → HTTP 409).
+
+**Additional refinements (SESSION_075, not from the
+four consolidated decisions but load-bearing for M5.1):**
+
+5. **§1.6 — no hidden writes from Vehicle properties.**
+   M5.2 contract splits `get_current_stage` (pure
+   read; may return `None`) from `ensure_current_stage`
+   (explicit mutating op). `Vehicle.current_stage` /
+   `Vehicle.is_retail_eligible` land in M5.2 alongside
+   the service, NOT in M5.1. Migration `0017` bootstraps
+   every existing Vehicle. New Vehicle creation paths
+   land in M5.5 as explicit `ensure_current_stage`
+   calls.
+
+6. **§5.c — bootstrap must create BOTH stage AND
+   event.** Migration `0017` inserts one
+   `VehicleStage` AND one matching bootstrap
+   `VehicleStageEvent` (`from_stage=None`,
+   `trigger='bootstrap'`, matching timestamps,
+   explicit dealership) for every existing Vehicle.
+
+7. **§5.h — rule evaluator refinements.**
+   `inspection → recon` fires only when a completed
+   report has actionable findings per the final
+   severity vocabulary. `recon → qc` requires every
+   `must_do` decision addressed by completed WO
+   coverage or explicitly resolved. `photography →
+   listing` returns structured unmet prerequisite (not
+   a fake suggestion) pending M6. `listing → frontline`
+   is **manual-only in M5**; M6 later adds the
+   deterministic published-listing rule.
+
+8. **§5.i — truthful customer language.** Approved
+   phrasing for a stock-specific non-frontline lookup:
+   *"That vehicle is not currently available for
+   retail."* Do not expose internal stage, recon
+   details, completion estimate, vendor status, or
+   expected-ready date.
 
 Every other §5.a – §5.k decision is either **chosen**
 by the planning doc (with rationale) or deferred to a
-future milestone (with a home cited). Decisions marked
-`[NEEDS-DECISION-BEFORE-M5.1]` are the ones the user
-should confirm at the top of SESSION_075 before code
-lands.
+future milestone (with a home cited).
