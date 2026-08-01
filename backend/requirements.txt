@@ -5,3 +5,13 @@ psycopg2-binary==2.9.9
 python-dotenv==1.0.1
 requests==2.32.3
 openai==1.30.5
+# Transitive-dep pin — ``openai==1.30.5`` passes the ``proxies`` kwarg
+# to ``httpx.Client.__init__``, which ``httpx>=0.28`` removed.
+# Without this pin, ``pip install -r requirements.txt`` resolves
+# ``httpx==0.28.x`` transitively (openai's own bound is
+# ``httpx<1,>=0.23.0``) and every OpenAI-client instantiation raises
+# ``TypeError: got an unexpected keyword argument 'proxies'``. Added
+# at SESSION_059 alongside the ``django-storages`` addition — the
+# fresh resolve is what surfaced the incompatibility.
+httpx<0.28
+django-storages[s3]==1.14.6

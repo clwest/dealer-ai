@@ -116,6 +116,84 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Milestone 3 · Increment 4 — provider-neutral photo storage.
+#
+# Configuration uses Django 5.0's ``STORAGES`` dict (the modern
+# successor to ``DEFAULT_FILE_STORAGE``). A dedicated
+# ``condition_photos`` alias keeps the storage decision decoupled
+# from the ``default`` alias so unrelated file fields (e.g. any
+# future onboarding-logo migration) never inherit condition-report
+# storage semantics silently. See
+# ``docs/roadmap/MILESTONE_3_PLANNING.md`` §1.4 + §5.a for the
+# design memo.
+#
+# The env-driven switch is intentional: unset ``AWS_STORAGE_BUCKET_NAME``
+# → dev / test uses local ``FileSystemStorage`` under
+# ``MEDIA_ROOT/condition-photos``. Tests therefore make **zero** S3
+# network calls unless an operator has explicitly configured a
+# bucket via env.
+#
+# Env vars (all optional; if unset, dev / test uses FileSystemStorage):
+#   - ``AWS_STORAGE_BUCKET_NAME`` — presence triggers S3 mode.
+#   - ``AWS_S3_REGION_NAME`` — e.g. ``us-east-1``.
+#   - ``AWS_S3_ENDPOINT_URL`` — for S3-compatible providers
+#     (DigitalOcean Spaces, Backblaze B2, Cloudflare R2, MinIO).
+#   - ``AWS_ACCESS_KEY_ID`` / ``AWS_SECRET_ACCESS_KEY`` — or IAM
+#     role in prod. django-storages / boto3 read these from env
+#     automatically per the standard AWS SDK credential chain.
+#   - ``AWS_S3_CUSTOM_DOMAIN`` — CDN in front of the bucket
+#     (CloudFront / Cloudflare). Optional.
+#
+# Security invariants (locked by ``tests/test_photo_storage.py``):
+#   - ``default_acl=None`` — no public ACL is ever set on uploads.
+#   - ``querystring_auth=True`` — every read URL is signed +
+#     short-lived. No permanent public URLs.
+#   - Presigned URL TTL capped at 900 seconds
+#     (``services/photo_storage._MAX_TTL_SECONDS``).
+_condition_photos_bucket = os.getenv("AWS_STORAGE_BUCKET_NAME", "").strip()
+if _condition_photos_bucket:
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+        "condition_photos": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                "bucket_name": _condition_photos_bucket,
+                "region_name": os.getenv("AWS_S3_REGION_NAME", "us-east-1"),
+                "endpoint_url": os.getenv("AWS_S3_ENDPOINT_URL") or None,
+                "custom_domain": os.getenv("AWS_S3_CUSTOM_DOMAIN") or None,
+                # Private uploads only — never public-read.
+                "default_acl": None,
+                # Every read URL is signed + short-lived.
+                "querystring_auth": True,
+                # Never overwrite an existing object at the same key
+                # (defense against key collisions; every canonical key
+                # embeds a UUID so collisions are already vanishingly
+                # rare).
+                "file_overwrite": False,
+            },
+        },
+    }
+else:
+    # Dev / test — FileSystemStorage under a dedicated subdir of
+    # MEDIA_ROOT. Callers of ``services/photo_storage`` receive
+    # local-mode URLs that are explicitly non-production markers;
+    # see the service module docstring for the local contract.
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+        "condition_photos": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+            "OPTIONS": {
+                "location": str(MEDIA_ROOT / "condition-photos"),
+            },
+        },
+    }
+
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],

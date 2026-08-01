@@ -198,10 +198,16 @@ class AdminLeadHandoffEndpointTests(TestCase):
     def test_mark_handed_off_flag_flips(self):
         lead = _make_lead_with_session()
         url = reverse("dealer_ai:admin-lead-handoff", args=[lead.id])
+        # ``format="json"`` explicitly invokes DRF's JSONRenderer.
+        # ``content_type="application/json"`` with a raw dict makes DRF's
+        # APIRequestFactory treat the dict as a raw bytestring (Python
+        # repr with single quotes), which fails JSON parsing at the
+        # view. SESSION_059 compat patch — triggered by the M3.4
+        # ``pip install`` refreshing the shared venv.
         res = self.client.post(
             url,
             data={"mark_handed_off": True},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(res.status_code, 200)
         self.assertTrue(res.json()["handed_off"])

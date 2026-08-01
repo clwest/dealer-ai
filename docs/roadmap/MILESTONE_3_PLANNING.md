@@ -1505,7 +1505,7 @@ storage. No service changes. No admin changes. No AI.
 - New: `backend/dealer_ai/tests/test_vehicle_condition_report_properties.py`.
 - No modifications to any other file.
 
-### Increment 4 (M3.4) — Storage story (S3-compatible + CDN)
+### Increment 4 (M3.4) — Storage story (S3-compatible + CDN) — SHIPPED at SESSION_059
 
 **Scope.** Storage abstraction landing BEFORE the model that uses
 it (deliberate sequencing so M3.5 has a real dependency to bind
@@ -1540,6 +1540,216 @@ S3-compatible mock — zero real network access.
 
 **Boundary.** Test baseline: ~1,858 → ~1,883 pass. One new
 dependency. No new models. No API. No frontend.
+
+**Shipped surface (SESSION_059) — reviewed refinements.**
+
+Six factual refinements landed vs. the original scope text above.
+All were reviewed at the top of SESSION_059 (spec in the user
+prompt). Original text preserved; refinements annotated here.
+
+1. **`STORAGES` dict replaces `DEFAULT_FILE_STORAGE`.** Django
+   5.0.6 (already installed) supports the modern `STORAGES` dict
+   as the preferred backend configuration; `DEFAULT_FILE_STORAGE`
+   is legacy. Shipped: `settings.py::STORAGES` extended (dev
+   settings) and preserved across `prod_settings.py` (which
+   `**STORAGES` spread-merges to keep the `condition_photos`
+   env-switch active).
+
+2. **Dedicated `condition_photos` alias — the `default` alias is
+   NOT touched.** The original scope implied changing the global
+   default backend. Shipped adds a dedicated `condition_photos`
+   alias so unrelated file fields never inherit condition-report
+   storage semantics silently. (The current `DealerOnboardingProfile.logo`
+   is a `CharField` URL string — not a `FileField` — so the risk
+   is theoretical today, but the alias establishes the pattern
+   for any future file field.)
+
+3. **Caller does NOT supply `storage_key` on upload.** The
+   original signature `generate_upload_url(*, storage_key, ...)`
+   was a path-traversal seam — untrusted callers choosing keys.
+   Shipped: `generate_upload_target(*, dealership, photo_uuid,
+   content_type, ttl_seconds=900) -> UploadTarget`. The service
+   computes the canonical key internally via
+   `build_canonical_key(dealership, photo_uuid)`. Shape:
+   `dealerships/<slug>/condition-findings/<uuid>/original`. Every
+   segment validated by regex; path traversal is impossible by
+   construction. `object_exists` and `generate_read_url` still
+   accept `storage_key` (M3.5 has one on the row), but re-validate
+   it against the canonical pattern before touching the backend.
+
+4. **PUT with deferred size verification (documented honestly).**
+   Presigned PUT binds `Content-Type` (S3 rejects mismatches) but
+   does NOT enforce upload size. Shipped: PUT with content-type
+   binding; the module docstring calls out that upload-size
+   enforcement is deferred to M3.5's HEAD verification of the
+   actual object size against the client-declared value. The
+   scope text above says "max_size_bytes" as a URL argument —
+   that would only bind under presigned POST + policy conditions,
+   which is not shipped in v1. Presigned POST kept as a possible
+   future revisit if HEAD verification proves insufficient.
+
+5. **Local dev URL contract is explicit.** Rather than pretending
+   `MEDIA_URL` is a signed URL (unsafe), the local adapter
+   returns URL markers prefixed with `LOCAL_UPLOAD_URL_MARKER` /
+   `LOCAL_READ_URL_MARKER` (non-URL schemes). Any caller that
+   hands one to a browser fails loudly. The M3.5 upload flow
+   will detect the prefix and route to a Django-side upload
+   helper; M3.7 UI (or an earlier M3.5 authenticated download
+   route) will detect the read marker and generate its own
+   authenticated route.
+
+6. **No `moto` — dependency injection + `mock.patch` +
+   `botocore` client stubs.** The user's SESSION_059 spec asked
+   to evaluate whether existing tools suffice before adding a
+   testing dependency; they did. `_S3Adapter._boto3_client()` is
+   the mock seam for HEAD tests; `_get_default_adapter()` is the
+   mock seam for public-function delegation tests;
+   `override_settings` drives the auto-selection tests. Zero
+   network calls in tests.
+
+**Shipped API surface.**
+
+- `services/photo_storage.py` module exporting:
+  - `UploadTarget` (frozen dataclass) — `method`, `upload_url`,
+    `storage_key`, `required_headers`, `expires_at`
+    (timezone-aware).
+  - `build_canonical_key(*, dealership, photo_uuid) -> str` —
+    single source of truth for the storage-key shape.
+  - `generate_upload_target(*, dealership, photo_uuid,
+    content_type, ttl_seconds=900) -> UploadTarget`.
+  - `object_exists(storage_key: str) -> bool`.
+  - `generate_read_url(*, storage_key, ttl_seconds=900) -> str`.
+  - Four domain errors: `InvalidStorageKeyError`,
+    `InvalidContentTypeError`, `InvalidTTLError`,
+    `ObjectStorageError` (all subclass `ValueError` or
+    `RuntimeError` for adapter-level backend faults).
+  - Two module-level marker constants: `LOCAL_UPLOAD_URL_MARKER`,
+    `LOCAL_READ_URL_MARKER`.
+- Private: `_PhotoStorageAdapter` (Protocol), `_LocalAdapter`,
+  `_S3Adapter`, `_get_default_adapter()`, `_validate_*` helpers,
+  `_KEY_PATTERN` / `_SLUG_PATTERN` / `_VALID_CONTENT_TYPES`
+  constants.
+- Settings: `backend/dealer_kit/settings.py::STORAGES` extended
+  with `condition_photos` alias (env-driven S3 vs
+  FileSystemStorage). `backend/dealer_kit/prod_settings.py`
+  spread-merges the dev `STORAGES` and swaps only `staticfiles`
+  to WhiteNoise.
+- Requirements: `django-storages[s3]==1.14.6` (pin matches
+  already-installed version; boto3 pulled transitively).
+
+**Tests:** `backend/dealer_ai/tests/test_photo_storage.py`
+— **46 tests** across nine classes:
+- `AdapterAutoSelection` (2) — local vs S3 backend switch via
+  `override_settings`.
+- `CanonicalKeyBuilder` (7) — shape, tenant namespacing, UUID
+  string acceptance, invalid UUID / None rejection,
+  `..`-path-traversal + forward-slash rejection on slug.
+- `ContentTypeWhitelist` (5) — 4 canonical MIMEs accepted,
+  zero-drift guard vs M3.1 model constant, non-image rejected,
+  SVG rejected specifically, empty rejected.
+- `TTLValidation` (8) — default = max, at-max accepted, over-max
+  rejected, zero / negative / float / bool rejected, expires_at
+  timezone-aware, read URL TTL over max rejected.
+- `StorageKeyValidationOnRead` (6) — `..`-traversal, arbitrary
+  key, missing UUID segment, missing suffix, forged key
+  rejected; adapter never touched on invalid input.
+- `UploadTargetShape` (3) — all fields populated, frozen +
+  immutable, response contains no raw AWS credentials.
+- `LocalAdapter` (3) — upload/read markers, filesystem-backed
+  `object_exists`.
+- `S3Adapter` (7) — PUT with bound Content-Type, GET signing,
+  HEAD success/404/NoSuchKey/AccessDenied paths, presigned-URL
+  BotoCore error wrapped as `ObjectStorageError`.
+- `PublicApiDelegation` (5) — public functions delegate to
+  injected mock with correct args; content-type validation
+  short-circuits before adapter.
+
+**Baseline delta.** 1,894 → 1,940 pass, 1 skipped, 0 fail
+(46 new tests). No migrations. No new models. No API. No
+frontend. No changes to `services/condition_report.py`,
+`services/vehicle_ledger.py`, `services/tenancy.py`,
+`services/llm_safety.py`, `permissions.py`, `admin.py`, or any
+existing model / migration.
+
+**Compatibility patches surfaced by the M3.4 pip install (SESSION_059).**
+
+The `pip install -r requirements.txt` performed at SESSION_059
+start (required to pick up `django-storages[s3]`) also re-resolved
+several transitive dependencies in the shared venv. Two of the
+resolves surfaced latent incompatibilities that were fixed as
+minimal-scope compat patches:
+
+1. **`httpx<0.28` pinned.** `openai==1.30.5` (the currently
+   pinned OpenAI SDK version) passes the `proxies` kwarg to
+   `httpx.Client.__init__`, which `httpx>=0.28` removed. Without
+   the pin, `pip install -r requirements.txt` resolved
+   `httpx==0.28.x` transitively (openai's own bound is
+   `httpx<1,>=0.23.0`) and every OpenAI-client instantiation
+   raised `TypeError: got an unexpected keyword argument
+   'proxies'`. Two tests
+   (`test_admin_endpoints_auth.AdminLeadHandoffAuth.test_dealer_owner_at_active_tenant_is_authorized`
+   and `test_sales_manager_at_active_tenant_is_authorized`)
+   exercised the handoff-suggestion code path that constructs
+   an OpenAI client. Pin added; no other change.
+
+2. **Four M1/M2 test methods migrated from
+   `content_type="application/json"` to `format="json"`.** DRF's
+   `APIRequestFactory._encode_data` treats an explicit
+   `content_type` as "raw payload" and calls
+   `force_bytes(data)` on the dict — producing Python's
+   dict-repr (single quotes) rather than JSON. Django's own
+   `RequestFactory._encode_data` DOES `json.dumps` a dict when
+   the content type is `application/json`, but DRF's override
+   in `APIClient`'s MRO wins. The four affected tests
+   (`test_salesperson_and_assignment.AssignmentEndpointTests.test_assign_sets_assigned_to_and_assigned_at`,
+   `test_unassign_with_null_clears_fields`,
+   `test_reassign_overwrites_cleanly`,
+   `test_handoff_and_reset.AdminLeadHandoffEndpointTests.test_mark_handed_off_flag_flips`)
+   were sending Python-dict-repr bodies that the DRF view
+   rejected with `JSON parse error - Expecting property name
+   enclosed in double quotes: line 1 column 2 (char 1)`. Fix:
+   swap `content_type="application/json"` → `format="json"` so
+   DRF's JSONRenderer runs. **No production behavior change** —
+   the endpoint request contract at the wire level is now
+   properly-serialized JSON (which was the tests' original
+   intent). The three companion tests in the same file
+   (400-expected paths) were left unchanged in this session
+   because their assertions pass under both the old and new
+   body shapes (the endpoint returns 400 for a JSON parse
+   error and for a legitimate-business-reason failure alike);
+   fixing them properly is a separate scope decision.
+
+   The tests were passing at M3.3 close (SESSION_058 baseline
+   1,894). The pip install re-resolved the venv and exposed
+   the latent bug; verified reproducible at pristine commit
+   `a733253` (M3.3 close) with the same environment.
+
+**Files changed (SESSION_059).**
+
+- Modified: `backend/requirements.txt` — added
+  `django-storages[s3]==1.14.6` + `httpx<0.28` transitive pin.
+- Modified: `backend/dealer_kit/settings.py` — appended the
+  `STORAGES` dict with env-driven `condition_photos` alias +
+  header comment naming every `AWS_*` env var.
+- Modified: `backend/dealer_kit/prod_settings.py` — spread-merge
+  `STORAGES` (preserves the `condition_photos` alias, swaps only
+  `staticfiles` to WhiteNoise).
+- Modified: `backend/dealer_ai/tests/test_salesperson_and_assignment.py`
+  — 3 test methods `content_type="application/json"` →
+  `format="json"` (compat patch; see "Compatibility patches"
+  above). No production behavior change.
+- Modified: `backend/dealer_ai/tests/test_handoff_and_reset.py`
+  — 1 test method same compat patch.
+- New: `backend/dealer_ai/services/photo_storage.py` (~530
+  lines).
+- New: `backend/dealer_ai/tests/test_photo_storage.py` (~570
+  lines, 46 tests).
+- No modifications to any model, admin, service (other than the
+  new module), permissions, migration, or frontend file.
+- No modifications to `services/condition_report.py`,
+  `services/vehicle_ledger.py`, `services/tenancy.py`,
+  `services/llm_safety.py`, `permissions.py`, `views.py`, or
+  any other production code file.
 
 ### Increment 5 (M3.5) — Condition-finding photo model + upload flow
 

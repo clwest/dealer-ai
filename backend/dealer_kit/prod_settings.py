@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 
 from .settings import *  # noqa: F401,F403
-from .settings import BASE_DIR, MIDDLEWARE  # explicit re-imports for editors
+from .settings import BASE_DIR, MIDDLEWARE, STORAGES  # explicit re-imports for editors
 
 # --- core security ---------------------------------------------------------
 DEBUG = False
@@ -34,8 +34,13 @@ MIDDLEWARE = (
     + ["whitenoise.middleware.WhiteNoiseMiddleware"]
     + MIDDLEWARE[_security_idx + 1 :]
 )
+# Milestone 3 · Increment 4 — prod overlay only swaps ``staticfiles``
+# to WhiteNoise's compressed manifest backend and re-uses the
+# ``condition_photos`` alias from the dev settings (env-driven S3 vs
+# FileSystemStorage). Do NOT rewrite the whole ``STORAGES`` dict here
+# or the ``condition_photos`` env-switch logic gets bypassed.
 STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    **STORAGES,
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },

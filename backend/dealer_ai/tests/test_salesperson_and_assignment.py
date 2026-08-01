@@ -69,10 +69,16 @@ class AssignmentEndpointTests(TestCase):
 
     def test_assign_sets_assigned_to_and_assigned_at(self):
         url = reverse("dealer_ai:admin-lead-assign", args=[self.lead.pk])
+        # ``format="json"`` explicitly invokes DRF's JSONRenderer for the
+        # request body. Using ``content_type="application/json"`` with a
+        # raw dict makes DRF's APIRequestFactory treat the dict as a raw
+        # bytestring (Python repr with single quotes), which fails JSON
+        # parsing at the view. SESSION_059 compat patch — triggered by
+        # the M3.4 ``pip install`` refreshing the shared venv.
         res = self.client.post(
             url,
             data={"salesperson_id": self.maria.pk},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(res.status_code, 200, res.content)
         data = res.json()
@@ -87,10 +93,12 @@ class AssignmentEndpointTests(TestCase):
         self.lead.assigned_to = self.maria
         self.lead.save()
         url = reverse("dealer_ai:admin-lead-assign", args=[self.lead.pk])
+        # See ``format="json"`` note in
+        # ``test_assign_sets_assigned_to_and_assigned_at`` above.
         res = self.client.post(
             url,
             data={"salesperson_id": None},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(res.status_code, 200)
         data = res.json()
@@ -101,10 +109,12 @@ class AssignmentEndpointTests(TestCase):
         self.lead.assigned_to = self.maria
         self.lead.save()
         url = reverse("dealer_ai:admin-lead-assign", args=[self.lead.pk])
+        # See ``format="json"`` note in
+        # ``test_assign_sets_assigned_to_and_assigned_at`` above.
         res = self.client.post(
             url,
             data={"salesperson_id": self.dave.pk},
-            content_type="application/json",
+            format="json",
         )
         self.assertEqual(res.status_code, 200)
         data = res.json()
