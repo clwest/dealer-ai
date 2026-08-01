@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: in-progress
 increment: 5
 increment_status: shipped
-commit: TBD
+commit: 5ebdc15
 ---
 
 # SESSION_060 — Milestone 3 · Increment 5 (M3.5 — photo attachment workflow)
