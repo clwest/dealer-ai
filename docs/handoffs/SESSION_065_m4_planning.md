@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: planning
 increment: 0
 increment_status: shipped
-commit: TBD
+commit: 98d9e79
 ---
 
 # SESSION_065 — Milestone 4 · Increment 0 (M4.0 — planning pass)
@@ -313,7 +313,7 @@ retro + planning-artifact §5):
 
 ## Commit hashes
 
-- `TBD` — `docs(m4-inc0): Milestone 4 planning pass — MILESTONE_4_PLANNING.md + SESSION_065 handoff + SESSION_066 priority`
+- `98d9e79` — `docs(m4-inc0): Milestone 4 planning pass — MILESTONE_4_PLANNING.md + SESSION_065 handoff + SESSION_066 priority`
 
 ## Exact SESSION_066 Milestone 4 · Increment 1 (M4.1) scope
 
