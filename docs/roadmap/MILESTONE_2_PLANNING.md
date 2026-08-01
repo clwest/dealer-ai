@@ -1350,16 +1350,42 @@ scope-discipline reminders above still apply to every increment.
   the scrub name (`acquisition_price`) is recorded in
   `scrubs_fired` and that is the durable identifier.
 
-- **M2.6 — Ledger API + permission matrix.** Three endpoints
-  under `/api/dealer-ai/admin/vehicles/<stock_number>/…`:
-  `GET .../ledger/`, `POST .../acquisition/`, `POST .../costs/`.
-  Permission composition: `[IsAuthenticated &
-  IsSalesManagerOrOwnerAtActiveDealership]` on all three.
-  Focused six-case permission matrix per endpoint (unauth,
-  wrong-role, wrong-tenant, correct sales_manager, correct
-  dealer_owner, advisor → 403). URL registrations. Cross-tenant
-  `stock_number` lookups fail closed (404) — same shape as
-  `AdminLeadDetailFailsClosedAcrossTenants`.
+- **M2.6 — Ledger API + permission matrix (SHIPPED at
+  SESSION_052).** Three admin endpoints under
+  `/api/dealer-ai/admin/vehicles/<stock_number>/…`:
+  `GET .../ledger/`, `POST .../acquisition/`,
+  `POST .../costs/`. Permission composition
+  `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`
+  on all three (M1 · 4D class reused unchanged). Endpoints
+  wrap the ledger service — `record_acquisition` and
+  `add_cost` — never bypass to
+  `VehicleAcquisition.objects.create` /
+  `VehicleCost.objects.create`. DRF `Serializer` classes for
+  input validation (Decimal-safe via `Decimal(str(value))`;
+  min_value=0 on non-negative acquisition fields; canonical
+  choices enforced from model constants). `ModelSerializer` +
+  hand-quantized totals dict for output — all money fields
+  serialize as strings so JavaScript `Number` can't truncate
+  Decimal precision. Cross-tenant AND nonexistent
+  `stock_number` both return 404 (identical shape, no
+  existence leak). Cost ordering deterministic:
+  ascending `incurred_at` with `pk` tie-break. `created_by`
+  on cost writes derives from `request.user` — client-supplied
+  attribution ignored (would let an operator forge cost
+  authorship). No update/delete endpoints (v1 corrections are
+  reversing rows). 57 focused tests including six-case
+  permission matrix per endpoint, full read scenarios
+  (empty/acq-only/mixed-actual-estimate/reversing/deterministic-
+  ordering/contract-stability/cross-tenant-isolation),
+  acquisition upsert scenarios (create/update/invalid-source/
+  invalid-decimal/missing-fields/every-canonical-source-accepted),
+  cost create scenarios (valid/negative-reversal/invalid-
+  category/invalid-decimal/invalid-datetime/created_by-
+  attribution-cannot-be-spoofed), immutable-routes
+  (PUT/PATCH/DELETE → 405), and security verification (no
+  ledger keywords on `/vehicles/<id>/`, `/salespeople/`,
+  `/onboarding/profile/` GET; DEFAULT_PERMISSION_CLASSES
+  remains unset; public routes still 200 without auth).
 
 - **M2.7 — Operator ledger UI.** Frontend
   `VehicleLedgerPage.tsx` at `/dealer-ai-inventory/:stock/ledger`,
