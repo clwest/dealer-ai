@@ -264,6 +264,11 @@ _TENANT_CARRIER_MODEL_NAMES = (
     "ChatMessage",
     "CustomerLead",
     "DealerOnboardingProfile",
+    # Milestone 3 · Increment 1 (SESSION_056) — condition-report
+    # persistence layer. Extended per MILESTONE_3_PLANNING.md §2 row 2.
+    "ConditionReport",
+    "ConditionFinding",
+    "ConditionFindingPhoto",
 )
 
 

@@ -274,3 +274,103 @@ class WritePathFallback(TestCase):
         session = ChatSession.objects.create(dealership=other)
         lead = CustomerLead.objects.create(name="Session-linked", session=session)
         self.assertEqual(lead.dealership_id, other.pk)
+
+    # Milestone 3 · Increment 1 (SESSION_056) — three new carriers
+    # registered with the pre_save autofill signal per
+    # ``services/tenancy.py::_TENANT_CARRIER_MODEL_NAMES`` extension
+    # (6 → 9). Each condition-report model without an explicit
+    # dealership picks up the default. See
+    # ``MILESTONE_3_PLANNING.md`` §2 row 2.
+
+    def test_condition_report_autofill_from_default(self):
+        from django.utils import timezone
+
+        from dealer_ai.models import ConditionReport
+
+        v = Vehicle.objects.create(
+            stock_number="M31-AUTOFILL-REPORT",
+            year=2024,
+            model="Bronco",
+            price=Decimal("42000.00"),
+        )
+        report = ConditionReport.objects.create(
+            vehicle=v,
+            inspector_name="Marta Ruiz",
+            inspected_at=timezone.now(),
+            mileage_at_inspection=42_000,
+        )
+        self.assertIsNotNone(report.dealership_id)
+        self.assertEqual(report.dealership.slug, "default")
+
+    def test_condition_finding_autofill_from_default(self):
+        from django.utils import timezone
+
+        from dealer_ai.models import (
+            CONDITION_CATEGORY_MECHANICAL,
+            CONDITION_SEVERITY_REQUIRED,
+            ConditionFinding,
+            ConditionReport,
+        )
+
+        v = Vehicle.objects.create(
+            stock_number="M31-AUTOFILL-FINDING",
+            year=2024,
+            model="Bronco",
+            price=Decimal("42000.00"),
+        )
+        report = ConditionReport.objects.create(
+            vehicle=v,
+            dealership=v.dealership,
+            inspector_name="Marta Ruiz",
+            inspected_at=timezone.now(),
+            mileage_at_inspection=42_000,
+        )
+        finding = ConditionFinding.objects.create(
+            report=report,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            severity=CONDITION_SEVERITY_REQUIRED,
+            description="Autofill smoke test.",
+        )
+        self.assertIsNotNone(finding.dealership_id)
+        self.assertEqual(finding.dealership.slug, "default")
+
+    def test_condition_finding_photo_autofill_from_default(self):
+        from django.utils import timezone
+
+        from dealer_ai.models import (
+            CONDITION_CATEGORY_MECHANICAL,
+            CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+            CONDITION_SEVERITY_REQUIRED,
+            ConditionFinding,
+            ConditionFindingPhoto,
+            ConditionReport,
+        )
+
+        v = Vehicle.objects.create(
+            stock_number="M31-AUTOFILL-PHOTO",
+            year=2024,
+            model="Bronco",
+            price=Decimal("42000.00"),
+        )
+        report = ConditionReport.objects.create(
+            vehicle=v,
+            dealership=v.dealership,
+            inspector_name="Marta Ruiz",
+            inspected_at=timezone.now(),
+            mileage_at_inspection=42_000,
+        )
+        finding = ConditionFinding.objects.create(
+            report=report,
+            dealership=v.dealership,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            severity=CONDITION_SEVERITY_REQUIRED,
+            description="Autofill smoke test.",
+        )
+        photo = ConditionFindingPhoto.objects.create(
+            finding=finding,
+            storage_key="cr/autofill/one.jpg",
+            content_type=CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+            size_bytes=100_000,
+        )
+        self.assertIsNotNone(photo.dealership_id)
+        self.assertEqual(photo.dealership.slug, "default")

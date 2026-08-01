@@ -505,13 +505,25 @@ right shape.
   reporting — pre-existing damage documentation, vendor
   communication, insurance claims, before/after evidence).
 - **Fields.**
+  - `public_id` (UUIDField, required, unique, default
+    `uuid.uuid4`, editable=False) — the durable public
+    identity of the photo. External references (URLs, API
+    payloads, log lines) use this value, never `storage_key`.
+    Added as an amendment at SESSION_056 (M3.1); see
+    §Design note — public identity is a UUID, not the storage
+    key.
   - `finding` (FK to `ConditionFinding`, required,
     on_delete=CASCADE).
   - `dealership` (FK, NOT NULL from day one — denormalized;
     same rationale as `VehicleAcquisition.dealership`).
-  - `storage_key` (CharField, required, unique) — the S3
-    object key. Storage-backend-agnostic identifier; the
-    storage service constructs the actual URL at read time.
+  - `storage_key` (CharField, required, unique) — the object
+    key the storage backend understands. Internal storage
+    locator only, not a public identifier. Storage-backend-
+    agnostic in shape (an S3-style flat key); the storage
+    service constructs the actual URL at read time. Populated
+    only after the upload has been verified as landed (see
+    §Design note — photo rows represent attached objects,
+    never upload intentions).
   - `content_type` (CharField, required) — recorded at upload
     time from the browser's chosen MIME type. Whitelist
     enforced at the upload-URL-generation view (`image/jpeg`,
@@ -550,6 +562,41 @@ condition; if the browser tries to upload a different MIME the
 S3 API rejects the PUT. This is the standard S3 conditioned-
 upload pattern; it's what prevents `.exe` uploads to
 `ConditionFindingPhoto` even if a client forges the metadata.
+
+**Design note — public identity is a UUID, not the storage
+key.** *Reviewed refinement added at SESSION_056 (M3.1
+implementation).* The original §1.5 draft used `storage_key`
+as both the storage locator and the public identifier. That
+conflates two lifecycles: the storage-backend object key is an
+implementation detail (bucket layout, naming scheme, provider
+choice — all of which can change) while the durable identity
+external callers reference must survive rekeying, provider
+migration, and CDN reconfiguration. `public_id` (UUIDField,
+`default=uuid.uuid4`, unique, editable=False) is the field
+external references bind to; `storage_key` remains an internal
+locator the storage service reads. API payloads, URL segments,
+audit-log lines, and cross-milestone references (e.g. a future
+milestone that attaches photos to a different parent) use
+`public_id`. This keeps M3.4 storage decisions from leaking
+into observable identity, and it keeps the door open for
+future non-finding parents to reuse the same storage
+abstraction without a schema rename.
+
+**Design note — photo rows represent attached objects, never
+upload intentions.** *Reviewed refinement added at SESSION_056
+(M3.1 implementation).* `storage_key` remains required and
+unique at the schema level. The presigned-upload workflow (M3.5)
+holds the prospective key transiently — outside the model
+layer — until the upload lands and is verified (e.g. via HEAD).
+Only after verification does the workflow create the
+`ConditionFindingPhoto` row. Consequence: any row that exists
+represents a successfully attached object; no null-guard
+branches for "row exists but object doesn't" leak into read
+paths, and no half-attached rows are ever visible to the
+operator UI. If verification fails, the transient key is
+discarded and no row is created. This mirrors M2's
+"immutable-once-written" ledger discipline (retrospective §6
+lesson 5) applied to storage identity.
 
 ### 1.6 Operator condition-report UI surface
 
@@ -820,7 +867,13 @@ Model-layer:
 - [ ] `ConditionFinding.severity` is validated at model layer via
   `choices=` (four canonical values).
 - [ ] `ConditionFindingPhoto.storage_key` is unique at schema
-  level.
+  level (internal storage locator only — see §1.5 Design note
+  "public identity is a UUID, not the storage key").
+- [ ] `ConditionFindingPhoto.public_id` (UUIDField,
+  `default=uuid.uuid4`, editable=False) is unique at schema
+  level and is the durable external identity. External
+  references (URLs, API payloads, log lines) MUST use
+  `public_id`; `storage_key` MUST NOT be exposed.
 - [ ] `ConditionFindingPhoto.content_type` restricted to the
   four-value image whitelist at the model layer.
 
@@ -1170,7 +1223,7 @@ increment. No session ever bundles two increments to "save time";
 the increment discipline that made Milestones 1 + 2 successful
 is preserved verbatim here.
 
-### Increment 1 (M3.1) — Core condition-report models
+### Increment 1 (M3.1) — Core condition-report models — SHIPPED at SESSION_056
 
 **Scope.** `ConditionReport` + `ConditionFinding` +
 `ConditionFindingPhoto` models. Migration `0015` (or whatever the
@@ -1201,6 +1254,60 @@ ones).
 zero regressions).
 
 **No API. No frontend. No service. No storage.**
+
+**Shipped surface (SESSION_056).**
+
+- Models: `backend/dealer_ai/models.py`
+  - `ConditionReport` — 10 fields (vehicle FK, dealership FK,
+    authored_by FK nullable SET_NULL, inspector_name CharField,
+    inspected_at DateTimeField, mileage_at_inspection
+    PositiveIntegerField, status CharField default `draft`,
+    completed_at DateTimeField nullable, notes TextField blank,
+    created_at + updated_at). `clean()` enforces cross-tenant
+    guard + `completed_at` ↔ `status` invariant.
+  - `ConditionFinding` — 8 fields (report FK, dealership FK,
+    category CharField 12-value choices, severity CharField
+    4-value choices, description TextField required,
+    estimated_cost Decimal nullable, notes TextField blank,
+    created_at + updated_at). `clean()` enforces cross-tenant
+    guard via `report.vehicle.dealership`. `estimated_cost`
+    is documentation-only and never touches `VehicleCost`
+    (invariant locked by
+    `test_condition_finding.EstimatedCostDoesNotPostToVehicleCost`).
+  - `ConditionFindingPhoto` — 9 fields (public_id UUIDField
+    unique editable=False default=uuid.uuid4, finding FK,
+    dealership FK, storage_key CharField required unique,
+    content_type CharField 4-value whitelist, size_bytes
+    PositiveIntegerField, caption CharField blank,
+    uploaded_by FK nullable SET_NULL, created_at). `clean()`
+    enforces cross-tenant guard via
+    `finding.report.vehicle.dealership`.
+- Enum constants (module-level in `models.py`):
+  - `CONDITION_REPORT_STATUS_CHOICES` (2 values).
+  - `CONDITION_SEVERITY_CHOICES` (4 values, escalation order).
+  - `CONDITION_CATEGORY_CHOICES` (12 values, flat).
+  - `CONDITION_PHOTO_CONTENT_TYPE_CHOICES` (4 values).
+- Migration: `backend/dealer_ai/migrations/0015_condition_report.py`.
+  Round-tripped clean-slate against `DATABASES["migration_check"]`.
+- Admin: `backend/dealer_ai/admin.py` — `ConditionReportAdmin`,
+  `ConditionFindingAdmin`, `ConditionFindingPhotoAdmin` mirroring
+  `VehicleAcquisitionAdmin` / `VehicleCostAdmin` shape.
+- Tenancy carrier extension: `backend/dealer_ai/services/tenancy.py`
+  `_TENANT_CARRIER_MODEL_NAMES` extended 6 → 9.
+- Tests: three new files totaling 57 focused tests —
+  `backend/dealer_ai/tests/test_condition_report.py` (17),
+  `test_condition_finding.py` (20),
+  `test_condition_finding_photo.py` (20). Extended
+  `WritePathFallback` in `test_dealership.py` with three
+  autofill tests (6 → 9 carriers verified in-place).
+- Planning-doc refinement: §1.5 amended to add UUID public
+  identity + storage_key as internal locator + "photo rows
+  represent attached objects, never upload intentions"
+  design note. §3 checklist updated to lock the new
+  `public_id` invariant.
+
+**Baseline delta.** 1,753 → 1,813 pass, 1 skipped, 0 fail
+(60 new tests: 57 model tests + 3 tenancy autofill).
 
 ### Increment 2 (M3.2) — Condition-report service layer
 

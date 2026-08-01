@@ -1062,3 +1062,459 @@ class UserDealershipRole(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} @ {self.dealership} ({self.role})"
+
+
+# Milestone 3 · Increment 1 — condition-report vocabulary.
+# Four module-level enum sets support the three condition-report models
+# (ConditionReport, ConditionFinding, ConditionFindingPhoto). Kept as
+# module-level constants so the M3.2 service layer, the M3.6 API layer,
+# and every test file import the canonical string literals without
+# redeclaring them (mirrors the ROLE_* and VEHICLE_COST_CATEGORY_*
+# patterns above). Sources of truth:
+# ``docs/roadmap/MILESTONE_3_PLANNING.md`` §1.1 / §1.2 / §1.5 (field
+# shapes) and ``docs/research/RECON_MAPPING.md`` §2.1 (category list),
+# §2.2 (severity ladder), §2.5 (photo whitelist context).
+
+# Report status — two values. The one-way ``draft → complete``
+# transition is enforced at the M3.2 service layer; the persistence
+# layer enforces only that ``completed_at`` agrees with ``status``.
+CONDITION_REPORT_STATUS_DRAFT = "draft"
+CONDITION_REPORT_STATUS_COMPLETE = "complete"
+
+CONDITION_REPORT_STATUS_CHOICES = (
+    (CONDITION_REPORT_STATUS_DRAFT, "Draft"),
+    (CONDITION_REPORT_STATUS_COMPLETE, "Complete"),
+)
+
+# Finding severity — four values in escalation order per RECON §2.2.
+CONDITION_SEVERITY_ADVISORY = "advisory"
+CONDITION_SEVERITY_RECOMMENDED = "recommended"
+CONDITION_SEVERITY_REQUIRED = "required"
+CONDITION_SEVERITY_SAFETY = "safety"
+
+CONDITION_SEVERITY_CHOICES = (
+    (CONDITION_SEVERITY_ADVISORY, "Advisory"),
+    (CONDITION_SEVERITY_RECOMMENDED, "Recommended"),
+    (CONDITION_SEVERITY_REQUIRED, "Required"),
+    (CONDITION_SEVERITY_SAFETY, "Safety"),
+)
+
+# Finding category — twelve values, flat (no hierarchy). Eleven sourced
+# from RECON §2.1's multi-point-inspection category list plus one
+# ``other`` escape hatch for real-inspection observations that don't
+# fit the strong partition of mechanical reality (documentation issues,
+# prior modification, aftermarket parts). Rationale in
+# ``MILESTONE_3_PLANNING.md`` §1.2.
+CONDITION_CATEGORY_MECHANICAL = "mechanical"
+CONDITION_CATEGORY_COSMETIC = "cosmetic"
+CONDITION_CATEGORY_BODY = "body"
+CONDITION_CATEGORY_GLASS = "glass"
+CONDITION_CATEGORY_TIRES = "tires"
+CONDITION_CATEGORY_INTERIOR = "interior"
+CONDITION_CATEGORY_FLUIDS = "fluids"
+CONDITION_CATEGORY_ELECTRICAL = "electrical"
+CONDITION_CATEGORY_SAFETY = "safety"
+CONDITION_CATEGORY_ACCESSORIES = "accessories"
+CONDITION_CATEGORY_MISSING = "missing"
+CONDITION_CATEGORY_OTHER = "other"
+
+CONDITION_CATEGORY_CHOICES = (
+    (CONDITION_CATEGORY_MECHANICAL, "Mechanical"),
+    (CONDITION_CATEGORY_COSMETIC, "Cosmetic / paint"),
+    (CONDITION_CATEGORY_BODY, "Body / structural"),
+    (CONDITION_CATEGORY_GLASS, "Glass"),
+    (CONDITION_CATEGORY_TIRES, "Tires"),
+    (CONDITION_CATEGORY_INTERIOR, "Interior"),
+    (CONDITION_CATEGORY_FLUIDS, "Fluids"),
+    (CONDITION_CATEGORY_ELECTRICAL, "Electrical"),
+    (CONDITION_CATEGORY_SAFETY, "Safety"),
+    (CONDITION_CATEGORY_ACCESSORIES, "Accessories / features present"),
+    (CONDITION_CATEGORY_MISSING, "Missing items"),
+    (CONDITION_CATEGORY_OTHER, "Other"),
+)
+
+# Photo content-type whitelist — four MIME values enforced at the
+# model layer via ``choices=``. A complementary check runs at the
+# M3.5 presigned-URL issuance view; the model-layer tuple is the
+# last line of defense (see MILESTONE_3_PLANNING.md §1.5 content-
+# type design note).
+CONDITION_PHOTO_CONTENT_TYPE_JPEG = "image/jpeg"
+CONDITION_PHOTO_CONTENT_TYPE_PNG = "image/png"
+CONDITION_PHOTO_CONTENT_TYPE_HEIC = "image/heic"
+CONDITION_PHOTO_CONTENT_TYPE_WEBP = "image/webp"
+
+CONDITION_PHOTO_CONTENT_TYPE_CHOICES = (
+    (CONDITION_PHOTO_CONTENT_TYPE_JPEG, "JPEG"),
+    (CONDITION_PHOTO_CONTENT_TYPE_PNG, "PNG"),
+    (CONDITION_PHOTO_CONTENT_TYPE_HEIC, "HEIC"),
+    (CONDITION_PHOTO_CONTENT_TYPE_WEBP, "WEBP"),
+)
+
+
+class ConditionReport(models.Model):
+    """Milestone 3 · Increment 1 — per-inspection condition report.
+
+    Many-per-Vehicle. Each row is one inspection event: arrival,
+    post-recon QC, pre-frontline, owner walkthrough. The report is
+    the durable provenance for the ``ConditionFinding`` rows hanging
+    off it — who inspected, when, at what mileage, on which vehicle.
+
+    Draft rows are freely editable at the M3.2 service layer;
+    complete rows are immutable (retrospective §6 lesson 5 applied to
+    inspection history). The one-way ``draft → complete`` transition
+    is enforced at the service layer in M3.2. The persistence layer
+    enforces only the invariant on ``completed_at``: NULL exactly
+    when status is ``draft``; set exactly when status is
+    ``complete``.
+
+    ``authored_by`` records the account that entered the report;
+    ``inspector_name`` records the free-text name of the person who
+    physically inspected the vehicle. The two can differ (a service
+    writer transcribing a paper inspection is not the mechanic who
+    did the work). ``authored_by`` is nullable + SET_NULL so
+    historical rows survive user deletion; ``inspector_name``
+    survives verbatim as a required field so the report remains
+    legally defensible.
+
+    Source of truth: ``docs/roadmap/MILESTONE_3_PLANNING.md`` §1.1 and
+    ``docs/research/RECON_MAPPING.md`` §2.4 / §2.6 / §12.1 / §12.2.
+    """
+
+    vehicle = models.ForeignKey(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="condition_reports",
+    )
+    # Denormalized tenancy FK. Same rationale as
+    # ``VehicleAcquisition.dealership`` / ``VehicleCost.dealership``:
+    # uniform tenant-scoped read paths, no join required.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="condition_reports",
+    )
+    # Provenance for who entered the report. Nullable + SET_NULL so
+    # historical rows survive user deletion (mirrors
+    # ``VehicleCost.created_by`` SET_NULL rationale from M2.1).
+    authored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Free-text name of the person who physically inspected the
+    # vehicle. Required per RECON §2.4. Independent of
+    # ``authored_by``; see class docstring for why.
+    inspector_name = models.CharField(max_length=255)
+    # When the physical inspection happened, not when the row was
+    # written. Required per RECON §2.4.
+    inspected_at = models.DateTimeField()
+    # Required per RECON §2.4 (mileage at inspection is one of the
+    # explicit fields on the condition-report document).
+    mileage_at_inspection = models.PositiveIntegerField()
+    status = models.CharField(
+        max_length=16,
+        choices=CONDITION_REPORT_STATUS_CHOICES,
+        default=CONDITION_REPORT_STATUS_DRAFT,
+    )
+    # Set when the M3.2 service transitions status to ``complete``.
+    # NULL on draft rows; NOT NULL on complete rows. The invariant
+    # is locked by :meth:`clean`.
+    completed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-inspected_at", "-created_at")
+        verbose_name = "Condition report"
+        verbose_name_plural = "Condition reports"
+
+    def __str__(self) -> str:
+        return (
+            f"Condition report for #{self.vehicle.stock_number} "
+            f"({self.get_status_display()})"
+        )
+
+    def clean(self) -> None:
+        """Persistence-layer invariants.
+
+        Two guards:
+
+        1. Cross-tenant contamination — the denormalized
+           ``dealership`` FK must match the parent Vehicle's tenant.
+           Same shape as :meth:`VehicleAcquisition.clean` /
+           :meth:`VehicleCost.clean`.
+        2. ``completed_at`` agrees with ``status`` — NULL exactly
+           when status is ``draft``; set exactly when status is
+           ``complete``. The M3.2 service layer sets both fields
+           in the same write; the model layer refuses inconsistent
+           combinations so a direct ORM write cannot corrupt the
+           report's lifecycle state.
+
+        The one-way ``draft → complete`` transition is a service-
+        layer concern (M3.2); this model does not enforce
+        transition direction. It only enforces that the two fields
+        agree.
+        """
+        super().clean()
+        if self.vehicle_id is not None and self.dealership_id is not None:
+            if self.vehicle.dealership_id != self.dealership_id:
+                raise ValidationError(
+                    {
+                        "dealership": (
+                            "ConditionReport.dealership must match the "
+                            "parent Vehicle's dealership. Cross-tenant "
+                            "contamination guard (see "
+                            "AUTHENTICATION_MODEL.md §1 layer 4)."
+                        )
+                    }
+                )
+        if self.status == CONDITION_REPORT_STATUS_DRAFT and self.completed_at is not None:
+            raise ValidationError(
+                {
+                    "completed_at": (
+                        "ConditionReport.completed_at must be NULL when "
+                        "status is 'draft'. The M3.2 service layer sets "
+                        "completed_at atomically with the draft → "
+                        "complete transition; direct writes must respect "
+                        "the same invariant."
+                    )
+                }
+            )
+        if (
+            self.status == CONDITION_REPORT_STATUS_COMPLETE
+            and self.completed_at is None
+        ):
+            raise ValidationError(
+                {
+                    "completed_at": (
+                        "ConditionReport.completed_at must be set when "
+                        "status is 'complete'. The M3.2 service layer "
+                        "sets completed_at atomically with the draft → "
+                        "complete transition; direct writes must respect "
+                        "the same invariant."
+                    )
+                }
+            )
+
+
+class ConditionFinding(models.Model):
+    """Milestone 3 · Increment 1 — one defect / needed work / missing item.
+
+    Many-per-ConditionReport. Every row is one observation made
+    during the parent report's inspection. ``description`` is the
+    human's own words — RECON §2.6 prohibits AI from authoring
+    findings.
+
+    ``estimated_cost`` is **documentation only** — it never posts to
+    ``VehicleCost`` and never enters ``compute_totals``. The recon
+    planning decision ("must-do vs. should-do vs. won't-do") has not
+    been made at inspection time (RECON §3.1); posting an estimate
+    cost row here would inflate
+    ``VehicleCost.projected_total_investment`` with advisory
+    findings the store will never spend on. Milestone 4 owns the
+    findings → recon plan → work order → cost flow.
+
+    Source of truth: ``docs/roadmap/MILESTONE_3_PLANNING.md`` §1.2
+    (see the "estimated_cost design note" for the
+    VehicleCost-integration non-decision) and
+    ``docs/research/RECON_MAPPING.md`` §2.1 / §2.2 / §2.6.
+    """
+
+    report = models.ForeignKey(
+        "ConditionReport",
+        on_delete=models.CASCADE,
+        related_name="findings",
+    )
+    # Denormalized tenancy FK — same rationale as
+    # ``ConditionReport.dealership``. ``clean()`` guards against
+    # divergence from ``report.vehicle.dealership``.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="condition_findings",
+    )
+    category = models.CharField(
+        max_length=32,
+        choices=CONDITION_CATEGORY_CHOICES,
+    )
+    severity = models.CharField(
+        max_length=16,
+        choices=CONDITION_SEVERITY_CHOICES,
+    )
+    # The human's words. Required; RECON §2.6 prohibits AI from
+    # writing findings, so the description cannot be blank.
+    description = models.TextField()
+    # Documentation-only estimate. Nullable because not every
+    # inspection includes cost estimates (RECON §2.4). Never posts
+    # to ``VehicleCost`` in M3 — the seam M4 reads when
+    # auto-drafting work orders. See class docstring.
+    estimated_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("severity", "category", "created_at")
+        verbose_name = "Condition finding"
+        verbose_name_plural = "Condition findings"
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_severity_display()} "
+            f"{self.get_category_display()} on "
+            f"#{self.report.vehicle.stock_number}"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant guard.
+
+        The denormalized ``dealership`` FK must match the parent
+        Vehicle's tenant, reached via ``report.vehicle.dealership``.
+        Same shape as :meth:`ConditionReport.clean` and its M2
+        analogues.
+        """
+        super().clean()
+        if self.report_id is None or self.dealership_id is None:
+            return
+        parent_dealership_id = getattr(self.report.vehicle, "dealership_id", None)
+        if parent_dealership_id is None:
+            return
+        if parent_dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "ConditionFinding.dealership must match the "
+                        "parent Vehicle's dealership (reached via "
+                        "report.vehicle). Cross-tenant contamination "
+                        "guard (see AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+
+
+class ConditionFindingPhoto(models.Model):
+    """Milestone 3 · Increment 1 — photo metadata for a finding.
+
+    Many-per-ConditionFinding. Photo evidence for warranty defense
+    (RECON §13.1), vendor communication (RECON §2.5), and before /
+    after documentation. **Metadata only** — the actual image bytes
+    live in the storage backend the M3.4 storage story configures;
+    this model owns only the fields that describe *which* stored
+    object belongs to *which* finding.
+
+    Public identity is :attr:`public_id` (UUID), **not**
+    :attr:`storage_key`. External references — URL segments, API
+    payloads, log lines, cross-milestone attachments — bind to the
+    UUID so a future storage-backend rekey or a future non-finding
+    parent does not force a schema rename. The storage service
+    (M3.4) reads ``storage_key`` internally; nothing outside the
+    storage layer treats it as an identifier. This split was
+    reviewed and added at SESSION_056 (M3.1 implementation); see
+    ``MILESTONE_3_PLANNING.md`` §1.5 design notes.
+
+    Rows in this table represent **successfully attached** storage
+    objects. The M3.5 presigned-upload workflow holds the
+    prospective key transiently — outside the model layer — until
+    the upload lands and is verified; only after verification does
+    it create the row. Consequence: any row that exists points at
+    a real object. No null-guards for "row exists but object
+    doesn't" leak into read paths.
+
+    Source of truth: ``docs/roadmap/MILESTONE_3_PLANNING.md`` §1.5
+    and ``docs/research/RECON_MAPPING.md`` §2.5.
+    """
+
+    # Durable public identity. External references bind here; never
+    # to ``storage_key``. Added at SESSION_056 per
+    # ``MILESTONE_3_PLANNING.md`` §1.5 "public identity is a UUID,
+    # not the storage key" design note.
+    public_id = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+    )
+    finding = models.ForeignKey(
+        "ConditionFinding",
+        on_delete=models.CASCADE,
+        related_name="photos",
+    )
+    # Denormalized tenancy FK — reached via
+    # ``finding.report.vehicle.dealership``. Same rationale as
+    # ``ConditionFinding.dealership``.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="condition_finding_photos",
+    )
+    # Internal storage locator — what the storage backend reads to
+    # locate the object. Required + unique at the schema layer;
+    # every row corresponds to a successfully attached object (see
+    # class docstring). Never exposed as a public identifier; see
+    # ``public_id``.
+    storage_key = models.CharField(max_length=512, unique=True)
+    content_type = models.CharField(
+        max_length=32,
+        choices=CONDITION_PHOTO_CONTENT_TYPE_CHOICES,
+    )
+    # Recorded on the S3 side after upload; the M3.5 workflow
+    # verifies this reflects the actual object size (mitigates
+    # client size lying).
+    size_bytes = models.PositiveIntegerField()
+    caption = models.CharField(max_length=255, blank=True, default="")
+    # Provenance for who uploaded the photo. Nullable + SET_NULL so
+    # historical rows survive user deletion (mirrors
+    # ``ConditionReport.authored_by`` SET_NULL rationale).
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
+        verbose_name = "Condition finding photo"
+        verbose_name_plural = "Condition finding photos"
+
+    def __str__(self) -> str:
+        return f"Photo {self.public_id} on finding #{self.finding_id}"
+
+    def clean(self) -> None:
+        """Cross-tenant guard.
+
+        The denormalized ``dealership`` FK must match the parent
+        Vehicle's tenant, reached via
+        ``finding.report.vehicle.dealership``. Same shape as
+        :meth:`ConditionFinding.clean`.
+        """
+        super().clean()
+        if self.finding_id is None or self.dealership_id is None:
+            return
+        report = getattr(self.finding, "report", None)
+        if report is None:
+            return
+        vehicle = getattr(report, "vehicle", None)
+        if vehicle is None:
+            return
+        parent_dealership_id = getattr(vehicle, "dealership_id", None)
+        if parent_dealership_id is None:
+            return
+        if parent_dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "ConditionFindingPhoto.dealership must match "
+                        "the parent Vehicle's dealership (reached via "
+                        "finding.report.vehicle). Cross-tenant "
+                        "contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )

@@ -3,6 +3,9 @@ from django.contrib import admin
 from .models import (
     ChatMessage,
     ChatSession,
+    ConditionFinding,
+    ConditionFindingPhoto,
+    ConditionReport,
     CustomerLead,
     DealerOnboardingProfile,
     Dealership,
@@ -197,6 +200,86 @@ class VehicleCostAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("vehicle", "dealership", "created_by")
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ConditionReport)
+class ConditionReportAdmin(admin.ModelAdmin):
+    """Milestone 3 · Increment 1 — read-mostly admin for the condition
+    report row. Primary operator surface is the M3.7 condition-report
+    UI; this admin is here for internal debugging + emergency
+    corrections. Mirrors ``VehicleAcquisitionAdmin`` shape."""
+
+    list_display = (
+        "vehicle",
+        "inspector_name",
+        "inspected_at",
+        "mileage_at_inspection",
+        "status",
+        "completed_at",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("status", "dealership", "inspected_at")
+    search_fields = (
+        "vehicle__stock_number",
+        "vehicle__vin",
+        "inspector_name",
+        "notes",
+    )
+    autocomplete_fields = ("vehicle", "dealership", "authored_by")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ConditionFinding)
+class ConditionFindingAdmin(admin.ModelAdmin):
+    """Milestone 3 · Increment 1 — read-mostly admin for a finding row.
+    Filters on ``severity`` + ``category`` support the common "what's
+    still safety-critical vs. advisory?" query."""
+
+    list_display = (
+        "report",
+        "category",
+        "severity",
+        "estimated_cost",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("severity", "category", "dealership")
+    search_fields = (
+        "report__vehicle__stock_number",
+        "report__vehicle__vin",
+        "description",
+        "notes",
+    )
+    autocomplete_fields = ("report", "dealership")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ConditionFindingPhoto)
+class ConditionFindingPhotoAdmin(admin.ModelAdmin):
+    """Milestone 3 · Increment 1 — read-mostly admin for photo metadata.
+    Storage bytes live in the M3.4 storage backend; this admin surfaces
+    the metadata row only. ``public_id`` is the durable external
+    identity (see ``ConditionFindingPhoto`` docstring)."""
+
+    list_display = (
+        "public_id",
+        "finding",
+        "content_type",
+        "size_bytes",
+        "uploaded_by",
+        "dealership",
+        "created_at",
+    )
+    list_filter = ("content_type", "dealership")
+    search_fields = (
+        "public_id",
+        "storage_key",
+        "caption",
+        "finding__report__vehicle__stock_number",
+    )
+    autocomplete_fields = ("finding", "dealership", "uploaded_by")
+    readonly_fields = ("public_id", "created_at")
 
 
 @admin.register(UserDealershipRole)
