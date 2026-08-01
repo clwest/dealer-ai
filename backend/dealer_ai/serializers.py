@@ -1,14 +1,19 @@
 from rest_framework import serializers
 
 from .models import (
+    ACQUISITION_SOURCE_CHOICES,
+    VEHICLE_COST_CATEGORY_CHOICES,
     ChatMessage,
     ChatSession,
     CustomerLead,
     DealerOnboardingProfile,
     Salesperson,
     Vehicle,
+    VehicleAcquisition,
+    VehicleCost,
 )
 from .services.chat_engine import customer_drivetrain_label
+from .services.vehicle_ledger import category_group_of
 
 
 # ---- Salesperson serializers (Manager Phase 4) -----------------------------
@@ -432,3 +437,196 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+
+# ---- Vehicle investment ledger serializers (Milestone 2 · Increment 6) ----
+#
+# Three admin endpoints under
+# ``/api/dealer-ai/admin/vehicles/<stock_number>/`` expose the ledger built
+# in M2.1-M2.5:
+#
+# - GET ``.../ledger/``       — full ledger read (uses the three OUTPUT
+#                                serializers below + a totals dict).
+# - POST ``.../acquisition/`` — upsert (uses ``AcquisitionUpsertRequestSerializer``
+#                                for input, ``VehicleAcquisitionOutputSerializer``
+#                                for output).
+# - POST ``.../costs/``       — post one immutable cost row (uses
+#                                ``CostCreateRequestSerializer`` for input,
+#                                ``VehicleCostOutputSerializer`` for output).
+#
+# Decimal handling: DRF ``DecimalField`` never parses through binary float
+# (uses ``Decimal(str(value))`` internally) — safe for cent-accurate
+# accounting inputs. Outputs are strings on the wire so JavaScript's
+# ``Number`` type can't silently truncate precision.
+
+
+class VehicleLedgerHeaderSerializer(serializers.ModelSerializer):
+    """Small vehicle-identity block for the ledger page header.
+
+    Deliberately minimal — the ledger page doesn't need the full
+    ``VehicleSerializer`` payload (drivetrain labels, budget-fit
+    annotations, presentation-flex metadata all live there for chat
+    surfaces). Header just needs enough to render "2024 Ford Ranger
+    XLT #F25-014" with the current asking price alongside it.
+    """
+
+    display_name = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = Vehicle
+        fields = [
+            "stock_number",
+            "vin",
+            "year",
+            "make",
+            "model",
+            "trim",
+            "price",
+            "display_name",
+        ]
+
+
+class VehicleAcquisitionOutputSerializer(serializers.ModelSerializer):
+    """Output projection for a single :class:`VehicleAcquisition`.
+
+    Includes ``source_display`` so the UI can render the friendly
+    label without maintaining its own choice map. ``dealership`` is
+    intentionally omitted — the caller resolved the tenant to reach
+    this endpoint; echoing the dealership back would be noise.
+    """
+
+    source_display = serializers.CharField(
+        source="get_source_display", read_only=True
+    )
+
+    class Meta:
+        model = VehicleAcquisition
+        fields = [
+            "source",
+            "source_display",
+            "source_detail",
+            "purchase_price",
+            "purchase_date",
+            "buyer_fees",
+            "arbitration_fees",
+            "transportation_cost",
+            "title_acquisition_cost",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class VehicleCostOutputSerializer(serializers.ModelSerializer):
+    """Output projection for a single :class:`VehicleCost`.
+
+    Includes:
+
+    - ``category_display`` — friendly label from the model's
+      ``choices=`` (e.g. ``"Floor plan interest"`` for
+      ``"floor_plan_interest"``).
+    - ``category_group`` — one of ``"flooring"`` / ``"recon"`` /
+      ``"administrative"`` / ``"photography"`` (via
+      :func:`services.vehicle_ledger.category_group_of`). Keeps the
+      partition source-of-truth in the service layer; the UI can
+      render group headers without repeating the partition logic.
+    - ``created_by`` — the username of the poster, or ``None`` for
+      seed / management-command writes. Full user object is
+      unnecessary for the ledger view and would leak email etc.
+    """
+
+    category_display = serializers.CharField(
+        source="get_category_display", read_only=True
+    )
+    category_group = serializers.SerializerMethodField()
+    created_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VehicleCost
+        fields = [
+            "id",
+            "category",
+            "category_display",
+            "category_group",
+            "amount",
+            "incurred_at",
+            "vendor",
+            "reference",
+            "notes",
+            "is_estimate",
+            "created_by",
+            "created_at",
+        ]
+
+    def get_category_group(self, obj):
+        return category_group_of(obj.category)
+
+    def get_created_by(self, obj):
+        if obj.created_by_id is None:
+            return None
+        return obj.created_by.username
+
+
+class AcquisitionUpsertRequestSerializer(serializers.Serializer):
+    """Request body for POST ``/admin/vehicles/<stock>/acquisition/``.
+
+    Every field validated with the same rules the model + service
+    enforce. Fee fields default to ``Decimal("0")`` — trades and
+    private-party acquisitions typically have no auction / broker /
+    arbitration / transportation charges.
+
+    ``purchase_price`` is required and non-negative
+    (``min_value=Decimal("0")``); the service layer's
+    ``VehicleAcquisition.clean()`` cross-tenant guard runs on save
+    but signed-money invariants live here in the request layer
+    where field-level errors surface to the caller cleanly.
+    """
+
+    source = serializers.ChoiceField(choices=ACQUISITION_SOURCE_CHOICES)
+    source_detail = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=255
+    )
+    purchase_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0
+    )
+    purchase_date = serializers.DateField()
+    buyer_fees = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0, required=False, default=0
+    )
+    arbitration_fees = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0, required=False, default=0
+    )
+    transportation_cost = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0, required=False, default=0
+    )
+    title_acquisition_cost = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0, required=False, default=0
+    )
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class CostCreateRequestSerializer(serializers.Serializer):
+    """Request body for POST ``/admin/vehicles/<stock>/costs/``.
+
+    ``amount`` is a signed :class:`Decimal` — negative values are
+    permitted because reversing entries are the ledger's correction
+    pattern (mirrors accounting §2.11). No update/delete endpoints
+    exist in v1; corrections happen by posting a new row with the
+    negative amount and a reference pointing at the original.
+
+    ``created_by`` is NOT accepted from the request body — the view
+    sets it to ``request.user``. Client-supplied attribution would
+    let an authenticated operator forge cost authorship.
+    """
+
+    category = serializers.ChoiceField(choices=VEHICLE_COST_CATEGORY_CHOICES)
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    incurred_at = serializers.DateTimeField()
+    vendor = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=255
+    )
+    reference = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=128
+    )
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+    is_estimate = serializers.BooleanField(required=False, default=False)

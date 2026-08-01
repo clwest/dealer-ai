@@ -25,14 +25,18 @@ from .models import (
     DealerOnboardingProfile,
     Salesperson,
     Vehicle,
+    VehicleAcquisition,
+    VehicleCost,
 )
 from .serializers import (
+    AcquisitionUpsertRequestSerializer,
     AdminChatSessionListSerializer,
     AdminLeadListSerializer,
     AssignLeadSerializer,
     ChatMessageInputSerializer,
     ChatMessageSerializer,
     ChatSessionSerializer,
+    CostCreateRequestSerializer,
     CustomerLeadSerializer,
     DealerOnboardingProfileSerializer,
     ManagerChatInputSerializer,
@@ -40,7 +44,10 @@ from .serializers import (
     SalespersonAdminSerializer,
     SalespersonPublicSerializer,
     StartChatSerializer,
+    VehicleAcquisitionOutputSerializer,
     VehicleAskSerializer,
+    VehicleCostOutputSerializer,
+    VehicleLedgerHeaderSerializer,
     VehicleSerializer,
 )
 from datetime import timedelta
@@ -69,6 +76,26 @@ from .services.pipeline import pipeline_snapshot
 from .services.tenancy import get_current_dealership, get_default_dealership
 from .services.trends import trends_snapshot
 from .services.vehicle_assistant import analyze_vehicle, answer_vehicle_question
+from .services.vehicle_ledger import add_cost, record_acquisition
+from decimal import ROUND_HALF_UP, Decimal as _Decimal
+
+# Milestone 2 · Increment 6 — money-projection helper. ORM ``Sum``
+# aggregations can strip trailing zeros (a sum of ``Decimal("300.00")``
+# rows may return ``Decimal("300")``); quantize every money field the
+# ledger endpoints emit to two decimal places so the JSON contract is
+# byte-for-byte consistent regardless of ORM backend quirks.
+_LEDGER_CENTS = _Decimal("0.01")
+
+
+def _money_str(value) -> str:
+    """Return ``value`` as a two-decimal-place :class:`Decimal` string.
+
+    Used by ``admin_vehicle_ledger`` to project every dollar figure
+    consistently. ``ROUND_HALF_UP`` matches the rounding mode the
+    M2.4a floor-plan engine uses, keeping consumer expectations
+    aligned across the API surface.
+    """
+    return str(_Decimal(value).quantize(_LEDGER_CENTS, rounding=ROUND_HALF_UP))
 
 
 DEMO_SOURCE = "demo_seed"
@@ -1191,3 +1218,226 @@ def _me_payload(request) -> dict:
         },
         "roles": roles,
     }
+
+
+# ---- Milestone 2 · Increment 6 — Vehicle investment ledger admin API -----
+#
+# Three tenant-scoped admin endpoints under
+# ``/api/dealer-ai/admin/vehicles/<stock_number>/``. All three:
+#
+# - Compose ``[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]``.
+#   (Reuses the M1 · Increment 4D permission class unchanged.
+#   Recon-manager access is deferred to Milestone 4 per M2 §5.)
+# - Resolve ``dealership = get_current_dealership(request)`` once at
+#   the top per ``AUTHENTICATION_MODEL.md`` §8b.
+# - Look up the vehicle via
+#   ``Vehicle.objects.filter(dealership=dealership).get(
+#   stock_number=<url_kwarg>)`` — cross-tenant AND nonexistent
+#   ``stock_number`` both raise ``DoesNotExist`` and return 404
+#   (identical response so existence is not leaked, mirroring
+#   ``AdminLeadDetailFailsClosedAcrossTenants``).
+# - Write via the ledger service — ``record_acquisition`` and
+#   ``add_cost`` — NEVER through ``VehicleAcquisition.objects.create``
+#   or ``VehicleCost.objects.create`` directly. Preserves the
+#   cross-tenant guard + ``full_clean`` invariants of the M2.2
+#   service.
+#
+# Response shape locked so M2.7 UI can consume without reshaping
+# the backend. See ``test_admin_vehicle_ledger.py`` for the
+# contract tests.
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
+def admin_vehicle_ledger(request, stock_number):
+    """Return the full ledger view for one vehicle.
+
+    Response shape::
+
+        {
+          "vehicle":     {stock_number, vin, year, make, model,
+                          trim, price, display_name},
+          "acquisition": <VehicleAcquisition projection> | null,
+          "costs":       [<VehicleCost projection>, ...],  # chronological
+          "totals":      {acquisition_total, flooring_total, recon_total,
+                          administrative_total, photography_total,
+                          actual_cost_total, estimated_cost_total,
+                          total_investment, projected_total_investment},
+          "days_in_inventory": int | null,
+          "projected_gross":   str(Decimal)   # asking price - total_investment
+        }
+
+    All money fields serialize as strings so JavaScript's ``Number``
+    cannot silently truncate Decimal precision.
+
+    Cost ordering: ascending ``incurred_at`` with ``pk`` tie-break —
+    chronological, so the UI can render a running-total column
+    without re-sorting. Locked by
+    ``test_admin_vehicle_ledger.ReadLedgerCostOrderingIsDeterministic``.
+    """
+    dealership = get_current_dealership(request)
+    try:
+        vehicle = (
+            Vehicle.objects.filter(dealership=dealership)
+            .select_related("acquisition")
+            .get(stock_number=stock_number)
+        )
+    except Vehicle.DoesNotExist:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Prime the cached ledger_totals once — every totals field
+    # below reads from the cache, avoiding double aggregation.
+    totals = vehicle.ledger_totals
+
+    # Cost list — chronological ascending. Deterministic tie-break
+    # on ``pk`` for rows with the same ``incurred_at`` timestamp
+    # (common for accrual runs where every row for a batch shares
+    # the same as_of moment).
+    costs = list(
+        VehicleCost.objects.filter(vehicle=vehicle, dealership=dealership)
+        .order_by("incurred_at", "pk")
+    )
+
+    # Acquisition — OneToOne, may not exist yet.
+    try:
+        acquisition = vehicle.acquisition
+    except VehicleAcquisition.DoesNotExist:
+        acquisition = None
+
+    # projected_gross = asking price - money already committed.
+    # Trivial arithmetic in the projection layer (no new business
+    # logic on Vehicle) — Vehicle.price + total_investment are
+    # both Decimals so subtraction preserves precision.
+    projected_gross = vehicle.price - totals.total_investment
+
+    return Response(
+        {
+            "vehicle": VehicleLedgerHeaderSerializer(vehicle).data,
+            "acquisition": (
+                VehicleAcquisitionOutputSerializer(acquisition).data
+                if acquisition is not None
+                else None
+            ),
+            "costs": VehicleCostOutputSerializer(costs, many=True).data,
+            "totals": {
+                "acquisition_total": _money_str(totals.acquisition_total),
+                "flooring_total": _money_str(totals.flooring_total),
+                "recon_total": _money_str(totals.recon_total),
+                "administrative_total": _money_str(totals.administrative_total),
+                "photography_total": _money_str(totals.photography_total),
+                "actual_cost_total": _money_str(totals.actual_cost_total),
+                "estimated_cost_total": _money_str(totals.estimated_cost_total),
+                "total_investment": _money_str(totals.total_investment),
+                "projected_total_investment": _money_str(
+                    totals.projected_total_investment
+                ),
+            },
+            "days_in_inventory": vehicle.days_in_inventory,
+            "projected_gross": _money_str(projected_gross),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
+def admin_vehicle_acquisition_upsert(request, stock_number):
+    """Create or update the vehicle's acquisition record.
+
+    Wraps :func:`services.vehicle_ledger.record_acquisition` — never
+    writes to ``VehicleAcquisition`` directly. Returns
+    ``{acquisition: <projection>, created: bool}``. Status code
+    reflects the ``created`` flag (201 on create, 200 on update).
+    """
+    dealership = get_current_dealership(request)
+    try:
+        vehicle = Vehicle.objects.filter(dealership=dealership).get(
+            stock_number=stock_number
+        )
+    except Vehicle.DoesNotExist:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = AcquisitionUpsertRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+
+    acquisition, created = record_acquisition(
+        vehicle,
+        dealership=dealership,
+        **payload,
+    )
+    return Response(
+        {
+            "acquisition": VehicleAcquisitionOutputSerializer(
+                acquisition
+            ).data,
+            "created": created,
+        },
+        status=(
+            status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        ),
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
+def admin_vehicle_cost_create(request, stock_number):
+    """Post one immutable cost row against the vehicle.
+
+    Wraps :func:`services.vehicle_ledger.add_cost` — never writes
+    to ``VehicleCost`` directly. Returns
+    ``{cost: <projection>}`` with 201.
+
+    ``created_by`` is attached from ``request.user`` — client-
+    supplied attribution is not accepted (would let an
+    authenticated operator forge cost authorship).
+
+    Signed amounts pass through: negative values are the reversing-
+    entry pattern (see ``ACCOUNTING_DEPARTMENT_MAPPING.md`` §2.11).
+    No update or delete endpoint exists in v1; corrections happen
+    via reversing entries whose ``reference`` points at the
+    original row.
+    """
+    dealership = get_current_dealership(request)
+    try:
+        vehicle = Vehicle.objects.filter(dealership=dealership).get(
+            stock_number=stock_number
+        )
+    except Vehicle.DoesNotExist:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = CostCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+
+    try:
+        cost = add_cost(
+            vehicle,
+            dealership=dealership,
+            created_by=request.user,
+            **payload,
+        )
+    except ValueError as exc:
+        # Defense-in-depth: the ``ChoiceField`` on the serializer
+        # already rejects invalid categories with a 400 field-level
+        # error, so ValueError from ``add_cost``'s category check
+        # should never surface here in practice. If it ever does
+        # (e.g. a future serializer refactor loosens validation),
+        # return a clean 400 rather than a 500.
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"cost": VehicleCostOutputSerializer(cost).data},
+        status=status.HTTP_201_CREATED,
+    )

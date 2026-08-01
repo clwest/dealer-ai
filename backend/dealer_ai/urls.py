@@ -97,4 +97,20 @@ urlpatterns = [
     path("auth/login/", views.auth_login, name="auth-login"),
     path("auth/logout/", views.auth_logout, name="auth-logout"),
     path("auth/me/", views.auth_me, name="auth-me"),
+    # Milestone 2 · Increment 6 — vehicle investment ledger admin API.
+    path(
+        "admin/vehicles/<str:stock_number>/ledger/",
+        views.admin_vehicle_ledger,
+        name="admin-vehicle-ledger",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/acquisition/",
+        views.admin_vehicle_acquisition_upsert,
+        name="admin-vehicle-acquisition",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/costs/",
+        views.admin_vehicle_cost_create,
+        name="admin-vehicle-cost-create",
+    ),
 ]
