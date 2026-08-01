@@ -10,7 +10,8 @@
 // When CRM/DMS feed integration lands, replace the data import with
 // the live source and delete the sample module.
 
-import { ExternalLink, Gauge, Sparkles, Tag, Zap } from "lucide-react";
+import { BookOpen, ExternalLink, Gauge, Sparkles, Tag, Zap } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -178,12 +179,30 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
         ) : null}
       </CardContent>
 
-      <CardFooter className="bg-muted/40 px-4 py-2.5">
+      <CardFooter className="flex items-center justify-between gap-2 bg-muted/40 px-4 py-2.5">
+        {/* Milestone 2 · Increment 7 — Operator-only Ledger link.
+            Deliberately NOT surfaced on the public /showroom page —
+            this card lives on the operator inventory surface only.
+            Stock number is URL-encoded because dealer conventions
+            can include slashes / special chars. */}
         <Button
           asChild
           variant="ghost"
           size="sm"
-          className="ml-auto h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Link
+            to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/ledger`}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            Ledger
+          </Link>
+        </Button>
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
         >
           <a href={vehicle.vdp_url} target="_blank" rel="noreferrer">
             <ExternalLink className="h-3.5 w-3.5" />

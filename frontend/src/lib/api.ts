@@ -800,3 +800,208 @@ export interface ManagerChatResponse {
 export function sendManagerChat(message: string) {
   return authPostJSON<ManagerChatResponse>(`/manager-chat/`, { message });
 }
+
+// ---- Milestone 2 · Increment 7: vehicle investment ledger admin API ------
+//
+// Types mirror the JSON contract shipped by SESSION_052 (M2.6). Every
+// money field is a fixed two-decimal-place string on the wire — do NOT
+// parse through JavaScript ``Number``; the backend is the source of
+// truth for totals and the frontend never recomputes them.
+//
+// Canonical enums are duplicated here for form UX (dropdown choices,
+// group labels). The backend re-validates every write via
+// ``AcquisitionUpsertRequestSerializer`` / ``CostCreateRequestSerializer``
+// so any drift between these lists and the backend enum surfaces as
+// a 400 with a field-level error — the frontend cannot silently
+// accept an invalid value.
+
+export type AcquisitionSource =
+  | "auction"
+  | "trade"
+  | "wholesale"
+  | "private"
+  | "off_lease"
+  | "rental"
+  | "repo"
+  | "fleet";
+
+export const ACQUISITION_SOURCE_CHOICES: Array<{
+  value: AcquisitionSource;
+  label: string;
+}> = [
+  { value: "auction", label: "Auction" },
+  { value: "trade", label: "Trade-in" },
+  { value: "wholesale", label: "Wholesale (dealer-to-dealer)" },
+  { value: "private", label: "Private party" },
+  { value: "off_lease", label: "Off-lease" },
+  { value: "rental", label: "Rental return" },
+  { value: "repo", label: "Repossession" },
+  { value: "fleet", label: "Fleet disposal" },
+];
+
+export type CostCategoryGroup =
+  | "flooring"
+  | "recon"
+  | "administrative"
+  | "photography";
+
+export const COST_CATEGORY_CHOICES: Array<{
+  value: string;
+  label: string;
+  group: CostCategoryGroup;
+}> = [
+  // Flooring (5)
+  { value: "floor_plan_interest", label: "Floor plan interest", group: "flooring" },
+  { value: "floor_plan_fees", label: "Floor plan fees", group: "flooring" },
+  { value: "curtailment", label: "Curtailment", group: "flooring" },
+  { value: "wire_fees", label: "Wire fees", group: "flooring" },
+  { value: "banking_fees", label: "Banking fees", group: "flooring" },
+  // Recon (13)
+  { value: "parts", label: "Parts", group: "recon" },
+  { value: "mechanical_labor", label: "Mechanical labor", group: "recon" },
+  { value: "tires", label: "Tires", group: "recon" },
+  { value: "brakes", label: "Brakes", group: "recon" },
+  { value: "battery", label: "Battery", group: "recon" },
+  { value: "oil_service", label: "Oil service", group: "recon" },
+  { value: "diagnostics", label: "Diagnostics", group: "recon" },
+  { value: "glass", label: "Glass", group: "recon" },
+  { value: "body_work", label: "Body work", group: "recon" },
+  { value: "paint", label: "Paint", group: "recon" },
+  { value: "upholstery", label: "Upholstery", group: "recon" },
+  { value: "wheel_repair", label: "Wheel repair", group: "recon" },
+  { value: "detail", label: "Detail", group: "recon" },
+  // Administrative (7)
+  { value: "fuel", label: "Fuel", group: "administrative" },
+  { value: "listing_fees", label: "Listing fees", group: "administrative" },
+  { value: "advertising_allocation", label: "Advertising allocation", group: "administrative" },
+  { value: "registration", label: "Registration", group: "administrative" },
+  { value: "title_work", label: "Title work", group: "administrative" },
+  { value: "shipping", label: "Shipping", group: "administrative" },
+  { value: "misc_dealer_expenses", label: "Miscellaneous dealer expenses", group: "administrative" },
+  // Photography (1)
+  { value: "photography", label: "Photography", group: "photography" },
+];
+
+export interface LedgerVehicleHeader {
+  stock_number: string;
+  vin: string;
+  year: number;
+  make: string;
+  model: string;
+  trim: string;
+  price: string;
+  display_name: string;
+}
+
+export interface LedgerAcquisition {
+  source: AcquisitionSource;
+  source_display: string;
+  source_detail: string;
+  purchase_price: string;
+  purchase_date: string;
+  buyer_fees: string;
+  arbitration_fees: string;
+  transportation_cost: string;
+  title_acquisition_cost: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LedgerCost {
+  id: number;
+  category: string;
+  category_display: string;
+  category_group: CostCategoryGroup | null;
+  amount: string;
+  incurred_at: string;
+  vendor: string;
+  reference: string;
+  notes: string;
+  is_estimate: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface LedgerTotals {
+  acquisition_total: string;
+  flooring_total: string;
+  recon_total: string;
+  administrative_total: string;
+  photography_total: string;
+  actual_cost_total: string;
+  estimated_cost_total: string;
+  total_investment: string;
+  projected_total_investment: string;
+}
+
+export interface VehicleLedgerResponse {
+  vehicle: LedgerVehicleHeader;
+  acquisition: LedgerAcquisition | null;
+  costs: LedgerCost[];
+  totals: LedgerTotals;
+  days_in_inventory: number | null;
+  projected_gross: string;
+}
+
+export interface AcquisitionUpsertPayload {
+  source: AcquisitionSource;
+  source_detail?: string;
+  purchase_price: string;
+  purchase_date: string;
+  buyer_fees?: string;
+  arbitration_fees?: string;
+  transportation_cost?: string;
+  title_acquisition_cost?: string;
+  notes?: string;
+}
+
+export interface AcquisitionUpsertResponse {
+  acquisition: LedgerAcquisition;
+  created: boolean;
+}
+
+export interface CostCreatePayload {
+  category: string;
+  amount: string;
+  incurred_at: string;
+  vendor?: string;
+  reference?: string;
+  notes?: string;
+  is_estimate?: boolean;
+}
+
+export interface CostCreateResponse {
+  cost: LedgerCost;
+}
+
+function _ledgerBasePath(stock: string): string {
+  // URL-encode the stock number — dealers may use slashes / special
+  // characters in their stock conventions and an unencoded segment
+  // would break the URL structure.
+  return `/admin/vehicles/${encodeURIComponent(stock)}`;
+}
+
+export function fetchVehicleLedger(stock: string) {
+  return authGetJSON<VehicleLedgerResponse>(`${_ledgerBasePath(stock)}/ledger/`);
+}
+
+export function upsertVehicleAcquisition(
+  stock: string,
+  body: AcquisitionUpsertPayload,
+) {
+  return authPostJSON<AcquisitionUpsertResponse>(
+    `${_ledgerBasePath(stock)}/acquisition/`,
+    body,
+  );
+}
+
+export function createVehicleCost(
+  stock: string,
+  body: CostCreatePayload,
+) {
+  return authPostJSON<CostCreateResponse>(
+    `${_ledgerBasePath(stock)}/costs/`,
+    body,
+  );
+}
