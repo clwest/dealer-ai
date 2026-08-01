@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: in-progress
 increment: 6B
 increment_status: shipped
-commit: TBD
+commit: e90af35
 ---
 
 # SESSION_062 — Milestone 3 · Increment 6B (M3.6B — photo API + local-upload receiver)
