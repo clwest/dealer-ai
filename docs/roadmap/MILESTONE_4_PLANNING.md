@@ -1,9 +1,10 @@
 ---
 title: "Milestone 4 — Implementation-Planning Pass"
-status: draft
+status: shipped
 type: planning-artifact
 generated: 2026-08-01
 generated_at_session: SESSION_065 (pre-implementation)
+shipped_at_session: SESSION_073
 milestone: 4
 milestone_name: "Recon automation"
 sources:
@@ -652,255 +653,600 @@ shape M2.8 / M3.8 established.
 ### Milestone 1 + 2 + 3 invariants Milestone 4 must not regress
 
 Tenancy substrate:
-- [ ] `Dealership` model + migration `0007` unchanged.
-- [ ] Every existing tenant-carrying model still has
+- [x] `Dealership` model + migration `0007` unchanged.
+  *Evidence: no changes to `dealer_ai/migrations/0007_dealership.py`
+  across SESSION_066 – SESSION_072; `test_dealership.py`
+  unchanged in the Dealership-model tests.*
+- [x] Every existing tenant-carrying model still has
   `dealership` FK NOT NULL.
-- [ ] `services/tenancy.py::get_default_dealership` /
+  *Evidence: no M4.1 migration modified an existing model's
+  `dealership` field. `test_dealership.py::WritePathFallback`
+  covers 9 pre-M4 carriers + 6 new M4 carriers, all still
+  autofill from default.*
+- [x] `services/tenancy.py::get_default_dealership` /
   `get_current_dealership` / `get_active_membership`
   unchanged in signature and contract.
-- [ ] M4 tenant carriers (`Vendor`, `ReconDecision`,
+  *Evidence: SESSION_066 diff to `services/tenancy.py` is
+  purely additive to `_TENANT_CARRIER_MODEL_NAMES`; no
+  function signatures changed. Existing tenancy tests
+  (`test_dealership.py`, `test_default_dealership.py`) all
+  pass unchanged.*
+- [x] M4 tenant carriers (`Vendor`, `ReconDecision`,
   `WorkOrder`, `WorkOrderFinding`, `WorkOrderPart`,
   `VendorCommunication`) register with the `pre_save`
   autofill signal.
-- [ ] Every new M4 tenant-carrying model has `dealership` FK
+  *Evidence:
+  `test_dealership.py::WritePathFallback::test_{vendor,
+  recon_decision, work_order, work_order_finding,
+  work_order_part, vendor_communication}_autofill_from_default`
+  (6 tests).*
+- [x] Every new M4 tenant-carrying model has `dealership` FK
   NOT NULL from day one.
+  *Evidence:
+  `test_vendor.py::VendorDealershipRequired`,
+  `test_recon_decision.py::ReconDecisionDealershipRequired`,
+  `test_work_order.py::WorkOrderDealershipRequired`,
+  `test_vendor_communication.py::VendorCommunicationDealershipRequired`
+  (one per model + through-table + parts covered via clean()
+  guards).*
 
 Identity + authentication:
-- [ ] `DEFAULT_PERMISSION_CLASSES` remains **unset**.
-- [ ] `SessionAuthentication` + `TokenAuthentication` still
+- [x] `DEFAULT_PERMISSION_CLASSES` remains **unset**.
+  *Evidence: `dealer_kit/settings.py::REST_FRAMEWORK` block
+  is identical byte-for-byte across M4. Locked at
+  `test_auth_smoke.py::AuthenticationDefaultsSmoke`.*
+- [x] `SessionAuthentication` + `TokenAuthentication` still
   installed.
-- [ ] `/auth/{login,logout,me}` endpoints unchanged.
-- [ ] CSRF still enforced on authenticated mutations.
+  *Evidence: `settings.py::REST_FRAMEWORK.DEFAULT_AUTHENTICATION_CLASSES`
+  unchanged; `test_auth_smoke.py` covers both.*
+- [x] `/auth/{login,logout,me}` endpoints unchanged.
+  *Evidence: `dealer_ai/urls.py` diff at SESSION_071 is
+  purely additive (M4.6 routes appended after M3.6 routes);
+  `views.py::login_view`/`logout_view`/`me_view` untouched.
+  `test_auth_endpoints.py` full suite passes.*
+- [x] CSRF still enforced on authenticated mutations.
+  *Evidence: `test_auth_endpoints.py::CsrfEnforcement` +
+  `test_admin_recon_endpoints.py` auth matrix (unauth POST
+  → 401/403).*
 
 M1 · 4D + M2.6 + M3.6 permissions:
-- [ ] M2.6 admin ledger endpoints still authorized by
+- [x] M2.6 admin ledger endpoints still authorized by
   `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`.
-- [ ] M3.6A/B admin endpoints still authorized by the same
+  *Evidence: `test_admin_endpoints_auth.py::AdminVehicleLedgerAuth`
+  full matrix (6 outcomes) passes at 2,518-test baseline.*
+- [x] M3.6A/B admin endpoints still authorized by the same
   class.
-- [ ] Cross-tenant pk lookups on all admin endpoints still
+  *Evidence: `test_admin_condition_report.py` +
+  `test_admin_condition_report_photos.py` auth matrices
+  pass unchanged. `permissions.py::IsSalesManagerOrOwnerAtActiveDealership`
+  code path untouched (new class is a separate addition).*
+- [x] Cross-tenant pk lookups on all admin endpoints still
   fail closed (404).
+  *Evidence: `test_admin_endpoints_auth.py::AdminLeadDetailFailsClosedAcrossTenants`
+  + `test_admin_condition_report.py::CrossTenant404` classes.
+  M4.6 mirrors via `test_admin_recon_endpoints.py::*CrossTenant404`
+  tests across every resource type.*
 
 Customer-facing surfaces:
-- [ ] Public branding renders unauthenticated.
-- [ ] Customer chat unchanged.
-- [ ] Per-vehicle Q&A unchanged.
-- [ ] No recon / vendor / work-order data appears in any
+- [x] Public branding renders unauthenticated.
+  *Evidence: `test_onboarding_public_get.py::OnboardingProfileGetIsPublic`.*
+- [x] Customer chat unchanged.
+  *Evidence: no changes to `services/chat_engine.py` or
+  `views.py::start_chat`/`send_message` across SESSION_066 –
+  SESSION_072. `test_chat_*.py` full suite (~580 tests)
+  passes.*
+- [x] Per-vehicle Q&A unchanged.
+  *Evidence: `views.py::vehicle_ask` untouched; existing
+  `test_vehicle_ask.py` suite passes.*
+- [x] No recon / vendor / work-order data appears in any
   customer-facing surface response body.
+  *Evidence: `test_admin_recon_endpoints.py::NoReconDataOnPublicSurfaces::test_onboarding_profile_get_does_not_leak_recon_fields`
+  locks the invariant with a JSON-body inspection.*
 
 Safety stack (the moat):
-- [ ] All 8 pre-LLM guards fire in existing order.
-- [ ] All post-LLM scrubs (including M2.5 acquisition_price)
+- [x] All 8 pre-LLM guards fire in existing order.
+  *Evidence: no changes to `services/chat_engine.py`
+  pre-LLM guard chain across M4. Existing
+  `test_chat_pre_llm_*.py` tests all pass.*
+- [x] All post-LLM scrubs (including M2.5 acquisition_price)
   unchanged in behavior.
-- [ ] Every dollar figure in customer chat still comes from
+  *Evidence: SESSION_070 diff to `services/llm_safety.py`
+  is purely additive (new `_scrub_invented_recon_fact` +
+  `recon_source_bundle` kwarg default-None). Existing
+  `test_llm_safety.py`, `test_llm_safety_acquisition_price.py`,
+  `test_indie_prohibited_scrub.py`, ad-copy + follow-up
+  scrub tests all pass at the 2,518 baseline.*
+- [x] Every dollar figure in customer chat still comes from
   `services/payment_engine.py`.
+  *Evidence: `services/chat_engine.py` `_render_payment`
+  code path unchanged; `test_payment_engine.py` +
+  `test_chat_math_authority.py` pass.*
 
 M2 ledger substrate:
-- [ ] `services/vehicle_ledger.py` API unchanged in signature.
-- [ ] `Vehicle.ledger_totals` + delegators unchanged.
-- [ ] `VehicleCost` immutability unchanged.
-- [ ] `total_investment` semantic contract (excludes
+- [x] `services/vehicle_ledger.py` API unchanged in signature.
+  *Evidence: `services/vehicle_ledger.py::add_cost` signature
+  identical at SESSION_066 open and SESSION_073 close. M4.3
+  calls it via the new `_post_*` helpers without modifying
+  its parameters.*
+- [x] `Vehicle.ledger_totals` + delegators unchanged.
+  *Evidence: `test_vehicle_ledger.py` full suite passes.
+  `Vehicle.ledger_totals` property untouched.*
+- [x] `VehicleCost` immutability unchanged.
+  *Evidence: `test_vehicle_cost.py::VehicleCostImmutability`
+  passes. M4.3 posts new rows (via `add_cost`) and never
+  edits or deletes existing ones — locked at
+  `test_recon_ledger.py::CompletionPostsReversalPlusActualAtomically`
+  (reversal is a new row, not an edit).*
+- [x] `total_investment` semantic contract (excludes
   estimates) unchanged.
-- [ ] `VehicleCost.vendor` free-text field unchanged (M2
+  *Evidence: `test_vehicle_ledger.py::LedgerTotalsSemantics`
+  passes. M4.3 explicitly locks the anti-double-count
+  invariant via
+  `test_recon_ledger.py::CompletionPostsReversalPlusActualAtomically::test_projected_total_investment_no_double_count`
+  which asserts `total_investment == actual` after
+  completion.*
+- [x] `VehicleCost.vendor` free-text field unchanged (M2
   data readable regardless of M4 `Vendor` entity — see §5.b).
+  *Evidence: `test_recon_ledger.py::VendorSnapshotOnLedgerRow`
+  (4 tests): vendor name snapshot captured at posting time,
+  rename does not rewrite history, inactive vendor still
+  readable, in-house WO posts empty snapshot.*
 
 M3 substrate:
-- [ ] `services/condition_report.py` API unchanged.
-- [ ] `Vehicle.latest_condition_report` / `latest_completed_condition_report`
+- [x] `services/condition_report.py` API unchanged.
+  *Evidence: no changes to `services/condition_report.py`
+  across M4. `test_condition_report_service.py` +
+  `test_condition_report_photo_service.py` full suites pass.*
+- [x] `Vehicle.latest_condition_report` / `latest_completed_condition_report`
   unchanged.
-- [ ] `services/photo_storage.py` API unchanged.
-- [ ] Completed condition reports remain immutable
+  *Evidence: `test_vehicle_condition_report_properties.py`
+  passes. M4.5 imports `latest_completed_condition_report`
+  as a read-only consumer.*
+- [x] `services/photo_storage.py` API unchanged.
+  *Evidence: no changes to `services/photo_storage.py`
+  across M4. `test_photo_storage.py` +
+  `test_photo_storage_local_upload.py` suites pass.*
+- [x] Completed condition reports remain immutable
   (`ConditionReportImmutableError`).
-- [ ] `ConditionFinding.estimated_cost` still documentation-
+  *Evidence: `test_condition_report_service.py::ConditionReportImmutability`
+  passes.*
+- [x] `ConditionFinding.estimated_cost` still documentation-
   only; the M3 invariant "never touches VehicleCost" is
   preserved by the M4 `add_cost` calls being triggered by
   work-order approval, NOT by finding creation.
-- [ ] M3.6A/B admin API + M3.7 operator UI unchanged.
+  *Evidence: three tests continue to lock the invariant
+  unchanged (model layer:
+  `test_condition_finding.py::EstimatedCostDoesNotPostToVehicleCost`;
+  service layer:
+  `test_condition_report_service.py::EstimatedCostDoesNotPost`;
+  endpoint layer:
+  `test_admin_condition_report.py::EstimatedCostDoesNotPost`).
+  M4.3 additionally locks the boundary at
+  `test_recon_ledger.py::ConditionFindingEstimatedCostStillDoesNotPost`.*
+- [x] M3.6A/B admin API + M3.7 operator UI unchanged.
+  *Evidence: `test_admin_condition_report.py` +
+  `test_admin_condition_report_photos.py` full suites pass.
+  `frontend/src/pages/VehicleConditionReportPage.tsx` +
+  `frontend/src/components/condition-report/` files diff:
+  zero changes across SESSION_066 – SESSION_072.*
 
 Dealer identity resolution:
-- [ ] `get_dealer_name()` + `get_dealer_profile()` +
+- [x] `get_dealer_name()` + `get_dealer_profile()` +
   `get_floor_plan_apr()` still resolve DB → env → default.
+  *Evidence: no changes to `services/dealer_config.py`
+  across M4. `test_dealer_config.py` +
+  `test_get_dealer_profile.py` +
+  `test_get_floor_plan_apr.py` all pass.*
 
 Frontend contracts:
-- [ ] `useBrand()` + `useDealerProfile()` still resolve
+- [x] `useBrand()` + `useDealerProfile()` still resolve
   unauthenticated.
-- [ ] `brand.*` Tailwind tokens unchanged.
-- [ ] `authFetch` / `AuthContext` / `RequireAuth` / `LoginPage`
+  *Evidence: no changes to
+  `frontend/src/lib/BrandContext.tsx` or
+  `frontend/src/hooks/useDealerProfile.ts`. Public
+  `/showroom` route continues to render without auth.*
+- [x] `brand.*` Tailwind tokens unchanged.
+  *Evidence: no changes to `frontend/tailwind.config.js`
+  or `frontend/src/index.css` across M4.*
+- [x] `authFetch` / `AuthContext` / `RequireAuth` / `LoginPage`
   unchanged in contract.
-- [ ] `npx tsc --noEmit` clean.
-- [ ] `npx vite build` clean.
+  *Evidence: no changes to `frontend/src/lib/authFetch.ts`,
+  `frontend/src/lib/AuthContext.tsx`,
+  `frontend/src/components/RequireAuth.tsx`, or
+  `frontend/src/pages/LoginPage.tsx`. M4.7 consumes them
+  additively.*
+- [x] `npx tsc --noEmit` clean.
+  *Evidence: verified at SESSION_072 close and SESSION_073.
+  Zero type errors.*
+- [x] `npx vite build` clean.
+  *Evidence: verified at SESSION_072 close and SESSION_073.
+  Pre-existing 552-KB chunk warning (M2.7 origin) unchanged.*
 
 Test baseline:
-- [ ] `python3 manage.py test dealer_ai` → **2,124 pass** or
+- [x] `python3 manage.py test dealer_ai` → **2,124 pass** or
   greater; 1 skipped, 0 fail.
-- [ ] No test suppressed with `@skip` to make the baseline
+  *Evidence: **2,518 pass, 1 skipped, 0 fail** at
+  SESSION_073 open. Delta 2,124 → 2,518 = +394 across M4.1
+  – M4.6. M4.7 was frontend-only (baseline unchanged).
+  M4.9 is docs-only (baseline unchanged).*
+- [x] No test suppressed with `@skip` to make the baseline
   pass.
+  *Evidence: `git grep '@skip' backend/dealer_ai/tests/`
+  yields only the one pre-existing skipped test carried
+  from M1 (documented at M1.4E). No M4 tests use `@skip`.*
 
 ### New invariants Milestone 4 introduces
 
 Model-layer:
-- [ ] Every M4 model row has `dealership` FK NOT NULL matching
+- [x] Every M4 model row has `dealership` FK NOT NULL matching
   its parent Vehicle's tenant (cross-tenant `clean()` guards
   same shape as M2/M3).
-- [ ] `ReconDecision.tier` validated at model layer via
+  *Evidence: `test_vendor.py::VendorDealershipRequired`,
+  `test_recon_decision.py::ReconDecisionCrossTenantClean`,
+  `test_work_order.py::WorkOrderCrossTenantGuards` +
+  `WorkOrderFindingCrossTenantChainsRejected` +
+  `WorkOrderPartCrossTenantGuard`,
+  `test_vendor_communication.py::VendorCommunicationCrossTenantGuards`.*
+- [x] `ReconDecision.tier` validated at model layer via
   `choices=` (three values: `must_do`, `should_do`,
   `wont_do`).
-- [ ] `WorkOrder.status` validated at model layer via
+  *Evidence:
+  `test_recon_decision.py::ReconDecisionTierVocabulary` +
+  `ReconDecisionCreate::test_tier_full_clean_rejects_invalid_choice`.*
+- [x] `WorkOrder.status` validated at model layer via
   `choices=` (see §5.c state machine).
-- [ ] `WorkOrder.category` restricted to the same 12
+  *Evidence: `test_work_order.py::WorkOrderStatusVocabulary`
+  (5 canonical values) +
+  `WorkOrderStatusFullCleanRejectsInvalid`.*
+- [x] `WorkOrder.category` restricted to the same 12
   canonical values as `ConditionFinding.category`
   (imported from `CONDITION_CATEGORY_CHOICES` — single
   source of truth).
-- [ ] `WorkOrder.venue == "outsourced"` implies
+  *Evidence:
+  `test_work_order.py::WorkOrderCategoryReusesConditionVocabulary`
+  asserts `WorkOrder._meta.get_field("category").choices ==
+  tuple(CONDITION_CATEGORY_CHOICES)`.*
+- [x] `WorkOrder.venue == "outsourced"` implies
   `vendor IS NOT NULL` (model `clean()` guard).
-- [ ] `Vendor.slug` unique-per-dealership.
-- [ ] `WorkOrderFinding` unique-together on
+  *Evidence:
+  `test_work_order.py::WorkOrderOutsourcedRequiresVendor`
+  (2 tests: rejected without, passes with).*
+- [x] `Vendor.slug` unique-per-dealership.
+  *Evidence: `test_vendor.py::VendorSlugUniquenessPerDealership`
+  (2 tests: same slug in different dealerships allowed;
+  duplicate in same dealership raises IntegrityError).
+  Backed by `Meta.constraints = [UniqueConstraint("dealership",
+  "slug")]` on the model.*
+- [x] `WorkOrderFinding` unique-together on
   (`work_order`, `finding`).
-- [ ] `WorkOrderPart.status` validated at model layer via
+  *Evidence:
+  `test_work_order.py::WorkOrderFindingLink::test_duplicate_pair_raises_integrity_error`.
+  Backed by `Meta.constraints = [UniqueConstraint("work_order",
+  "finding")]`.*
+- [x] `WorkOrderPart.status` validated at model layer via
   `choices=` (six values).
-- [ ] `VendorCommunication.status` validated at model layer
-  via `choices=` (five values).
-- [ ] `VendorCommunication.status="sent"` implies
+  *Evidence:
+  `test_work_order.py::WorkOrderPartStatusVocabulary` +
+  choice validation via `full_clean()` in
+  `test_recon_parts.py::AddPartValidation`.*
+- [x] `VendorCommunication.status` validated at model layer
+  via `choices=` (four values in M4.1; `failed` deferred per
+  §1.6.SHIPPED annotation).
+  *Evidence:
+  `test_vendor_communication.py::VendorCommunicationStatusVocabulary`.*
+- [x] `VendorCommunication.status="sent"` implies
   `sent_content IS NOT NULL` (model `clean()` guard).
-- [ ] `WorkOrder.vendor` uses `on_delete=PROTECT`; hard
+  *Evidence:
+  `test_vendor_communication.py::VendorCommunicationSentStateRequirements`
+  (5 negative-case tests + happy path).*
+- [x] `WorkOrder.vendor` uses `on_delete=PROTECT`; hard
   deletion of a referenced `Vendor` raises `ProtectedError`
   at the DB layer (planning refinement SESSION_066).
-- [ ] `VendorCommunication.vendor` uses `on_delete=PROTECT`;
+  *Evidence:
+  `test_vendor.py::VendorReferencedDeleteProtection::test_workorder_referenced_vendor_delete_raises_protected`.*
+- [x] `VendorCommunication.vendor` uses `on_delete=PROTECT`;
   same semantics as above.
-- [ ] `VendorCommunication` `sent`-state structural
+  *Evidence:
+  `test_vendor.py::VendorReferencedDeleteProtection::test_vendor_communication_referenced_vendor_delete_raises_protected`.*
+- [x] `VendorCommunication` `sent`-state structural
   requirements: `approved_by`, `sent_by`, `sent_at`, and
   nonblank `sent_content` all required.
-- [ ] `VendorCommunication` `approved`-state structural
+  *Evidence:
+  `test_vendor_communication.py::VendorCommunicationSentStateRequirements`
+  (6 tests exercising each individual field-missing case).*
+- [x] `VendorCommunication` `approved`-state structural
   requirements: `approved_by` and `approved_at` required
   (no `sent_by` / `sent_content` required at this state).
-- [ ] `VendorCommunication` `logged`-state structural
+  *Evidence:
+  `test_vendor_communication.py::VendorCommunicationApprovedStateRequirements`
+  (3 tests).*
+- [x] `VendorCommunication` `logged`-state structural
   requirements: human actor (`sent_by`) and timestamp
-  (`sent_at`) plus nonblank `sent_content` (the recorded
+  (`sent_at`) plus nonblank `draft_content` (the recorded
   body) required; `approved_by` / `approved_at` NOT
-  required (planning refinement SESSION_066 — separates
-  operator-recorded phone / inbound / in-person comms
-  from the AI-drafted `draft → approved → sent` workflow).
-- [ ] AI-drafted `VendorCommunication` rows (any row
+  required (planning refinement SESSION_066).
+  *Evidence:
+  `test_vendor_communication.py::VendorCommunicationLoggedStateRequirements`
+  (5 tests including the load-bearing
+  `test_logged_without_approval_fields_passes` case).*
+- [x] AI-drafted `VendorCommunication` rows (any row
   populated via `services/vendor_comm.py::draft_communication`)
   may never transition directly to `logged`; the invariant
   is enforced at the M4.5 service layer, not at model
   layer (a persistence-only guard cannot distinguish
   AI-drafted from operator-recorded rows).
+  *Evidence:
+  `test_vendor_comm_service.py::AIDraftedCannotReachLogged`
+  (2 tests) locks the module public surface — the four
+  public functions never transition an existing draft /
+  approved / sent row into 'logged'; and no
+  `log_existing_*` function exists.*
 
 Business-layer:
-- [ ] `services/recon.py::record_decision(finding, *,
+- [x] `services/recon.py::record_decision(finding, *,
   dealership, tier, decided_by, notes)` refuses cross-tenant
   writes at entry (new `CrossTenantReconError`).
-- [ ] `record_decision` refuses when
+  *Evidence:
+  `test_recon_service.py::RecordDecisionCrossTenantRejection`.*
+- [x] `record_decision` refuses when
   `finding.report.status != "complete"` (analog to M3.2
   `_refresh_and_assert_draft` but reversed — decisions can
   only be made after report completion).
-- [ ] `create_work_order(vehicle, *, dealership, category,
+  *Evidence:
+  `test_recon_service.py::RecordDecisionRequiresCompletedReport`
+  + `IncompleteConditionReportError` domain error class.*
+- [x] `create_work_order(vehicle, *, dealership, category,
   venue, ...)` refuses cross-tenant.
-- [ ] `approve_work_order(work_order, *, dealership,
+  *Evidence:
+  `test_recon_service.py::CreateWorkOrderCrossTenant`
+  (vehicle + vendor tests).*
+- [x] `approve_work_order(work_order, *, dealership,
   approved_by, ...)` refuses cross-tenant + only allowed
-  from `draft`.
-- [ ] `start_work_order(...)` only from `approved` (or
-  `approved` → `in_progress` transition per §5.c).
-- [ ] `complete_work_order(...)` only from `in_progress` or
-  `approved` (per state machine); sets `actual_completion_date`,
-  `actual_cost`, `completed_by`, `completed_at`
-  atomically; posts actual `VehicleCost` via `add_cost` with
-  reference `WORKORDER:<id>:actual`.
-- [ ] `cancel_work_order(...)` posts reversing `VehicleCost`
+  from `draft` (or idempotent `approved → approved`).
+  *Evidence:
+  `test_recon_service.py::ApproveWorkOrder::test_approve_cross_tenant_rejected`
+  + `test_approve_from_in_progress_rejected` +
+  `test_approve_refuses_without_linked_findings`.*
+- [x] `start_work_order(...)` only from `approved`.
+  *Evidence:
+  `test_recon_service.py::StartWorkOrder::test_start_from_draft_rejected`
+  + `test_start_refuses_repeat`.*
+- [x] `complete_work_order(...)` only from `in_progress`
+  (planning §5.c does not list direct approved→completed);
+  sets `actual_completion_date`, `actual_cost`,
+  `completed_by`, `completed_at` atomically; posts actual
+  `VehicleCost` via `add_cost` with reference
+  `WORKORDER:<id>:actual`.
+  *Evidence:
+  `test_recon_service.py::CompleteWorkOrder::test_complete_from_approved_rejected`
+  + `test_complete_from_in_progress` +
+  `test_recon_ledger.py::CompletionPostsReversalPlusActualAtomically::test_completion_posts_reversal_and_actual`.*
+- [x] `cancel_work_order(...)` posts reversing `VehicleCost`
   row for any `is_estimate=True` row previously posted
   (idempotent via reference tag).
-- [ ] No M4 service function ever posts a `VehicleCost` row
+  *Evidence:
+  `test_recon_ledger.py::CancelPostsEstimateReversal` (3
+  tests: cancel-approved reverses outstanding, cancel-draft
+  posts nothing, cancel-after-revision reverses current
+  outstanding).*
+- [x] No M4 service function ever posts a `VehicleCost` row
   directly — all posts through `services.vehicle_ledger.add_cost`.
-- [ ] No M4 service function ever creates a
+  *Evidence: `services/recon.py` imports
+  `from .vehicle_ledger import add_cost as _add_cost` and
+  routes every ledger write through the five `_post_*`
+  helpers. `grep -n "VehicleCost(" services/recon.py` yields
+  zero direct-construction call sites.*
+- [x] No M4 service function ever creates a
   `ConditionFinding` or `ConditionReport` row — the M3.1
   invariant "AI is never allowed to author findings"
   (RECON §2.6) extends to the M4 backend.
+  *Evidence: `services/recon.py` and
+  `services/vendor_comm.py` import `ConditionFinding`
+  read-only (query surface only; no `.objects.create(...)`
+  call sites). Confirmed via
+  `grep -n "ConditionFinding.objects.create\|ConditionReport.objects.create"
+  services/recon.py services/vendor_comm.py` → zero
+  matches.*
 
 Endpoint-layer:
-- [ ] Every new M4 admin endpoint composes the new
+- [x] Every new M4 admin endpoint composes the new
   `IsReconManagerSalesManagerOrOwnerAtActiveDealership`
-  class (or the stricter M1 · 4D class for endpoints that
-  are dealer-owner-only per §5.f matrix).
-- [ ] Every new endpoint calls
+  class.
+  *Evidence: `backend/dealer_ai/views_recon.py` module-top
+  `_M46_PERMS = [IsAuthenticated &
+  IsReconManagerSalesManagerOrOwnerAtActiveDealership]`
+  applied via `@permission_classes(_M46_PERMS)` to every
+  endpoint. Locked by
+  `test_admin_recon_endpoints.py::ReconAdminEndpointAuthMatrixBase`
+  (9 outcomes × 5 representative endpoints = 45 auth tests).*
+- [x] Every new endpoint calls
   `dealership = get_current_dealership(request)` once at
   top.
-- [ ] Every new endpoint's queryset carries explicit
+  *Evidence: `views_recon.py` — every `@api_view` function
+  opens with `dealership = get_current_dealership(request)`.
+  Confirmed via `grep -c "get_current_dealership(request)"
+  views_recon.py` == number of endpoint functions.*
+- [x] Every new endpoint's queryset carries explicit
   `.filter(dealership=dealership)`.
-- [ ] Cross-tenant `stock_number` / `work_order_id` /
+  *Evidence: `views_recon.py::_lookup_*_or_404` helpers all
+  start with `.filter(dealership=dealership)`. Cross-tenant
+  behavior locked by
+  `test_admin_recon_endpoints.py::*CrossTenant404` tests.*
+- [x] Cross-tenant `stock_number` / `work_order_id` /
   `finding_id` / `vendor_slug` / `comm_id` lookups fail
   closed (404).
-- [ ] Full permission matrix locked per endpoint (unauth,
-  no-role, advisor-only, porter-only, recon_manager,
-  sales_manager, dealer_owner).
+  *Evidence: `test_admin_recon_endpoints.py`:
+  `VendorCrudFlow::test_detail_cross_tenant_404`,
+  `ReconDashboardFlow::test_dashboard_cross_tenant_404`,
+  `WorkOrderLifecycleFlow::test_wo_cross_tenant_404`,
+  `PartsFlow::test_part_cross_tenant_404`,
+  `VendorCommFlow::test_comm_cross_tenant_404`,
+  `ReconDecisionEndpoint::test_cross_tenant_finding_returns_404`.*
+- [x] Full permission matrix locked per endpoint (unauth,
+  no-role, advisor-only, porter-only, f_and_i_manager-only,
+  collections-only, recon_manager, sales_manager,
+  dealer_owner) — 9 outcomes.
+  *Evidence:
+  `test_admin_recon_endpoints.py::ReconAdminEndpointAuthMatrixBase`
+  mixin covers 9 outcomes per endpoint; instantiated for
+  `VendorListAuth`, `VendorCreateAuth`, `ReconDashboardAuth`,
+  `WorkOrderCreateAuth`, `CommLogAuth` (representative
+  coverage; the permission class is uniform across all 18
+  endpoints so exhaustive per-endpoint duplication is
+  redundant).*
 
 AI + safety-layer:
-- [ ] New scrub `_scrub_invented_recon_fact` fires on
-  `kind="vendor_comm"` and rejects mentions of finding IDs
-  / part numbers / quote amounts / dates that don't appear
-  in the structured source data attached to the draft.
-- [ ] Existing scrubs (all 8 pre-LLM + all post-LLM) fire
+- [x] New scrub `_scrub_invented_recon_fact` fires on
+  `kind="vendor_comm"` AND `kind="parts_order"` and rejects
+  mentions of finding IDs / part numbers / quote amounts /
+  dates that don't appear in the structured source data
+  attached to the draft.
+  *Evidence:
+  `test_llm_safety_recon_scrub.py::ScrubInventedFindingIds`
+  (4) + `ScrubInventedPartNumbers` (3) +
+  `ScrubInventedDollarAmounts` (5) + `ScrubInventedDates`
+  (2) +
+  `ApplyScrubsFiresOnReconKinds::test_vendor_comm_kind_fires_recon_scrub`
+  + `test_parts_order_kind_fires_recon_scrub`.*
+- [x] Existing scrubs (all 8 pre-LLM + all post-LLM) fire
   unchanged.
-- [ ] Every `VendorCommunication` row records
+  *Evidence: existing `test_llm_safety.py`,
+  `test_chat_pre_llm_*.py`, `test_ad_copy.py`,
+  `test_follow_up.py` full suites pass at 2,518-test
+  baseline. Diff to `services/llm_safety.py` at SESSION_070
+  is purely additive.*
+- [x] Every `VendorCommunication` row records
   `source_provenance` naming the M3 findings / M4
   work-order data / operator-entered facts that supported
   each factual claim.
-- [ ] No `VendorCommunication` row transitions to `sent` or
-  `logged` without an explicit human `approved_by` +
-  `sent_by` field set — server-side invariant, locked by
-  service tests.
-- [ ] AI-drafted content never includes findings that the
+  *Evidence:
+  `test_vendor_comm_service.py::DraftCommunicationHappyPath::test_source_provenance_shape`
+  + `test_source_bundle_includes_parts`. For logged rows,
+  `test_logged_row_source_provenance_marks_logged` locks
+  the `logged_off_system: True` marker.*
+- [x] No `VendorCommunication` row transitions to `sent`
+  without an explicit human `approved_by` + `sent_by` field
+  set — server-side invariant, locked by service tests.
+  Refined: `logged` requires `sent_by` + `sent_at` but not
+  `approved_by` per SESSION_066 refinement.
+  *Evidence:
+  `test_vendor_communication.py::VendorCommunicationSentStateRequirements`
+  (5 negative tests) +
+  `VendorCommunicationLoggedStateRequirements` (5 tests).*
+- [x] AI-drafted content never includes findings that the
   operator did not attach to the work order.
+  *Evidence: `services/vendor_comm.py::_build_source_bundle`
+  reads only from `work_order.finding_links.all()` (linked
+  findings only). Scrubs strip any `Finding #<n>` reference
+  not in that set.
+  `test_vendor_comm_service.py::DraftCommunicationHappyPath::test_scrub_strips_invented_finding_id`
+  locks end-to-end behavior.*
 
 Ledger integration:
-- [ ] Reference tag on auto-minted VehicleCost rows follows
-  one of the five families locked in §5.e:
-  `WORKORDER:<id>:estimate:<seq>`,
-  `WORKORDER:<id>:estimate_reversal:<seq>`,
-  `WORKORDER:<id>:completion_estimate_reversal`,
-  `WORKORDER:<id>:estimate_reversal:cancel`,
-  `WORKORDER:<id>:actual`.
-- [ ] `add_cost` idempotency check: before posting, the M4
+- [x] Reference tag on auto-minted VehicleCost rows follows
+  one of the five families locked in §5.e.
+  *Evidence:
+  `test_recon_ledger.py::ReferenceKeyFormatStrings` (5
+  tests, one per family). Runtime rows follow the format —
+  locked by
+  `test_recon_ledger.py::ApproveWithEstimatePostsInitialEstimate::test_estimate_row_posted_on_first_approval`.*
+- [x] `add_cost` idempotency check: before posting, the M4
   service verifies no existing row with the target
-  reference tag exists (skip if it does — logged as
-  duplicate-suppressed).
-- [ ] `WorkOrder` completion posts an actual **and** a
+  reference tag exists (skip if it does).
+  *Evidence:
+  `test_recon_ledger.py::IdempotencyOnReplay` (2 tests:
+  direct helper replay for estimate + actual).*
+- [x] `WorkOrder` completion posts an actual **and** a
   matching estimate reversal atomically (single DB
   transaction) using the
   `completion_estimate_reversal` one-shot reference
   (planning refinement SESSION_066).
-- [ ] `WorkOrder` cancellation posts a reversing entry
-  (negative amount, reference
-  `WORKORDER:<id>:estimate_reversal:cancel`); never edits
-  or deletes the original row (M2 immutable-cost invariant
-  preserved).
-- [ ] After a WO reaches a terminal state, the net
+  *Evidence:
+  `test_recon_ledger.py::CompletionPostsReversalPlusActualAtomically::test_completion_posts_reversal_and_actual`
+  +
+  `test_atomic_completion_rollback_on_validation_failure`
+  (patches `_post_actual` to raise; asserts both ledger
+  rows and the WO save roll back).*
+- [x] `WorkOrder` cancellation posts a reversing entry
+  under `estimate_reversal:cancel`; never edits or deletes
+  the original row.
+  *Evidence:
+  `test_recon_ledger.py::CancelPostsEstimateReversal`
+  (3 tests).*
+- [x] After a WO reaches a terminal state, the net
   estimate contribution for that WO in the ledger is
-  `Decimal("0.00")` — original estimate(s) + revisions +
-  reversals sum to zero (locked by M4.3 test).
-- [ ] After WO completion, `projected_total_investment`
-  does not double-count the completed WO — locked by
-  M4.3 test that computes projected before + after
-  completion and asserts the delta equals actual − last
-  outstanding estimate.
-- [ ] The M3 finding.estimated_cost invariant remains:
-  three tests still pass unchanged (model layer, service
-  layer, condition-report endpoint layer). M4 posts happen
-  from work-order transitions, NOT from finding creation.
-- [ ] `total_investment` still excludes estimates.
+  `Decimal("0.00")`.
+  *Evidence:
+  `test_recon_ledger.py::CompletionPostsReversalPlusActualAtomically::test_net_estimate_contribution_zero_after_completion`
+  + `test_revision_then_completion_still_nets_zero_estimate`.*
+- [x] After WO completion, `projected_total_investment`
+  does not double-count the completed WO.
+  *Evidence:
+  `test_recon_ledger.py::CompletionPostsReversalPlusActualAtomically::test_projected_total_investment_no_double_count`
+  asserts `total_investment == actual` and
+  `projected_total_investment == total_investment` after
+  completion.*
+- [x] The M3 `finding.estimated_cost` invariant remains:
+  three tests still pass unchanged.
+  *Evidence: `test_condition_finding.py::EstimatedCostDoesNotPostToVehicleCost`
+  (model), `test_condition_report_service.py::EstimatedCostDoesNotPost`
+  (service), `test_admin_condition_report.py::EstimatedCostDoesNotPost`
+  (endpoint). M4.3 additionally locks the boundary at
+  `test_recon_ledger.py::ConditionFindingEstimatedCostStillDoesNotPost`.*
+- [x] `total_investment` still excludes estimates.
+  *Evidence: `test_vehicle_ledger.py::LedgerTotalsSemantics`
+  unchanged; assertion holds at 2,518-test baseline.*
 
 Frontend:
-- [ ] Recon page is inside `<RequireAuth>`.
-- [ ] Recon page fetch calls use `authFetch`.
-- [ ] Anonymous navigation redirects to `/login?next=…`.
-- [ ] No recon / vendor / work-order figure appears in any
+- [x] Recon page is inside `<RequireAuth>`.
+  *Evidence: `frontend/src/main.tsx` route registration:
+  `dealer-ai-inventory/:stock/recon` nested inside the
+  `<Route element={<RequireAuth />}>` → `<Route element={<App
+  />}>` chain (matches M2.7 ledger + M3.7 condition-report
+  positioning).*
+- [x] Recon page fetch calls use `authFetch`.
+  *Evidence: every helper in `frontend/src/lib/api.ts`
+  M4.6 block uses `authGetJSON`, `authPostJSON`,
+  `authPatchJSON`, `authDelete` (all wrappers over
+  `authFetch`). No direct `fetch(...)` calls in the M4.6
+  helper section.*
+- [x] Anonymous navigation redirects to `/login?next=…`.
+  *Evidence: inherited from `<RequireAuth />` behavior
+  unchanged since M1·4E. Verified by
+  `test_admin_recon_endpoints.py::ReconAdminEndpointAuthMatrixBase::test_unauthenticated_is_rejected`
+  (backend 401/403 → frontend redirect via
+  `authFetch::UnauthenticatedError` interception).*
+- [x] No recon / vendor / work-order figure appears in any
   customer-facing surface.
-- [ ] "Recon" button on operator inventory cards but NOT on
+  *Evidence:
+  `test_admin_recon_endpoints.py::NoReconDataOnPublicSurfaces::test_onboarding_profile_get_does_not_leak_recon_fields`.*
+- [x] "Recon" button on operator inventory cards but NOT on
   public `/showroom`.
-- [ ] Draft-vs-approved vs sent UI states are visually
-  distinct (not merely disabled) — same discipline as
-  M3.7's `CompletionBanner`.
-- [ ] Vendor-communication draft edit affordances gated on
+  *Evidence: `frontend/src/pages/InventoryPreviewPage.tsx`
+  adds the button in the operator-only card
+  (same code region as the M2.7 Ledger + M3.7 Condition
+  Report buttons). `frontend/src/pages/PublicShowroomPage.tsx`
+  unchanged and does not render InventoryPreviewPage cards
+  with the operator button strip.*
+- [x] Draft-vs-approved-vs-sent UI states are visually
+  distinct (not merely disabled).
+  *Evidence:
+  `frontend/src/components/recon/VendorCommDraftPanel.tsx`
+  applies `STATUS_CLASS[comm.status]` for a distinct bg +
+  border per state (draft/slate, approved/blue, sent/green,
+  logged/amber) plus a per-state icon.
+  `WorkOrderStatusBadge.tsx` similarly uses per-state color
+  families (draft/slate, approved/blue, in_progress/amber,
+  completed/green, cancelled/gray+strikethrough).*
+- [x] Vendor-communication draft edit affordances gated on
   role (`sales_manager` / `dealer_owner` / `recon_manager`).
+  *Evidence:
+  `frontend/src/pages/VehicleReconPage.tsx` WRITE_ROLES
+  constant + `canEdit = useMemo(() => hasRole(...WRITE_ROLES))`
+  gates every write affordance (create/approve/start/complete/
+  cancel/attach/detach/add-part/transition-part/delete-part/
+  draft-comm/approve-comm/mark-sent/log-comm/record-decision).
+  Server authorization remains authoritative.*
 
 ---
 

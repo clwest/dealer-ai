@@ -541,7 +541,16 @@ that the AI role is zero in this phase.
 
 ---
 
-### Milestone 4 — Recon automation (next active milestone; planning pass at SESSION_065)
+### Milestone 4 — Recon automation — SHIPPED at SESSION_073
+
+*Full delivery record: `docs/roadmap/MILESTONE_4_PLANNING.md`
+§7 (annotated SHIPPED per increment) and
+`docs/roadmap/MILESTONE_4_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7e. Test baseline
+delta: 2,124 → 2,518 (+394, zero regressions). Sessions
+065 → 073. M4.8 (outbound SMTP / SMS send) deferred per
+planning §5.i / §5.j pending real pilot-store engagement.
+Frontend `tsc --noEmit` + `vite build` clean.*
 
 **Business objective.** Reduce the "chase vendor for status,
 chase vendor for invoice, chase parts store for order" pain by
@@ -614,7 +623,7 @@ visible."
 
 ---
 
-### Milestone 5 — Vehicle lifecycle stages + retail gating
+### Milestone 5 — Vehicle lifecycle stages + retail gating (next active milestone; planning pass pending)
 
 **Business objective.** Distinguish "in inventory" from
 "actually retail-eligible" at the data layer, so the retail
