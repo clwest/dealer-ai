@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: shipped
 increment: 9
 increment_status: shipped
-commit: TBD
+commit: c070deb
 ---
 
 # SESSION_073 — Milestone 4 · Increment 9 (M4.9 — closeout)
