@@ -649,6 +649,60 @@ VEHICLE_COST_CATEGORY_CHOICES = (
     (CATEGORY_PHOTOGRAPHY, "Photography"),
 )
 
+# Milestone 2 · Increment 2 — canonical category groupings.
+# Deferred from Increment 1 (which shipped only the individual
+# constants) because the groupings exist to serve
+# ``services/vehicle_ledger.compute_totals`` — pure metadata, no
+# business logic, but useful only to the service layer.
+#
+# Invariants (locked by ``test_vehicle_ledger.CategoryGroupings``):
+#
+# - Every constant in ``VEHICLE_COST_CATEGORY_CHOICES`` appears in
+#   exactly one grouping (exhaustive + non-overlapping partition).
+# - Photography is kept separate from administrative — VCP §Phase 5
+#   photography milestone will want to distinguish "shot for
+#   listing" from "shot for damage documentation" without
+#   recategorizing historical rows. The ledger UI (M2.7) may
+#   choose to render "Admin + photo" as a single row, but the
+#   underlying partition stays granular.
+FLOORING_CATEGORIES: tuple[str, ...] = (
+    CATEGORY_FLOOR_PLAN_INTEREST,
+    CATEGORY_FLOOR_PLAN_FEES,
+    CATEGORY_CURTAILMENT,
+    CATEGORY_WIRE_FEES,
+    CATEGORY_BANKING_FEES,
+)
+
+RECON_CATEGORIES: tuple[str, ...] = (
+    CATEGORY_PARTS,
+    CATEGORY_MECHANICAL_LABOR,
+    CATEGORY_TIRES,
+    CATEGORY_BRAKES,
+    CATEGORY_BATTERY,
+    CATEGORY_OIL_SERVICE,
+    CATEGORY_DIAGNOSTICS,
+    CATEGORY_GLASS,
+    CATEGORY_BODY_WORK,
+    CATEGORY_PAINT,
+    CATEGORY_UPHOLSTERY,
+    CATEGORY_WHEEL_REPAIR,
+    CATEGORY_DETAIL,
+)
+
+ADMIN_CATEGORIES: tuple[str, ...] = (
+    CATEGORY_FUEL,
+    CATEGORY_LISTING_FEES,
+    CATEGORY_ADVERTISING_ALLOCATION,
+    CATEGORY_REGISTRATION,
+    CATEGORY_TITLE_WORK,
+    CATEGORY_SHIPPING,
+    CATEGORY_MISC_DEALER_EXPENSES,
+)
+
+PHOTOGRAPHY_CATEGORIES: tuple[str, ...] = (
+    CATEGORY_PHOTOGRAPHY,
+)
+
 
 class VehicleCost(models.Model):
     """Milestone 2 · Increment 1 — per-vehicle post-acquisition cost row.
