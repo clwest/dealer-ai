@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: planning
 increment: 0
 increment_status: shipped
-commit: TBD
+commit: 872f8a0
 ---
 
 # SESSION_055 — Milestone 3 · Increment 0 (M3.0 — planning pass)
@@ -224,9 +224,7 @@ retrospective + planning-artifact §5):
 
 ## Commit hashes
 
-(Filled in immediately after commit.)
-
-- (this session's commit) — `docs(m3-inc0): Milestone 3 planning pass — MILESTONE_3_PLANNING.md + SESSION_055 handoff + SESSION_056 priority`
+- `872f8a0` — `docs(m3-inc0): Milestone 3 planning pass — MILESTONE_3_PLANNING.md + SESSION_055 handoff + SESSION_056 priority`
 
 ## Exact SESSION_056 Milestone 3 · Increment 1 (M3.1) scope
 
