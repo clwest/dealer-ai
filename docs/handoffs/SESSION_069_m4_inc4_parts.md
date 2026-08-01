@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: in-progress
 increment: 4
 increment_status: shipped
-commit: TBD
+commit: 33438ff
 ---
 
 # SESSION_069 — Milestone 4 · Increment 4 (M4.4 — parts tracking service)
