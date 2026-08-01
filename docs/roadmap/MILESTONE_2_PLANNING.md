@@ -1387,13 +1387,38 @@ scope-discipline reminders above still apply to every increment.
   `/onboarding/profile/` GET; DEFAULT_PERMISSION_CLASSES
   remains unset; public routes still 200 without auth).
 
-- **M2.7 — Operator ledger UI.** Frontend
-  `VehicleLedgerPage.tsx` at `/dealer-ai-inventory/:stock/ledger`,
-  inside `<RequireAuth>`. Three `lib/api.ts` helpers via
-  `authFetch`. "Ledger" link on each inventory-list card.
-  `useAuth()` role-gated show/hide on write forms
-  (belt-and-suspenders on top of server-side 403).
-  `npx tsc --noEmit` + `npx vite build` clean.
+- **M2.7 — Operator ledger UI (SHIPPED at SESSION_053).**
+  Frontend `VehicleLedgerPage.tsx` at
+  `/dealer-ai-inventory/:stock/ledger`, inside `<RequireAuth>`.
+  Three typed `lib/api.ts` helpers (`fetchVehicleLedger`,
+  `upsertVehicleAcquisition`, `createVehicleCost`) all via
+  `authFetch` (session cookies, CSRF, typed 401/403). Every
+  money field stays a string on the wire and in state —
+  frontend never recomputes totals, projected_gross, or
+  category sums (M2.2's actual-vs-estimated semantic contract
+  is preserved by the backend being authoritative).
+  Read-only-until-edit acquisition card + immutable cost
+  ledger table (reversing entries display with a "reversal"
+  badge; UPDATE / DELETE are deliberately absent). Add-cost
+  form with grouped category dropdown (via
+  `COST_CATEGORY_CHOICES` mirroring backend enum). Days-in-
+  inventory badge color-coded (green 0–30 / yellow 31–60 /
+  orange 61–90 / red 91+ / neutral null). Distinct 401/403/404
+  UX; error surfaces preserve the tenancy-fail-closed 404
+  message without leaking existence. "Ledger" button on
+  operator inventory cards (URL-encoded stock; deliberately
+  NOT surfaced on public `/showroom`). Role-based show/hide
+  on write forms via `useAuth().hasRole('sales_manager') ||
+  hasRole('dealer_owner')` — belt on top of server-side 403.
+  Verification: `npx tsc --noEmit` clean, `npx vite build`
+  clean (same pre-existing chunk-size warning as SESSION_044,
+  unchanged), route registered + smoked via curl (200 on the
+  SPA fallback). No component-test framework introduced (no
+  Vitest / Jest / RTL in the project; Playwright present but
+  not configured) — per the SESSION_053 brief's decision to
+  use typecheck + build instead of standing up a new test
+  substrate for one increment. Manual browser smoke deferred
+  to operator verification.
 
 - **M2.8 — Milestone verification + closeout.** Full §3
   compatibility sweep with evidence recorded inline (mirror the

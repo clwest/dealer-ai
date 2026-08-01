@@ -1,42 +1,44 @@
 ---
 state: active
 date: 2026-07-31
-last_session_shipped: SESSION_052
+last_session_shipped: SESSION_053
 milestone_1_status: shipped
 milestone_2_status: in_progress
-next_session: SESSION_053
+next_session: SESSION_054
 next_milestone: 2
 next_milestone_name: "Vehicle investment ledger"
-next_increment: 7
-next_increment_name: "Operator ledger UI"
+next_increment: 8
+next_increment_name: "Milestone 2 verification + closeout"
 ---
 
-# Next session — SESSION_053 · Milestone 2 · Increment 7 (M2.7 — operator ledger UI)
+# Next session — SESSION_054 · Milestone 2 · Increment 8 (M2.8 — verification + closeout)
 
-> **Milestone 2 · Increment 6 shipped at SESSION_052.**
-> Three admin ledger endpoints under
-> `/api/dealer-ai/admin/vehicles/<stock_number>/…` — `ledger/`
-> (GET), `acquisition/` (POST upsert), `costs/` (POST create).
-> Permission composition
-> `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`
-> (M1 · 4D class reused unchanged). All writes route through the
-> ledger service. 57 focused tests including full permission
-> matrix, JSON contract stability locks, deterministic cost
-> ordering (`incurred_at` ASC, pk tie-break), immutable-routes
-> (PUT/PATCH/DELETE → 405), `created_by` cannot be spoofed, and
-> **security verification that no ledger keywords leak into any
-> public endpoint**. Test baseline: 1,696 → **1,753 pass**, 1
-> skipped, 0 fail. Zero regressions. No schema drift.
+> **Milestone 2 · Increment 7 shipped at SESSION_053.**
+> Operator ledger UI at `/dealer-ai-inventory/:stock/ledger`
+> inside `<RequireAuth>`. Three typed API helpers via
+> `authFetch`. Money-as-strings end-to-end; frontend never
+> recomputes totals. Read-only-until-edit acquisition,
+> immutable cost table with reversal badges, distinct
+> 401/403/404 UX, days-in-inventory color bucket badge. Role-
+> based show/hide via `useAuth()`. "Ledger" link on operator
+> inventory cards (URL-encoded). Verification: `npx tsc
+> --noEmit` clean, `npx vite build` clean, route smoked via
+> curl (200). No component-test framework introduced (per
+> brief). Manual browser smoke deferred to operator
+> verification. **Backend untouched — no test-baseline
+> change, no schema drift, no service-contract change.**
 >
-> **JSON contract locked for M2.7 to consume** — every money
-> field is a two-decimal-place string; costs come back
-> chronological ASC; `created_by` is username string or `null`;
-> `acquisition` is a projection object or `null`;
-> `days_in_inventory` is int or `null`.
+> **All eight Milestone 2 increments shipped:** M2.1 (models)
+> · M2.2 (service) · M2.3 (read model) · M2.4a (financial
+> engine + APR config) · M2.4b (accrual command) · M2.5
+> (acquisition-price scrub) · M2.6 (admin API) · M2.7
+> (operator UI). SESSION_054 closes the milestone with the
+> §3 compatibility sweep + retrospective + doc flips.
 >
-> **SESSION_053 opens M2.7 — the operator ledger UI.**
-> Frontend-only session. Consumes the M2.6 JSON contract without
-> reshaping the backend.
+> **SESSION_054 is documentation-only.** No code changes
+> unless a §3 compatibility item fails verification. If a fix
+> is needed, mirror the SESSION_044 pattern (small hardening
+> in the same closeout commit).
 
 ## Governance layers (all apply, in this order on conflict)
 
@@ -44,134 +46,132 @@ next_increment_name: "Operator ledger UI"
 2. `docs/DOC_GOVERNANCE.md` — documentation rules.
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 2 —
    scope boundary.
-4. `docs/roadmap/AUTHENTICATION_MODEL.md` §2c — frontend auth
-   primitives. Every M2.7 fetch goes through `authFetch`; the
-   ledger page lives inside `<RequireAuth>`.
-5. `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` §6 lesson 6 —
-   public/protected route boundary must remain explicit; the
-   ledger page is protected.
-6. `docs/roadmap/MILESTONE_2_PLANNING.md` §1.6 + §7.b · M2.7.
-7. `docs/handoffs/SESSION_052_milestone_2_ledger_api.md` — the
-   authoritative M2.7 recommended scope + full M2.6 JSON
-   contract the UI consumes verbatim.
-8. Earlier M2 handoffs (`SESSION_045` – `SESSION_051`).
+4. `docs/roadmap/AUTHENTICATION_MODEL.md` — every M2
+   invariant that inherits M1's substrate.
+5. `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` — the
+   structural template M2's retrospective mirrors, plus its
+   §6 lessons that Milestone 2 was expected to inherit.
+6. `docs/roadmap/MILESTONE_2_PLANNING.md` §3 (the
+   compatibility checklist to walk) + §7.b (the as-shipped
+   sequence to close out) + §5 (deferrals to preserve in the
+   retrospective's §7).
+7. `docs/handoffs/SESSION_053_milestone_2_ledger_ui.md` —
+   authoritative M2.8 recommended scope.
+8. Earlier M2 handoffs (SESSION_045 – SESSION_052).
 
-## What SESSION_053 should do — M2 · Increment 7
+## What SESSION_054 should do — M2 · Increment 8
 
-Per `MILESTONE_2_PLANNING.md` §1.6 + §7.b · M2.7 and the
-SESSION_052 handoff's "Exact recommended scope for M2.7".
+Per `MILESTONE_2_PLANNING.md` §7.b · M2.8 + SESSION_053
+handoff's "Exact recommended scope for M2.8". Mirror the
+SESSION_044 closeout pattern.
 
 ### Recommended step sequence
 
 1. **Read first (in this order):**
-   - `docs/handoffs/SESSION_052_milestone_2_ledger_api.md`
-     § "Exact recommended scope for M2.7" — authoritative
-     scope + the JSON contract to consume.
-   - `docs/roadmap/MILESTONE_2_PLANNING.md` §1.6 — UI design
-     memo.
-   - `docs/roadmap/AUTHENTICATION_MODEL.md` §2c — frontend
-     auth primitives.
-   - `frontend/src/lib/authFetch.ts`, `frontend/src/lib/api.ts`,
-     `frontend/src/lib/AuthContext.tsx`,
-     `frontend/src/components/RequireAuth.tsx`,
-     `frontend/src/pages/LoginPage.tsx` — existing operator-side
-     fetch + auth primitives to reuse.
-   - `frontend/src/main.tsx` — route registration file.
-   - The existing inventory list page (grep for
-     `/dealer-ai-inventory` in `frontend/src/pages/`) — the
-     "Ledger" link is added there.
-   - `frontend/tailwind.config.js` + `frontend/src/index.css` —
-     confirm the shadcn/ui bridge is stable (no v3→v4 drift).
-     Use `brand.*` tokens for headers/totals, shadcn tokens
-     for chrome (dialogs, tables, inputs).
+   - `docs/handoffs/SESSION_053_milestone_2_ledger_ui.md` §
+     "Exact recommended scope for M2.8" — authoritative
+     scope + retrospective structure.
+   - `docs/handoffs/SESSION_044_milestone_1_closeout.md` —
+     precedent for milestone-close doc discipline.
+   - `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` — the
+     structural template M2's retrospective mirrors
+     (frontmatter shape, §1–§8 numbering, lessons format).
+   - `docs/roadmap/MILESTONE_2_PLANNING.md` §3 (walk every
+     compatibility item) + §7.b (record shipped commits
+     per increment).
+   - Every SESSION_046 – SESSION_053 handoff (the shipped
+     evidence that feeds retrospective §2 and §5).
 
-2. **Add three `lib/api.ts` helpers** wrapping M2.6 endpoints:
-   - `fetchVehicleLedger(stock: string) → LedgerResponse`
-   - `upsertVehicleAcquisition(stock, body) → AcquisitionResponse`
-   - `createVehicleCost(stock, body) → CostResponse`
-   All via `authFetch` (session cookies, CSRF-protected).
-   Type the payloads to match the JSON contract in the
-   SESSION_052 handoff.
+2. **Walk the §3 compatibility checklist.** For each
+   checkbox, record inline the test class / code location /
+   runtime probe that locks the invariant. Same shape as the
+   SESSION_044 annotation of `MILESTONE_1_PLANNING.md` §3.
+   If any item fails verification:
+   - Land the smallest possible fix (mirror SESSION_044's
+     franchise-env-override two-line fix pattern) in the
+     same closeout commit.
+   - Document the pre-verification gap explicitly in the
+     retrospective §4.
+   - Never claim a checklist item is true if verification
+     shows otherwise.
 
-3. **Register the new route** in `main.tsx`:
-   ```
-   <Route path="/dealer-ai-inventory/:stock/ledger"
-          element={<VehicleLedgerPage />} />
-   ```
-   Inside `<RequireAuth>` — the public/protected split from
-   M1 · 4E stays intact.
+3. **Write `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md`** —
+   mirror the M1 retrospective structure. Contents per
+   SESSION_053 handoff § "Exact recommended scope for
+   M2.8":
+   - §1 What was planned
+   - §2 What shipped (with commit table)
+   - §3 Sequencing changes
+   - §4 Deviations and why
+   - §5 Regressions avoided
+   - §6 Lessons learned
+   - §7 Remaining deferred work
+   - §8 Does the roadmap need adjustment?
 
-4. **Build `VehicleLedgerPage.tsx`** per planning §1.6:
-   - Header: `{Year} {Make} {Model} #{stock_number}` + three-
-     number bar: **In it for $X · Asking $Y · Projected gross $Z**.
-   - `days_in_inventory` badge, color-coded per aging bucket
-     (0–30 green, 31–60 yellow, 61–90 orange, 91+ red; `null`
-     → "Record acquisition" pill).
-   - Acquisition card — read-only display + "Edit" toggle to
-     an inline form (POST `.../acquisition/`).
-   - Cost ledger table — chronological rows: category /
-     vendor / amount / incurred_at / notes / is_estimate flag
-     / created_by.
-   - "Add cost" inline form (POST `.../costs/`).
-   - Category totals block (four rows: flooring, recon, admin,
-     photography).
+4. **Update `docs/CAPABILITY_MATRIX.md`.**
+   - Add §7c "Vehicle investment ledger (Milestone 2,
+     shipped)".
+   - Update §2.1 rows (acquisition record + per-vehicle cost
+     basis) from N → F.
+   - Update §2.5 row (per-vehicle cost accumulation) from
+     N → F (or P if we want to signal vendor entity is M4).
+   - Refresh `last_verified` + `verified_against_commit`.
 
-5. **Role-based show/hide on write forms** via `useAuth()`:
-   `hasRole('sales_manager') || hasRole('dealer_owner')`
-   controls whether "Add cost" / "Edit acquisition" render.
-   Belt-and-suspenders on the server-side 403 (matches M1 ·
-   4E pattern).
+5. **Update `docs/roadmap/IMPLEMENTATION_ROADMAP.md`.**
+   - §Milestone 2 recommended-order paragraph — shipped
+     date + retrospective link.
 
-6. **Inventory list card** — add a "Ledger" link on each row
-   that navigates to `/dealer-ai-inventory/:stock/ledger`.
+6. **Flip `docs/roadmap/MILESTONE_2_PLANNING.md`
+   frontmatter.**
+   - `status: planning` → `status: shipped`.
+   - Add `shipped_at_session`, `shipped_over` (list of
+     SESSION_046 – SESSION_054), `retrospective` fields.
 
-7. **Verify.**
-   - `npx tsc --noEmit` clean.
-   - `npx vite build` clean.
-   - Manual browser smokes:
-     - Login as `smoke_owner` → inventory list → click
-       "Ledger" on a card → see ledger → add a cost → see
-       totals update.
-     - Login as advisor → navigate to a ledger URL directly
-       → see 403 UI (not `/login` redirect).
-     - Anonymous → navigate to ledger URL → redirect to
-       `/login?next=...`.
-   - Backend suite unchanged: 1,753 pass. (M2.7 is
-     frontend-only.)
+7. **Overwrite this file** (`00-START-NEXT-SESSION.md`)
+   with SESSION_055 = Milestone 3 planning-pass priority.
+   Mirror the SESSION_045 pattern (planning only, no code,
+   deliverable is `docs/roadmap/MILESTONE_3_PLANNING.md`).
 
-8. **Close SESSION_053 with:**
+8. **Defensive full-suite run** — a sanity that M2.8's
+   doc-only changes did not accidentally touch code. Target:
+   `python3 manage.py test dealer_ai` → 1,753 pass, 1
+   skipped, 0 fail.
+
+9. **Close SESSION_054 with:**
    - Handoff at
-     `docs/handoffs/SESSION_053_milestone_2_ledger_ui.md`.
-   - Overwrite this file with SESSION_054 = M2.8 priority
-     (milestone verification + closeout retrospective).
+     `docs/handoffs/SESSION_054_milestone_2_closeout.md`.
+   - Overwrite `00-START-NEXT-SESSION.md` (per step 7).
+   - Commit the doc changes.
 
-## Explicit non-goals for SESSION_053 (M2 · Increment 7)
+## Explicit non-goals for SESSION_054 (M2 · Increment 8)
 
-- ❌ Do NOT ship M2.8 (milestone verification + closeout
-  retrospective).
-- ❌ Do NOT touch any backend file. If the JSON contract needs
-  reshaping, stop and reopen M2.6 as a separate increment.
-- ❌ Do NOT introduce a bulk inventory-list optimization —
-  deferred per M2.3 handoff N+1 preview.
-- ❌ Do NOT ship update/delete cost operations. v1 corrections
-  are reversing rows.
-- ❌ Do NOT introduce role-specific chrome beyond the write-
-  form show/hide (planning §5 defers per-role UI polish).
-- ❌ Do NOT introduce charts / visualizations. Numbers only
-  for v1.
-- ❌ Do NOT introduce recon-manager role in the UI (deferred
-  to Milestone 4).
-- ❌ Do NOT fold in `floor_plan_apr` Setup UI unless the
-  ledger page genuinely needs to expose it in v1 (evaluate
-  and document; if unclear, defer).
-- ❌ Do NOT commit any real `OPENAI_API_KEY` or credentials.
+- ❌ Do NOT begin the Milestone 3 planning artifact. That is
+  SESSION_055 = M3 · Increment 0 (planning) — mirror the
+  SESSION_045 pattern.
+- ❌ Do NOT ratchet the deferred ideas into M2. Every one
+  stays deferred per the Discovery Rule
+  (`PROJECT_RULES.md` §Discovery Rule). Curtailment
+  automation, Vendor FK, expected_gross, tenant-scoped
+  stock_number uniqueness, is_available → computed,
+  multi-photo storage, async infra, bulk-list optimization,
+  `floor_plan_apr` Setup UI field — all stay in
+  `MILESTONE_2_PLANNING.md` §5 (and now
+  `MILESTONE_2_RETROSPECTIVE.md` §7) as recorded deferrals.
+- ❌ Do NOT introduce new capabilities. If a §3 item fails,
+  land a minimal hardening fix like SESSION_044 did for the
+  franchise env-override; do not scope-creep.
+- ❌ Do NOT deploy to prod. Milestone 2 does not require
+  prod.
+- ❌ Do NOT commit any real `OPENAI_API_KEY` or
+  credentials.
 
 ## NEXT TASK
 
-Start SESSION_053 with the read-first list above. Ship the
-three `lib/api.ts` helpers + `VehicleLedgerPage.tsx` + route
-registration + inventory-card "Ledger" link + role-based
-show/hide on write forms. Nothing else.
+Start SESSION_054 with the read-first list above. Walk §3.
+Write the retrospective. Update `CAPABILITY_MATRIX.md`,
+`IMPLEMENTATION_ROADMAP.md`, and
+`MILESTONE_2_PLANNING.md` frontmatter. Overwrite this
+file for SESSION_055 = M3 planning. Commit. Nothing else.
 
 ---
 
@@ -181,73 +181,80 @@ show/hide on write forms. Nothing else.
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 2
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` §6 lessons
-6. `docs/roadmap/MILESTONE_2_PLANNING.md` §1.6 + §7.b · M2.7
-7. `docs/handoffs/SESSION_052_milestone_2_ledger_api.md`
-   (M2.7 authoritative scope + full JSON contract)
-8. `docs/handoffs/SESSION_051_milestone_2_acquisition_price_scrub.md`
-9. `docs/handoffs/SESSION_050_milestone_2_accrual_command.md`
-10. `docs/handoffs/SESSION_049_milestone_2_financial_math.md`
-11. `docs/handoffs/SESSION_048_milestone_2_vehicle_read_model.md`
-12. `docs/handoffs/SESSION_047_milestone_2_ledger_service.md`
-13. `docs/handoffs/SESSION_046_milestone_2_schema.md`
-14. `docs/handoffs/SESSION_045_milestone_2_planning.md`
-15. Current source code — the M2.6 three admin endpoints and
-    their JSON contract.
+5. `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` (structural
+   template for M2's retrospective)
+6. `docs/roadmap/MILESTONE_2_PLANNING.md` §3 + §7.b + §5
+7. `docs/handoffs/SESSION_053_milestone_2_ledger_ui.md`
+   (M2.8 authoritative scope)
+8. `docs/handoffs/SESSION_052_milestone_2_ledger_api.md`
+9. Earlier M2 handoffs (SESSION_045 – SESSION_051).
+10. `docs/handoffs/SESSION_044_milestone_1_closeout.md`
+    (closeout-pattern precedent).
+11. Current source code — the shipped M2.1–M2.7 surface.
 
 Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_052 — M2.6 shipped)
+## Operational state (post-SESSION_053 — M2.7 shipped)
 
 - **Backend (local):** Django on `:8001`. Migrations
   `0001`–`0014` applied. No pending migrations.
 - **Backend (prod):** `vehicle-match-api.onrender.com` — NOT
   active. Milestone 2 does not require prod either.
 - **Frontend (local):** Vite on `:5173`. Auth flow wired
-  end-to-end. **NOT touched in M2.1 through M2.6.** M2.7 is
-  the first frontend session in Milestone 2.
+  end-to-end. **Ledger page shipped this session:**
+  `/dealer-ai-inventory/:stock/ledger`.
 - **Frontend (prod):** NONE.
-- **Test baseline:** **1,753 pass** (1,696 baseline + 57 new
-  M2.6 tests), 1 skipped, 0 fail.
-- **DRF defaults + CSRF + endpoint-level permissions:** all as
-  documented in `AUTHENTICATION_MODEL.md`. Unchanged.
-  M2.6 confirmed `DEFAULT_PERMISSION_CLASSES` still unset.
-- **Migration-check DB alias:** `DATABASES["migration_check"]`.
+- **Test baseline (backend):** **1,753 pass** (unchanged
+  from SESSION_052 — M2.7 is frontend-only), 1 skipped,
+  0 fail.
+- **Frontend build status:** `npx tsc --noEmit` clean;
+  `npx vite build` clean (pre-existing 524KB chunk-size
+  warning, unchanged from SESSION_044).
+- **DRF defaults + CSRF + endpoint-level permissions:** all
+  as documented in `AUTHENTICATION_MODEL.md`. Unchanged.
 - **Env-override surface:** `DEALER_AI_DEALER_NAME`,
   `DEALER_AI_DEALER_TYPE`, `DEALER_AI_PRIMARY_MAKE`,
   `DEALER_AI_FLOOR_PLAN_APR`.
 - **Dev DB seeded users:** `smoke_owner` (dealer_owner) +
   `smoke_advisor` (advisor). Password `smoke-pass-4e`. Not
-  committed. M2.7 browser smokes reuse both.
-- **Ledger model surface (M2.1):** `VehicleAcquisition`,
-  `VehicleCost`, `SOURCE_*` × 8, `CATEGORY_*` × 26.
-- **Category groupings (M2.2):** `FLOORING_CATEGORIES` (5),
-  `RECON_CATEGORIES` (13), `ADMIN_CATEGORIES` (7),
-  `PHOTOGRAPHY_CATEGORIES` (1).
-- **Ledger service (M2.2):** `record_acquisition`,
-  `add_cost`, `compute_totals`, `category_group_of`,
-  `LedgerTotals`, `CrossTenantLedgerError`, `ZERO`.
-- **Vehicle read-model (M2.3):** `@cached_property
-  ledger_totals` + 9 delegator properties +
-  `days_in_inventory`.
-- **Financial engine + APR config (M2.4a):**
-  `daily_floor_plan_interest`, `get_floor_plan_apr`,
-  `DealerOnboardingProfile.floor_plan_apr`.
-- **Accrual command (M2.4b):**
-  `manage.py accrue_floor_plan_interest --dealership=<slug>
-  [--as-of=DATE] [--dry-run]`.
-- **Safety pipeline (M2.5):** `acquisition_price` scrub in
-  `apply_post_llm_scrubs`, fires on every kind, runs AFTER
-  `detect_unsafe_response`.
-- **Admin API (M2.6):** Three tenant-scoped endpoints under
-  `/api/dealer-ai/admin/vehicles/<stock_number>/` — `ledger/`
-  (GET), `acquisition/` (POST), `costs/` (POST). Full JSON
-  contract locked by tests. Permission composition
-  `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`
-  (M1 · 4D class reused). All writes through the ledger
-  service. Cross-tenant + nonexistent stock_number both → 404.
-- **`docs/roadmap/DEFERRED_IDEAS.md`** — still does not exist.
-  Every deferred idea from Milestones 1 + 2 is recorded in
-  the respective planning + retrospective + handoff docs.
+  committed. Manual browser smoke of M2.7 uses both.
+- **Milestone 2 shipped surface (all eight increments):**
+  - **M2.1** models — `VehicleAcquisition`, `VehicleCost`,
+    `SOURCE_*` × 8, `CATEGORY_*` × 26, admin
+    registrations, migrations `0012` + `0013`.
+  - **M2.2** service — `record_acquisition`, `add_cost`,
+    `compute_totals`, `category_group_of`, `LedgerTotals`,
+    `CrossTenantLedgerError`. Category groupings
+    (`FLOORING_CATEGORIES`, `RECON_CATEGORIES`,
+    `ADMIN_CATEGORIES`, `PHOTOGRAPHY_CATEGORIES`).
+  - **M2.3** Vehicle read model — `@cached_property
+    ledger_totals` + 9 delegator properties +
+    `days_in_inventory`.
+  - **M2.4a** financial engine + APR config —
+    `daily_floor_plan_interest`, `get_floor_plan_apr`,
+    `DealerOnboardingProfile.floor_plan_apr`, migration
+    `0014`, `DEALER_AI_FLOOR_PLAN_APR` env.
+  - **M2.4b** accrual command —
+    `manage.py accrue_floor_plan_interest --dealership=<slug>
+    [--as-of=DATE] [--dry-run]`. Workflow-owned
+    idempotency via `ACCRUAL:<date>` reference tag.
+  - **M2.5** safety scrub — `acquisition_price` joins
+    `apply_post_llm_scrubs`, fires on every kind, runs
+    AFTER `detect_unsafe_response`.
+  - **M2.6** admin API — three endpoints under
+    `/api/dealer-ai/admin/vehicles/<stock_number>/`
+    (`ledger/` GET, `acquisition/` POST, `costs/` POST).
+    Permission composition
+    `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`
+    (M1 · 4D class reused).
+  - **M2.7** operator UI —
+    `/dealer-ai-inventory/:stock/ledger` inside
+    `<RequireAuth>`. Three typed API helpers via
+    `authFetch`. Money-as-strings end-to-end. Role-based
+    show/hide on write forms.
+- **`docs/roadmap/DEFERRED_IDEAS.md`** — still does not
+  exist. Every deferred idea from Milestones 1 + 2 is
+  recorded in the respective planning + retrospective +
+  handoff docs.
