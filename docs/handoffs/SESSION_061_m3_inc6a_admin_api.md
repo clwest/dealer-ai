@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: in-progress
 increment: 6A
 increment_status: shipped
-commit: TBD
+commit: f80a6d1
 ---
 
 # SESSION_061 — Milestone 3 · Increment 6A (M3.6A — core condition-report admin API)
