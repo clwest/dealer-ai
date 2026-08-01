@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: shipped
 increment: 8
 increment_status: shipped
-commit: TBD
+commit: 8ce3f84
 ---
 
 # SESSION_064 — Milestone 3 · Increment 8 (M3.8 — verification + closeout)
