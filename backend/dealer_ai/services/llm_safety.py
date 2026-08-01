@@ -330,6 +330,195 @@ def _scrub_invented_appointment(text: str) -> Tuple[str, bool]:
     return cleaned, changed
 
 
+# ---- Acquisition-price scrub (Milestone 2 · Increment 5) -------------------
+#
+# Defense-in-depth against internal acquisition / investment figures
+# leaking into any customer-facing AI output. Runs on every ``kind``
+# because ledger data is equally wrong anywhere it appears; not
+# gated on dealer type. Text-only — no DB access, no ledger reads,
+# no Vehicle/Dealership lookups. Deterministic.
+#
+# Design principles (SESSION_051 brief):
+#
+# - Verbal framing is the primary signal. Patterns anchor on
+#   cost-ownership verbs ("we paid", "our cost", "our investment",
+#   "acquired", "spent on recon", "purchase price was") rather than
+#   proximity to a dollar amount. A generic dollar detector would
+#   over-fire on legitimate customer-facing pricing.
+# - Favor false negatives over broad false positives. A missed
+#   obscure phrase can be added later; a scrub that damages valid
+#   pricing language breaks the product today.
+# - Substitutions are neutral phrases, never fabricated
+#   customer-facing numbers. Prefer "our current pricing" or
+#   "a strong value" or removal-of-the-offending-clause over any
+#   made-up figure.
+# - Ordering: this scrub does NOT reference a numbered "stage."
+#   The pipeline count is a documentation concept, not a code
+#   contract; introducing "stage 17" here would create ordering
+#   dependencies future scrubs could invalidate. This scrub simply
+#   joins the always-runs section of ``apply_post_llm_scrubs``.
+
+_ACQUISITION_PRICE_PATTERNS: List[Tuple[re.Pattern[str], str]] = [
+    # "we paid $X for (this|the|it) ..." OR "we paid $X at auction/wholesale"
+    # Deliberately requires the vehicle-context suffix ("for this"/
+    # "at auction") to avoid firing on unrelated "we paid $X to the DMV"
+    # style disclosures about customer bills. The scrub's job is
+    # cost-ownership language, not any-first-person-payment language.
+    (
+        re.compile(
+            r"\bwe\s+paid\s+\$?\s*\d[\d,]*(?:\.\d+)?"
+            r"(?:"
+            r"\s+for\s+(?:this|the|it)\b[^.!?\n]*"
+            r"|\s+at\s+(?:auction|wholesale|the\s+auction)"
+            r"|\s+for\s+(?:this|the)\s+\w+\s+at\s+(?:auction|wholesale)"
+            r")",
+            re.IGNORECASE,
+        ),
+        "we picked this one up carefully",
+    ),
+    # "our cost (on this / on the / of / was / is) $X"
+    (
+        re.compile(
+            r"\bour\s+cost"
+            r"(?:\s+on\s+(?:this|the)\s+\w+)?"
+            r"\s+(?:was|is|of)\s+\$?\s*\d[\d,]*(?:\.\d+)?",
+            re.IGNORECASE,
+        ),
+        "our current pricing reflects the market",
+    ),
+    # "we're in it for $X" / "we are in it for $X" / "we're in this for $X"
+    (
+        re.compile(
+            r"\bwe(?:'re|\s+are)?\s+in\s+(?:it|this)\s+for\s+\$?\s*\d[\d,]*(?:\.\d+)?",
+            re.IGNORECASE,
+        ),
+        "we've set a competitive price",
+    ),
+    # "we've got $X in (this|the) <vehicle-word>" /
+    # "we have $X in (this|the) <vehicle-word>"
+    (
+        re.compile(
+            r"\bwe(?:'ve|\s+have)\s+(?:got\s+)?\$?\s*\d[\d,]*(?:\.\d+)?"
+            r"\s+in\s+(?:this|the)\s+\w+",
+            re.IGNORECASE,
+        ),
+        "we've set a competitive price",
+    ),
+    # "our purchase price (was|is|of|for) $X" — "our" makes ownership
+    # explicit; safe to match any tense.
+    (
+        re.compile(
+            r"\bour\s+purchase\s+price"
+            r"(?:\s+(?:was|is|of|for|on)\s+\$?\s*\d[\d,]*(?:\.\d+)?)?",
+            re.IGNORECASE,
+        ),
+        "our current pricing",
+    ),
+    # "purchase price was $X" / "purchase price of $X"
+    # Deliberately NOT matching "purchase price is $X" — that could
+    # be customer-facing sticker phrasing.
+    (
+        re.compile(
+            r"\bpurchase\s+price\s+(?:was|of)\s+\$?\s*\d[\d,]*(?:\.\d+)?",
+            re.IGNORECASE,
+        ),
+        "our current pricing is what matters",
+    ),
+    # "acquired [this|the|it] [<one or two intervening words>] (for|at) $X"
+    # Allows a short noun phrase between "acquired" and the price
+    # anchor (e.g. "acquired the used vehicle for $X", "acquired this
+    # truck at $X"). Non-greedy 0-3 intervening words to catch the
+    # common shapes without over-generalizing.
+    (
+        re.compile(
+            r"\bacquired\s+(?:\w+\s+){0,3}?(?:for|at)\s+\$?\s*\d[\d,]*(?:\.\d+)?",
+            re.IGNORECASE,
+        ),
+        "brought this into inventory carefully",
+    ),
+    # "our investment in (this|the) <word>" — matches with or without
+    # a trailing dollar amount so the "our investment on this piece"
+    # phrasing (no explicit $ figure) also fires.
+    (
+        re.compile(
+            r"\bour\s+investment\s+in\s+(?:this|the)\s+\w+"
+            r"(?:\s+(?:is|of|was)\s+\$?\s*\d[\d,]*(?:\.\d+)?)?",
+            re.IGNORECASE,
+        ),
+        "our commitment to a fair price",
+    ),
+    # "total investment (is|of|was)? $X" / "total investment $X"
+    # Matches "our total investment is $22,000" and "total investment
+    # $22,000" without requiring "our" — dealer's total investment
+    # in any vehicle is inherently internal.
+    (
+        re.compile(
+            r"\b(?:our\s+)?total\s+investment"
+            r"(?:\s+(?:is|of|was))?"
+            r"\s+\$?\s*\d[\d,]*(?:\.\d+)?",
+            re.IGNORECASE,
+        ),
+        "a strong value",
+    ),
+    # "floor plan interest" / "floor-plan interest" — always internal
+    # regardless of whether an amount is mentioned. Customers never
+    # talk about floor plan; internal-ops term only.
+    (
+        re.compile(
+            r"\bfloor[- ]plan\s+interest"
+            r"(?:\s+(?:of|is|was|totals?|amounts?\s+to)\s+\$?\s*\d[\d,]*(?:\.\d+)?)?",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    # "we spent $X on recon" / "spent $X on reconditioning" / "spent
+    # $X on repair"
+    (
+        re.compile(
+            r"\b(?:we\s+)?spent\s+\$?\s*\d[\d,]*(?:\.\d+)?"
+            r"\s+on\s+(?:recon|reconditioning|repair|repairs)"
+            r"[^.!?\n]*",
+            re.IGNORECASE,
+        ),
+        "invested time in preparing the vehicle",
+    ),
+    # "recon (cost|costs|expense|expenses) (was|were|of|is|are) $X"
+    (
+        re.compile(
+            r"\brecon(?:ditioning)?\s+(?:costs?|expenses?)"
+            r"\s+(?:were|was|of|is|are)\s+\$?\s*\d[\d,]*(?:\.\d+)?",
+            re.IGNORECASE,
+        ),
+        "the vehicle was carefully prepared",
+    ),
+]
+
+
+def _scrub_acquisition_price(text: str) -> Tuple[str, bool]:
+    """Strip internal cost-ownership language from a reply.
+
+    Text-only. No I/O. No ledger reads. Deterministic — same input,
+    same output.
+
+    Callers do NOT gate on dealer type (unlike
+    :func:`_scrub_indie_prohibited`); ledger data is sensitive
+    regardless of independent vs. franchise.
+    """
+    if not text:
+        return text, False
+    cleaned = text
+    changed = False
+    for pattern, replacement in _ACQUISITION_PRICE_PATTERNS:
+        if pattern.search(cleaned):
+            cleaned = pattern.sub(replacement, cleaned)
+            changed = True
+    if changed:
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
+        cleaned = cleaned.strip()
+    return cleaned, changed
+
+
 # ---- Public entry -----------------------------------------------------------
 
 
@@ -381,6 +570,16 @@ def apply_post_llm_scrubs(
     cleaned, default_changed = scrub_default_assumption_language(cleaned)
     if default_changed:
         scrubs.append("default_assumption")
+
+    # 2b. Acquisition-price scrub (Milestone 2 · Increment 5).
+    #     Runs on every ``kind`` because ledger-leakage phrasing is
+    #     equally wrong anywhere. No dealer-type gating (unlike the
+    #     indie-prohibited scrub below) — investment figures are
+    #     sensitive regardless of independent vs. franchise. Text-
+    #     only; no DB access.
+    cleaned, acquisition_price_changed = _scrub_acquisition_price(cleaned)
+    if acquisition_price_changed:
+        scrubs.append("acquisition_price")
 
     # 3. Kind-specific scrubs.
     if kind in ("ad", "follow_up"):
