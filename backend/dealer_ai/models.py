@@ -1,8 +1,12 @@
 import uuid
+from datetime import date
+from functools import cached_property
+from typing import Optional
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 
 # Milestone 1 · Increment 4A — role vocabulary. Kept as a module-level
@@ -122,6 +126,204 @@ class Vehicle(models.Model):
     def display_name(self) -> str:
         parts = [str(self.year), self.make, self.model, self.trim]
         return " ".join(p for p in parts if p)
+
+    # ---- Milestone 2 · Increment 3 — Vehicle-as-read-model -------------
+    #
+    # The following properties are the *read model* for the Vehicle
+    # Investment Ledger. Callers (Django admin, future serializers,
+    # future ledger UI) can read financial totals off a ``Vehicle``
+    # instance without knowing anything about how the ledger is
+    # implemented.
+    #
+    # Layer contract (see also ``docs/roadmap/MILESTONE_2_PLANNING.md``
+    # §1.3 + §7.b · M2.3):
+    #
+    # - ``Vehicle`` = read model. Thin delegator. Never aggregates.
+    #   Never understands cost categories. Never writes.
+    # - ``services/vehicle_ledger.py`` = business layer + write model.
+    #   All aggregation, category grouping, and money math lives
+    #   there. All writes go through ``record_acquisition`` /
+    #   ``add_cost``.
+    #
+    # Caching contract:
+    #
+    # - :attr:`ledger_totals` is a ``@cached_property`` — the first
+    #   read triggers exactly one ledger computation (six DB queries;
+    #   see ``compute_totals`` docstring). Every subsequent read on
+    #   the same instance returns from cache (zero queries).
+    # - The nine per-total properties (`total_investment`,
+    #   `projected_total_investment`, etc.) all delegate to the
+    #   cached ``ledger_totals`` object. Reading all nine costs the
+    #   same as reading one.
+    # - :attr:`days_in_inventory` is a plain ``@property`` — it does
+    #   not go through ``ledger_totals`` because it is a temporal
+    #   metric (depends on "today"), not a financial one. Django's
+    #   OneToOne reverse-accessor cache means both properties share
+    #   the same acquisition lookup after either one runs, so
+    #   reading both together does not double-query.
+    #
+    # Cache invalidation caveat: writes made *after* a
+    # ``ledger_totals`` read on the same instance are NOT reflected
+    # in the cached value. Callers that write via
+    # :func:`services.vehicle_ledger.add_cost` and then read totals
+    # on the same instance should either refetch the Vehicle
+    # (``Vehicle.objects.get(pk=...)``) or delete the cached
+    # attribute (``del vehicle.ledger_totals``) before reading. In
+    # the request/response cycle this is not a concern — each
+    # request builds a fresh Vehicle instance from the DB.
+
+    @cached_property
+    def ledger_totals(self):
+        """Cached snapshot of the vehicle's ledger totals.
+
+        Runs ``services.vehicle_ledger.compute_totals`` exactly once
+        per Vehicle instance and caches the returned
+        :class:`services.vehicle_ledger.LedgerTotals`. Every
+        downstream property reads a field off this cached instance
+        instead of re-querying.
+
+        Tenant resolves from ``self.dealership`` — the vehicle
+        borrows its own tenant. Cross-tenant leakage is impossible
+        here because the vehicle IS in its dealership by
+        construction; the service-layer ``CrossTenantLedgerError``
+        would only fire if a caller manually mutated
+        ``vehicle.dealership_id`` in memory to a different value
+        before reading a property. Locked by
+        ``VehicleReadModelTenantIsolation``.
+        """
+        # Local import — the ledger service imports models, so a
+        # top-of-module import here would create a cycle at import
+        # time. Django handles this pattern throughout the codebase
+        # (see ``services/tenancy.py`` for the same guard).
+        from .services.vehicle_ledger import compute_totals
+
+        return compute_totals(self, dealership=self.dealership)
+
+    @property
+    def total_investment(self):
+        """Money actually committed to this vehicle.
+
+        Equals ``acquisition_total + actual_cost_total``. Excludes
+        rows where ``is_estimate=True``. This is the number to
+        compare against the asking price for projected front-end
+        gross. See the module docstring in
+        ``services/vehicle_ledger.py`` for the load-bearing
+        semantic contract.
+        """
+        return self.ledger_totals.total_investment
+
+    @property
+    def projected_total_investment(self):
+        """Money in this vehicle once every open estimate lands.
+
+        Equals ``total_investment + estimated_cost_total``. Useful
+        for pricing decisions; NOT for sunk-cost comparisons
+        (would double-count projected spend as invested).
+        """
+        return self.ledger_totals.projected_total_investment
+
+    @property
+    def acquisition_total(self):
+        """Sum of every cash line on the acquisition row.
+
+        Returns :data:`services.vehicle_ledger.ZERO` when no
+        acquisition record exists.
+        """
+        return self.ledger_totals.acquisition_total
+
+    @property
+    def actual_cost_total(self):
+        """Sum of category totals for actual (``is_estimate=False``)
+        costs across flooring + recon + admin + photography."""
+        return self.ledger_totals.actual_cost_total
+
+    @property
+    def estimated_cost_total(self):
+        """Sum of ``VehicleCost.amount`` across every category where
+        ``is_estimate=True``. Money projected but not committed."""
+        return self.ledger_totals.estimated_cost_total
+
+    @property
+    def flooring_total(self):
+        """Actual flooring costs (``is_estimate=False``). Category
+        partition lives in
+        :data:`dealer_ai.models.FLOORING_CATEGORIES`."""
+        return self.ledger_totals.flooring_total
+
+    @property
+    def recon_total(self):
+        """Actual reconditioning costs (``is_estimate=False``).
+        Category partition lives in
+        :data:`dealer_ai.models.RECON_CATEGORIES`."""
+        return self.ledger_totals.recon_total
+
+    @property
+    def administrative_total(self):
+        """Actual administrative costs (``is_estimate=False``).
+        Category partition lives in
+        :data:`dealer_ai.models.ADMIN_CATEGORIES`."""
+        return self.ledger_totals.administrative_total
+
+    @property
+    def photography_total(self):
+        """Actual photography costs (``is_estimate=False``). Kept
+        separate from administrative so future photography
+        surfaces can distinguish 'shot for listing' from 'shot
+        for damage documentation' without recategorizing history.
+        Category partition lives in
+        :data:`dealer_ai.models.PHOTOGRAPHY_CATEGORIES`."""
+        return self.ledger_totals.photography_total
+
+    @property
+    def days_in_inventory(self) -> Optional[int]:
+        """Days elapsed since the vehicle was physically acquired.
+
+        Primary signal: ``VehicleAcquisition.purchase_date``.
+        Returns ``today - purchase_date`` in whole days (never
+        negative — a future purchase_date returns 0, which
+        surfaces the operator's data-entry error without breaking
+        aging math).
+
+        **Fallback behavior when no acquisition record exists:**
+        returns ``None``. Aging is undefined until the operator
+        records the acquisition. A misleading fallback (e.g.
+        ``imported_at`` when the vehicle was imported via CSV
+        weeks after physical arrival) would produce wrong aging
+        buckets in the ledger UI. ``None`` forces the operator
+        to record the acquisition first — a documented invariant
+        of Milestone 2's ledger model.
+
+        Timezone: uses ``django.utils.timezone.now().date()`` for
+        "today", which respects ``settings.TIME_ZONE``
+        (``America/Chicago``). Comparing a
+        timezone-aware "now" against a ``purchase_date`` (a naive
+        :class:`datetime.date`) is safe because ``.date()`` strips
+        the timezone.
+        """
+        purchase_date = self._purchase_date_or_none()
+        if purchase_date is None:
+            return None
+        today = timezone.now().date()
+        delta_days = (today - purchase_date).days
+        return max(0, delta_days)
+
+    def _purchase_date_or_none(self) -> Optional[date]:
+        """Return ``VehicleAcquisition.purchase_date`` or ``None``.
+
+        Wrapped for testability + to isolate the OneToOne reverse-
+        accessor + ``DoesNotExist`` handling in one place. Django
+        caches the OneToOne reverse access on the Vehicle instance,
+        so calling this after :attr:`ledger_totals` (which also
+        accesses ``self.acquisition``) does not re-query.
+
+        Note: ``VehicleAcquisition`` is defined below in this same
+        module. At method-call time the class already exists in
+        module scope; the reference resolves fine.
+        """
+        try:
+            return self.acquisition.purchase_date
+        except VehicleAcquisition.DoesNotExist:
+            return None
 
 
 class ChatSession(models.Model):
