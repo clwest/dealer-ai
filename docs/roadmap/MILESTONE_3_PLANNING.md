@@ -2332,7 +2332,7 @@ changes.
   mapping, permission composition, response projections all
   identical between A + B.
 
-### Increment 7 (M3.7) — Operator condition-report UI
+### Increment 7 (M3.7) — Operator condition-report UI — SHIPPED at SESSION_063
 
 **Scope.** Frontend surface per §1.6:
 - Route registration in `main.tsx`:
@@ -2363,6 +2363,166 @@ drive an interactive browser (honesty over false completion).
 
 **Boundary.** Test baseline unchanged (frontend has no test
 runner). Backend baseline: ~1,983 (M3.6) still passing.
+
+**Shipped surface (SESSION_063).**
+
+- **Route registered** in `frontend/src/main.tsx` inside
+  `<RequireAuth>`: `dealer-ai-inventory/:stock/condition-report`
+  → `<VehicleConditionReportPage />`. Sits alongside the
+  existing M2.7 `.../ledger` route.
+- **API helpers** in `frontend/src/lib/api.ts` (all via
+  `authFetch`, all typed):
+  - `fetchLatestConditionReport(stock)`.
+  - `createConditionReport(stock, body)`.
+  - `completeConditionReport(stock, reportId)`.
+  - `createConditionFinding(stock, reportId, body)`.
+  - `updateConditionFinding(stock, findingId, body)`.
+  - `deleteConditionFinding(stock, findingId)`.
+  - `requestPhotoUpload(stock, findingId, contentType)`.
+  - `uploadPhotoBytes({...})` — branches on
+    `LOCAL_UPLOAD_URL_MARKER` prefix to choose local
+    receiver vs. presigned PUT.
+  - `attachPhoto(stock, findingId, body)`.
+  - `deletePhoto(stock, publicId)` — public UUID in URL.
+  - `LOCAL_UPLOAD_URL_MARKER` constant exported (so the UI can
+    check without importing the storage module).
+  - Choice constants: `CONDITION_CATEGORY_CHOICES`,
+    `CONDITION_SEVERITY_CHOICES`,
+    `CONDITION_PHOTO_CONTENT_TYPES`.
+  - **Three-step upload workflow kept literal** — no
+    `uploadAndAttachPhoto` one-shot helper. Callers see the
+    contract in their code (M3.7 spec compliance).
+- **`authFetch` extensions**: added `authPatchJSON` +
+  `authDelete` for M3.6 PATCH/DELETE endpoints.
+- **Page component**:
+  `frontend/src/pages/VehicleConditionReportPage.tsx`
+  (~506 lines — well under the M2 ledger's 1,059-line
+  ceiling; component extraction per §7 M3.7 spec kept
+  presentation out of the page).
+- **Small component library** in
+  `frontend/src/components/condition-report/` (7 files):
+  - `SeverityBadge.tsx` (102 lines) — badge + icon + label
+    per severity (a11y — not color-only). Exports
+    `SEVERITY_DISPLAY_ORDER` (safety → advisory).
+  - `CompletionBanner.tsx` (61) — visible locked-state
+    banner for completed reports.
+  - `PhotoUploadButton.tsx` (185) — three-step upload
+    orchestrator; step-labeled progress; per-step error
+    humanization (409 / 400 / 502 / 404).
+  - `PhotoGallery.tsx` (181) — per-finding gallery; delete
+    affordance draft-only; detects
+    `LOCAL_READ_URL_MARKER` prefix to render dev
+    placeholder rather than broken `<img>`.
+  - `FindingCard.tsx` (277) — finding + inline edit form +
+    per-finding photo gallery.
+  - `AddFindingForm.tsx` (196) — expandable inline form.
+  - `CreateReportForm.tsx` (152) — no-report-yet form.
+- **Findings grouped by CATEGORY**, then by SEVERITY within
+  category (per M3.7 pushback: "operators generally think by
+  inspection area first"). Empty categories skipped. Severity
+  order: safety > required > recommended > advisory (highest
+  priority first). Stable tie-break on `created_at`.
+- **Estimated cost**: rendered exactly as the backend returns
+  (2-decimal string), with a per-finding italic note
+  "Documentation only — not yet part of vehicle investment"
+  reinforcing the M3.1 / M3.2 invariant. **Never summed,
+  never aggregated.**
+- **Distinct error UI** per class: humanized messages for
+  401/403/404/409/400/502 with the specific meaning
+  (unauthenticated, forbidden, immutable, upload not
+  completed, metadata mismatch, provider failure, generic
+  validation).
+- **Role gating**: `WRITE_ROLES = ["dealer_owner",
+  "sales_manager"]` (M2.7 convention). Edit affordances
+  render only when both `isDraft` and `canWrite` are true;
+  server authorization is authoritative.
+- **Inventory button**: added to `InventoryPreviewPage`
+  card footer beside the existing "Ledger" link. Same
+  operator-only surface — NOT on `/showroom`.
+
+**Security invariants (verified by code inspection —
+frontend has no test runner):**
+
+- `storage_key` never rendered — the ONLY value referenced
+  in `PhotoUploadButton.uploadPhotoBytes` is passed to the
+  local receiver form-data or ignored (S3 path uses only
+  the URL). Photo projection everywhere else uses
+  `public_id`.
+- `bucket` / `provider` / adapter internals never rendered.
+- `LOCAL_UPLOAD_URL_MARKER` referenced only in the API
+  layer's branching helper — never surfaced to the DOM.
+- `LOCAL_READ_URL_MARKER` detected in `PhotoGallery` and
+  swapped for a "Local dev — no signed URL" placeholder
+  rather than passed to `<img src>`.
+
+**Frontend verification (SESSION_063).**
+
+- `npx tsc --noEmit` — **clean, exit 0**.
+- `npx vite build` — **clean**. Bundle output:
+  `dist/assets/index-F0sQTOf7.js` 552.78 kB (gzip 150.79
+  kB). Same pre-existing chunk-size warning as M2.7,
+  unchanged.
+- Backend baseline: `python3 manage.py test dealer_ai` →
+  **2,124 pass, 1 skipped, 0 fail** (identical to
+  post-M3.6B).
+- **Browser verification via automation NOT performed this
+  session** — no interactive browser access. See "Manual
+  browser verification" below for the honest scope.
+
+**Manual browser verification (deferred to operator
+first-live-use).** The 12 steps in the M3.7 spec (open
+inventory → create → add findings → upload → attach →
+refresh → verify persistence → complete → verify locked
+state → verify advisor read-only → verify anonymous
+redirect) all **remain operator verification**. This session
+did not:
+
+- Start Django + Vite dev servers and drive an interactive
+  browser.
+- Log in as `smoke_owner` / `smoke_advisor` and walk the
+  workflow.
+- Upload real photo bytes in local mode.
+- Verify the completion banner renders correctly by eye.
+- Verify the advisor role sees the read-only surface.
+
+What WAS verified (structural, non-interactive):
+
+- Route reachable via URL (SPA fallback returns 200 for
+  any registered path — verified in prior M2.7 sessions,
+  unchanged this session).
+- Every M3.6 endpoint has a typed API helper.
+- Every component compiles under `tsc --noEmit`.
+- Production build succeeds.
+- Backend surface untouched — every backend test still
+  passes.
+
+Operator first-live-use should run all 12 steps and record
+any friction against `docs/roadmap/DEFERRED_IDEAS.md`
+(create the file at that moment if UI friction surfaces).
+
+**Baseline delta.** Backend unchanged. Frontend files
+added: 1 page + 7 components + 2 API/authFetch extensions
++ 1 inventory card edit + 1 route registration.
+
+**Files changed (SESSION_063).**
+
+- New: `frontend/src/pages/VehicleConditionReportPage.tsx`.
+- New: `frontend/src/components/condition-report/`
+  (7 files listed above).
+- Modified: `frontend/src/lib/api.ts` — 10 new helpers +
+  types + marker constant + choice constants.
+- Modified: `frontend/src/lib/authFetch.ts` — added
+  `authPatchJSON` + `authDelete`.
+- Modified: `frontend/src/main.tsx` — new route registration.
+- Modified: `frontend/src/pages/InventoryPreviewPage.tsx`
+  — "Condition Report" button next to "Ledger" (operator
+  card only).
+- **Zero backend changes.**
+- Modified: `docs/roadmap/MILESTONE_3_PLANNING.md` §7 M3.7
+  annotated SHIPPED.
+- New: `docs/handoffs/SESSION_063_m3_inc7_operator_ui.md`.
+- Modified: `00-START-NEXT-SESSION.md` — SESSION_064 = M3.8
+  closeout priority.
 
 ### Increment 8 (M3.8) — Milestone verification + closeout
 

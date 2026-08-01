@@ -10,7 +10,7 @@
 // When CRM/DMS feed integration lands, replace the data import with
 // the live source and delete the sample module.
 
-import { BookOpen, ExternalLink, Gauge, Sparkles, Tag, Zap } from "lucide-react";
+import { BookOpen, ClipboardCheck, ExternalLink, Gauge, Sparkles, Tag, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -185,19 +185,37 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             this card lives on the operator inventory surface only.
             Stock number is URL-encoded because dealer conventions
             can include slashes / special chars. */}
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Link
-            to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/ledger`}
+        <div className="flex items-center gap-1">
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <BookOpen className="h-3.5 w-3.5" />
-            Ledger
-          </Link>
-        </Button>
+            <Link
+              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/ledger`}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Ledger
+            </Link>
+          </Button>
+          {/* Milestone 3 · Increment 7 — Condition Report operator link.
+              Same operator-only surface as Ledger; explicitly NOT on
+              /showroom. */}
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Link
+              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/condition-report`}
+            >
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              Condition Report
+            </Link>
+          </Button>
+        </div>
         <Button
           asChild
           variant="ghost"

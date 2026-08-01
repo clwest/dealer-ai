@@ -163,3 +163,35 @@ export async function authPostForm<T>(
   }
   return res.json() as Promise<T>;
 }
+
+// Milestone 3 · Increment 7 — PATCH and DELETE helpers for the
+// M3.6 condition-report admin API. Same typed-error shape as the
+// existing GET/POST/PUT helpers.
+
+export async function authPatchJSON<T>(
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const res = await authFetch({
+    path,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, await res.text());
+  }
+  return res.json() as Promise<T>;
+}
+
+/**
+ * DELETE convenience. Backend returns 204 with an empty body for
+ * successful deletes, so this helper does not attempt to JSON-parse
+ * the response — it just resolves on 2xx and throws on error.
+ */
+export async function authDelete(path: string): Promise<void> {
+  const res = await authFetch({ path, method: "DELETE" });
+  if (!res.ok) {
+    throw new ApiError(res.status, await res.text());
+  }
+}

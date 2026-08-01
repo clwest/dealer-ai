@@ -12,7 +12,9 @@
 // broken session can never break a customer-facing page.
 
 import {
+  authDelete,
   authGetJSON,
+  authPatchJSON,
   authPostForm,
   authPostJSON,
   authPutJSON,
@@ -1003,5 +1005,299 @@ export function createVehicleCost(
   return authPostJSON<CostCreateResponse>(
     `${_ledgerBasePath(stock)}/costs/`,
     body,
+  );
+}
+
+// ---- Milestone 3 · Increment 7 — condition-report admin API ------------
+//
+// Consumes the M3.6A + M3.6B endpoint contracts. Every helper wraps
+// authFetch (session cookies + CSRF handled uniformly) and returns a
+// typed interface mirroring the backend projections.
+//
+// The three-step photo-upload workflow (request-upload → upload bytes
+// → attach) is DELIBERATELY kept as three separate function calls so
+// callers see the backend contract literally. Do not create a
+// one-shot ``uploadAndAttachPhoto`` helper — the M3.5 planning
+// contract's "photo rows represent attached objects, never upload
+// intentions" invariant is easier to reason about when the workflow
+// is visible in the call site.
+
+// Marker prefix emitted by the local storage adapter (M3.4). If the
+// upload target's ``upload_url`` starts with this prefix, the caller
+// MUST route to the local multipart receiver instead of doing a
+// direct PUT — see uploadPhotoBytes.
+export const LOCAL_UPLOAD_URL_MARKER = "local-dev-no-signature-upload";
+
+export const CONDITION_CATEGORY_CHOICES: {
+  value: string;
+  label: string;
+}[] = [
+  { value: "mechanical", label: "Mechanical" },
+  { value: "cosmetic", label: "Cosmetic / paint" },
+  { value: "body", label: "Body / structural" },
+  { value: "glass", label: "Glass" },
+  { value: "tires", label: "Tires" },
+  { value: "interior", label: "Interior" },
+  { value: "fluids", label: "Fluids" },
+  { value: "electrical", label: "Electrical" },
+  { value: "safety", label: "Safety" },
+  { value: "accessories", label: "Accessories / features present" },
+  { value: "missing", label: "Missing items" },
+  { value: "other", label: "Other" },
+];
+
+export const CONDITION_SEVERITY_CHOICES: {
+  value: string;
+  label: string;
+}[] = [
+  { value: "advisory", label: "Advisory" },
+  { value: "recommended", label: "Recommended" },
+  { value: "required", label: "Required" },
+  { value: "safety", label: "Safety" },
+];
+
+export const CONDITION_PHOTO_CONTENT_TYPES: string[] = [
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+  "image/webp",
+];
+
+export type ConditionReportStatus = "draft" | "complete";
+
+export interface ConditionPhoto {
+  public_id: string;
+  content_type: string;
+  size_bytes: number;
+  caption: string;
+  uploaded_by: string | null;
+  created_at: string;
+  signed_read_url: string;
+  read_url_expires_at: string;
+}
+
+export interface ConditionFinding {
+  id: number;
+  category: string;
+  category_display: string;
+  severity: string;
+  severity_display: string;
+  description: string;
+  estimated_cost: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  photos: ConditionPhoto[];
+}
+
+export interface ConditionReport {
+  id: number;
+  status: ConditionReportStatus;
+  status_display: string;
+  inspector_name: string;
+  inspected_at: string;
+  mileage_at_inspection: number;
+  completed_at: string | null;
+  notes: string;
+  authored_by: string | null;
+  created_at: string;
+  updated_at: string;
+  findings: ConditionFinding[];
+}
+
+export interface ConditionReportLatestResponse {
+  vehicle: LedgerVehicleHeader;
+  report: ConditionReport | null;
+}
+
+export interface ConditionReportCreatePayload {
+  inspector_name: string;
+  inspected_at: string; // ISO datetime
+  mileage_at_inspection: number;
+  notes?: string;
+}
+
+export interface ConditionFindingCreatePayload {
+  category: string;
+  severity: string;
+  description: string;
+  estimated_cost?: string | null;
+  notes?: string;
+}
+
+export interface ConditionFindingUpdatePayload {
+  category?: string;
+  severity?: string;
+  description?: string;
+  estimated_cost?: string | null;
+  notes?: string;
+}
+
+export interface PhotoUploadTarget {
+  method: string;
+  upload_url: string;
+  storage_key: string;
+  required_headers: Record<string, string>;
+  expires_at: string;
+}
+
+export interface PhotoRequestUploadResponse {
+  upload_target: PhotoUploadTarget;
+}
+
+export interface PhotoAttachPayload {
+  storage_key: string;
+  content_type: string;
+  size_bytes: number;
+  caption?: string;
+}
+
+export interface PhotoAttachResponse {
+  photo: ConditionPhoto;
+}
+
+function _conditionReportBasePath(stock: string): string {
+  return `/admin/vehicles/${encodeURIComponent(stock)}`;
+}
+
+// ---- Report + finding endpoints ----
+
+export function fetchLatestConditionReport(stock: string) {
+  return authGetJSON<ConditionReportLatestResponse>(
+    `${_conditionReportBasePath(stock)}/condition-report/latest/`,
+  );
+}
+
+export function createConditionReport(
+  stock: string,
+  body: ConditionReportCreatePayload,
+) {
+  return authPostJSON<{ report: ConditionReport }>(
+    `${_conditionReportBasePath(stock)}/condition-reports/`,
+    body,
+  );
+}
+
+export function completeConditionReport(
+  stock: string,
+  reportId: number,
+) {
+  return authPostJSON<{ report: ConditionReport }>(
+    `${_conditionReportBasePath(stock)}/condition-reports/${reportId}/complete/`,
+    {},
+  );
+}
+
+export function createConditionFinding(
+  stock: string,
+  reportId: number,
+  body: ConditionFindingCreatePayload,
+) {
+  return authPostJSON<{ finding: ConditionFinding }>(
+    `${_conditionReportBasePath(stock)}/condition-reports/${reportId}/findings/`,
+    body,
+  );
+}
+
+export function updateConditionFinding(
+  stock: string,
+  findingId: number,
+  body: ConditionFindingUpdatePayload,
+) {
+  return authPatchJSON<{ finding: ConditionFinding }>(
+    `${_conditionReportBasePath(stock)}/findings/${findingId}/`,
+    body,
+  );
+}
+
+export function deleteConditionFinding(
+  stock: string,
+  findingId: number,
+) {
+  return authDelete(
+    `${_conditionReportBasePath(stock)}/findings/${findingId}/`,
+  );
+}
+
+// ---- Photo endpoints — three-step upload workflow kept literal ----
+
+export function requestPhotoUpload(
+  stock: string,
+  findingId: number,
+  contentType: string,
+) {
+  return authPostJSON<PhotoRequestUploadResponse>(
+    `${_conditionReportBasePath(stock)}/findings/${findingId}/photos/request-upload/`,
+    { content_type: contentType },
+  );
+}
+
+/**
+ * Step 2 of the three-step photo-upload workflow. Delivers the raw
+ * bytes to whichever endpoint the presigned upload target names.
+ *
+ * The upload target may be one of two shapes:
+ *
+ * - **Production (S3-compatible presigned PUT):** ``upload_url``
+ *   is a real HTTPS URL. Uploads bytes via a direct PUT with the
+ *   ``required_headers`` (typically ``Content-Type``). This request
+ *   goes to the storage provider, NOT to the Django backend, so it
+ *   uses plain ``fetch`` (no session cookie, no CSRF).
+ *
+ * - **Local dev (``LOCAL_UPLOAD_URL_MARKER`` prefix):** the target
+ *   URL is a marker string, not a real URL. Route to the M3.6B
+ *   local-upload receiver via ``authPostForm`` — this DOES require
+ *   session cookies + CSRF because it hits the Django app server.
+ *
+ * Returns the observed HTTP status so callers can distinguish
+ * network / provider failures cleanly.
+ */
+export async function uploadPhotoBytes(args: {
+  stock: string;
+  findingId: number;
+  uploadTarget: PhotoUploadTarget;
+  contentType: string;
+  file: Blob;
+}): Promise<{ status: number }> {
+  const { stock, findingId, uploadTarget, contentType, file } = args;
+
+  if (uploadTarget.upload_url.startsWith(LOCAL_UPLOAD_URL_MARKER)) {
+    // Local path: hand off to Django multipart receiver. authPostForm
+    // sends the CSRF token + session cookie for us.
+    const form = new FormData();
+    form.append("file", file);
+    form.append("storage_key", uploadTarget.storage_key);
+    form.append("content_type", contentType);
+    await authPostForm(
+      `${_conditionReportBasePath(stock)}/findings/${findingId}/photos/local-upload/`,
+      form,
+    );
+    return { status: 201 };
+  }
+
+  // Production path: direct browser-to-S3 PUT. Bypasses the Django
+  // backend entirely — no cookies, no CSRF.
+  const res = await fetch(uploadTarget.upload_url, {
+    method: uploadTarget.method,
+    headers: uploadTarget.required_headers,
+    body: file,
+  });
+  return { status: res.status };
+}
+
+export function attachPhoto(
+  stock: string,
+  findingId: number,
+  body: PhotoAttachPayload,
+) {
+  return authPostJSON<PhotoAttachResponse>(
+    `${_conditionReportBasePath(stock)}/findings/${findingId}/photos/`,
+    body,
+  );
+}
+
+export function deletePhoto(stock: string, publicId: string) {
+  return authDelete(
+    `${_conditionReportBasePath(stock)}/photos/${publicId}/`,
   );
 }
