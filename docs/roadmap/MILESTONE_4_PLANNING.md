@@ -1320,6 +1320,37 @@ completion reversal cancel out, leaving only the actual
 contributing to both `total_investment` and
 `projected_total_investment`. Locked by M4.3 tests.
 
+**Category mapping — `WorkOrder.category` (12 M3 values) →
+`VehicleCost.category` (26 M2 values).** The two vocabularies
+serve different purposes: the M3 finding side answers *what
+kind of defect?* while the M2 ledger side answers *what kind
+of expense?*. A one-way mapping is required at posting time.
+Locked table (SESSION_068 — code at
+`services/recon.py::_WORK_ORDER_CATEGORY_TO_LEDGER_CATEGORY`;
+regression test at
+`test_recon_ledger.CategoryMappingCompleteness`):
+
+| WorkOrder category | VehicleCost category    | Rationale                                                 |
+|--------------------|-------------------------|-----------------------------------------------------------|
+| mechanical         | mechanical_labor        | Engine / drivetrain fault → shop labor                    |
+| cosmetic           | paint                   | Cosmetic dominated by chip / scratch / blend jobs         |
+| body               | body_work               | Panel dent / structural                                    |
+| glass              | glass                   | Direct one-to-one                                          |
+| tires              | tires                   | Direct one-to-one                                          |
+| interior           | upholstery              | Seat / dash / carpet restoration                           |
+| fluids             | oil_service             | Oil / coolant / transmission service                       |
+| electrical         | diagnostics             | Electrical faults start with a diagnostic charge           |
+| safety             | brakes                  | Safety findings dominated by brakes                        |
+| accessories        | misc_dealer_expenses    | Key fobs, floor mats, trim clips                           |
+| missing            | misc_dealer_expenses    | Replacement of missing items                               |
+| other              | misc_dealer_expenses    | Escape hatch                                               |
+
+Ambiguous rows (cosmetic could be paint OR body_work; safety
+could be brakes OR tires) default to the most common
+real-world outcome. This is a policy call — operational
+evidence may motivate a revision in M8 once cost-variance
+dashboards make the mapping consequences visible.
+
 ### 5.f Load-bearing decision — Role permission matrix
 
 **Question.** Which existing role can access each M4 surface?

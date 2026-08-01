@@ -20,15 +20,16 @@ business-logic layer:
   :func:`has_recon_decisions_for_vehicle` (backing
   ``Vehicle.has_recon_decisions``).
 
-The service is deliberately narrow. It writes and reads WorkOrder,
-ReconDecision, and WorkOrderFinding rows. It does NOT:
-
-- Post any :class:`VehicleCost` row. Ledger integration lands in
-  M4.3. Per the SESSION_067 brief, M4.2 contains **no ledger call
-  at all** — no stub function, no no-op placeholder, no hook seam.
-  A silent stub would let tests prove a false contract; M4.3
-  extends the transition functions with narrow internal helpers
-  as a reviewed refactor.
+The service writes and reads WorkOrder, ReconDecision, and
+WorkOrderFinding rows, and — as of M4.3 — posts auto-minted
+:class:`VehicleCost` rows via
+:func:`services.vehicle_ledger.add_cost` at the approve /
+revise-estimate / complete / cancel transitions. The reference-key
+vocabulary is locked at planning §5.e (five families:
+``estimate:<seq>``, ``estimate_reversal:<seq>``,
+``completion_estimate_reversal``, ``estimate_reversal:cancel``,
+``actual``). Every helper is idempotent via reference lookup so
+transition replay is safe. The service does NOT:
 - Own :class:`WorkOrderPart` transitions (add/order/receive/
   install/return). Parts service lands in M4.4.
 - Draft or send :class:`VendorCommunication` rows. Vendor comm
@@ -143,19 +144,43 @@ Concurrency posture:
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Sequence
+from typing import Optional, Sequence
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from ..models import (
+    CATEGORY_BODY_WORK,
+    CATEGORY_BRAKES,
+    CATEGORY_DIAGNOSTICS,
+    CATEGORY_GLASS,
+    CATEGORY_MECHANICAL_LABOR,
+    CATEGORY_MISC_DEALER_EXPENSES,
+    CATEGORY_OIL_SERVICE,
+    CATEGORY_PAINT,
+    CATEGORY_TIRES,
+    CATEGORY_UPHOLSTERY,
+    CONDITION_CATEGORY_ACCESSORIES,
+    CONDITION_CATEGORY_BODY,
+    CONDITION_CATEGORY_COSMETIC,
+    CONDITION_CATEGORY_ELECTRICAL,
+    CONDITION_CATEGORY_FLUIDS,
+    CONDITION_CATEGORY_GLASS,
+    CONDITION_CATEGORY_INTERIOR,
+    CONDITION_CATEGORY_MECHANICAL,
+    CONDITION_CATEGORY_MISSING,
+    CONDITION_CATEGORY_OTHER,
+    CONDITION_CATEGORY_SAFETY,
+    CONDITION_CATEGORY_TIRES,
     CONDITION_REPORT_STATUS_COMPLETE,
     ConditionFinding,
     Dealership,
     RECON_DECISION_TIER_CHOICES,
     ReconDecision,
     Vehicle,
+    VehicleCost,
     WORK_ORDER_STATUS_APPROVED,
     WORK_ORDER_STATUS_CANCELLED,
     WORK_ORDER_STATUS_COMPLETED,
@@ -167,6 +192,7 @@ from ..models import (
 from .condition_report import (
     latest_completed_condition_report as _latest_completed_condition_report,
 )
+from .vehicle_ledger import add_cost as _add_cost
 
 _VALID_RECON_DECISION_TIER_KEYS = frozenset(
     key for key, _ in RECON_DECISION_TIER_CHOICES
@@ -194,6 +220,87 @@ _DECISION_LOCKING_WORK_ORDER_STATUSES = frozenset(
         WORK_ORDER_STATUS_CANCELLED,
     }
 )
+
+
+# ----------------------------------------------------------------------------
+# Milestone 4 · Increment 3 (SESSION_068) — ledger integration.
+# ----------------------------------------------------------------------------
+
+# Reference-key vocabulary — five families, locked at planning §5.e
+# (SESSION_066 refinement). Every auto-minted VehicleCost row this
+# module posts carries a reference matching exactly one of these
+# format strings. Idempotency is enforced by looking up the resolved
+# reference before posting: repeated calls for the same key skip.
+#
+# The five families let idempotency distinguish "we already reversed
+# on completion" from "we reversed during a mid-life revision" from
+# "we reversed on cancellation" without ambiguity.
+WORKORDER_LEDGER_REF_ESTIMATE = "WORKORDER:{wo_id}:estimate:{seq}"
+WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL = (
+    "WORKORDER:{wo_id}:estimate_reversal:{seq}"
+)
+WORKORDER_LEDGER_REF_COMPLETION_ESTIMATE_REVERSAL = (
+    "WORKORDER:{wo_id}:completion_estimate_reversal"
+)
+WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL_CANCEL = (
+    "WORKORDER:{wo_id}:estimate_reversal:cancel"
+)
+WORKORDER_LEDGER_REF_ACTUAL = "WORKORDER:{wo_id}:actual"
+
+
+# WorkOrder.category (12 M3 finding categories) → VehicleCost.category
+# (26 M2 expense categories). The two vocabularies serve different
+# purposes — the finding side answers "what kind of defect?"; the
+# ledger side answers "what kind of expense?" — so a one-way mapping
+# is required at posting time.
+#
+# Chosen mapping (SESSION_068; documented at planning §5.e mapping
+# note). Ambiguous rows (COSMETIC could be PAINT or BODY_WORK;
+# SAFETY could be BRAKES or TIRES) default to the most common
+# real-world outcome:
+#
+# - MECHANICAL → MECHANICAL_LABOR — engine / drivetrain fault
+#   diagnostics turn into shop labor.
+# - COSMETIC → PAINT — cosmetic findings are dominated by chip /
+#   scratch / blend jobs (paint), not full body panel work.
+# - BODY → BODY_WORK — panel dent / structural findings.
+# - GLASS → GLASS — direct one-to-one.
+# - TIRES → TIRES — direct one-to-one.
+# - INTERIOR → UPHOLSTERY — seat tear / dash crack / carpet
+#   restoration.
+# - FLUIDS → OIL_SERVICE — fluid findings in inspection are
+#   dominated by oil / coolant / transmission service.
+# - ELECTRICAL → DIAGNOSTICS — electrical faults start with a
+#   diagnostic charge; labor to fix follows as a separate
+#   MECHANICAL_LABOR line if the shop bills that way.
+# - SAFETY → BRAKES — safety findings are most commonly
+#   brake-related. Tire safety would come in as TIRES on its own.
+# - ACCESSORIES → MISC_DEALER_EXPENSES — key fobs, floor mats,
+#   trim clips.
+# - MISSING → MISC_DEALER_EXPENSES — replacement of missing items
+#   (owner's manual, second key).
+# - OTHER → MISC_DEALER_EXPENSES — the escape hatch.
+#
+# This is a policy call — operational evidence may motivate a
+# revision in M8 (once cost-variance dashboards make the
+# category-mapping consequences visible).
+_WORK_ORDER_CATEGORY_TO_LEDGER_CATEGORY = {
+    CONDITION_CATEGORY_MECHANICAL: CATEGORY_MECHANICAL_LABOR,
+    CONDITION_CATEGORY_COSMETIC: CATEGORY_PAINT,
+    CONDITION_CATEGORY_BODY: CATEGORY_BODY_WORK,
+    CONDITION_CATEGORY_GLASS: CATEGORY_GLASS,
+    CONDITION_CATEGORY_TIRES: CATEGORY_TIRES,
+    CONDITION_CATEGORY_INTERIOR: CATEGORY_UPHOLSTERY,
+    CONDITION_CATEGORY_FLUIDS: CATEGORY_OIL_SERVICE,
+    CONDITION_CATEGORY_ELECTRICAL: CATEGORY_DIAGNOSTICS,
+    CONDITION_CATEGORY_SAFETY: CATEGORY_BRAKES,
+    CONDITION_CATEGORY_ACCESSORIES: CATEGORY_MISC_DEALER_EXPENSES,
+    CONDITION_CATEGORY_MISSING: CATEGORY_MISC_DEALER_EXPENSES,
+    CONDITION_CATEGORY_OTHER: CATEGORY_MISC_DEALER_EXPENSES,
+}
+
+
+_ZERO = Decimal("0.00")
 
 
 # ---- Domain errors --------------------------------------------------------
@@ -705,6 +812,233 @@ def _load_for_transition(work_order: WorkOrder) -> WorkOrder:
     return WorkOrder.objects.select_for_update().get(pk=work_order.pk)
 
 
+# ---- Ledger integration (M4.3) --------------------------------------------
+
+
+def _ledger_category_for(work_order: WorkOrder) -> str:
+    """Map ``WorkOrder.category`` to the VehicleCost category the
+    ledger row is posted under. See
+    :data:`_WORK_ORDER_CATEGORY_TO_LEDGER_CATEGORY` for the full
+    mapping table + rationale."""
+    return _WORK_ORDER_CATEGORY_TO_LEDGER_CATEGORY[work_order.category]
+
+
+def _vendor_snapshot(work_order: WorkOrder) -> str:
+    """Return the vendor-name snapshot for the ``VehicleCost.vendor``
+    free-text field. Planning §5.b Option C locks the invariant:
+    the name at posting time is the immutable snapshot; a later
+    vendor rename does not rewrite historical rows."""
+    return work_order.vendor.name if work_order.vendor is not None else ""
+
+
+def _outstanding_estimate_amount(work_order: WorkOrder) -> Decimal:
+    """Return the current signed sum of every estimate + reversal
+    row previously posted for ``work_order``.
+
+    All families that carry ``is_estimate=True`` contribute:
+    ``estimate:<seq>`` (positive), ``estimate_reversal:<seq>``
+    (negative), ``completion_estimate_reversal`` (negative), and
+    ``estimate_reversal:cancel`` (negative). The ``actual`` family
+    is ``is_estimate=False`` and does not contribute.
+
+    Returns :data:`_ZERO` when no estimate rows have been posted
+    (avoids Django's aggregate-returns-``None`` case)."""
+    prefix = f"WORKORDER:{work_order.pk}:"
+    result = (
+        VehicleCost.objects.filter(
+            vehicle=work_order.vehicle,
+            dealership=work_order.dealership,
+            is_estimate=True,
+            reference__startswith=prefix,
+        )
+        .aggregate(total=Sum("amount"))
+        .get("total")
+    )
+    return result if result is not None else _ZERO
+
+
+def _next_estimate_seq(work_order: WorkOrder) -> int:
+    """Return the next sequential number for an estimate posting.
+
+    Reads all existing ``WORKORDER:{wo.pk}:estimate:*`` references
+    and returns ``max(seq) + 1``. Starts at 1 for a WorkOrder with
+    no prior estimate."""
+    prefix = f"WORKORDER:{work_order.pk}:estimate:"
+    existing = VehicleCost.objects.filter(
+        reference__startswith=prefix,
+        dealership=work_order.dealership,
+    ).values_list("reference", flat=True)
+    max_seq = 0
+    for ref in existing:
+        # Reference format is ``WORKORDER:<pk>:estimate:<seq>``.
+        # Skip ``estimate_reversal:*`` — the prefix filter above
+        # matches ``estimate:`` exactly so reversal rows never
+        # appear in this iterator.
+        try:
+            seq = int(ref.rsplit(":", 1)[-1])
+        except (ValueError, IndexError):
+            continue
+        if seq > max_seq:
+            max_seq = seq
+    return max_seq + 1
+
+
+def _post_estimate(
+    work_order: WorkOrder, *, seq: int, actor=None
+) -> Optional[VehicleCost]:
+    """Post an initial or revised estimate row.
+
+    Idempotent — if the resolved reference already exists, returns
+    ``None`` without a second insert. Returns ``None`` also when
+    ``work_order.estimated_cost`` is ``None`` (nothing to estimate).
+    """
+    if work_order.estimated_cost is None:
+        return None
+    reference = WORKORDER_LEDGER_REF_ESTIMATE.format(
+        wo_id=work_order.pk, seq=seq
+    )
+    if VehicleCost.objects.filter(reference=reference).exists():
+        return None
+    return _add_cost(
+        work_order.vehicle,
+        dealership=work_order.dealership,
+        category=_ledger_category_for(work_order),
+        amount=work_order.estimated_cost,
+        incurred_at=timezone.now(),
+        vendor=_vendor_snapshot(work_order),
+        reference=reference,
+        is_estimate=True,
+        created_by=actor,
+    )
+
+
+def _post_estimate_reversal(
+    work_order: WorkOrder, *, outstanding_amount: Decimal, seq: int, actor=None
+) -> Optional[VehicleCost]:
+    """Post a mid-life estimate-reversal row (matches a prior
+    ``estimate:<seq>``). Called from :func:`revise_estimate`.
+
+    Idempotent — returns ``None`` if the resolved reference already
+    exists. Returns ``None`` when ``outstanding_amount`` is zero
+    (nothing to reverse)."""
+    if outstanding_amount == _ZERO:
+        return None
+    reference = WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL.format(
+        wo_id=work_order.pk, seq=seq
+    )
+    if VehicleCost.objects.filter(reference=reference).exists():
+        return None
+    return _add_cost(
+        work_order.vehicle,
+        dealership=work_order.dealership,
+        category=_ledger_category_for(work_order),
+        amount=-outstanding_amount,
+        incurred_at=timezone.now(),
+        vendor=_vendor_snapshot(work_order),
+        reference=reference,
+        is_estimate=True,
+        created_by=actor,
+    )
+
+
+def _post_completion_reversal(
+    work_order: WorkOrder, *, outstanding_amount: Decimal, actor=None
+) -> Optional[VehicleCost]:
+    """Post the one-shot completion-time estimate reversal that
+    retires the outstanding estimate atomically with the actual
+    (SESSION_066 refinement — see planning §5.e). Called only from
+    :func:`complete_work_order`.
+
+    Idempotent via the one-shot reference; returns ``None`` on
+    replay. Returns ``None`` when ``outstanding_amount`` is zero
+    (WorkOrder had no outstanding estimate — a legitimate case for
+    WOs completed without a prior estimate)."""
+    if outstanding_amount == _ZERO:
+        return None
+    reference = WORKORDER_LEDGER_REF_COMPLETION_ESTIMATE_REVERSAL.format(
+        wo_id=work_order.pk
+    )
+    if VehicleCost.objects.filter(reference=reference).exists():
+        return None
+    return _add_cost(
+        work_order.vehicle,
+        dealership=work_order.dealership,
+        category=_ledger_category_for(work_order),
+        amount=-outstanding_amount,
+        incurred_at=timezone.now(),
+        vendor=_vendor_snapshot(work_order),
+        reference=reference,
+        is_estimate=True,
+        created_by=actor,
+    )
+
+
+def _post_cancel_reversal(
+    work_order: WorkOrder, *, outstanding_amount: Decimal, actor=None
+) -> Optional[VehicleCost]:
+    """Post the cancellation-time estimate reversal. Called only
+    from :func:`cancel_work_order`. Preserves any partial actual
+    row posted before cancellation — it represents work truly
+    performed and stays on the ledger."""
+    if outstanding_amount == _ZERO:
+        return None
+    reference = WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL_CANCEL.format(
+        wo_id=work_order.pk
+    )
+    if VehicleCost.objects.filter(reference=reference).exists():
+        return None
+    return _add_cost(
+        work_order.vehicle,
+        dealership=work_order.dealership,
+        category=_ledger_category_for(work_order),
+        amount=-outstanding_amount,
+        incurred_at=timezone.now(),
+        vendor=_vendor_snapshot(work_order),
+        reference=reference,
+        is_estimate=True,
+        created_by=actor,
+    )
+
+
+def _post_actual(
+    work_order: WorkOrder, *, actor=None
+) -> Optional[VehicleCost]:
+    """Post the actual-cost row on WorkOrder completion. Called
+    only from :func:`complete_work_order` (inside the same
+    ``transaction.atomic()`` block as :func:`_post_completion_reversal`
+    so a mid-completion crash leaves the ledger untouched).
+
+    Idempotent via the ``actual`` reference; returns ``None`` on
+    replay. Uses the WorkOrder's ``actual_completion_date`` for
+    ``incurred_at`` if set; falls back to ``now()`` otherwise
+    (should never happen — ``complete_work_order`` sets the date
+    unconditionally)."""
+    reference = WORKORDER_LEDGER_REF_ACTUAL.format(wo_id=work_order.pk)
+    if VehicleCost.objects.filter(reference=reference).exists():
+        return None
+    if work_order.actual_completion_date is not None:
+        incurred_at = timezone.make_aware(
+            timezone.datetime.combine(
+                work_order.actual_completion_date,
+                timezone.datetime.min.time(),
+            ),
+            timezone.get_current_timezone(),
+        )
+    else:
+        incurred_at = timezone.now()
+    return _add_cost(
+        work_order.vehicle,
+        dealership=work_order.dealership,
+        category=_ledger_category_for(work_order),
+        amount=work_order.actual_cost,
+        incurred_at=incurred_at,
+        vendor=_vendor_snapshot(work_order),
+        reference=reference,
+        is_estimate=False,
+        created_by=actor,
+    )
+
+
 # ---- Approve --------------------------------------------------------------
 
 
@@ -735,20 +1069,21 @@ def approve_work_order(
     - Sets ``approved_by`` to the supplied user.
     - Sets ``approved_at = timezone.now()``.
     - Sets ``authorized_cost`` if supplied.
-    - Does **not** post any :class:`VehicleCost` row (M4.3).
+    - **Posts an estimate row** via :func:`_post_estimate` when
+      ``estimated_cost`` is non-null (M4.3). Reference key
+      ``WORKORDER:<id>:estimate:1``. Idempotent via reference
+      lookup — a race that produces two entries to this branch
+      for the same WO writes at most one estimate.
 
     Effects on the approved → approved idempotent re-approve path:
 
-    - Refreshes ``approved_at`` (audit trail: "most recently
-      re-approved at time X"). Callers reading the field see the
-      timestamp move forward.
+    - Refreshes ``approved_at`` (audit trail).
     - **Preserves the original `approved_by`** — the first-time
-      approver is the historical fact. Passing a different user
-      does not overwrite. To record a different approver's
-      authority, cancel and recreate.
-    - Updates ``authorized_cost`` if supplied — this is the
-      operational purpose of the idempotent path (a vendor asked
-      for a higher cap).
+      approver is the historical fact.
+    - Updates ``authorized_cost`` if supplied.
+    - Does **not** post an estimate revision. Estimate revisions
+      go through :func:`revise_estimate` — a separate operator
+      gesture with distinct audit semantics.
 
     Rejects every other from-state as :class:`InvalidReconTransitionError`.
     """
@@ -760,7 +1095,8 @@ def approve_work_order(
         if wo.status == WORK_ORDER_STATUS_APPROVED:
             # Idempotent re-approve — refresh audit timestamp,
             # preserve original approver, permit authorized_cost
-            # update.
+            # update. Does NOT post estimate revision; call
+            # ``revise_estimate`` for that.
             wo.approved_at = timezone.now()
             if authorized_cost is not None:
                 wo.authorized_cost = authorized_cost
@@ -790,6 +1126,111 @@ def approve_work_order(
             wo.authorized_cost = authorized_cost
         wo.full_clean()
         wo.save()
+
+        # Post the initial estimate row (M4.3). Inside the same
+        # transaction so a mid-approve crash leaves neither the
+        # WorkOrder row nor the ledger row. ``_post_estimate``
+        # returns None when ``estimated_cost`` is null (nothing
+        # to estimate) — WorkOrders without an estimate approve
+        # cleanly and post no ledger row.
+        _post_estimate(wo, seq=_next_estimate_seq(wo), actor=approved_by)
+
+        return wo
+
+
+# ---- Revise estimate (M4.3) -----------------------------------------------
+
+
+def revise_estimate(
+    work_order: WorkOrder,
+    *,
+    dealership: Dealership,
+    new_estimated_cost: Decimal,
+    revised_by=None,
+) -> WorkOrder:
+    """Revise the estimated cost on an already-approved WorkOrder.
+
+    Separate operator gesture from re-approval per M4.3 semantic:
+    approval is about *authorizing* the work; estimate revision is
+    about *re-pricing* it after new information (a vendor quote
+    came back higher, parts turned out to be back-ordered at a
+    premium, etc.). Both keep the WorkOrder in ``approved`` status;
+    the WO does not fall back to ``draft`` when the estimate
+    changes.
+
+    Preconditions:
+
+    - Current status must be ``approved``. Raises
+      :class:`InvalidReconTransitionError` from any other
+      state — an in_progress WO's next number is the actual, not a
+      re-estimate; a draft WO has never posted an estimate to
+      revise.
+    - ``new_estimated_cost`` must be nonnegative Decimal (raises
+      :class:`ValueError` on negative). A nonzero revision is
+      required to change anything; passing the same value is a
+      no-op that returns the WO unchanged.
+
+    Effects:
+
+    - Posts an estimate reversal for the current outstanding
+      amount under ``WORKORDER:<id>:estimate_reversal:<seq>``
+      where ``seq`` matches the estimate being reversed.
+    - Posts a new estimate under
+      ``WORKORDER:<id>:estimate:<seq+1>``.
+    - Updates ``work_order.estimated_cost`` to the new value.
+    - Both ledger posts happen inside the same
+      ``transaction.atomic()`` block so a mid-revision crash
+      leaves the ledger untouched.
+
+    Idempotent — a repeated call with the same
+    ``new_estimated_cost`` passes through as a no-op (the outstanding
+    already matches the new value).
+    """
+    _assert_work_order_tenant(work_order, dealership)
+
+    new_estimated_cost = Decimal(new_estimated_cost)
+    if new_estimated_cost < 0:
+        raise ValueError(
+            f"revise_estimate: new_estimated_cost must be nonnegative "
+            f"(got {new_estimated_cost}). Negative amounts are for "
+            "reversing entries and are not accepted as an estimate."
+        )
+
+    with transaction.atomic():
+        wo = _load_for_transition(work_order)
+        if wo.status != WORK_ORDER_STATUS_APPROVED:
+            raise InvalidReconTransitionError(
+                f"Cannot revise estimate on WorkOrder #{wo.pk}: "
+                f"current status is {wo.status!r}. Estimate revision "
+                "is allowed only from 'approved'."
+            )
+
+        outstanding = _outstanding_estimate_amount(wo)
+        if outstanding == new_estimated_cost:
+            # Nothing to change. Idempotent no-op.
+            return wo
+
+        # Post reversal for whatever was outstanding, using the
+        # sequence of the estimate being reversed. Then post the
+        # new estimate at the next sequence.
+        next_seq = _next_estimate_seq(wo)
+        # The reversal seq matches the estimate being reversed —
+        # i.e., the max existing seq (which is ``next_seq - 1``).
+        # Guard against the edge case where nothing was ever
+        # posted: outstanding == 0 handles it via the helper.
+        reversal_seq = max(next_seq - 1, 1)
+        _post_estimate_reversal(
+            wo,
+            outstanding_amount=outstanding,
+            seq=reversal_seq,
+            actor=revised_by,
+        )
+
+        wo.estimated_cost = new_estimated_cost
+        wo.full_clean()
+        wo.save()
+
+        _post_estimate(wo, seq=next_seq, actor=revised_by)
         return wo
 
 
@@ -865,7 +1306,15 @@ def complete_work_order(
     - Preserves ``approved_by`` / ``approved_at`` /
       ``started_by`` / ``started_at`` — earlier provenance is
       history.
-    - Does **not** post any :class:`VehicleCost` row (M4.3).
+    - **Posts the completion-time estimate reversal + the actual
+      cost row** atomically inside the same
+      ``transaction.atomic()`` block as the WorkOrder save
+      (M4.3). The reversal retires any outstanding estimate;
+      the actual carries the final cost. After the transaction
+      commits, the net estimate contribution for the WO is
+      ``Decimal("0.00")`` and ``projected_total_investment``
+      no longer double-counts the completed WO (SESSION_066
+      refinement — planning §5.e).
     - Does **not** claim QC verification. Per the SESSION_067
       QC-GAP annotation in ``MILESTONE_4_PLANNING.md`` §1.0,
       completion timestamps prove *when work was marked complete*,
@@ -911,6 +1360,19 @@ def complete_work_order(
         wo.completed_at = timezone.now()
         wo.full_clean()
         wo.save()
+
+        # Ledger: atomically post the completion-time estimate
+        # reversal + the actual cost row. Both inside the same
+        # ``transaction.atomic()`` block as the WorkOrder save so
+        # a mid-completion crash leaves the ledger untouched
+        # (SESSION_066 refinement — planning §5.e). Both helpers
+        # are idempotent via reference lookup so replay is safe.
+        outstanding = _outstanding_estimate_amount(wo)
+        _post_completion_reversal(
+            wo, outstanding_amount=outstanding, actor=completed_by
+        )
+        _post_actual(wo, actor=completed_by)
+
         return wo
 
 
@@ -949,8 +1411,11 @@ def cancel_work_order(
       completed pairs remain untouched — a cancelled-after-start
       WO retains its start actor and timestamp so the timeline
       is legible).
-    - Does **not** post any ledger row (partial-actual
-      handling on cancel-after-start belongs to M4.3).
+    - **Reverses any outstanding estimate** via
+      :func:`_post_cancel_reversal` (M4.3). Preserves any
+      partial actual row posted before cancel (they represent
+      work truly performed and stay on the ledger). Idempotent
+      via reference lookup.
     """
     _assert_work_order_tenant(work_order, dealership)
 
@@ -980,6 +1445,17 @@ def cancel_work_order(
         wo.cancellation_reason = cancellation_reason
         wo.full_clean()
         wo.save()
+
+        # Ledger: reverse any outstanding estimate. Preserves any
+        # partial actual posted before cancellation (M4 v1 does not
+        # have a partial-actual path, but the invariant is
+        # documented at planning §5.e so a future partial-completion
+        # workflow can rely on it). Idempotent via reference lookup.
+        outstanding = _outstanding_estimate_amount(wo)
+        _post_cancel_reversal(
+            wo, outstanding_amount=outstanding, actor=cancelled_by
+        )
+
         return wo
 
 

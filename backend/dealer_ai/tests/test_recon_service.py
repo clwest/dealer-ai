@@ -1095,46 +1095,36 @@ class CancelWorkOrder(TestCase):
             )
 
 
-class ZeroLedgerSideEffectsAcrossAllTransitions(TestCase):
-    """Regression boundary — no M4.2 service function creates a
-    VehicleCost row. Locks the M4.3 boundary."""
+class NoLedgerSideEffectsWithoutEstimate(TestCase):
+    """M4.3 boundary: WorkOrders with no ``estimated_cost`` and no
+    ``actual_cost`` do not post to VehicleCost. Positive-assertion
+    tests for the estimate/actual ledger paths live in
+    ``test_recon_ledger.py``."""
 
-    def test_full_lifecycle_creates_no_vehicle_cost(self):
+    def test_approve_without_estimated_cost_posts_no_row(self):
         default = Dealership.objects.get(slug="default")
-        vehicle = _make_vehicle("M42-LC-NOLEDGER", default)
+        vehicle = _make_vehicle("M42-NOEST-APPR", default)
         report = _make_report(vehicle, default)
         finding = _make_finding(report, default)
-        record_decision(
-            finding, dealership=default, tier=RECON_DECISION_TIER_MUST_DO
-        )
         wo = create_work_order(
             vehicle,
             dealership=default,
             category=CONDITION_CATEGORY_MECHANICAL,
             venue=WORK_ORDER_VENUE_IN_HOUSE,
+            # No estimated_cost — nothing to post.
         )
         attach_findings(wo, dealership=default, finding_ids=[finding.pk])
+        pre = VehicleCost.objects.count()
         approve_work_order(
             wo,
             dealership=default,
-            approved_by=_make_user("lc-appr"),
-            authorized_cost=Decimal("500.00"),
-        )
-        start_work_order(
-            wo, dealership=default, started_by=_make_user("lc-start")
-        )
-        pre = VehicleCost.objects.count()
-        complete_work_order(
-            wo,
-            dealership=default,
-            completed_by=_make_user("lc-comp"),
-            actual_cost=Decimal("450.00"),
+            approved_by=_make_user("noest-appr"),
         )
         self.assertEqual(VehicleCost.objects.count(), pre)
 
-    def test_cancel_from_approved_creates_no_vehicle_cost(self):
+    def test_cancel_without_outstanding_estimate_posts_no_row(self):
         default = Dealership.objects.get(slug="default")
-        vehicle = _make_vehicle("M42-CL-NOLEDGER", default)
+        vehicle = _make_vehicle("M42-NOEST-CANC", default)
         report = _make_report(vehicle, default)
         finding = _make_finding(report, default)
         wo = create_work_order(
@@ -1147,15 +1137,14 @@ class ZeroLedgerSideEffectsAcrossAllTransitions(TestCase):
         approve_work_order(
             wo,
             dealership=default,
-            approved_by=_make_user("cl-appr"),
-            authorized_cost=Decimal("500.00"),
+            approved_by=_make_user("noest-canc-appr"),
         )
         pre = VehicleCost.objects.count()
         cancel_work_order(
             wo,
             dealership=default,
-            cancelled_by=_make_user("cl-canc"),
-            cancellation_reason="Vendor unavailable.",
+            cancelled_by=_make_user("noest-canc"),
+            cancellation_reason="Nothing was estimated.",
         )
         self.assertEqual(VehicleCost.objects.count(), pre)
 
