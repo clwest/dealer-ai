@@ -276,6 +276,26 @@ need.
 
 ### 1.3 Computed gross properties on `Vehicle`
 
+> **Read/write layer note (annotated at SESSION_048, M2.3
+> shipped).** The `Vehicle` model is the **read model** for the
+> ledger — thin `@property` accessors that expose already-computed
+> ledger information without duplicating math. All aggregation,
+> category grouping, upsert semantics, and cross-tenant guards
+> live in `services/vehicle_ledger.py` (the **business layer +
+> write model**). One `@cached_property ledger_totals` runs the
+> lookup once per Vehicle instance; every per-total property
+> delegates to that cached `LedgerTotals`. Consequences:
+>
+> - Callers can read `vehicle.total_investment` naturally without
+>   knowing the service exists.
+> - Adding a new total requires *only* extending `LedgerTotals` +
+>   `compute_totals` — the Vehicle side becomes one delegator
+>   `@property`.
+> - Callers who need fresh totals after a write on the same
+>   instance must refetch (`Vehicle.objects.get(pk=...)`) or
+>   `del vehicle.ledger_totals`. In the request/response cycle
+>   this is not a concern — each request builds a fresh instance.
+
 - **Business question answered.** Q1 (total investment), Q2
   (breakdown by category), Q3 (projected gross), Q4 (aging days).
 - **Citation.** `ACCOUNTING_DEPARTMENT_MAPPING.md` §2.14 (Vehicle
@@ -1224,13 +1244,19 @@ scope-discipline reminders above still apply to every increment.
   the `is_estimate` field exists precisely because the
   distinction matters at decision time.
 
-- **M2.3 — Vehicle computed properties (SESSION_048 = NEXT).**
-  `@property` accessors on `Vehicle` delegating to
-  `services/vehicle_ledger.compute_totals` for
-  `total_investment`, `projected_total_investment`,
-  `actual_cost_total`, `estimated_cost_total`, per-category
-  totals, `days_in_inventory`. Focused property tests. No API.
-  No frontend.
+- **M2.3 — Vehicle computed properties (SHIPPED at SESSION_048).**
+  `@cached_property ledger_totals` on `Vehicle` (delegates to
+  `services/vehicle_ledger.compute_totals`) + nine `@property`
+  accessors reading fields off the cached `LedgerTotals` +
+  `days_in_inventory` (temporal metric; returns `None` when no
+  acquisition record exists — misleading fallbacks like
+  `imported_at` are deliberately rejected). 29 focused tests
+  including `assertNumQueries` verification that all nine
+  per-total properties after cache priming cost zero additional
+  queries. Cross-tenant read isolation verified. Zero writes
+  during property access. Vehicle became the read model; the
+  service stayed the write/business model. See §1.3 above for
+  the layer contract annotation.
 
 - **M2.4 — Floor-plan math, APR configuration, accrual command.**
   `services/payment_engine.py::daily_floor_plan_interest`
