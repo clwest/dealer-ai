@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: in-progress
 increment: 2
 increment_status: shipped
-commit: TBD
+commit: 0c98f2e
 ---
 
 # SESSION_057 — Milestone 3 · Increment 2 (M3.2 — condition-report service layer)
