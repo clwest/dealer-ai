@@ -1284,14 +1284,34 @@ scope-discipline reminders above still apply to every increment.
   the engine pure before wiring the workflow around it is
   cheaper to test and cleaner to reuse.
 
-- **M2.4b — Floor-plan accrual command (NEXT — SESSION_050).**
+- **M2.4b — Floor-plan accrual command (SHIPPED at SESSION_050).**
   `manage.py accrue_floor_plan_interest --dealership=<slug>
-  [--as-of=DATE] [--dry-run]` command — consumes the M2.4a
-  math + config to post `VehicleCost` rows via
-  `services.vehicle_ledger.add_cost` (never
-  `VehicleCost.objects.create` directly). Idempotency
-  (re-running same-day is a no-op), dry-run purity,
-  tenant-required guard.
+  [--as-of=DATE] [--dry-run]`. Consumes the M2.4a math + config
+  to post `VehicleCost` rows via `services.vehicle_ledger.add_cost`
+  (never `VehicleCost.objects.create` directly — the ledger
+  service remains the one write path). **Explicit
+  operational-idempotency**: before each planning step the
+  command queries for an existing row with
+  `reference=f"ACCRUAL:{as_of.isoformat()}"`; if one exists the
+  vehicle is skipped and counted as `duplicate`. Duplicate
+  detection is workflow-owned, not left to the engine's
+  `days_elapsed <= 0` short-circuit alone (belt + suspenders).
+  **Last-accrual resolution order** locked by tests: (1) most
+  recent floor-plan accrual row's `incurred_at.date()`, (2)
+  `VehicleAcquisition.purchase_date`, (3) skip. **Transaction
+  strategy**: live-mode execute phase wraps every `add_cost`
+  call in one `transaction.atomic()`; any exception rolls back
+  all previously-posted accruals in this run. Dry-run mode
+  skips the atomic block entirely. **Operational-event
+  framing**: `AccrualPlan` dataclass separates PLAN (pure
+  computation) from EXECUTE (post via `add_cost`) so a future
+  dedicated `AccrualEvent` model can slot in without changing
+  the command's user-facing surface. Summary output:
+  Evaluated / Accrued / Skipped (no acquisition / no elapsed
+  days / duplicate) + total accrued dollars + `[DRY RUN]`
+  marker. 19 focused workflow tests using
+  `daily_floor_plan_interest` as the source of truth (no
+  duplicated math).
 
 - **M2.5 — Acquisition-price safety scrub (safety pipeline
   stage 17).** `services/llm_safety.py::_scrub_acquisition_price`
