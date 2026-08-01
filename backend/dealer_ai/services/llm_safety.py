@@ -42,14 +42,27 @@ core stack:
 - ``"follow_up"`` — partial scrubs + ``invented_promotion`` +
   ``invented_appointment`` (the AI must not promise a specific
   appointment time / confirmation).
+- ``"vendor_comm"`` — partial scrubs + ``invented_recon_fact``.
+  Fires on AI-drafted vendor communications (M4.5). Callers pass
+  ``recon_source_bundle=`` — a structured dict of the
+  human-authored facts the draft was rendered from
+  (see :func:`_scrub_invented_recon_fact` docstring). Any
+  finding ID / part number / dollar amount / date in the draft
+  that is NOT present in the source bundle is stripped.
+- ``"parts_order"`` — same scrub set as ``"vendor_comm"``.
+  Subtype used by the M4.5 parts-order path so aggregation /
+  metrics can distinguish parts orders from other vendor comms,
+  but the invented-fact regex families are identical.
 
 This module performs **no** state writes. It is import-safe and
-side-effect-free. Tests live in ``test_llm_safety.py``.
+side-effect-free. Tests live in ``test_llm_safety.py`` and
+(for the M4.5 recon scrub) ``test_llm_safety_recon_scrub.py``.
 """
 
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
 from typing import List, Optional, Tuple
 
 from .chat_engine import (
@@ -62,7 +75,14 @@ from .chat_engine import (
 from .dealer_config import get_dealer_profile
 
 
-SafetyKind = str  # "chat" | "vehicle_ask" | "ad" | "follow_up"
+SafetyKind = str
+# Valid kinds: "chat" | "vehicle_ask" | "ad" | "follow_up" |
+# "vendor_comm" | "parts_order". The recon kinds land in M4.5.
+
+
+# Kinds that trigger the invented-recon-fact scrub. Kept module-level
+# so tests can import and lock the exact set.
+_RECON_COMM_KINDS: frozenset[str] = frozenset({"vendor_comm", "parts_order"})
 
 
 # ---- Indie-only scrub: OEM / new-inventory / captive-finance leaks ----------
@@ -519,11 +539,262 @@ def _scrub_acquisition_price(text: str) -> Tuple[str, bool]:
     return cleaned, changed
 
 
+# ---- Recon-communication scrub (Milestone 4 · Increment 5) ------------------
+#
+# Fires on ``kind in _RECON_COMM_KINDS`` (i.e. ``"vendor_comm"`` or
+# ``"parts_order"``). Unlike the other post-LLM scrubs which are pure
+# text-only pattern matchers, this scrub takes a structured
+# ``source_bundle`` — the human-authored facts the vendor-comm draft
+# was rendered from — and strips any claim in the LLM's output that
+# does not trace back to that source.
+#
+# The source bundle is defined at ``MILESTONE_4_PLANNING.md`` §5.g:
+#
+#   {
+#     "vehicle": {stock, year, make, model, vin_last_6},
+#     "vendor": {name},
+#     "findings": [{id, category, severity, description}, ...],
+#     "authorized_cost": str_two_decimals or None,
+#     "estimated_completion_date": iso or None,
+#     "parts_needed": [{name, part_number, quantity, unit_cost, source_type}, ...],
+#     "operator_notes": str,
+#   }
+#
+# Four regex families run per §5.g:
+#
+# 1. Invented finding IDs — ``Finding #<n>`` where ``n`` is not in
+#    ``source["findings"][*]["id"]``.
+# 2. Invented part numbers — ``[A-Z0-9-]{5,}`` tokens not in
+#    ``source["parts_needed"][*]["part_number"]``.
+# 3. Invented dollar amounts — ``$<n>`` not equal to
+#    ``source["authorized_cost"]`` and not equal to
+#    ``sum(source["parts_needed"][*].unit_cost * quantity)`` for any
+#    subset.
+# 4. Invented dates — ISO ``YYYY-MM-DD`` tokens not equal to
+#    ``source["estimated_completion_date"]``.
+#
+# Rewrite strategy: strip the invented reference and substitute a
+# generic phrase. The scrub does NOT delete the whole draft (that's
+# the caller's job to review). It returns ``(cleaned_text,
+# changed_bool)`` matching every other scrub in this module.
+
+# Part-number token pattern per §5.g: [A-Z0-9-]{5,}. Anchored on word
+# boundaries so we don't match segments of longer alphanumeric runs.
+_RECON_PART_NUMBER_PATTERN = re.compile(r"\b[A-Z][A-Z0-9-]{4,}\b")
+
+# Finding reference pattern per §5.g.
+_RECON_FINDING_REF_PATTERN = re.compile(
+    r"\bFinding\s*#\s*(\d+)\b", re.IGNORECASE
+)
+
+# Dollar-amount pattern — matches "$123", "$1,234", "$1234.56".
+_RECON_DOLLAR_PATTERN = re.compile(r"\$([\d,]+(?:\.\d{1,2})?)")
+
+# ISO date pattern — matches "YYYY-MM-DD" (the format the source
+# bundle uses per §5.g). Free-text dates like "October 15" are not
+# scrubbed — too much false-positive risk for a text-only pass.
+# Operator review + M4.7 UI provenance rendering are the compensating
+# controls per §5.g.
+_RECON_ISO_DATE_PATTERN = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+
+
+def _valid_finding_ids(source_bundle: dict) -> set:
+    """Extract the set of legitimate finding IDs (as strings) from the
+    source bundle."""
+    ids = set()
+    for finding in source_bundle.get("findings") or ():
+        fid = finding.get("id") if isinstance(finding, dict) else None
+        if fid is not None:
+            ids.add(str(fid))
+    return ids
+
+
+def _valid_part_numbers(source_bundle: dict) -> set:
+    """Extract the set of legitimate part-number strings from the
+    source bundle."""
+    numbers = set()
+    for part in source_bundle.get("parts_needed") or ():
+        pn = part.get("part_number") if isinstance(part, dict) else None
+        if pn:
+            numbers.add(str(pn).strip())
+    return numbers
+
+
+def _valid_dollar_strings(source_bundle: dict) -> set:
+    """Return the set of legitimate dollar-amount strings the LLM may
+    reference. Includes ``authorized_cost`` and every
+    ``unit_cost * quantity`` product for parts. Every amount is
+    represented in three normalized forms — bare integer
+    (``"500"``), two-decimal (``"500.00"``), and comma-grouped
+    (``"1,234.00"``) — so a match against any of the three forms
+    counts as legitimate."""
+    def _forms(amount) -> set:
+        try:
+            dec = Decimal(str(amount))
+        except (InvalidOperation, TypeError, ValueError):
+            return set()
+        result = {
+            f"{dec:.2f}",  # two-decimal
+            f"{int(dec)}" if dec == dec.to_integral_value() else f"{dec}",
+        }
+        # Comma-grouped two-decimal (e.g. "1,234.00").
+        if dec >= 1000:
+            result.add(f"{dec:,.2f}")
+            if dec == dec.to_integral_value():
+                result.add(f"{int(dec):,}")
+        return result
+
+    valid: set[str] = set()
+    authorized_cost = source_bundle.get("authorized_cost")
+    if authorized_cost is not None:
+        valid.update(_forms(authorized_cost))
+    for part in source_bundle.get("parts_needed") or ():
+        if not isinstance(part, dict):
+            continue
+        unit = part.get("unit_cost")
+        qty = part.get("quantity", 1) or 1
+        if unit is None:
+            continue
+        try:
+            total = Decimal(str(unit)) * Decimal(str(qty))
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+        valid.update(_forms(total))
+    return valid
+
+
+def _valid_iso_dates(source_bundle: dict) -> set:
+    """Return the set of legitimate ISO date strings the LLM may
+    reference — currently just ``estimated_completion_date`` from
+    the source bundle."""
+    valid = set()
+    ecd = source_bundle.get("estimated_completion_date")
+    if ecd:
+        valid.add(str(ecd).strip())
+    return valid
+
+
+def _scrub_invented_recon_fact(
+    text: str, *, source_bundle: dict
+) -> Tuple[str, bool]:
+    """Strip invented finding IDs, part numbers, dollar amounts, and
+    ISO dates from a vendor-comm draft.
+
+    Text-only. No DB access. Deterministic — same input, same
+    output. Callers thread the ``source_bundle`` dict at
+    :func:`apply_post_llm_scrubs` call-time.
+
+    Rewrite strategy per §5.g:
+
+    - Invented ``Finding #<n>`` → ``"the finding"``. Preserves the
+      surrounding sentence so the human-authored description can
+      still land in the reader's context.
+    - Invented part number → ``"the part"``. Stripping the specific
+      identifier while preserving the sentence is safer than
+      dropping the whole clause (which might strand a "please
+      order" clause without an object).
+    - Invented ``$<amount>`` → ``"the quoted amount"``. Operator
+      reviews before send per §5.g human-approval invariant.
+    - Invented ``YYYY-MM-DD`` → ``"the scheduled date"``.
+
+    A NIL ``source_bundle`` (empty dict) treats every referenced
+    fact as invented — the LLM should not fabricate facts when the
+    caller provided no source. Returns ``(text, False)`` for empty
+    input.
+
+    Returns ``(cleaned_text, changed_bool)`` matching the shape of
+    every other scrub in this module.
+    """
+    if not text:
+        return text, False
+
+    source_bundle = source_bundle or {}
+    valid_findings = _valid_finding_ids(source_bundle)
+    valid_parts = _valid_part_numbers(source_bundle)
+    valid_amounts = _valid_dollar_strings(source_bundle)
+    valid_dates = _valid_iso_dates(source_bundle)
+
+    cleaned = text
+    changed = False
+
+    # 1. Invented finding IDs.
+    def _finding_sub(match: re.Match) -> str:
+        nonlocal changed
+        fid = match.group(1)
+        if fid in valid_findings:
+            return match.group(0)
+        changed = True
+        return "the finding"
+
+    cleaned = _RECON_FINDING_REF_PATTERN.sub(_finding_sub, cleaned)
+
+    # 2. Invented part numbers.
+    def _part_sub(match: re.Match) -> str:
+        nonlocal changed
+        pn = match.group(0)
+        if pn in valid_parts:
+            return pn
+        changed = True
+        return "the part"
+
+    cleaned = _RECON_PART_NUMBER_PATTERN.sub(_part_sub, cleaned)
+
+    # 3. Invented dollar amounts.
+    def _dollar_sub(match: re.Match) -> str:
+        nonlocal changed
+        # Normalize the captured number for comparison — the source
+        # bundle's forms include stripped, comma-grouped, and
+        # decimal variants.
+        raw = match.group(1)
+        stripped = raw.replace(",", "")
+        try:
+            dec = Decimal(stripped)
+        except InvalidOperation:
+            return match.group(0)
+        candidates = {
+            f"{dec:.2f}",
+            f"{int(dec)}" if dec == dec.to_integral_value() else f"{dec}",
+            raw,
+        }
+        if dec >= 1000:
+            candidates.add(f"{dec:,.2f}")
+            if dec == dec.to_integral_value():
+                candidates.add(f"{int(dec):,}")
+        if candidates & valid_amounts:
+            return match.group(0)
+        changed = True
+        return "the quoted amount"
+
+    cleaned = _RECON_DOLLAR_PATTERN.sub(_dollar_sub, cleaned)
+
+    # 4. Invented ISO dates.
+    def _date_sub(match: re.Match) -> str:
+        nonlocal changed
+        d = match.group(1)
+        if d in valid_dates:
+            return d
+        changed = True
+        return "the scheduled date"
+
+    cleaned = _RECON_ISO_DATE_PATTERN.sub(_date_sub, cleaned)
+
+    if changed:
+        # Same whitespace normalization the other scrubs use.
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
+        cleaned = cleaned.strip()
+
+    return cleaned, changed
+
+
 # ---- Public entry -----------------------------------------------------------
 
 
 def apply_post_llm_scrubs(
-    text: str, *, kind: SafetyKind = "chat"
+    text: str,
+    *,
+    kind: SafetyKind = "chat",
+    recon_source_bundle: Optional[dict] = None,
 ) -> Tuple[str, List[str], Optional[str]]:
     """Run the shared post-LLM safety stack on ``text``.
 
@@ -546,6 +817,17 @@ def apply_post_llm_scrubs(
       per-vehicle endpoint the same safety net.
     - ``"ad"``: + ``invented_promotion``.
     - ``"follow_up"``: + ``invented_promotion`` + ``invented_appointment``.
+    - ``"vendor_comm"`` / ``"parts_order"``: +
+      ``invented_recon_fact`` (M4.5). Callers thread
+      ``recon_source_bundle=`` — a dict of the human-authored
+      facts the draft was rendered from. Any finding ID / part
+      number / dollar amount / ISO date in the LLM output that
+      is not present in the source bundle is stripped. See
+      :func:`_scrub_invented_recon_fact` for the full contract.
+
+    ``recon_source_bundle`` is only consulted when ``kind`` is one of
+    the recon-comm kinds. Text-only callers (chat / vehicle_ask /
+    ad / follow_up) may leave it as ``None``.
     """
     if not text:
         return text, [], None
@@ -580,6 +862,20 @@ def apply_post_llm_scrubs(
     cleaned, acquisition_price_changed = _scrub_acquisition_price(cleaned)
     if acquisition_price_changed:
         scrubs.append("acquisition_price")
+
+    # 2c. Recon-fact scrub (Milestone 4 · Increment 5).
+    #     Fires on ``vendor_comm`` / ``parts_order`` kinds. Requires
+    #     the caller to pass ``recon_source_bundle`` — the structured
+    #     dict of human-authored facts the draft was rendered from.
+    #     A missing bundle treats every referenced fact as invented
+    #     (the LLM should not fabricate when the caller has no
+    #     source). Text-only; no DB access.
+    if kind in _RECON_COMM_KINDS:
+        cleaned, recon_changed = _scrub_invented_recon_fact(
+            cleaned, source_bundle=recon_source_bundle or {}
+        )
+        if recon_changed:
+            scrubs.append("invented_recon_fact")
 
     # 3. Kind-specific scrubs.
     if kind in ("ad", "follow_up"):
