@@ -2,7 +2,7 @@
 title: "Dealer AI Kit — Verified Capability Matrix"
 status: living
 last_verified: 2026-07-31
-verified_against_commit: 02472f1
+verified_against_commit: f20564f
 ---
 
 # Dealer AI Kit — Verified Capability Matrix
@@ -228,6 +228,67 @@ research trigger):
 - Gating `demo/reset` + `demo/scenarios` endpoints (intentional
   cross-tenant wipe semantics; separate scope decision).
 - Prod deployment.
+
+---
+
+## 7c. Vehicle investment ledger (Milestone 2, shipped)
+
+Milestone 2 (SESSION_046 → SESSION_054) shipped a complete per-
+vehicle investment ledger. Every subsequent milestone that touches
+per-vehicle cost basis (M4 Recon Automation, M8 Operational
+Intelligence, M9 Sale + Delivery gross reconciliation, M13
+Accounting reconciliation) inherits this substrate. See
+`docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` for what shipped vs.
+what remained deferred, and `docs/roadmap/MILESTONE_2_PLANNING.md`
+for the full acceptance contract.
+
+| Concern | Shipped surface | Notes |
+| --- | --- | --- |
+| Acquisition record | `models.VehicleAcquisition` (OneToOne with `Vehicle`; `dealership` FK NOT NULL; 8-value `source` enum from `ACQUISITION_SOURCE_CHOICES`; purchase price, purchase date, buyer fees, arbitration fees, transportation cost, title acquisition cost, notes) + migration `0012`. | One acquisition per vehicle. Model `clean()` enforces cross-tenant guard. |
+| Per-vehicle cost ledger | `models.VehicleCost` (FK to `Vehicle`; `dealership` FK NOT NULL; 26-value `category` enum from `VEHICLE_COST_CATEGORY_CHOICES` across flooring/recon/admin/photography; signed `amount` Decimal; `incurred_at`; vendor free-text; `reference` tag; `is_estimate` flag; `created_by` nullable SET_NULL) + migration `0013`. | Immutable rows. Corrections happen via reversing entries (negative amount + reference tag pointing at original). No update/delete endpoint. |
+| Category groupings | `dealer_ai.models::FLOORING_CATEGORIES`, `RECON_CATEGORIES`, `ADMIN_CATEGORIES`, `PHOTOGRAPHY_CATEGORIES` (exhaustive + non-overlapping partition, locked by tests). | Photography kept separate from admin so M6 photography can distinguish "shot for listing" from "shot for damage doc" without recategorizing history. |
+| Ledger service | `services/vehicle_ledger.py`: `record_acquisition(vehicle, *, dealership, ...) → (VehicleAcquisition, bool)` upsert; `add_cost(vehicle, *, dealership, ...) → VehicleCost` immutable-post; `compute_totals(vehicle, *, dealership) → LedgerTotals` deterministic aggregation; `category_group_of(category) → Optional[str]`; `CrossTenantLedgerError(ValueError)` fail-closed guard; `LedgerTotals` frozen dataclass with 9 Decimal fields; `ZERO = Decimal("0.00")`. | One authoritative write path. Every function threads `dealership=` explicitly per `AUTHENTICATION_MODEL.md` §8b. |
+| **Semantic contract — actual vs. estimated** | `total_investment` = `acquisition_total + actual_cost_total` (excludes `is_estimate=True`). `estimated_cost_total` isolates estimates. `projected_total_investment` sums both. | Load-bearing. Documented in module docstring; locked by `ComputeTotalsActualVsEstimated` (5 tests). Preserved verbatim by the API + UI layers. |
+| Vehicle read model | `Vehicle.ledger_totals` `@cached_property` → `compute_totals`. Nine `@property` delegators (`total_investment`, `projected_total_investment`, `acquisition_total`, `actual_cost_total`, `estimated_cost_total`, `flooring_total`, `recon_total`, `administrative_total`, `photography_total`) + `days_in_inventory` temporal metric. | First property access = 7 queries; subsequent reads = 0. `days_in_inventory` returns `None` when no acquisition (no misleading fallback to `imported_at`). |
+| Floor-plan interest math | `services/payment_engine.py::daily_floor_plan_interest(principal, apr, days_elapsed) → Decimal`. Pure. 365-day year. ROUND_HALF_UP to cents. `apr==0 / principal==0 / days<=0` → `Decimal("0.00")`. Negative `principal` or `apr` → `ValueError`. | Reusable for future payoff / curtailment / lender-balance calculations. |
+| Per-tenant floor-plan APR configuration | `DealerOnboardingProfile.floor_plan_apr` nullable field + migration `0014`. `services/dealer_config.py::get_floor_plan_apr(dealership) → Decimal` resolver (DB → env `DEALER_AI_FLOOR_PLAN_APR` → `Decimal("8.5")` default). | DB beats env (documented divergence from `get_dealer_name`); silent fall-through on unparseable env values. |
+| Floor-plan interest accrual command | `python manage.py accrue_floor_plan_interest --dealership=<slug> [--as-of=YYYY-MM-DD] [--dry-run]`. Plan/execute split via `AccrualPlan` dataclass (operational-event abstraction). Whole-run atomic transaction (live mode); dry-run skips atomic entirely. Workflow-owned idempotency via `reference=f"ACCRUAL:{as_of.isoformat()}"` duplicate check BEFORE calling the engine. Posts through `services.vehicle_ledger.add_cost` — never `VehicleCost.objects.create`. | Same-day re-runs post ZERO new rows. Reports `Evaluated / Accrued / Skipped (no acquisition / no elapsed days / duplicate)` + total accrued + `[DRY RUN]` marker. Manual/cron for v1; Celery deferred to Milestone 7. |
+| Internal-cost-leakage safety scrub | `services/llm_safety.py::_scrub_acquisition_price` — new partial scrub joining the always-runs section of `apply_post_llm_scrubs`. Fires on every `kind` (chat / vehicle_ask / ad / follow_up). Runs AFTER `detect_unsafe_response` so pre-existing dealer-cost wholesale rewrite still short-circuits first. Text-only, zero DB access. 12 verbal-framing regex patterns anchored on cost-ownership signals ("we're in it for", "purchase price was", "acquired for", "total investment", "floor plan interest", "spent on recon", etc.). | Recorded in `scrubs_fired` as `"acquisition_price"`. 71 focused tests including a 21-case negative corpus (asking price, monthly payment, warranty, trade value, budget, "purchase price IS $X" customer boundary — none fire the scrub). Deliberately NOT named "stage 17" in code. |
+| Authorized ledger admin API | Three endpoints under `/api/dealer-ai/admin/vehicles/<stock_number>/`: `GET .../ledger/` (full read), `POST .../acquisition/` (upsert; wraps `record_acquisition`), `POST .../costs/` (immutable post; wraps `add_cost`). All three: permission_classes `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]` (M1·4D class reused unchanged). Cross-tenant AND nonexistent `stock_number` → 404 identical body (no existence leak). Cost ordering deterministic (ascending `incurred_at`, `pk` tie-break). `created_by` derives from `request.user` — client-supplied attribution ignored (would let an operator forge authorship). No PUT/PATCH/DELETE routes on `/costs/`. | Money serialized as fixed two-decimal-place strings via `_money_str` helper (`ROUND_HALF_UP` quantize) so JavaScript `Number` can't truncate precision. Input validation via DRF Serializer classes (Decimal-safe via `Decimal(str(value))`; choices from model enums). |
+| Operator ledger UI | `/dealer-ai-inventory/:stock/ledger` route inside `<RequireAuth>`. `frontend/src/pages/VehicleLedgerPage.tsx`. Three typed `lib/api.ts` helpers via `authFetch`. Header with color-coded `days_in_inventory` badge. Investment summary (5 cards with backend-terminology labels + help lines documenting the actual-vs-estimated distinction). Read-only-until-edit acquisition. Cost history table (chronological ASC from API — no re-sorting). Add-cost form with grouped optgroup category dropdown, `inputMode="decimal"`, `is_estimate` checkbox, explicit reversing-entry footnote. "Ledger" button on operator inventory cards (URL-encoded stock; **not** exposed on public `/showroom`). Role-gated write forms via `useAuth().hasRole('sales_manager') || hasRole('dealer_owner')`. Distinct 401/403/404 UX. | Money-as-strings end-to-end; frontend never recomputes totals, projected_gross, or category sums. `formatMoney` is pure string manipulation; zero float arithmetic. Full click-through browser smoke deferred to operator first-live-use (SESSION_053 + SESSION_054 environments could not drive an interactive browser). |
+
+**What is NOT shipped in Milestone 2** (deferred to the milestone
+that first needs it — do not re-plan without reopening the
+research trigger; every item recorded in `MILESTONE_2_PLANNING.md`
+§5 + `MILESTONE_2_RETROSPECTIVE.md` §7):
+
+- `expected_gross` computed property (needs
+  `estimated_remaining_investment` from M3 ConditionReport).
+- `Vendor` FK model (M4 Recon Automation; M2 `VehicleCost.vendor`
+  is free-text until then).
+- Automated curtailment scheduling (M7+; needs lender integration
+  or async).
+- `recon_manager` read/write access on the ledger (M4).
+- Aging-alert recommended actions (M8 Operational Intelligence).
+- Tenant-scoped uniqueness on `Vehicle.stock_number` (deferred
+  since M1 §5; lands with the first second-live-dealership
+  onboarding).
+- `Vehicle.is_available` → computed lifecycle (M5).
+- `Vehicle.make="Ford"` default rename (opportunistic; M5 most
+  likely).
+- Multi-photo storage (S3-compatible + CDN) — M3 concern or a
+  pre-M3 half-milestone.
+- Async / Celery for the accrual command (M7).
+- Cost update / delete workflows (v1 corrections are reversing
+  rows).
+- Prod deployment — Render Blueprint staged since SESSION_028,
+  still not active. Milestone 2 does not require prod (operator
+  can run the ledger from a dev laptop).
+- Bulk inventory-list optimization (per M2.3 handoff N+1 preview —
+  the M2.6 API is detail-only; future inventory-list page will
+  need bulk aggregates).
+- `floor_plan_apr` field in the operator Setup UI (M2.7-adjacent;
+  land whenever the Setup UI takes its next extension).
 
 ---
 

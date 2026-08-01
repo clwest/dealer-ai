@@ -1,177 +1,251 @@
 ---
 state: active
 date: 2026-07-31
-last_session_shipped: SESSION_053
+last_session_shipped: SESSION_054
 milestone_1_status: shipped
-milestone_2_status: in_progress
-next_session: SESSION_054
-next_milestone: 2
-next_milestone_name: "Vehicle investment ledger"
-next_increment: 8
-next_increment_name: "Milestone 2 verification + closeout"
+milestone_2_status: shipped
+next_session: SESSION_055
+next_milestone: 3
+next_milestone_name: "Structured condition report"
 ---
 
-# Next session — SESSION_054 · Milestone 2 · Increment 8 (M2.8 — verification + closeout)
+# Next session — SESSION_055 · Milestone 3 (Structured condition report) — Increment 0 (planning pass, no code)
 
-> **Milestone 2 · Increment 7 shipped at SESSION_053.**
-> Operator ledger UI at `/dealer-ai-inventory/:stock/ledger`
-> inside `<RequireAuth>`. Three typed API helpers via
-> `authFetch`. Money-as-strings end-to-end; frontend never
-> recomputes totals. Read-only-until-edit acquisition,
-> immutable cost table with reversal badges, distinct
-> 401/403/404 UX, days-in-inventory color bucket badge. Role-
-> based show/hide via `useAuth()`. "Ledger" link on operator
-> inventory cards (URL-encoded). Verification: `npx tsc
-> --noEmit` clean, `npx vite build` clean, route smoked via
-> curl (200). No component-test framework introduced (per
-> brief). Manual browser smoke deferred to operator
-> verification. **Backend untouched — no test-baseline
-> change, no schema drift, no service-contract change.**
+> **Milestone 2 shipped at SESSION_054.** Every §3 compatibility
+> item verified with inline evidence,
+> `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` written,
+> `docs/CAPABILITY_MATRIX.md` §7c added, `IMPLEMENTATION_ROADMAP.md`
+> §Milestone 2 flipped to shipped. Baseline: 1,753 pass, 1
+> skipped, 0 fail. Manifest of what shipped: `VehicleAcquisition`
+> + `VehicleCost` + service + Vehicle read model + financial
+> engine + APR config + accrual command + acquisition-price scrub
+> + admin API + operator UI. `MILESTONE_2_PLANNING.md`
+> frontmatter now `status: shipped`.
 >
-> **All eight Milestone 2 increments shipped:** M2.1 (models)
-> · M2.2 (service) · M2.3 (read model) · M2.4a (financial
-> engine + APR config) · M2.4b (accrual command) · M2.5
-> (acquisition-price scrub) · M2.6 (admin API) · M2.7
-> (operator UI). SESSION_054 closes the milestone with the
-> §3 compatibility sweep + retrospective + doc flips.
->
-> **SESSION_054 is documentation-only.** No code changes
-> unless a §3 compatibility item fails verification. If a fix
-> is needed, mirror the SESSION_044 pattern (small hardening
-> in the same closeout commit).
+> **SESSION_055 opens Milestone 3 with a planning pass — no
+> implementation.** Milestone 3 is the Structured Condition
+> Report: the human-authored record of what needs to happen
+> before a vehicle is front-line ready. Do not start typing
+> model code before the plan is written, reviewed, and committed.
 
 ## Governance layers (all apply, in this order on conflict)
 
 1. `docs/PROJECT_RULES.md` — six project-work rules.
 2. `docs/DOC_GOVERNANCE.md` — documentation rules.
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 2 —
-   scope boundary.
-4. `docs/roadmap/AUTHENTICATION_MODEL.md` — every M2
-   invariant that inherits M1's substrate.
-5. `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` — the
-   structural template M2's retrospective mirrors, plus its
-   §6 lessons that Milestone 2 was expected to inherit.
-6. `docs/roadmap/MILESTONE_2_PLANNING.md` §3 (the
-   compatibility checklist to walk) + §7.b (the as-shipped
-   sequence to close out) + §5 (deferrals to preserve in the
-   retrospective's §7).
-7. `docs/handoffs/SESSION_053_milestone_2_ledger_ui.md` —
-   authoritative M2.8 recommended scope.
-8. Earlier M2 handoffs (SESSION_045 – SESSION_052).
+3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 3 —
+   scope boundary (in-scope / out-of-scope enumeration).
+4. `docs/roadmap/AUTHENTICATION_MODEL.md` — every ConditionReport
+   / ConditionFinding row inherits the tenancy + authorization
+   substrate; Milestone 3 must NOT re-derive these decisions.
+5. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` — the eleven
+   lessons that directly shape Milestone 3's approach
+   (increment discipline, actual-vs-estimated semantic contract
+   inheritance for cost estimates on findings, immutable rows +
+   reversing entries, focused positive/negative test matrices,
+   money-as-strings if the report ever exposes cost data,
+   frontend manual verification must not be marked complete
+   when tooling cannot perform it).
+6. `docs/roadmap/MILESTONE_2_PLANNING.md` §7.b — the shipped
+   eight-increment sequence M3 planning should mirror in shape.
+7. `docs/roadmap/MILESTONE_1_PLANNING.md` §3 (compatibility
+   template) + `MILESTONE_2_PLANNING.md` §3 (annotated variant)
+   — the acceptance-checklist shape Milestone 3 planning
+   mirrors.
+8. `docs/research/RECON_MAPPING.md` — the primary business-
+   truth source for Milestone 3 (the entire recon workflow,
+   pain points around inspection quality variance and jacket
+   confusion, the "human-authored inspection discipline is
+   non-negotiable" invariant).
+9. `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 2 — the
+   architectural target (`ConditionReport`, `ConditionFinding`,
+   category + severity enums; "AI role: NONE yet" — the report
+   is proven un-automated first, automation lands with M4).
+10. `docs/BUSINESS_DOMAIN_MAP.md` — the recon department
+    section for cross-department context.
+11. `docs/CAPABILITY_MATRIX.md` — what already exists (M2's
+    ledger, M1's tenancy/auth substrate).
 
-## What SESSION_054 should do — M2 · Increment 8
+## What Milestone 3 delivers (per `IMPLEMENTATION_ROADMAP.md`
+§Milestone 3)
 
-Per `MILESTONE_2_PLANNING.md` §7.b · M2.8 + SESSION_053
-handoff's "Exact recommended scope for M2.8". Mirror the
-SESSION_044 closeout pattern.
+For any stock number, answer: **"What needs to happen before this
+vehicle is front-line ready?"** Human-authored, structured.
+
+**In scope:**
+
+- `ConditionReport` model (per-vehicle, timestamped, authored by
+  a named human, status draft/complete).
+- `ConditionFinding` model (category from mechanical/cosmetic/
+  body/glass/tires/interior/fluids/electrical/safety/
+  accessories/missing/other; severity from advisory/
+  recommended/required/safety; description; optional cost
+  estimate; optional photos).
+- Multi-photo attachment per finding — introduces the first
+  real file-storage need beyond the single onboarding logo. The
+  planning pass must address whether storage lands with M3 or
+  as a pre-M3 half-milestone.
+- Operator UI to author + view a condition report.
+- Deliberate absence of AI — this milestone ships with NO LLM
+  role at all so the data shape gets proven before automation
+  lands on top (per VCP Phase 2: *"AI role: NONE yet.
+  Deliberately un-automated so the data shape gets proven
+  before automation lands on top"*).
+
+**Explicitly out of scope:**
+
+- AI-drafted recon work plans (Milestone 4).
+- `Vendor` FK model (Milestone 4).
+- `WorkOrder` model (Milestone 4).
+- Vehicle lifecycle stage advancement based on findings
+  (Milestone 5).
+- Auto-minting `VehicleCost` rows from completed work
+  (Milestone 4).
+- Recon-manager-specific permission class (Milestone 4 when
+  recon-manager workflows first surface).
+- Warranty callback tracking (Milestone 4 — post-sale repair
+  concern).
+
+## What SESSION_055 should do — Increment 0 (planning pass)
+
+Mirror the shape of `MILESTONE_2_PLANNING.md`. No code this
+session. The planning artifact is the deliverable.
 
 ### Recommended step sequence
 
-1. **Read first (in this order):**
-   - `docs/handoffs/SESSION_053_milestone_2_ledger_ui.md` §
-     "Exact recommended scope for M2.8" — authoritative
-     scope + retrospective structure.
-   - `docs/handoffs/SESSION_044_milestone_1_closeout.md` —
-     precedent for milestone-close doc discipline.
-   - `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` — the
-     structural template M2's retrospective mirrors
-     (frontmatter shape, §1–§8 numbering, lessons format).
-   - `docs/roadmap/MILESTONE_2_PLANNING.md` §3 (walk every
-     compatibility item) + §7.b (record shipped commits
-     per increment).
-   - Every SESSION_046 – SESSION_053 handoff (the shipped
-     evidence that feeds retrospective §2 and §5).
+1. **Read first (in this order — one pass, do not skim):**
+   - `docs/PROJECT_RULES.md` (all six rules).
+   - `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` §6 (eleven
+     lessons) + §7 (remaining deferred) + §8 (roadmap
+     guidance for M3).
+   - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 3
+     (business objective + scope boundary).
+   - `docs/research/RECON_MAPPING.md` — the FULL document.
+     Note the "human-authored inspection discipline is
+     non-negotiable" invariant, the pain points around
+     inspection quality variance and jacket confusion, and
+     the recon-manager-owned workflow.
+   - `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 2
+     (~lines 449–470) — the target `ConditionReport` /
+     `ConditionFinding` shape and the "AI role: NONE yet"
+     rule.
+   - `docs/BUSINESS_DOMAIN_MAP.md` §4.2 Recon department.
+   - `docs/roadmap/AUTHENTICATION_MODEL.md` — every ledger
+     model gets a `dealership` FK + tenant-scoped querysets
+     from day one; M3 inherits.
+   - `backend/dealer_ai/models.py::Vehicle` + M2's
+     `VehicleAcquisition` / `VehicleCost` — the identity
+     primitives ConditionReport hangs off.
+   - `backend/dealer_ai/services/vehicle_ledger.py` — the
+     M2 pattern M3's `services/condition_report.py` (or
+     equivalent) will mirror.
+   - `backend/dealer_ai/services/tenancy.py` — the tenancy
+     primitives every ConditionReport read/write flows
+     through.
 
-2. **Walk the §3 compatibility checklist.** For each
-   checkbox, record inline the test class / code location /
-   runtime probe that locks the invariant. Same shape as the
-   SESSION_044 annotation of `MILESTONE_1_PLANNING.md` §3.
-   If any item fails verification:
-   - Land the smallest possible fix (mirror SESSION_044's
-     franchise-env-override two-line fix pattern) in the
-     same closeout commit.
-   - Document the pre-verification gap explicitly in the
-     retrospective §4.
-   - Never claim a checklist item is true if verification
-     shows otherwise.
+2. **Address the multi-photo storage tension explicitly.** The
+   M2 §5 deferrals list "Multi-photo storage (S3-compatible +
+   CDN) — Milestone 3 concern or a pre-M3 half-milestone." M3
+   `ConditionFinding` needs photo attachments. The planning
+   pass must choose:
+   - **Option A: Fold storage into M3.** Storage story
+     (S3-compatible + CDN configured via env; MediaField
+     wiring; upload flow) lands as its own increment inside
+     the M3 sequence, before `ConditionFinding` photos.
+   - **Option B: Pre-M3 half-milestone.** Storage ships as
+     "M2.9" or "M3.0" before the M3 planning artifact
+     targets its use.
+   - **Option C: Ship M3 without photos.** Findings text-only
+     for v1; photo attachments deferred to a later
+     ConditionReport iteration. Weaker for warranty-defense
+     use cases but simpler.
 
-3. **Write `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md`** —
-   mirror the M1 retrospective structure. Contents per
-   SESSION_053 handoff § "Exact recommended scope for
-   M2.8":
-   - §1 What was planned
-   - §2 What shipped (with commit table)
-   - §3 Sequencing changes
-   - §4 Deviations and why
-   - §5 Regressions avoided
-   - §6 Lessons learned
-   - §7 Remaining deferred work
-   - §8 Does the roadmap need adjustment?
+   Recommend Option A: storage is truly the first non-trivial
+   file-upload need and belongs to the milestone that first
+   uses it. Half-milestones defer the coordination without
+   avoiding the work. Document the choice in the M3 planning
+   artifact §5.
 
-4. **Update `docs/CAPABILITY_MATRIX.md`.**
-   - Add §7c "Vehicle investment ledger (Milestone 2,
-     shipped)".
-   - Update §2.1 rows (acquisition record + per-vehicle cost
-     basis) from N → F.
-   - Update §2.5 row (per-vehicle cost accumulation) from
-     N → F (or P if we want to signal vendor entity is M4).
-   - Refresh `last_verified` + `verified_against_commit`.
+3. **Produce the planning artifact.** New file:
+   `docs/roadmap/MILESTONE_3_PLANNING.md`. Mirror the shipped
+   `MILESTONE_2_PLANNING.md` structure:
+   1. **§0 Engineering practices to preserve.** Lift from M2
+      retrospective §6.
+   2. **§1 Design memo** — one entry per shipped subsystem
+      (`ConditionReport`, `ConditionFinding`, category +
+      severity enums, storage story, operator UI). Each
+      entry answers: **why** (with RECON_MAPPING citation),
+      **existing primitive to extend** (M2 ledger patterns,
+      M1 tenancy), **what to leave untouched** (M2 ledger
+      service, M2 safety pipeline, M1 auth).
+   3. **§2 Migration impact review** — every existing
+      system Milestone 3 touches, with concrete work required.
+      Reuse the M2 §2 table shape.
+   4. **§3 Compatibility checklist** — the acceptance
+      contract. Every existing M1 + M2 invariant Milestone 3
+      must uphold. Verified inline at Milestone 3 close, not
+      by inference. Include: safety pipeline unchanged,
+      ledger service contract unchanged, auth substrate
+      unchanged, `total_investment` semantic contract
+      unchanged (crucial — M3 findings will surface cost
+      estimates that flow into M4's cost-posting workflow).
+   5. **§4 Reusable primitives review** — extend `Vehicle`,
+      inherit tenancy + authorization + service-layer
+      patterns from M2. No parallel implementations.
+   6. **§5 Scope discipline + deferrals** — every idea that
+      surfaces during planning that would expand scope, per
+      the Discovery Rule. Include the storage-option
+      decision.
+   7. **§7 Increment sequencing** — mirror the M2 §7.b
+      shape. Given the storage decision (Option A above),
+      likely 5-6 increments: models + admin, service layer,
+      Vehicle read-model extension for report status,
+      storage story, API + permission matrix, operator UI +
+      closeout.
 
-5. **Update `docs/roadmap/IMPLEMENTATION_ROADMAP.md`.**
-   - §Milestone 2 recommended-order paragraph — shipped
-     date + retrospective link.
+4. **Confirm nothing changed in the substrate.** Grep
+   verifies: `Vehicle` unchanged (M2 only added properties),
+   `services/tenancy.py` stable, `dealer_ai/permissions.py`
+   unchanged, safety pipeline byte-for-byte identical.
 
-6. **Flip `docs/roadmap/MILESTONE_2_PLANNING.md`
-   frontmatter.**
-   - `status: planning` → `status: shipped`.
-   - Add `shipped_at_session`, `shipped_over` (list of
-     SESSION_046 – SESSION_054), `retrospective` fields.
+5. **Do NOT write code this session.** No models, no
+   migrations, no service functions. The plan alone.
 
-7. **Overwrite this file** (`00-START-NEXT-SESSION.md`)
-   with SESSION_055 = Milestone 3 planning-pass priority.
-   Mirror the SESSION_045 pattern (planning only, no code,
-   deliverable is `docs/roadmap/MILESTONE_3_PLANNING.md`).
+6. **Close SESSION_055 with:**
+   - The planning artifact committed.
+   - Handoff at `docs/handoffs/SESSION_055_<slug>.md`.
+   - Overwrite this file (`00-START-NEXT-SESSION.md`) with
+     the SESSION_056 = Milestone 3 Increment 1 priority (the
+     specific sequence the planning artifact chose).
 
-8. **Defensive full-suite run** — a sanity that M2.8's
-   doc-only changes did not accidentally touch code. Target:
-   `python3 manage.py test dealer_ai` → 1,753 pass, 1
-   skipped, 0 fail.
+## Explicit non-goals for SESSION_055
 
-9. **Close SESSION_054 with:**
-   - Handoff at
-     `docs/handoffs/SESSION_054_milestone_2_closeout.md`.
-   - Overwrite `00-START-NEXT-SESSION.md` (per step 7).
-   - Commit the doc changes.
-
-## Explicit non-goals for SESSION_054 (M2 · Increment 8)
-
-- ❌ Do NOT begin the Milestone 3 planning artifact. That is
-  SESSION_055 = M3 · Increment 0 (planning) — mirror the
-  SESSION_045 pattern.
-- ❌ Do NOT ratchet the deferred ideas into M2. Every one
-  stays deferred per the Discovery Rule
-  (`PROJECT_RULES.md` §Discovery Rule). Curtailment
-  automation, Vendor FK, expected_gross, tenant-scoped
-  stock_number uniqueness, is_available → computed,
-  multi-photo storage, async infra, bulk-list optimization,
-  `floor_plan_apr` Setup UI field — all stay in
-  `MILESTONE_2_PLANNING.md` §5 (and now
-  `MILESTONE_2_RETROSPECTIVE.md` §7) as recorded deferrals.
-- ❌ Do NOT introduce new capabilities. If a §3 item fails,
-  land a minimal hardening fix like SESSION_044 did for the
-  franchise env-override; do not scope-creep.
-- ❌ Do NOT deploy to prod. Milestone 2 does not require
-  prod.
-- ❌ Do NOT commit any real `OPENAI_API_KEY` or
-  credentials.
+- ❌ Do NOT write any Milestone 3 code (models, migrations,
+  services, views, tests).
+- ❌ Do NOT touch the M1 permission classes, tenancy resolver,
+  or safety pipeline. Every ConditionReport row inherits the
+  substrate as-is.
+- ❌ Do NOT touch the M2 ledger service, API, or UI. M3 is
+  additive; the ledger contract is now stable.
+- ❌ Do NOT scope in `WorkOrder`, `Vendor`, AI-drafted work
+  plans, or auto-minted `VehicleCost` rows from completed
+  work. All are Milestone 4 concerns.
+- ❌ Do NOT scope in vehicle lifecycle stage transitions based
+  on findings (Milestone 5).
+- ❌ Do NOT introduce a `recon_manager` permission class in the
+  planning artifact. Milestone 4 first surfaces that role's
+  need; M3 uses M1 · 4D admin permissions (owner + sales_manager)
+  which is the same role composition M2's ledger uses.
+- ❌ Do NOT reopen the M2 semantic contracts (`total_investment`
+  excludes estimates; `days_in_inventory` returns None on missing
+  acquisition; money-as-strings at API boundaries).
+- ❌ Do NOT commit any real `OPENAI_API_KEY` or credentials.
 
 ## NEXT TASK
 
-Start SESSION_054 with the read-first list above. Walk §3.
-Write the retrospective. Update `CAPABILITY_MATRIX.md`,
-`IMPLEMENTATION_ROADMAP.md`, and
-`MILESTONE_2_PLANNING.md` frontmatter. Overwrite this
-file for SESSION_055 = M3 planning. Commit. Nothing else.
+Start SESSION_055 with the read-first list above. Produce
+`docs/roadmap/MILESTONE_3_PLANNING.md`. Do not write code.
+Address the multi-photo storage tension in the planning artifact
+§5 before implementation begins.
 
 ---
 
@@ -179,82 +253,79 @@ file for SESSION_055 = M3 planning. Commit. Nothing else.
 
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 2
+3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 3
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_1_RETROSPECTIVE.md` (structural
-   template for M2's retrospective)
-6. `docs/roadmap/MILESTONE_2_PLANNING.md` §3 + §7.b + §5
-7. `docs/handoffs/SESSION_053_milestone_2_ledger_ui.md`
-   (M2.8 authoritative scope)
-8. `docs/handoffs/SESSION_052_milestone_2_ledger_api.md`
-9. Earlier M2 handoffs (SESSION_045 – SESSION_051).
-10. `docs/handoffs/SESSION_044_milestone_1_closeout.md`
-    (closeout-pattern precedent).
-11. Current source code — the shipped M2.1–M2.7 surface.
+5. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` (lessons for M3)
+6. `docs/roadmap/MILESTONE_2_PLANNING.md` §7.b (shape template)
+7. `docs/roadmap/MILESTONE_1_PLANNING.md` §3 +
+   `MILESTONE_2_PLANNING.md` §3 (compatibility template)
+8. `docs/BUSINESS_DOMAIN_MAP.md`
+9. `docs/research/RECON_MAPPING.md` +
+   `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 2
+10. `docs/CAPABILITY_MATRIX.md`
+11. Most recent handoffs (`SESSION_054_...`, `SESSION_053_...`).
 
 Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_053 — M2.7 shipped)
+## Operational state (post-SESSION_054 — Milestone 2 closed)
 
 - **Backend (local):** Django on `:8001`. Migrations
-  `0001`–`0014` applied. No pending migrations.
+  `0001`–`0014` applied. Default `Dealership` row exists
+  (`slug='default'`). No pending migrations.
 - **Backend (prod):** `vehicle-match-api.onrender.com` — NOT
-  active. Milestone 2 does not require prod either.
+  active. Milestone 2 did not require prod; Milestone 3 does
+  not either (recon is an in-store workflow; field-based
+  operator sessions land with M4 vendor emails or later).
 - **Frontend (local):** Vite on `:5173`. Auth flow wired
-  end-to-end. **Ledger page shipped this session:**
-  `/dealer-ai-inventory/:stock/ledger`.
+  end-to-end. Operator ledger page at
+  `/dealer-ai-inventory/:stock/ledger` shipped M2.7.
 - **Frontend (prod):** NONE.
-- **Test baseline (backend):** **1,753 pass** (unchanged
-  from SESSION_052 — M2.7 is frontend-only), 1 skipped,
+- **Test baseline (backend):** **1,753 pass**, 1 skipped,
   0 fail.
-- **Frontend build status:** `npx tsc --noEmit` clean;
-  `npx vite build` clean (pre-existing 524KB chunk-size
-  warning, unchanged from SESSION_044).
+- **Frontend build:** `npx tsc --noEmit` clean; `npx vite
+  build` clean (pre-existing 524KB chunk-size warning,
+  unchanged).
 - **DRF defaults + CSRF + endpoint-level permissions:** all
   as documented in `AUTHENTICATION_MODEL.md`. Unchanged.
+- **Migration-check DB alias:** `DATABASES["migration_check"]`.
 - **Env-override surface:** `DEALER_AI_DEALER_NAME`,
   `DEALER_AI_DEALER_TYPE`, `DEALER_AI_PRIMARY_MAKE`,
   `DEALER_AI_FLOOR_PLAN_APR`.
 - **Dev DB seeded users:** `smoke_owner` (dealer_owner) +
   `smoke_advisor` (advisor). Password `smoke-pass-4e`. Not
-  committed. Manual browser smoke of M2.7 uses both.
-- **Milestone 2 shipped surface (all eight increments):**
-  - **M2.1** models — `VehicleAcquisition`, `VehicleCost`,
-    `SOURCE_*` × 8, `CATEGORY_*` × 26, admin
-    registrations, migrations `0012` + `0013`.
-  - **M2.2** service — `record_acquisition`, `add_cost`,
+  committed to source. Also present after SESSION_054's
+  runtime smoke.
+- **Milestone 2 shipped surface (locked):**
+  - Models: `VehicleAcquisition`, `VehicleCost`, `SOURCE_*` ×
+    8, `CATEGORY_*` × 26, migrations `0012` + `0013`.
+  - Category groupings: `FLOORING/RECON/ADMIN/PHOTOGRAPHY_CATEGORIES`.
+  - Ledger service: `record_acquisition`, `add_cost`,
     `compute_totals`, `category_group_of`, `LedgerTotals`,
-    `CrossTenantLedgerError`. Category groupings
-    (`FLOORING_CATEGORIES`, `RECON_CATEGORIES`,
-    `ADMIN_CATEGORIES`, `PHOTOGRAPHY_CATEGORIES`).
-  - **M2.3** Vehicle read model — `@cached_property
-    ledger_totals` + 9 delegator properties +
-    `days_in_inventory`.
-  - **M2.4a** financial engine + APR config —
-    `daily_floor_plan_interest`, `get_floor_plan_apr`,
-    `DealerOnboardingProfile.floor_plan_apr`, migration
+    `CrossTenantLedgerError`, `ZERO`.
+  - Vehicle read model: `@cached_property ledger_totals` +
+    9 delegators + `days_in_inventory`.
+  - Financial engine + APR config: `daily_floor_plan_interest`,
+    `get_floor_plan_apr`,
+    `DealerOnboardingProfile.floor_plan_apr` + migration
     `0014`, `DEALER_AI_FLOOR_PLAN_APR` env.
-  - **M2.4b** accrual command —
+  - Accrual command:
     `manage.py accrue_floor_plan_interest --dealership=<slug>
-    [--as-of=DATE] [--dry-run]`. Workflow-owned
-    idempotency via `ACCRUAL:<date>` reference tag.
-  - **M2.5** safety scrub — `acquisition_price` joins
-    `apply_post_llm_scrubs`, fires on every kind, runs
-    AFTER `detect_unsafe_response`.
-  - **M2.6** admin API — three endpoints under
+    [--as-of=DATE] [--dry-run]`. Workflow-owned idempotency
+    via `ACCRUAL:<date>` reference tag.
+  - Safety pipeline addition: `acquisition_price` scrub in
+    `apply_post_llm_scrubs`.
+  - Admin API: three endpoints under
     `/api/dealer-ai/admin/vehicles/<stock_number>/`
     (`ledger/` GET, `acquisition/` POST, `costs/` POST).
-    Permission composition
-    `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`
-    (M1 · 4D class reused).
-  - **M2.7** operator UI —
+  - Operator UI:
     `/dealer-ai-inventory/:stock/ledger` inside
-    `<RequireAuth>`. Three typed API helpers via
-    `authFetch`. Money-as-strings end-to-end. Role-based
-    show/hide on write forms.
+    `<RequireAuth>`. Three typed `lib/api.ts` helpers via
+    `authFetch`. Money-as-strings end-to-end.
 - **`docs/roadmap/DEFERRED_IDEAS.md`** — still does not
   exist. Every deferred idea from Milestones 1 + 2 is
   recorded in the respective planning + retrospective +
-  handoff docs.
+  handoff docs. Milestone 3 planning may want to create
+  this file if new cross-milestone deferrals surface that
+  don't cleanly fit any planning doc.

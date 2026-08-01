@@ -94,8 +94,8 @@ reconciles the two.
 |---------------------|--------|------------------------------|-------|
 | Vehicle identity record (stock number, VIN, description) | F | §3.5 Vehicle model | Vehicle model with `stock_number` unique, VIN, YMM, features |
 | Multi-source inventory import (upsert, per-source) | F | §3.6 inventory_import | CSV importer with per-source upsert-by-stock discipline |
-| Acquisition record (source, purchase price, fees, purchase date) | N | §3.5 Vehicle model (target) | No VehicleAcquisition or equivalent |
-| Per-vehicle cost basis + running investment total | N | §3.5 Vehicle model (target) | No VehicleCost ledger |
+| Acquisition record (source, purchase price, fees, purchase date) | F | §3.5 Vehicle model + `services/vehicle_ledger.py` | Milestone 2 (SESSION_046+). `VehicleAcquisition` OneToOne with Vehicle; 8-value source enum; `record_acquisition` upsert. See `CAPABILITY_MATRIX.md` §7c. |
+| Per-vehicle cost basis + running investment total | F | §3.5 Vehicle model + `services/vehicle_ledger.py` | Milestone 2 (SESSION_046+). `VehicleCost` immutable rows across 26 categories (flooring/recon/admin/photography); `compute_totals` deterministic. Actual vs. estimated semantic contract locked. See `CAPABILITY_MATRIX.md` §7c. |
 | Floor plan advance / interest / curtailment tracking | N | §3.2 payment math (interest math reusable) | No floor plan schedule; no daily accrual |
 | Aging report + reprice cadence (Day 15/30/45/60/90/120) | N | §3.7 recommended-actions pattern (extends cleanly) | No aging bucket logic; no reprice suggestion generator |
 | Trade appraisal record (customer trade → wholesale value + allowance) | N | §3.2 payment math (some reuse) | No trade appraisal entity |
@@ -161,7 +161,7 @@ reconciles the two.
 | Bank reconciliation (statement to GL) | N | — | Not present |
 | Contracts-in-transit (CIT) schedule + funding tracking | N | — | Not present |
 | Floor plan reconciliation (schedule to lender statement) | N | — | Depends on floor plan entity (see 2.1) |
-| Per-vehicle cost accumulation | N | §3.5 Vehicle model (target) | Depends on cost entity (see 2.1) |
+| Per-vehicle cost accumulation | F | §3.5 Vehicle model + `services/vehicle_ledger.py` | Milestone 2 (SESSION_046+). `VehicleCost` + `LedgerTotals` computed. Vendor entity remains N (deferred to Milestone 4). See `CAPABILITY_MATRIX.md` §7c. |
 | Title arrival + aging + storage tracking | N | — | Not present |
 | Reserve receivable + product commission receivable schedules | N | — | Depends on F&I entities (see 2.4) |
 | Monthly close + trial balance + adjusting entries | N | — | Not present |
@@ -460,11 +460,19 @@ selling standalone to another dealer tomorrow.
   not scope them); vendor negotiation workflows; trade
   appraisal workflow (belongs to Milestone 11 sales-side).
 
-**Recommended order — second.** VCP names this as "the first
-day the product is worth selling standalone to another
-dealer." It also generates the data Milestone 4 (recon
-automation), Milestone 8 (operational intelligence), and
-Milestone 9 (sale + delivery gross reconciliation) need.
+**Recommended order — second. Shipped SESSION_046 → SESSION_054.**
+Eight sub-increments (M2.1 models · M2.2 service · M2.3 read
+model · M2.4a financial engine + APR config · M2.4b accrual
+command · M2.5 acquisition-price scrub · M2.6 admin API · M2.7
+operator UI · M2.8 verification + closeout). Full planning
+artifact at `docs/roadmap/MILESTONE_2_PLANNING.md`;
+retrospective at `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md`.
+Test baseline: 1,466 → 1,753 pass (+287); 1 skipped, 0 fail;
+zero regressions. VCP's "first day the product is worth selling
+standalone to another dealer" now delivers: an operator can
+enter an $18,500 auction buy + $475 buyer fees + $850 transport
++ $125 title and see *"$19,475 in it; asking $24,900; projected
+gross $5,425"* on the operator ledger page.
 
 ---
 
