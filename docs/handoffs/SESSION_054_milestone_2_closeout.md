@@ -8,7 +8,7 @@ milestone: 2
 milestone_status: shipped
 increment: 8
 increment_status: shipped
-commit: (pending)
+commit: b50c0e9
 ---
 
 # SESSION_054 — Milestone 2 · Increment 8 (M2.8 — verification + closeout)
