@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: in-progress
 increment: 7
 increment_status: shipped
-commit: TBD
+commit: 90cbf7c
 ---
 
 # SESSION_072 — Milestone 4 · Increment 7 (M4.7 — operator UI)
