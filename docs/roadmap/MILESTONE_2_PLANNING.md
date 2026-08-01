@@ -1013,13 +1013,35 @@ Planning docs are claims. Rules + research + code are facts.
 
 ---
 
-## 7. Increment sequencing (planned)
+## 7. Increment sequencing
 
 The design memo (§1) describes *what* Milestone 2 delivers. This
-section records *how* the work should be sliced into per-session
+section records *how* the work is sliced into per-session
 increments so each session ends with the app deployable and the
-test baseline healthy. Three increments per the VCP Weeks 3–5
-allocation.
+test baseline healthy.
+
+> **§7 was refined at SESSION_047 during Milestone 2 implementation.**
+> The original three-increment plan (M2.1 / M2.2 / M2.3) is
+> preserved verbatim below under §7.a as the historical planning
+> record. The as-shipped sequence (M2.1 through M2.8) lives under
+> §7.b. Do not treat §7.a as the current contract — read §7.b
+> for the increment boundaries every subsequent SESSION_04x
+> session is bound by.
+>
+> **Why the refinement.** SESSION_047's brief recognized that the
+> proposed M2.2 (twelve deliverables spanning ledger business
+> logic, Vehicle computed properties, API surfaces, permissions,
+> tenant scoping, acquisition-price safety, floor-plan math,
+> floor-plan configuration, and accrual command behavior) combined
+> too many independent concerns into a single session. That would
+> undo the increment discipline that made Milestone 1 successful.
+> Deferred work should be redistributed into small increments, not
+> accumulated into one large session. §7.b is the redistribution.
+
+### §7.a Original three-increment plan (preserved for history)
+
+Three increments per the VCP Weeks 3–5 allocation, as scoped at
+SESSION_045.
 
 ### Increment 1 (M2.1) — schema + model layer
 
@@ -1163,6 +1185,104 @@ full §3 compatibility sweep + retrospective.
 - ❌ No commit of any real `OPENAI_API_KEY`.
 - ❌ No deletion of the franchise config path or Freedom Ford
   demo assets.
+
+### §7.b Refined as-shipped increment sequence (SESSION_047+)
+
+Eight increments. Each one small enough that a single session ships
+it end-to-end with focused tests and full-suite verification. The
+scope-discipline reminders above still apply to every increment.
+
+- **M2.1 — Core ledger models (SHIPPED at SESSION_046,
+  commits `795fee4` + `882b8e5`).**
+  `VehicleAcquisition` + `VehicleCost` models, migrations `0012`
+  + `0013`, admin registrations, `SOURCE_*` × 8 and `CATEGORY_*`
+  × 26 module-level constants, `DATABASES["migration_check"]`
+  alias (per M1 lesson 2), 30 focused model tests. Test baseline:
+  1,466 → 1,496 pass. **Deviation from the original §7.a M2.1
+  scope:** the persistence layer shipped without the service
+  module or `Vehicle` `@property` methods (SESSION_046 brief
+  narrowed to persistence-only). Those absorbed into the M2.2 /
+  M2.3 boundary below.
+
+- **M2.2 — Ledger business service (SHIPPED at SESSION_047).**
+  `services/vehicle_ledger.py` with `LedgerTotals` dataclass +
+  `record_acquisition` upsert (returning `(instance, created)`) +
+  `add_cost` immutable-post-only + `compute_totals` deterministic
+  rollup + `category_group_of` classifier + `CrossTenantLedgerError`
+  fail-closed guard on every function. Category groupings
+  (`FLOORING_CATEGORIES`, `RECON_CATEGORIES`,
+  `ADMIN_CATEGORIES`, `PHOTOGRAPHY_CATEGORIES`) added to
+  `models.py`. 44 focused deterministic financial tests
+  (hand-verified dollar values). No migrations. No API. No
+  frontend. No `Vehicle` `@property` methods (that is M2.3).
+  **Load-bearing semantic decision recorded:** `total_investment`
+  equals acquisition_total + actual_cost_total *excluding* rows
+  where `is_estimate=True`. Estimated spend lives in
+  `estimated_cost_total`. `projected_total_investment` is the
+  sum of both. Rationale: labeling estimated spending as invested
+  money would mislead operators making disposition decisions —
+  the `is_estimate` field exists precisely because the
+  distinction matters at decision time.
+
+- **M2.3 — Vehicle computed properties (SESSION_048 = NEXT).**
+  `@property` accessors on `Vehicle` delegating to
+  `services/vehicle_ledger.compute_totals` for
+  `total_investment`, `projected_total_investment`,
+  `actual_cost_total`, `estimated_cost_total`, per-category
+  totals, `days_in_inventory`. Focused property tests. No API.
+  No frontend.
+
+- **M2.4 — Floor-plan math, APR configuration, accrual command.**
+  `services/payment_engine.py::daily_floor_plan_interest`
+  helper + tests.
+  `services/dealer_config.py::get_floor_plan_apr` resolver +
+  tests. `DealerOnboardingProfile.floor_plan_apr` nullable
+  field + migration `0014` (additive). `settings.py::DEALER_AI_FLOOR_PLAN_APR`
+  env var (mirroring the M1 · 4F pattern). `manage.py
+  accrue_floor_plan_interest --dealership=<slug> [--as-of=DATE]
+  [--dry-run]` command + tests (idempotency, dry-run purity,
+  tenant-required guard).
+
+- **M2.5 — Acquisition-price safety scrub (safety pipeline stage
+  17).** `services/llm_safety.py::_scrub_acquisition_price` +
+  `_ACQUISITION_PRICE_PATTERNS` block + branch in
+  `apply_post_llm_scrubs` firing on every `kind`. Positive AND
+  negative tests. Existing 16 scrub stages untouched.
+
+- **M2.6 — Ledger API + permission matrix.** Three endpoints
+  under `/api/dealer-ai/admin/vehicles/<stock_number>/…`:
+  `GET .../ledger/`, `POST .../acquisition/`, `POST .../costs/`.
+  Permission composition: `[IsAuthenticated &
+  IsSalesManagerOrOwnerAtActiveDealership]` on all three.
+  Focused six-case permission matrix per endpoint (unauth,
+  wrong-role, wrong-tenant, correct sales_manager, correct
+  dealer_owner, advisor → 403). URL registrations. Cross-tenant
+  `stock_number` lookups fail closed (404) — same shape as
+  `AdminLeadDetailFailsClosedAcrossTenants`.
+
+- **M2.7 — Operator ledger UI.** Frontend
+  `VehicleLedgerPage.tsx` at `/dealer-ai-inventory/:stock/ledger`,
+  inside `<RequireAuth>`. Three `lib/api.ts` helpers via
+  `authFetch`. "Ledger" link on each inventory-list card.
+  `useAuth()` role-gated show/hide on write forms
+  (belt-and-suspenders on top of server-side 403).
+  `npx tsc --noEmit` + `npx vite build` clean.
+
+- **M2.8 — Milestone verification + closeout.** Full §3
+  compatibility sweep with evidence recorded inline (mirror the
+  SESSION_044 pattern). `docs/CAPABILITY_MATRIX.md` §7c
+  "Vehicle investment ledger" enumerating shipped surface.
+  `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §2.1 rows for
+  acquisition + cost basis flipped `N` → `F`.
+  `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` written.
+  `00-START-NEXT-SESSION.md` overwritten with Milestone 3
+  planning-pass priority.
+
+**Increment discipline for §7.b.** Every session lands one
+increment. No session ever bundles two increments to "save time";
+the increment discipline that made Milestone 1 successful (each
+of 4A–4F ended with the app deployable and the baseline healthy)
+is preserved verbatim here.
 
 ---
 
