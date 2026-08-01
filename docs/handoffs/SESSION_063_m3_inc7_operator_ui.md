@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: in-progress
 increment: 7
 increment_status: shipped
-commit: TBD
+commit: 8e9a5b2
 ---
 
 # SESSION_063 — Milestone 3 · Increment 7 (M3.7 — operator condition-report UI)
