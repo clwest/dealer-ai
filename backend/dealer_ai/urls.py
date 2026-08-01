@@ -146,4 +146,29 @@ urlpatterns = [
         views.admin_condition_finding_detail,
         name="admin-condition-finding-detail",
     ),
+    # Milestone 3 · Increment 6B — photo API + local-mode receiver.
+    path(
+        "admin/vehicles/<str:stock_number>/findings/"
+        "<int:finding_id>/photos/request-upload/",
+        views.admin_condition_photo_request_upload,
+        name="admin-condition-photo-request-upload",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/findings/"
+        "<int:finding_id>/photos/",
+        views.admin_condition_photo_attach,
+        name="admin-condition-photo-attach",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/photos/"
+        "<uuid:public_id>/",
+        views.admin_condition_photo_delete,
+        name="admin-condition-photo-delete",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/findings/"
+        "<int:finding_id>/photos/local-upload/",
+        views.admin_condition_photo_local_upload_receiver,
+        name="admin-condition-photo-local-upload",
+    ),
 ]

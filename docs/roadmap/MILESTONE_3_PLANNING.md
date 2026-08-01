@@ -2148,7 +2148,7 @@ changes.
 - No modifications to any model, migration, admin, service
   (beyond imports), permissions, or frontend file.
 
-### Increment 6B (M3.6B) — Condition-report photo API + local-upload receiver — QUEUED for SESSION_062
+### Increment 6B (M3.6B) — Condition-report photo API + local-upload receiver — SHIPPED at SESSION_062
 
 **Split from M3.6 at SESSION_061.** Per scope-discipline
 pushback ("do not treat all ten proposed endpoints as
@@ -2200,6 +2200,137 @@ throughout).
 
 **Boundary.** Test baseline: 2,067 → ~2,107. No migrations.
 No frontend.
+
+**Shipped surface (SESSION_062).**
+
+- **Four endpoints wired** (matching planning contract):
+  - `POST admin/vehicles/<stock_number>/findings/<finding_id>/photos/request-upload/`
+    → `admin_condition_photo_request_upload`. Body:
+    `{content_type}`. Returns
+    `{upload_target: {method, upload_url, storage_key,
+    required_headers, expires_at}}`. `storage_key` in this
+    response is the narrow exception; locked with negative
+    tests everywhere else.
+  - `POST admin/vehicles/<stock_number>/findings/<finding_id>/photos/`
+    → `admin_condition_photo_attach`. Body: `{storage_key,
+    content_type, size_bytes, caption?}`. Returns
+    `{photo: <projection>}` with 201. Photo projection uses
+    `_project_photo` (M3.6A helper) — **storage_key absent**.
+  - `DELETE admin/vehicles/<stock_number>/photos/<uuid:public_id>/`
+    → `admin_condition_photo_delete`. Path uses `<uuid:public_id>`
+    (Django UUID converter); `storage_key` never touches URL
+    routing. Tenant + finding-report-vehicle-chain scoped via
+    new `_lookup_photo_or_404` helper. 204 on success.
+  - `POST admin/vehicles/<stock_number>/findings/<finding_id>/photos/local-upload/`
+    → `admin_condition_photo_local_upload_receiver`.
+    `@parser_classes([MultiPartParser])`. Returns 404 in S3
+    mode via `LocalUploadNotAvailableError` catch. Does NOT
+    create the `ConditionFindingPhoto` row — attach still
+    performs metadata verification.
+
+- **Two new serializers** (`serializers.py`):
+  - `PhotoRequestUploadSerializer` — `content_type` only.
+  - `PhotoAttachSerializer` — `storage_key`, `content_type`,
+    `size_bytes`, `caption`. `photo_uuid` NOT accepted (server
+    extracts via `parse_canonical_key`).
+
+- **One new lookup helper** (`views.py`):
+  - `_lookup_photo_or_404(dealership, vehicle, public_id)` —
+    tenant + `finding__report__vehicle` chain scoped.
+
+- **One new upload-target projection** (`_upload_target_response`)
+  — the ONLY place in the codebase that serializes
+  `storage_key` into an HTTP response body. Locked with
+  negative tests everywhere else.
+
+- **Cross-tenant `storage_key` on attach fails as 404**, not
+  404 with a specific "wrong tenant" message. This is the
+  same "never leak cross-tenant existence" pattern as M3.6A
+  vehicle / report / finding lookups.
+
+- **Domain-error mapping wired verbatim per spec:**
+  - `PhotoNotYetUploadedError` → 409.
+  - `PhotoMetadataMismatchError` → 409.
+  - `PhotoAlreadyAttachedError` → 409.
+  - `InvalidStorageKeyError` → 400.
+  - `InvalidContentTypeError` (aliased `StorageInvalidContentTypeError`)
+    → 400.
+  - `InvalidTTLError` → 400.
+  - `ObjectStorageError` → 502 with sanitized detail
+    (never leaks provider exception text).
+  - `LocalUploadNotAvailableError` → 404.
+  - `CrossTenantConditionReportError` → 404.
+  - `ConditionReportImmutableError` → 409.
+
+**Tests:**
+`backend/dealer_ai/tests/test_admin_condition_report_photos.py`
+— **57 tests** across 6 classes:
+
+- Permission matrix subclasses (`RequestUploadAuth`,
+  `AttachAuth`, `DeleteAuth`) — 3 endpoints × 6 outcomes each
+  (18 tests). `LocalUploadFlow` covers its own auth via the
+  business-flow class rather than a separate matrix subclass
+  (multipart is awkward to fit the shared mixin cleanly).
+- `RequestUploadFlow` (6) — valid MIME returns target,
+  invalid MIME → 400, missing content_type → 400, no row
+  created, TTL within cap, completed report → 409.
+- `AttachFlow` (10) — success + row projection, storage_key
+  absent from response, duplicate → 409, missing object →
+  409, size mismatch → 409, content_type mismatch → 409,
+  malformed key → 400, cross-tenant key → 404, completed
+  report → 409, no row on failure.
+- `DeleteFlow` (7) — success 204 + row removed, completed →
+  409, cross-tenant 404, unknown public_id 404, provider
+  failure → 502 with row retained, provider error message
+  sanitized, missing storage object still succeeds.
+- `LocalUploadFlow` (11) — local mode accepts multipart,
+  attach still required after, S3 mode returns 404, missing
+  file / storage_key / content_type → 400, arbitrary key
+  400, cross-tenant key 404, empty upload 400, oversized
+  400, invalid MIME 400.
+- `StorageKeyLeakageNegative` (5) — attach response omits
+  storage_key, latest-report response omits it, finding-
+  update response omits it, delete response has no body,
+  request-upload response IS the only place storage_key
+  appears (positive assertion completing the invariant).
+
+**Baseline delta.** 2,067 → 2,124 pass, 1 skipped, 0 fail
+(+57 tests, 0 regressions). No migrations. No frontend. No
+model / admin / service / permissions / requirements
+changes.
+
+**Files changed (SESSION_062).**
+
+- Modified: `backend/dealer_ai/serializers.py` — added
+  `PhotoRequestUploadSerializer`,
+  `PhotoAttachSerializer`, imports
+  `CONDITION_PHOTO_CONTENT_TYPE_CHOICES`.
+- Modified: `backend/dealer_ai/views.py` — added 4 view
+  functions + `_lookup_photo_or_404` helper +
+  `_upload_target_response` projection + extended imports
+  (photo domain errors + storage errors +
+  `ConditionFindingPhoto` model +
+  `PhotoAttachSerializer` / `PhotoRequestUploadSerializer`).
+- Modified: `backend/dealer_ai/urls.py` — 4 new URL patterns
+  (uses `<uuid:public_id>` converter for delete).
+- New: `backend/dealer_ai/tests/test_admin_condition_report_photos.py`
+  (~730 lines, 57 tests).
+- No modifications to any model, migration, admin,
+  `services/condition_report.py`, `services/photo_storage.py`,
+  `services/vehicle_ledger.py`, `services/tenancy.py`,
+  `services/llm_safety.py`, `permissions.py`,
+  `requirements.txt`, or any frontend file.
+
+**M3.6 executed as a two-increment sequence:**
+
+- M3.6A (SESSION_061) — 6 core report endpoints; 69 tests.
+- M3.6B (SESSION_062) — 4 photo endpoints; 57 tests.
+- Combined M3.6 shipped surface: **10 endpoints, 126 tests**,
+  1,998 → 2,124 baseline (+126).
+- The split preserved increment discipline without changing
+  any of the original planning contracts. Domain-error
+  mapping, permission composition, response projections all
+  identical between A + B.
 
 ### Increment 7 (M3.7) — Operator condition-report UI
 

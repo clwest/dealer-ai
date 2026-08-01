@@ -22,6 +22,7 @@ from .models import (
     ChatMessage,
     ChatSession,
     ConditionFinding,
+    ConditionFindingPhoto,
     ConditionReport,
     CustomerLead,
     DealerOnboardingProfile,
@@ -46,6 +47,8 @@ from .serializers import (
     DealerOnboardingProfileSerializer,
     ManagerChatInputSerializer,
     ONBOARDING_DEFAULTS,
+    PhotoAttachSerializer,
+    PhotoRequestUploadSerializer,
     SalespersonAdminSerializer,
     SalespersonPublicSerializer,
     StartChatSerializer,
@@ -90,6 +93,16 @@ from .services import photo_storage as photo_storage_service
 from .services.condition_report import (
     ConditionReportImmutableError,
     CrossTenantConditionReportError,
+    PhotoAlreadyAttachedError,
+    PhotoMetadataMismatchError,
+    PhotoNotYetUploadedError,
+)
+from .services.photo_storage import (
+    InvalidContentTypeError as StorageInvalidContentTypeError,
+    InvalidStorageKeyError,
+    InvalidTTLError,
+    LocalUploadNotAvailableError,
+    ObjectStorageError,
 )
 from decimal import ROUND_HALF_UP, Decimal as _Decimal
 
@@ -1949,3 +1962,429 @@ def admin_condition_finding_detail(request, stock_number, finding_id):
         .get()
     )
     return Response({"finding": _project_finding(updated)})
+
+
+# =========================================================================
+# Milestone 3 · Increment 6B — condition-report photo API (four endpoints)
+# =========================================================================
+#
+# Wires the M3.5 photo service to HTTP. Same governance +
+# permission composition + response projection contracts as M3.6A.
+#
+# Extended domain-error mapping (in addition to M3.6A):
+#
+#   PhotoNotYetUploadedError       → 409 Conflict
+#   PhotoMetadataMismatchError     → 409 Conflict
+#   PhotoAlreadyAttachedError      → 409 Conflict
+#   InvalidStorageKeyError         → 400
+#   InvalidContentTypeError        → 400
+#   InvalidTTLError                → 400
+#   ObjectStorageError             → 502 Bad Gateway
+#   LocalUploadNotAvailableError   → 404 (dev-only surface hidden
+#                                          in production S3 mode)
+#
+# ``storage_key`` invariants:
+#
+#   - APPEARS in ``request-upload`` responses (client needs it to
+#     hand back to ``attach``).
+#   - NEVER appears in any other response — attach, delete, latest-
+#     report projections all use ``public_id``.
+#   - Locked by explicit negative tests in
+#     ``test_admin_condition_report.py``.
+#
+# Local-upload transport:
+#
+#   - Behaves exactly like S3 upload from the workflow's perspective:
+#     request → upload → attach → verify → row. Never bypasses.
+#   - Returns 404 in S3 mode (not 501) — do not advertise dev-only
+#     surface.
+#   - Never creates the ``ConditionFindingPhoto`` row itself; the
+#     normal attach endpoint still performs metadata verification.
+
+
+def _lookup_photo_or_404(
+    dealership, vehicle, public_id
+):
+    """Tenant + finding-report-vehicle-chain scoped photo lookup.
+
+    ``public_id`` is the durable external identity (M3.1 refinement);
+    ``storage_key`` is never used for URL routing. Traverses
+    ``finding__report__vehicle`` to enforce the vehicle scope in
+    addition to the tenant scope.
+    """
+    try:
+        return ConditionFindingPhoto.objects.filter(
+            dealership=dealership,
+            finding__report__vehicle=vehicle,
+        ).get(public_id=public_id)
+    except ConditionFindingPhoto.DoesNotExist:
+        return None
+
+
+def _upload_target_response(upload_target) -> dict:
+    """Serialize an :class:`UploadTarget` for the request-upload
+    response.
+
+    This is the ONLY response projection that includes
+    ``storage_key`` — the client needs it to hand back to
+    ``attach_photo``. Every other photo response goes through
+    :func:`_project_photo` which omits ``storage_key``.
+    """
+    return {
+        "method": upload_target.method,
+        "upload_url": upload_target.upload_url,
+        "storage_key": upload_target.storage_key,
+        "required_headers": dict(upload_target.required_headers),
+        "expires_at": upload_target.expires_at,
+    }
+
+
+# ---- 7. Request upload target ---------------------------------------
+
+
+@api_view(["POST"])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_photo_request_upload(
+    request, stock_number, finding_id
+):
+    """Authorize a photo upload for a draft finding.
+
+    Returns ``{upload_target: {method, upload_url, storage_key,
+    required_headers, expires_at}}`` with 200. **Does NOT create a
+    ConditionFindingPhoto row** — that lands only after
+    :func:`attach_photo` HEAD-verifies the upload.
+
+    ``storage_key`` in the response is the narrow exception to the
+    "never expose storage_key" rule; the client needs it to
+    subsequently POST to the attach endpoint.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    finding = _lookup_finding_or_404(dealership, vehicle, finding_id)
+    if finding is None:
+        return Response(
+            {"detail": "Condition finding not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = PhotoRequestUploadSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        upload_target = condition_report_service.request_photo_upload(
+            finding,
+            dealership=dealership,
+            content_type=serializer.validated_data["content_type"],
+            uploaded_by=request.user,
+        )
+    except ConditionReportImmutableError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except StorageInvalidContentTypeError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    except InvalidTTLError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    except ObjectStorageError as exc:
+        return Response(
+            {"detail": "Upstream storage failure."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    return Response(
+        {"upload_target": _upload_target_response(upload_target)}
+    )
+
+
+# ---- 8. Attach photo (verified against actual object metadata) ------
+
+
+@api_view(["POST"])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_photo_attach(
+    request, stock_number, finding_id
+):
+    """Persist the ConditionFindingPhoto row after HEAD-verifying
+    the uploaded object metadata.
+
+    Response uses :func:`_project_photo` — **``storage_key`` is
+    NEVER exposed here**. Client identifies the resulting photo by
+    ``public_id``.
+
+    Five-verification path (delegated to
+    :func:`condition_report.attach_photo`): cross-tenant guard,
+    parent report is draft, canonical key shape, key namespace
+    matches dealership slug, actual object metadata matches
+    declared. Any mismatch → 409 with a specific domain-error
+    class.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    finding = _lookup_finding_or_404(dealership, vehicle, finding_id)
+    if finding is None:
+        return Response(
+            {"detail": "Condition finding not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = PhotoAttachSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        photo = condition_report_service.attach_photo(
+            finding,
+            dealership=dealership,
+            storage_key=serializer.validated_data["storage_key"],
+            content_type=serializer.validated_data["content_type"],
+            size_bytes=serializer.validated_data["size_bytes"],
+            caption=serializer.validated_data.get("caption", ""),
+            uploaded_by=request.user,
+        )
+    except CrossTenantConditionReportError as exc:
+        # storage_key referenced another dealership's namespace.
+        # Fail closed with 404 — do not leak that a key belongs to
+        # some other tenant.
+        return Response(
+            {"detail": "Condition finding not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except ConditionReportImmutableError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except PhotoNotYetUploadedError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except PhotoMetadataMismatchError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except PhotoAlreadyAttachedError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except InvalidStorageKeyError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    except ObjectStorageError as exc:
+        return Response(
+            {"detail": "Upstream storage failure."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    photo = (
+        ConditionFindingPhoto.objects.filter(pk=photo.pk)
+        .select_related("uploaded_by")
+        .get()
+    )
+    return Response(
+        {"photo": _project_photo(photo)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+# ---- 9. Delete photo (identified by public_id, never storage_key) ---
+
+
+@api_view(["DELETE"])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_photo_delete(
+    request, stock_number, public_id
+):
+    """Delete a photo by its public UUID.
+
+    Path identity is ``public_id`` — **storage_key is never used
+    for routing or lookup**. Tenant + vehicle scoped lookup fails
+    closed with 404 for both nonexistent and cross-tenant.
+
+    Delegates to :func:`condition_report.delete_photo` which
+    implements the storage-first strategy:
+    :func:`photo_storage.delete_object` runs FIRST; if it raises,
+    the DB row is retained and the caller sees 502. Only after
+    storage success does the row get dropped.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    photo = _lookup_photo_or_404(dealership, vehicle, public_id)
+    if photo is None:
+        return Response(
+            {"detail": "Condition finding photo not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        condition_report_service.delete_photo(
+            photo, dealership=dealership
+        )
+    except ConditionReportImmutableError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except ObjectStorageError as exc:
+        # Storage-first delete failed — the M3.5 service retained
+        # the DB row. Surface a sanitized 502.
+        return Response(
+            {"detail": "Upstream storage failure."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---- 10. Local-mode multipart upload receiver (dev only) ------------
+
+
+@api_view(["POST"])
+@parser_classes([MultiPartParser])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_photo_local_upload_receiver(
+    request, stock_number, finding_id
+):
+    """Local-mode substitute for a browser-to-S3 PUT.
+
+    **Returns 404 (not 501) when the active adapter is S3** — the
+    dev-only surface must not be advertised in production. If a
+    caller is running against a real S3-configured environment,
+    this endpoint appears not to exist.
+
+    Behaves exactly like S3 upload from the workflow perspective:
+    the M3.7 client (or a developer's manual test) POSTs bytes
+    here, and MUST STILL POST to the attach endpoint afterward.
+    The receiver does NOT create the
+    :class:`ConditionFindingPhoto` row — attach still runs the
+    five-verification path.
+
+    Request body: multipart with:
+      - ``file`` (required) — the raw bytes.
+      - ``storage_key`` (required) — the canonical key returned
+        by a prior ``request-upload`` response.
+      - ``content_type`` (required) — the MIME the upload
+        represents; must match what was authorized.
+
+    Returns ``{stored_metadata: {content_type, size_bytes,
+    exists}}`` with 201 on success.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    finding = _lookup_finding_or_404(dealership, vehicle, finding_id)
+    if finding is None:
+        return Response(
+            {"detail": "Condition finding not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Multipart fields — validate before touching storage.
+    uploaded_file = request.FILES.get("file")
+    storage_key = request.data.get("storage_key")
+    content_type = request.data.get("content_type")
+
+    if uploaded_file is None:
+        return Response(
+            {"detail": "Missing multipart field 'file'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not storage_key:
+        return Response(
+            {"detail": "Missing multipart field 'storage_key'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not content_type:
+        return Response(
+            {"detail": "Missing multipart field 'content_type'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Verify the supplied key namespace matches the caller's
+    # dealership. Defense-in-depth alongside
+    # :func:`photo_storage.parse_canonical_key`'s regex check.
+    try:
+        parsed_slug, _parsed_uuid = (
+            photo_storage_service.parse_canonical_key(storage_key)
+        )
+    except InvalidStorageKeyError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    if parsed_slug != dealership.slug:
+        return Response(
+            {"detail": "Storage key namespace does not match tenant."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Read the bytes once. ``.read()`` on Django's UploadedFile
+    # materializes into memory — the 25 MB ceiling in
+    # ``store_local_upload`` bounds the cost.
+    data = uploaded_file.read()
+
+    try:
+        metadata = photo_storage_service.store_local_upload(
+            storage_key=storage_key,
+            content_type=content_type,
+            data=data,
+        )
+    except LocalUploadNotAvailableError:
+        # Production S3 mode — hide the dev surface.
+        return Response(
+            {"detail": "Not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except StorageInvalidContentTypeError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    except InvalidStorageKeyError as exc:
+        # Also raised for zero-byte / oversized uploads per the
+        # ``store_local_upload`` docstring.
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    except ObjectStorageError as exc:
+        return Response(
+            {"detail": "Upstream storage failure."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    return Response(
+        {
+            "stored_metadata": {
+                "content_type": metadata.content_type,
+                "size_bytes": metadata.size_bytes,
+                "exists": metadata.exists,
+            }
+        },
+        status=status.HTTP_201_CREATED,
+    )

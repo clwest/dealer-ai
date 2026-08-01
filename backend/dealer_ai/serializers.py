@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import (
     ACQUISITION_SOURCE_CHOICES,
     CONDITION_CATEGORY_CHOICES,
+    CONDITION_PHOTO_CONTENT_TYPE_CHOICES,
     CONDITION_SEVERITY_CHOICES,
     VEHICLE_COST_CATEGORY_CHOICES,
     ChatMessage,
@@ -726,4 +727,47 @@ class ConditionFindingUpdateRequestSerializer(serializers.Serializer):
     )
     notes = serializers.CharField(
         required=False, allow_blank=True
+    )
+
+
+# ---- Milestone 3 · Increment 6B — photo API request serializers ----
+
+
+class PhotoRequestUploadSerializer(serializers.Serializer):
+    """Request body for POST ``.../findings/<finding_id>/photos/request-upload/``.
+
+    Client supplies only the intended MIME type. Server generates
+    the UUID + canonical key + presigned URL and returns them via
+    the ``UploadTarget`` projection. ``dealership``, ``finding``,
+    ``photo_uuid`` are all server-owned or URL-scoped.
+    """
+
+    content_type = serializers.ChoiceField(
+        choices=CONDITION_PHOTO_CONTENT_TYPE_CHOICES
+    )
+
+
+class PhotoAttachSerializer(serializers.Serializer):
+    """Request body for POST ``.../findings/<finding_id>/photos/``.
+
+    ``storage_key`` is the key the client received from a prior
+    ``request-upload`` response (or wrote to via the local-mode
+    receiver). ``content_type`` + ``size_bytes`` are the values the
+    client claims for HEAD verification against actual object
+    metadata. ``caption`` is optional.
+
+    ``photo_uuid`` is NOT accepted — the service extracts it from
+    ``storage_key`` via
+    :func:`photo_storage.parse_canonical_key`. ``dealership`` is
+    resolved server-side. ``uploaded_by`` is set from
+    ``request.user``.
+    """
+
+    storage_key = serializers.CharField(max_length=512)
+    content_type = serializers.ChoiceField(
+        choices=CONDITION_PHOTO_CONTENT_TYPE_CHOICES
+    )
+    size_bytes = serializers.IntegerField(min_value=1)
+    caption = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=255
     )
