@@ -8,7 +8,7 @@ milestone: 6
 milestone_status: in-progress
 increment: 4
 increment_status: shipped
-commit: TBD
+commit: 659078f
 ---
 
 # SESSION_085 — Milestone 6 · Increment 4 (M6.4 — deterministic rule integration)
@@ -181,7 +181,7 @@ class rename = **+24 net new tests**.
 
 ## Commit hashes
 
-- Session commit: **TBD** (populate at close before overwriting
+- Session commit: **659078f** (M6 ship commit; populate before overwriting
   `00-START-NEXT-SESSION.md`).
 
 ## Exact recommended scope for M6.5

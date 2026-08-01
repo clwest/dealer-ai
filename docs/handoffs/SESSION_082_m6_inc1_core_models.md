@@ -8,7 +8,7 @@ milestone: 6
 milestone_status: in-progress
 increment: 1
 increment_status: shipped
-commit: TBD
+commit: 659078f
 ---
 
 # SESSION_082 — Milestone 6 · Increment 1 (M6.1 — core persistence)
@@ -372,7 +372,7 @@ Three new files, 39 focused tests total (target ~35):
 
 ## Commit hashes
 
-- Session commit: **TBD** (populate at close before
+- Session commit: **659078f** (M6 ship commit; populate before
   overwriting `00-START-NEXT-SESSION.md`).
 
 ## Exact recommended scope for M6.2

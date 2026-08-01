@@ -8,7 +8,7 @@ milestone: 6
 milestone_status: in-progress
 increment: 5
 increment_status: shipped
-commit: TBD
+commit: 659078f
 ---
 
 # SESSION_086 — Milestone 6 · Increment 5 (M6.5 — endpoints + UI + §5.i refactor)
@@ -318,7 +318,7 @@ in-place fixture updates).
 
 ## Commit hashes
 
-- Session commit: **TBD** (populate at close before overwriting
+- Session commit: **659078f** (M6 ship commit; populate before overwriting
   `00-START-NEXT-SESSION.md`).
 
 ## Exact recommended scope for M6.6

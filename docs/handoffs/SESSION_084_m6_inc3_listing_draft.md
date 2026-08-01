@@ -8,7 +8,7 @@ milestone: 6
 milestone_status: in-progress
 increment: 3
 increment_status: shipped
-commit: TBD
+commit: 659078f
 ---
 
 # SESSION_084 — Milestone 6 · Increment 3 (M6.3 — listing draft + AI safety scrub)
@@ -237,7 +237,7 @@ One new file, 40 focused tests total (target ~40):
 
 ## Commit hashes
 
-- Session commit: **TBD** (populate at close before overwriting
+- Session commit: **659078f** (M6 ship commit; populate before overwriting
   `00-START-NEXT-SESSION.md`).
 
 ## Exact recommended scope for M6.4
