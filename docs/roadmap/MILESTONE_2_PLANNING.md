@@ -1258,20 +1258,44 @@ scope-discipline reminders above still apply to every increment.
   service stayed the write/business model. See §1.3 above for
   the layer contract annotation.
 
-- **M2.4 — Floor-plan math, APR configuration, accrual command.**
-  `services/payment_engine.py::daily_floor_plan_interest`
-  helper + tests.
-  `services/dealer_config.py::get_floor_plan_apr` resolver +
-  tests. `DealerOnboardingProfile.floor_plan_apr` nullable
-  field + migration `0014` (additive). `settings.py::DEALER_AI_FLOOR_PLAN_APR`
-  env var (mirroring the M1 · 4F pattern). `manage.py
-  accrue_floor_plan_interest --dealership=<slug> [--as-of=DATE]
-  [--dry-run]` command + tests (idempotency, dry-run purity,
-  tenant-required guard).
+- **M2.4a — Financial mathematics foundation (SHIPPED at
+  SESSION_049).**
+  `services/payment_engine.py::daily_floor_plan_interest(
+  principal, apr, days_elapsed) -> Decimal` — pure engine, no
+  DB, no dealership knowledge, no Vehicle knowledge, no ledger
+  writes. Reusable for future payoff / curtailment / lender-
+  balance calculations. Load-bearing financial rules locked
+  by tests: APR/principal/days-zero → `Decimal("0.00")`;
+  negative days → `Decimal("0.00")` (idempotency escape hatch);
+  negative principal / negative APR → `ValueError`
+  (data-corruption signal, not benign edge case); 365-day
+  year (documented); ROUND_HALF_UP (documented divergence from
+  banker's rounding). `DealerOnboardingProfile.floor_plan_apr`
+  nullable field + additive migration `0014`.
+  `services/dealer_config.py::get_floor_plan_apr` — layered
+  resolver DB → env → `Decimal("8.5")` default; silent
+  fall-through on unparseable env values.
+  `settings.py::DEALER_AI_FLOOR_PLAN_APR` env override
+  (M1 · 4F pattern). 37 focused tests including hand-verified
+  1-day / 30-day / 90-day / 365-day accruals + all edge cases.
+  **Split from original M2.4 scope** because the original
+  bundled ledger posting + management-command idempotency +
+  batch processing with the pure math + config layers; keeping
+  the engine pure before wiring the workflow around it is
+  cheaper to test and cleaner to reuse.
 
-- **M2.5 — Acquisition-price safety scrub (safety pipeline stage
-  17).** `services/llm_safety.py::_scrub_acquisition_price` +
-  `_ACQUISITION_PRICE_PATTERNS` block + branch in
+- **M2.4b — Floor-plan accrual command (NEXT — SESSION_050).**
+  `manage.py accrue_floor_plan_interest --dealership=<slug>
+  [--as-of=DATE] [--dry-run]` command — consumes the M2.4a
+  math + config to post `VehicleCost` rows via
+  `services.vehicle_ledger.add_cost` (never
+  `VehicleCost.objects.create` directly). Idempotency
+  (re-running same-day is a no-op), dry-run purity,
+  tenant-required guard.
+
+- **M2.5 — Acquisition-price safety scrub (safety pipeline
+  stage 17).** `services/llm_safety.py::_scrub_acquisition_price`
+  + `_ACQUISITION_PRICE_PATTERNS` block + branch in
   `apply_post_llm_scrubs` firing on every `kind`. Positive AND
   negative tests. Existing 16 scrub stages untouched.
 
