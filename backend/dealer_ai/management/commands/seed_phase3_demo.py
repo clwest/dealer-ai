@@ -466,7 +466,7 @@ _LOW_BAND_LEADS: List[Phase3Lead] = [
             "urgency": "this_week",
         },
         conversation_summary=(
-            "Repeat Freedom Ford customer — had a 2010 Focus. Wants "
+            "Repeat Dealer OS customer — had a 2010 Focus. Wants "
             "to stay Ford and is eyeing the 2014 Ford Fusion SE "
             "(#FF-USED-201, $11,995). $1k down available. Loyalty "
             "buyer — keep the relationship warm."

@@ -296,6 +296,28 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # stays a safety net.
     "VehiclePhoto",
     "VehicleListing",
+    # Milestone 7 · Increment 1 (SESSION_088) — job-run observability
+    # substrate. Extended per MILESTONE_7_PLANNING.md §5.e Option A
+    # (user-confirmed at SESSION_088 open) (19 → 20). ``JobRunLog`` has
+    # no parent-tenant relation (no ``session`` FK to walk), so the
+    # ``_parent_session_dealership_id`` branch is unreachable and the
+    # fallback path is always "attach the default tenant" — which is
+    # the right posture for jobs kicked off with no explicit tenant
+    # context. The ``@instrumented_task`` decorator overrides this
+    # default when a task receives a ``dealership_id`` kwarg (the
+    # explicit path that Django autofill defers to per resolution rule
+    # 1 in ``_auto_attach_default_dealership``).
+    "JobRunLog",
+    # Milestone 7 · Increment 3 (SESSION_090) — aging-per-stage
+    # snapshot substrate. Extended per MILESTONE_7_PLANNING.md §5.c
+    # Option A (user-confirmed at SESSION_088 open) (20 → 21).
+    # ``StageAgingSnapshot`` has no parent-tenant relation (unlike
+    # VehiclePhoto ⇐ Vehicle), so the ``_parent_session_dealership_id``
+    # branch is unreachable and the fallback path is "attach the
+    # default tenant." The M7.3 verb writes ``dealership`` explicitly
+    # on every row, so the autofill signal only fires when a caller
+    # bypasses the verb.
+    "StageAgingSnapshot",
 )
 
 

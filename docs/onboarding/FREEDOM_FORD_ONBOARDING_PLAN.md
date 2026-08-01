@@ -1,15 +1,15 @@
 ---
-title: Freedom Ford Dealer AI — onboarding plan (v0)
+title: Dealer OS Dealer AI — onboarding plan (v0)
 status: foundation — persistence (SESSION_008) + live AI wiring (SESSION_009) shipped
 generated: 2026-05-01
 updated: 2026-05-02
 audience: dealership managers, salespeople, pilot lead
 ---
 
-# Freedom Ford Dealer AI — onboarding plan (v0)
+# Dealer OS Dealer AI — onboarding plan (v0)
 
 This document covers the **first lightweight onboarding layer** for
-the Freedom Ford Dealer AI pilot. It is written for two audiences:
+the Dealer OS Dealer AI pilot. It is written for two audiences:
 
 - **Pilot lead / GM / sales manager** — what gets configured and why.
 - **Engineering** — what is in scope for v0 vs. deferred.
@@ -326,7 +326,7 @@ foundation. Adding any of them is a separate, scoped task.
   The current backend has session-based admin access for the
   manager dashboard; no further auth work happens here.
 - **Multi-tenant isolation.** This codebase serves one dealership
-  (Freedom Ford). Multi-tenant boundaries are a future architectural
+  (Dealer OS). Multi-tenant boundaries are a future architectural
   concern.
 - **Live AI behavior changes from onboarding inputs.** The fields
   for assistant greeting / banned phrases / approved phrases are

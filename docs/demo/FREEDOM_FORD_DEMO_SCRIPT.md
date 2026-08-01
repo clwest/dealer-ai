@@ -1,11 +1,11 @@
 ---
-title: Freedom Ford Dealer AI — 5-minute demo script
+title: Dealer OS Dealer AI — 5-minute demo script
 status: active
 generated: 2026-05-01
 test_baseline: 1111 backend tests passing, frontend tsc/build clean
 ---
 
-# Freedom Ford Dealer AI — 5-minute demo script
+# Dealer OS Dealer AI — 5-minute demo script
 
 Run this script when showing the AI Sales Assistant to dealership
 staff (sales managers, owner, GM). Goal: prove the system handles

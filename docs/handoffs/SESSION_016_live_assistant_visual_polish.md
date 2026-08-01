@@ -40,7 +40,7 @@ Use this snapshot to pick up at SESSION_017.
   **Real inventory · Payment-aware · No pressure**
 - `New chat` button kept; appears once `messages.length > 0`.
 
-The `Estimates only. A Freedom Ford advisor confirms real
+The `Estimates only. A Dealer OS advisor confirms real
 numbers.` disclaimer beneath the composer was preserved verbatim.
 
 ### 2. Buyer-friendly starter prompts

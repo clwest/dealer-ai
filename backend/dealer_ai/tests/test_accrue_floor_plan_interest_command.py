@@ -524,10 +524,13 @@ class TransactionSafety(TestCase):
         # Patch add_cost so the second call raises. First call
         # succeeds inside the atomic block; second raises → whole
         # transaction rolls back.
+        #
+        # SESSION_089 (M7.2): the orchestration body moved from the
+        # management command to ``services.floor_plan.accrual`` —
+        # the patch target follows.
         call_count = {"n": 0}
         real_add_cost_target = (
-            "dealer_ai.management.commands"
-            ".accrue_floor_plan_interest.add_cost"
+            "dealer_ai.services.floor_plan.accrual.add_cost"
         )
 
         def _fake_add_cost(*args, **kwargs):
@@ -567,9 +570,12 @@ class TransactionSafety(TestCase):
         # Dry-run mode skips the atomic block entirely (nothing to
         # roll back). Prove by patching transaction.atomic to raise
         # if called; dry-run should NOT trigger it.
+        #
+        # SESSION_089 (M7.2): the atomic block moved from the
+        # management command to ``services.floor_plan.accrual`` —
+        # the patch target follows.
         real_atomic_target = (
-            "dealer_ai.management.commands"
-            ".accrue_floor_plan_interest.transaction.atomic"
+            "dealer_ai.services.floor_plan.accrual.transaction.atomic"
         )
         with patch(real_atomic_target) as mock_atomic:
             call_command(

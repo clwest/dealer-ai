@@ -3472,3 +3472,224 @@ class VehicleListing(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 7 · Increment 1 — job-run observability substrate
+# ---------------------------------------------------------------------------
+
+JOB_RUN_STATUS_STARTED = "started"
+JOB_RUN_STATUS_SUCCEEDED = "succeeded"
+JOB_RUN_STATUS_FAILED = "failed"
+JOB_RUN_STATUS_RETRIED = "retried"
+
+JOB_RUN_STATUS_CHOICES = (
+    (JOB_RUN_STATUS_STARTED, "Started"),
+    (JOB_RUN_STATUS_SUCCEEDED, "Succeeded"),
+    (JOB_RUN_STATUS_FAILED, "Failed"),
+    (JOB_RUN_STATUS_RETRIED, "Retried"),
+)
+
+
+class JobRunLog(models.Model):
+    """Milestone 7 · Increment 1 — one row per Celery task invocation.
+
+    The observability substrate for every :func:`@instrumented_task`
+    invocation across M7.2-M7.5 scheduled jobs (and any ad-hoc
+    ``services/**/tasks.py`` module that opts in). Writes happen on
+    task start and task end (success / failure / retry) — the pair
+    lets an operator answer three questions from ``manage.py shell``,
+    the Django admin, or a future M8 dashboard:
+
+    1. *Did the scheduled job actually run?* (row exists with matching
+       ``task_name``).
+    2. *How long did it take?* (``duration_ms``).
+    3. *Did it fail, and if so, what did it say?* (``status='failed'``
+       + ``error_message``).
+
+    **Chosen at §5.e Option A** (user-confirmed at SESSION_088 open).
+    Prometheus counters (Option B) are deferred until the deploy stack
+    grows a Prometheus scrape target; when it does, an additive
+    decorator can wrap this model's write path without touching job
+    authors.
+
+    **Tenant-scoped when knowable.** The ``dealership`` FK is nullable
+    because some job runs are process-wide (e.g. a future "vacuum
+    orphaned rows across all tenants" reaper). Jobs that operate on a
+    single tenant thread that tenant through as an
+    :func:`@instrumented_task` context kwarg; the decorator writes
+    ``dealership_id`` on both the start and end rows.
+
+    **``args_summary`` is a truncated repr, not the full payload.**
+    Celery task args may contain user-supplied strings; storing the
+    full payload would risk leaking sensitive data into a queryable
+    log table. The decorator truncates to 255 chars — enough for
+    forensic pattern-matching, short enough to sidestep the leak.
+    The full payload is available on the broker until the task
+    completes; if forensic recovery is ever needed, a separate
+    structured-log substrate is the right home.
+
+    **Cross-tenant guard.** ``clean()`` is a no-op — this model has no
+    parent-tenant relation (a job run is a top-level artifact). The
+    :func:`services.tenancy._auto_attach_default_dealership` signal
+    still fires because ``JobRunLog`` is in the
+    ``_TENANT_CARRIER_MODEL_NAMES`` tuple (M7.1 extension 19 → 20),
+    but the resolver's parent-inheritance branch is unreachable for
+    this model (no ``session_id`` field), so the fallback path is
+    always "attach the default tenant" — which is the right posture
+    for jobs that were kicked off with no explicit tenant context.
+
+    Source of truth: ``docs/roadmap/MILESTONE_7_PLANNING.md`` §1.7 +
+    §5.e (Option A) + §7 M7.1.
+    """
+
+    # Dotted task path (e.g. ``services.floor_plan.tasks.accrue_daily_interest``).
+    # Indexed because the M8 dashboard's primary query is
+    # ``.filter(task_name=X).order_by('-started_at')``.
+    task_name = models.CharField(max_length=255, db_index=True)
+    status = models.CharField(
+        max_length=16,
+        choices=JOB_RUN_STATUS_CHOICES,
+        db_index=True,
+    )
+    # Set at start-log write time. Immutable — the end-log write goes
+    # to the *same row* via ``update_fields=('status', 'ended_at', ...)``
+    # so ``started_at`` never changes.
+    started_at = models.DateTimeField()
+    # Nullable at start-log write time — filled on end-log write
+    # (success / failure / retry).
+    ended_at = models.DateTimeField(null=True, blank=True)
+    # Whole-millisecond duration. Computed at end-log write time as
+    # ``(ended_at - started_at).total_seconds() * 1000`` and stamped
+    # onto the row. Nullable until the end-log write.
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    # Non-blank on ``status='failed'`` end-log writes. Truncated
+    # summary of the exception's ``__str__`` (full traceback lives in
+    # the structured log stream, not in this table).
+    error_message = models.TextField(blank=True, default="")
+    # Truncated repr of ``args + kwargs``, max 255 chars. See class
+    # docstring for the leak-avoidance rationale.
+    args_summary = models.CharField(max_length=255, blank=True, default="")
+    # Nullable — some jobs are process-wide. When set, the value is
+    # populated by the :func:`@instrumented_task` decorator from a
+    # ``dealership_id`` kwarg on the task invocation. Cross-tenant
+    # ``clean()`` is a no-op (no parent record to compare against).
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="job_run_logs",
+    )
+
+    class Meta:
+        # ``-started_at`` first so the M8 dashboard's default view
+        # (most-recent first) is a straight index scan.
+        ordering = ("-started_at",)
+        verbose_name = "Job run log"
+        verbose_name_plural = "Job run logs"
+        indexes = [
+            # Support the "did *this* job run in the last N days?" query
+            # per-tenant without a full-table scan. Composite because
+            # both fields are frequently constrained together on the M8
+            # dashboards.
+            models.Index(
+                fields=("task_name", "-started_at"),
+                name="jrl_task_started_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.task_name} [{self.status}] @ {self.started_at:%Y-%m-%d %H:%M:%S}"
+
+
+# ---------------------------------------------------------------------------
+# Milestone 7 · Increment 3 — aging-per-stage snapshot substrate
+# ---------------------------------------------------------------------------
+
+
+class StageAgingSnapshot(models.Model):
+    """Milestone 7 · Increment 3 — periodic per-stage aging snapshot.
+
+    One row per ``(dealership, stage, snapshot_at)`` tuple. Records how
+    many vehicles are currently in a given lifecycle stage and the
+    distribution of "days spent in stage" across them, expressed as
+    :attr:`vehicle_count` + :attr:`p50_days` (median) +
+    :attr:`p90_days` (90th percentile).
+
+    **Chosen at §5.c Option A** (user-confirmed at SESSION_088 open) —
+    persist snapshots rather than compute-on-read at M8 endpoint time.
+    Rationale: predictable dashboard latency at M8 justifies the extra
+    model + scheduled job. On-read aggregation would scan every
+    :class:`VehicleStage` row per request.
+
+    **The row is the M7.3 job's output.** The
+    :func:`services.lifecycle_aging.snapshots.snapshot_stage_ages`
+    verb writes one row per stage-with-vehicles for one tenant. Stages
+    with zero vehicles at snapshot time produce no rows — the M8
+    dashboard interprets absence as "no vehicles here right now."
+
+    **Percentile semantics.** ``p50_days`` is the median of "days
+    between :attr:`VehicleStage.entered_at` and snapshot time" across
+    every vehicle currently in the stage. ``p90_days`` is the 90th
+    percentile — the "long tail" days-in-stage the operator should
+    triage. Values are whole days (rounded down at computation time)
+    so aging on a fresh vehicle can read 0.
+
+    **Cross-tenant guard.** ``clean()`` is a no-op — the model has no
+    parent-tenant relation to compare against (unlike VehiclePhoto ⇐
+    Vehicle). The M7.3 verb writes ``dealership`` explicitly on every
+    row; the M7.1 tenant-carrier autofill signal fills in the default
+    tenant as a safety-net path if a caller bypasses the verb.
+
+    Source of truth: ``docs/roadmap/MILESTONE_7_PLANNING.md`` §1.3 +
+    §5.c (Option A) + §7 M7.3.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="stage_aging_snapshots",
+    )
+    # The lifecycle stage this snapshot describes. Uses the M5
+    # ``VEHICLE_STAGE_CHOICES`` vocabulary — M7.3 does not introduce
+    # new stage values.
+    stage = models.CharField(
+        max_length=32,
+        choices=VEHICLE_STAGE_CHOICES,
+    )
+    # Snapshot wall-clock time. Populated by the verb at write time so
+    # M8 aggregations can bucket by (stage, snapshot_at) without a
+    # separate ``captured_at`` field.
+    snapshot_at = models.DateTimeField(db_index=True)
+    vehicle_count = models.PositiveIntegerField()
+    # Whole-day p50 (median) days-in-stage across
+    # ``vehicle_count`` vehicles. Zero is a legal value —
+    # a vehicle that entered its current stage today reads 0 days.
+    p50_days = models.PositiveIntegerField()
+    p90_days = models.PositiveIntegerField()
+
+    class Meta:
+        # ``-snapshot_at`` first so the M8 dashboard's default "most-
+        # recent snapshot first" view is a straight index scan.
+        ordering = ("-snapshot_at", "stage")
+        verbose_name = "Stage aging snapshot"
+        verbose_name_plural = "Stage aging snapshots"
+        indexes = [
+            # Support the "aging history for tenant X, stage Y" query
+            # per M8 dashboards without a full-table scan. Composite
+            # because the M8 aggregation always constrains all three
+            # columns together.
+            models.Index(
+                fields=("dealership", "stage", "-snapshot_at"),
+                name="sas_tenant_stage_time_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_stage_display()} aging "
+            f"(n={self.vehicle_count}, "
+            f"p50={self.p50_days}d, p90={self.p90_days}d) "
+            f"@ {self.snapshot_at:%Y-%m-%d %H:%M}"
+        )

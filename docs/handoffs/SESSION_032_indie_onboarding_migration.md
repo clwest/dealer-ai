@@ -250,7 +250,7 @@ Unchanged from SESSION_031. Full pivot remains shipped; all
 franchise-config paths preserved.
 
 - ❌ Do not delete the franchise config path.
-- ❌ Do not reintroduce hardcoded "Sam Wampler" / "Freedom Ford" /
+- ❌ Do not reintroduce hardcoded "Sam Wampler" / "Dealer OS" /
   Ford-model strings in default paths.
 - ❌ Do not change chat behavior contracts. 1300-test baseline
   must stay green.
@@ -298,7 +298,7 @@ Concrete opportunities:
 ### Cosmetic tech-debt still open
 
 - Adopt-generated titles in `docs/PROJECT_WHAT_IT_IS.md` and
-  `docs/BUILD_PLAN.md` still say `# Freedom Ford — …` because
+  `docs/BUILD_PLAN.md` still say `# Dealer OS — …` because
   `context-kit adopt` derives project name from git working
   directory. Full fix requires either a git-repo rename or a
   `--project-name` flag in adopt.

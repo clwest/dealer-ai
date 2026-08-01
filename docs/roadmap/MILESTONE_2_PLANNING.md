@@ -1241,7 +1241,7 @@ full §3 compatibility sweep + retrospective.
 - ❌ No async / Celery.
 - ❌ No `demo/*` gating decision (separate scope per M1 §7).
 - ❌ No commit of any real `OPENAI_API_KEY`.
-- ❌ No deletion of the franchise config path or Freedom Ford
+- ❌ No deletion of the franchise config path or Dealer OS
   demo assets.
 
 ### §7.b Refined as-shipped increment sequence (SESSION_047+)

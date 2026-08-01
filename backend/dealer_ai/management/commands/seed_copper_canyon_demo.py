@@ -4,7 +4,7 @@ The invented independent-dealer persona that ships as the kit's
 default demo per docs/research/INDEPENDENT_DEALER_PIVOT.md. 45 mixed-make used
 units, $4k–$25k, truck/SUV-heavy, 3–10 yrs old, no OEM feed, no CPO,
 no captive finance. Runs alongside :mod:`seed_demo_vehicles` (the
-Freedom Ford franchise-config seed); the two are keyed by
+Dealer OS franchise-config seed); the two are keyed by
 ``source="copper_canyon_demo"`` and ``source="demo_seed"``
 respectively so an admin can load one, the other, or both without
 collision.

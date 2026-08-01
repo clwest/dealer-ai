@@ -1,5 +1,5 @@
 ---
-title: Freedom Ford Dealer AI — assistant / agent creation roadmap
+title: Dealer OS Dealer AI — assistant / agent creation roadmap
 status: planning sketch — not yet implemented
 generated: 2026-05-01
 ---
@@ -46,7 +46,7 @@ The **store-level AI persona.** One per dealership.
 |---|---|---|
 | `id` | UUID | Primary key |
 | `dealership` | FK → `Dealership` | Owner. One DealerAssistant per dealership in v1; multiple variants (e.g., service vs. sales) deferred. |
-| `display_name` | str | "Freedom Ford Sales Assistant" |
+| `display_name` | str | "Dealer OS Sales Assistant" |
 | `greeting` | text | First message shown on the empty chat. Captured in onboarding Step 5. |
 | `voice_profile` | FK → `VoiceProfile` | Selected preset (warm / consultative / etc). |
 | `store_policy` | FK → `StorePolicyProfile` | Pricing comfort, finance rules, disclaimers. |

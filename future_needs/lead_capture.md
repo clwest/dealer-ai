@@ -1,4 +1,4 @@
-Want me to send these options to someone at Freedom Ford so they can help you check availability?
+Want me to send these options to someone at Dealer OS so they can help you check availability?
 
 {
   "name": "",

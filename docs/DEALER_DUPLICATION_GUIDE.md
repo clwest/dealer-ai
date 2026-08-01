@@ -9,7 +9,7 @@ audience: developer + dealership operations
 # Dealer Duplication Guide
 
 This guide is for taking the **Dealer AI Kit** — currently
-shipping with Sam Wampler's Freedom Ford McAlester as Dealer #1
+shipping with Sam Wampler's Dealer OS McAlester as Dealer #1
 — and standing up a second dealership (Chevy, Toyota, an
 independent used-car lot, anything) **without forking the
 repository**.
@@ -292,7 +292,7 @@ phase entirely and configure it in Phase 2.
 - The chat behavior is brand-agnostic — it'll work for any
   dealer with valid inventory in the backend.
 - For demos before real inventory is wired up, the existing
-  Freedom Ford backend data continues to serve responses;
+  Dealer OS backend data continues to serve responses;
   swap it out before a customer-facing pilot.
 
 ---
@@ -328,7 +328,7 @@ without a fork. That's the contract.
 - **Kit** — this codebase. The Dealer AI Kit. One repository,
   many possible dealer configurations.
 - **Dealer** — the dealership using the kit. Currently
-  Sam Wampler's Freedom Ford McAlester (Dealer #1).
+  Sam Wampler's Dealer OS McAlester (Dealer #1).
 - **Active dealer** — the dealer identity edited in Setup and
   loaded at runtime via `useBrand()`.
 - **Default dealer** — the fallback identity in

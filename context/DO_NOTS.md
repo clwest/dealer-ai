@@ -10,7 +10,7 @@ wrong even if the LLM "agrees" with it. The LLM is a language layer.
   W.A.C. ("with approved credit"). The post-LLM scrub is a safety net,
   not the source of truth — input blocks must be clean too.
 - **Do NOT speculate about specific dealer financing terms or rate
-  approvals.** Defer to a Freedom Ford advisor. The pre-LLM rate-inquiry
+  approvals.** Defer to a Dealer OS advisor. The pre-LLM rate-inquiry
   guard returns the canned response without invoking the model.
 - **Do NOT reveal dealer cost, invoice price, internal margins, holdback,
   or acquisition cost.** Pre-LLM guard refuses these and the post-LLM

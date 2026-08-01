@@ -51,7 +51,7 @@ class OnboardingDealershipFieldsTests(TestCase):
     def test_put_saves_dealership_fields(self):
         body = {
             **ONBOARDING_DEFAULTS,
-            "dealership_name": "Freedom Ford Tulsa",
+            "dealership_name": "Dealer OS Tulsa",
             "store_location": "Tulsa, OK",
             "main_brands": "Ford + multi-brand used",
             "sales_phone": "(918) 555-0100",
@@ -61,7 +61,7 @@ class OnboardingDealershipFieldsTests(TestCase):
         self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(DealerOnboardingProfile.objects.count(), 1)
         profile = DealerOnboardingProfile.objects.get()
-        self.assertEqual(profile.dealership_name, "Freedom Ford Tulsa")
+        self.assertEqual(profile.dealership_name, "Dealer OS Tulsa")
         self.assertEqual(profile.store_location, "Tulsa, OK")
         self.assertEqual(profile.main_brands, "Ford + multi-brand used")
         self.assertEqual(profile.sales_phone, "(918) 555-0100")
@@ -208,7 +208,7 @@ class OnboardingAssistantBehaviorTests(TestCase):
     def test_put_saves_assistant_behavior(self):
         body = {
             **ONBOARDING_DEFAULTS,
-            "dealership_greeting": "Welcome to Freedom Ford. Tell me what you're shopping for.",
+            "dealership_greeting": "Welcome to Dealer OS. Tell me what you're shopping for.",
             "approved_phrases": "Want me to set up a closer look?\nWith approved credit",
             "banned_phrases": "guaranteed approval\nbest price ever",
             "escalation_rule": "When a customer asks about specific financing terms, hand off to next available.",
@@ -217,7 +217,7 @@ class OnboardingAssistantBehaviorTests(TestCase):
         res = self.client.put(URL, data=json.dumps(body), content_type="application/json")
         self.assertEqual(res.status_code, 200, res.content)
         profile = DealerOnboardingProfile.objects.get()
-        self.assertIn("Welcome to Freedom Ford", profile.dealership_greeting)
+        self.assertIn("Welcome to Dealer OS", profile.dealership_greeting)
         self.assertIn("closer look", profile.approved_phrases)
         self.assertIn("guaranteed approval", profile.banned_phrases)
         self.assertIn("hand off", profile.escalation_rule)
@@ -275,7 +275,7 @@ class OnboardingRoundTripTests(TestCase):
     def test_get_after_save_returns_persisted_values(self):
         body = {
             **ONBOARDING_DEFAULTS,
-            "dealership_name": "Freedom Ford Tulsa",
+            "dealership_name": "Dealer OS Tulsa",
             "store_location": "Tulsa, OK",
             "sales_tone": "Direct + fast-paced",
             "salesperson_name": "Sarah Lin",
@@ -289,7 +289,7 @@ class OnboardingRoundTripTests(TestCase):
         load = self.client.get(URL)
         self.assertEqual(load.status_code, 200, load.content)
         data = load.json()
-        self.assertEqual(data["dealership_name"], "Freedom Ford Tulsa")
+        self.assertEqual(data["dealership_name"], "Dealer OS Tulsa")
         self.assertEqual(data["store_location"], "Tulsa, OK")
         self.assertEqual(data["sales_tone"], "Direct + fast-paced")
         self.assertEqual(data["salesperson_name"], "Sarah Lin")

@@ -553,7 +553,61 @@ shipped vs. deferred.
 - **Physical-delete reaper for tombstoned photos**
   — safer-direction deletion is shipped; the
   eventual reaper is deferred to Milestone 7 async
-  infrastructure.
+  infrastructure. **Shipped at Milestone 7 · Increment 5
+  (SESSION_092)** — see §7h below.
+
+---
+
+## 7h. Async infrastructure (Milestone 7, shipped)
+
+Milestone 7 (SESSION_088 → SESSION_093) shipped the
+Celery + Redis substrate + four scheduled job families +
+the cross-cutting `JobRunLog` observability layer.
+Beat scheduler wired at hourly cadence 02:00 – 05:00
+project-time so the four job families run in
+non-overlapping maintenance windows. **No frontend, no
+HTTP endpoints, no changes to M1–M6 business logic** —
+the async layer is pure background runtime, invisible to
+the operator until Milestone 8 dashboards land. See
+`docs/roadmap/MILESTONE_7_PLANNING.md` +
+`docs/roadmap/MILESTONE_7_RETROSPECTIVE.md` for what
+shipped vs. deferred.
+
+| Domain | Surface (M7.1 – M7.5) | Notes |
+| --- | --- | --- |
+| Task-queue substrate (M7.1) | New `backend/dealer_kit/celery.py` module — module-level `celery.Celery("dealer_kit")` app instance + `config_from_object("django.conf:settings", namespace="CELERY")` + `autodiscover_tasks()`. `backend/dealer_kit/__init__.py` exposes `celery_app` at project-package load time. Settings block: `REDIS_URL` env → `CELERY_BROKER_URL` + `CELERY_RESULT_BACKEND`; `CELERY_TASK_ALWAYS_EAGER = _is_running_tests()` (mirrors M5.5 test-only signal pattern); `CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"`; `CELERY_TIMEZONE = TIME_ZONE`; JSON-only serialization pins (`task_serializer` / `result_serializer` / `accept_content`). `requirements.txt` pinned: `celery[redis]==5.5.3`, `django-celery-beat==2.8.1`, `redis==6.4.0`. | **Broker choice per SESSION_088 §5.a Option A user-confirmed** (Redis over LISTEN/NOTIFY / RabbitMQ). **Framework per §5.b Option A** (Celery over RQ / Dramatiq). Env-driven `REDIS_URL` moves prod to managed Redis without code change. DB scheduler enables per-schedule edits via Django admin. |
+| Observability substrate (M7.1) | New `dealer_ai/services/jobs/__init__.py` + `jobs/instrumentation.py::@instrumented_task` decorator wrapping every task with structured start / end logging + one `JobRunLog` row per invocation (updated in-place on end) + retry-on-transient-error policy (`INSTRUMENTED_TRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError)`; max 3 retries; exponential backoff with jitter, cap 10 min). New `JobRunLog` model + migration `0020` (fields: `task_name` indexed, `status` from `JOB_RUN_STATUS_CHOICES` — started/succeeded/failed/retried, `started_at` / `ended_at` / `duration_ms` / `error_message` / `args_summary` (truncated ≤255 chars) / `dealership` FK SET_NULL nullable). Composite index `(task_name, -started_at)`. Tenancy-carrier autofill signal wires it in as the 20th entry. | **Per SESSION_088 §5.e Option A user-confirmed** — DB model, not Prometheus (Option B deferred until deploy stack grows a scrape target). `args_summary` truncated to 255 chars to sidestep sensitive-data leaks into a queryable log table. `dealership_id` kwarg propagates from task invocation to audit row via the decorator. |
+| Floor-plan accrual (M7.2) | New `dealer_ai/services/floor_plan/` package: `__init__.py` facade + `accrual.py::accrue_daily_interest(dealership, *, as_of=None, dry_run=False)` verb + `tasks.py` with two Celery tasks (`accrue_daily_interest_for_tenant` per-tenant worker + `accrue_daily_interest_for_all_tenants` orchestrator). M2 `accrue_floor_plan_interest` management command rewritten as 137-line CLI adapter (from 419 lines) — CLI surface (`--dealership` / `--as-of` / `--dry-run`) preserved verbatim. Beat entry `"floor-plan-accrual-daily-02-00"` at 02:00 project-time. | **Idempotency preserved** — same-day re-runs post 0 rows (M2 duplicate detection via `reference='ACCRUAL:<iso-date>'`). Whole-run atomicity in live mode; dry-run skips the atomic block. Verb owns orchestration; command owns CLI adaptation; task shell owns registration + audit. |
+| Aging-per-stage snapshot (M7.3) | New `StageAgingSnapshot` model + migration `0021` (fields: `dealership` FK CASCADE, `stage` from `VEHICLE_STAGE_CHOICES`, `snapshot_at` DateTimeField indexed, `vehicle_count`/`p50_days`/`p90_days` PositiveIntegerField). Composite index `(dealership, stage, -snapshot_at)`. Tenancy-carrier extended 20 → **21**. New `dealer_ai/services/lifecycle_aging/` package: `snapshots.py::snapshot_stage_ages` verb + `tasks.py` per-tenant + orchestrator. Beat entry `"stage-aging-snapshot-daily-03-00"` at 03:00 project-time. | **Chosen at SESSION_088 §5.c Option A user-confirmed** — persist snapshots rather than compute-on-read (predictable M8 dashboard latency justifies the model). **Nearest-rank percentiles** (not linear interpolation) — preserves worst-case values for long-tail M8 signals. Days-in-stage clamps to 0 for future-dated `entered_at` (clock-skew defense). Reads `VehicleStage.entered_at` via `.values()` (fleet-scale efficient). Stages with 0 vehicles produce no rows (absence signals "empty stage"). |
+| Vendor SLA warnings (M7.4) | New `dealer_ai/services/vendor_sla/` package: `detection.py::detect_sla_breaches` verb (**read-only** — emits `logging.WARNING` records per breach, no DB writes beyond the `JobRunLog` audit row) + `SlaBreach` / `SlaBreachReport` dataclasses + `_classify_in_progress` + `_classify_approved` rule branches. Three locked policy constants: `APPROVED_STALE_THRESHOLD_DAYS = 7`, `IN_PROGRESS_ETA_GRACE_DAYS = 0`, scope `venue='outsourced'` only. Query-level narrowing: `venue='outsourced' AND status__in=(approved, in_progress)` — terminal / draft / in-house rows never reach Python. Two Celery tasks + Beat entry `"vendor-sla-scan-daily-04-00"` at 04:00 project-time. | **Three implementation-time thresholds confirmed at SESSION_091 open** (all recommendations). Missing `estimated_completion_date` / missing `approved_at` deliberately NOT flagged (data-quality issues, not SLA breaches — the M4.2 service should have prevented them). Notification channels (email / SMS / phone) are Milestone 11+; M7 emits log records only. Per-dealer configurability deferred. |
+| Photo tombstone reaper (M7.5) | Restructured `services/photo_gallery.py` → `services/photo_gallery/__init__.py` (via `git mv` + two relative-import bumps; zero-breaking verified against 7 downstream import sites + 112 tests). New `services/photo_gallery/reaper.py::reap_tombstoned_photos` verb + `ReaperResult` dataclass + `PHOTO_RETENTION_DAYS = 30` constant. **Storage-first delete pattern** (M3.5) — bytes gone before row gone; storage failure leaves row intact for next-run retry. **Iteration-level failure isolation** — mid-batch storage failure counted + logged, remaining candidates still process. Two Celery tasks + Beat entry `"photo-tombstone-reaper-daily-05-00"` at 05:00 project-time. Extended `services/photo_storage.py` with sibling `delete_vehicle_photo_object` + `_validate_vehicle_photo_storage_key` — M6.2 substrate gap discovered (existing `delete_object` validated only M3.4 condition-report shape). | **Per SESSION_088 §5.d Option A user-confirmed** — fixed 30-day retention window; per-dealer configurability (§5.d Option C) deferred. Scheduled last in the daily M7 window (05:00) because the reaper is the only physically-deleting job — running after read-heavy M7.3 aggregation + write-heavy M7.2 accrual means the day's aggregations ran against pre-reap data. |
+| Beat schedule policy | Four entries at hourly cadence in `CELERY_BEAT_SCHEDULE`: `floor-plan-accrual-daily-02-00`, `stage-aging-snapshot-daily-03-00`, `vendor-sla-scan-daily-04-00`, `photo-tombstone-reaper-daily-05-00`. All fire orchestrator tasks; each orchestrator enqueues per-tenant tasks via `.delay()` (async in prod; synchronous under `CELERY_TASK_ALWAYS_EAGER=True` in tests). | **Non-overlapping windows** so operator triage is straightforward when one job family starts failing. Timezone alignment: Celery `CELERY_TIMEZONE = settings.TIME_ZONE` (`America/Chicago`) so `crontab(hour=2, minute=0)` means "02:00 project-time," not 02:00 UTC. Per-tenant local time deliberately not supported at v1 (accrual math is time-of-day agnostic; a per-tenant schedule would require N Beat entries or DB rows). |
+| Test baseline | +202 tests (M6 close **2,948** → M7 close **3,150**). Zero regressions. Zero migrations flagged by `makemigrations --check --dry-run`. `tsc --noEmit` + `vite build` clean (unchanged — M7 shipped no frontend). | Distribution: M7.1 +62, M7.2 +27, M7.3 +49, M7.4 +34, M7.5 +29, M7.6 +0 (docs-only). Test-relaxation pattern applied three times during M7 (M6.1 tenancy count at S_088, M7.1 Beat-schedule-empty at S_089, M7.1 tenancy count at S_090) — see M7 retrospective §6 lesson 14 for the codified pattern. |
+
+**What is NOT shipped in Milestone 7** (deferred per
+`MILESTONE_7_RETROSPECTIVE.md` §4):
+
+- **BHPH payment reminder cadence** (planning §1.6)
+  — no BHPH substrate at M7 time. Deferred to
+  Milestone 12.
+- **Per-dealer `photo_retention_days`** — fixed at 30
+  for v1; per-dealer configurability deferred.
+- **Per-dealer vendor-SLA thresholds** — three
+  constants locked at v1; per-dealer configurability
+  deferred.
+- **In-house tech-delay detection** — M7.4 scoped
+  outsourced-only.
+- **Prometheus counters** — Option B deferred until
+  deploy stack grows a scrape target.
+- **Job-history operator UI** — deferred; Django
+  admin + log inspection acceptable for v1. M8
+  dashboards will surface these.
+- **Multi-worker autoscaling / complex workflow DAGs**
+  — explicitly out-of-scope per M7 planning §1.
+- **Notification channels** (email / SMS / phone) —
+  Milestone 11+.
+- **Historical aging aggregation** — M7.3 writes
+  snapshots; M8 aggregates.
 
 ---
 
@@ -683,7 +737,7 @@ questions) or Shape B (coaching directive). Rejects free-form monologues.
   capability.
 - **Default seed inventory pivoted to Copper Canyon Auto** (Yuma, AZ —
   indie, mixed-make used only) as of SESSION_030 Phases 1–3. The
-  Freedom Ford franchise seed + demo script are preserved as an
+  Dealer OS franchise seed + demo script are preserved as an
   alternate-config reference (`docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`)
   and remain runnable via `DEALER_AI_DEALER_TYPE=franchise` +
   `DEALER_AI_PRIMARY_MAKE=Ford`. The Django project package rename

@@ -160,8 +160,8 @@ Result:
   version below was written manually.
 
 **Known cosmetic tech-debt:** the adopt-generated titles in
-`PROJECT_WHAT_IT_IS.md` (`# Freedom Ford — What It Is`) and
-`BUILD_PLAN.md` (`# Freedom Ford — Build Plan`) still say "Freedom
+`PROJECT_WHAT_IT_IS.md` (`# Dealer OS — What It Is`) and
+`BUILD_PLAN.md` (`# Dealer OS — Build Plan`) still say "Freedom
 Ford" because adopt derives project names from the git working
 directory (`freedom-ford/`). The one-paragraph project summary
 inside is correct (says "Dealer AI Kit"). Full title fix requires
@@ -175,11 +175,11 @@ growing a `--project-name` override flag. Left as tech-debt.
   test count `1218 → 1281` (both objective baseline + "honestly
   claim to a prospect" section); "Seed inventory is still 100%
   Ford (Tier 2 rebrand pending)" gap → replaced with a note
-  describing the Copper Canyon pivot shipped + Freedom Ford
+  describing the Copper Canyon pivot shipped + Dealer OS
   franchise-config preserved as alternate + `backend/dealer_kit/`
   rename; doc-path refs updated `FREEDOM_FORD_*` → `DEALER_KIT_*`.
 - `docs/CONTEXT_KIT_INVENTORY.md` — updated the low-signal intro
-  note: replaced Freedom Ford framing with "Dealer AI Kit";
+  note: replaced Dealer OS framing with "Dealer AI Kit";
   updated the referenced-doc bullet from
   `FREEDOM_FORD_BEHAVIOR_LAYER.md` → `DEALER_KIT_BEHAVIOR_LAYER.md`;
   added `backend/dealer_kit/` to the mentioned directory shape.
@@ -270,7 +270,7 @@ cd frontend && npx tsc --noEmit && npx vite build
   `DEALER_AI_PRIMARY_MAKE=<OEM>` +
   `DEALER_AI_DEALER_NAME=<name>`.
 - ❌ Do **not** reintroduce hardcoded "Sam Wampler" /
-  "Freedom Ford" / Ford-model strings in default paths.
+  "Dealer OS" / Ford-model strings in default paths.
 - ❌ Do **not** change chat behavior contracts. 1281-test baseline
   stays green (+ new tests for any new features).
 - ❌ Do **not** delete `docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md` or
@@ -312,7 +312,7 @@ the pivot doc "deferred" lists):
 Also worth considering (cosmetic tech-debt from Phase 5):
 
 - Adopt-generated titles in `PROJECT_WHAT_IT_IS.md` / `BUILD_PLAN.md`
-  still say *"Freedom Ford — …"* because adopt derives project
+  still say *"Dealer OS — …"* because adopt derives project
   name from the git working directory (`freedom-ford/`). Full fix
   requires either a git-repo rename (large, out of scope) or a
   `context-kit adopt --project-name` flag.

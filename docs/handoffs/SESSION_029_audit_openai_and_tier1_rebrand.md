@@ -16,7 +16,7 @@ Three phases in one session:
    provider code changes to handle reasoning-model parameter shape.
 3. **Tier 1 rebrand** — templatize dealer identity throughout the
    stack so no user-visible surface hardcodes "Sam Wampler" or
-   "Freedom Ford" anymore.
+   "Dealer OS" anymore.
 
 Also: took the Vercel frontend offline pending rebrand, reset the
 persisted `OnboardingProfile`, and killed the local Ollama process.
@@ -88,7 +88,7 @@ towing" — confirming the swap didn't regress the backend math.
 
 ## Phase 3 — Tier 1 rebrand (`71f5d48`)
 
-Removed all hardcoded "Sam Wampler" / "Freedom Ford" references
+Removed all hardcoded "Sam Wampler" / "Dealer OS" references
 from user-visible surfaces. **Runtime dealer identity is now
 templated** — the same code works for any dealership.
 
@@ -128,7 +128,7 @@ Setup UI change or an env flip takes effect immediately.
 ### Serializer defaults
 
 `backend/dealer_ai/serializers.py` `ONBOARDING_DEFAULTS`:
-- `dealership_name`: `"Freedom Ford"` → `""`
+- `dealership_name`: `"Dealer OS"` → `""`
 - `main_brands`: `"Ford (new) + multi-brand used"` → `""`
 
 ### Frontend
@@ -138,26 +138,26 @@ Setup UI change or an env flip takes effect immediately.
 - `frontend/index.html` `<title>` → `Dealer AI Kit` (no dealer).
 - Hero, SiteNav, LeadCaptureModal, GenerateAdModal, DealerAIDemo
   now interpolate `brand.dealershipName` / `brand.tagline` via
-  `useBrand()` instead of hardcoding "Freedom Ford" / "Sam Wampler".
+  `useBrand()` instead of hardcoding "Dealer OS" / "Sam Wampler".
 - "Find your next Ford" hero copy → "Find your next ride". Trade-in
   placeholder de-Ford-ified.
-- Historical Sam Wampler / Freedom Ford examples in `brand.ts`,
+- Historical Sam Wampler / Dealer OS examples in `brand.ts`,
   `EmbedAssistantPage`, `AssistantChat`, `AssistantVehicleCard`
   comments rewritten with generic placeholders.
 
 ### Tests
 
-46 tests broke because they asserted on "Freedom Ford" strings.
+46 tests broke because they asserted on "Dealer OS" strings.
 Fixed **without changing intent** via:
 
-- `@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")` at
+- `@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")` at
   class scope in 4 test files (`test_follow_up.py`,
   `test_handoff_and_reset.py`, `test_post_llm_safety.py`,
   `test_vehicle_assistant.py`) — 16 classes total.
 - Where tests did `assertEqual(response, TEMPLATE_CONSTANT)`, the
   assertion now wraps the constant with `_render(...)`.
-- Two substring assertions ("freedom ford advisor") flipped to
-  match the reworded phrasing "advisor from freedom ford".
+- Two substring assertions ("Dealer OS advisor") flipped to
+  match the reworded phrasing "advisor from Dealer OS".
 
 ### DB reset
 
@@ -175,7 +175,7 @@ configured.
   preserved).
 - `npx tsc --noEmit` → clean.
 - `npx vite build` → clean, 488 kB / 133 kB gzip.
-- `grep -rnE "Sam Wampler|Freedom Ford" frontend/src frontend/index.html
+- `grep -rnE "Sam Wampler|Dealer OS" frontend/src frontend/index.html
   backend/dealer_ai/services backend/freedom_ford` → **zero
   matches** except one historical docstring in `dealer_config.py`
   explaining what the module replaces.
@@ -214,10 +214,10 @@ that needs a rebrand-time update when a new frontend is deployed.
   `backend/dealer_ai/management/commands/seed_demo_vehicles.py`
 - Scenario copy in
   `backend/dealer_ai/management/commands/seed_demo_scenarios.py`
-- "Repeat Freedom Ford customer" note in
+- "Repeat Dealer OS customer" note in
   `backend/dealer_ai/management/commands/seed_phase3_demo.py`
 - `frontend/src/data/freedomFordInventorySample.ts` contents
-- Backend tests use "Freedom Ford" as fixture data — safe (kept
+- Backend tests use "Dealer OS" as fixture data — safe (kept
   intentionally so `@override_settings` decorator works)
 
 **Tier 3 — identifiers not text:**

@@ -97,7 +97,7 @@ def _good_variants_json() -> str:
         [
             {
                 "platform_hint": "facebook",
-                "headline": "Trucks ready at Freedom Ford",
+                "headline": "Trucks ready at Dealer OS",
                 "body": (
                     "Stock #FF-2025-002 is on the lot and priced for the "
                     "real world. Estimated payments W.A.C. — see an advisor "
@@ -119,7 +119,7 @@ def _good_variants_json() -> str:
                 "headline": "Your next truck is on the lot",
                 "body": (
                     "Stock #FF-2025-002, in stock and ready. Payments are "
-                    "estimates only and finalized by Freedom Ford with "
+                    "estimates only and finalized by Dealer OS with "
                     "approved credit."
                 ),
                 "cta": "Reply for details",

@@ -1,6 +1,6 @@
 # What This Is
 
-Freedom Ford Dealer AI is a **budget-constrained vehicle selection system**.
+Dealer OS Dealer AI is a **budget-constrained vehicle selection system**.
 
 It is **not a chatbot**. The chat surface is a thin language layer over a
 deterministic backend that does the actual work: parsing intent, computing

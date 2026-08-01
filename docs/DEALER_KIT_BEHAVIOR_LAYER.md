@@ -17,7 +17,7 @@ companion_docs: ["DEALER_KIT_SESSION_START.md", "PROJECT_WHAT_IT_IS.md", "CONTEX
 > **Reference implementation note (2026-07-31 pivot):** the shipped
 > default dealer is Copper Canyon Auto (Yuma, AZ — indie, mixed-make
 > used only). The examples in this doc were originally captured
-> against the Freedom Ford franchise reference implementation
+> against the Dealer OS franchise reference implementation
 > (SESSION_001–020) because that is the tested baseline. **The
 > contracts are identical for the Copper Canyon indie default** —
 > same voice rules, same UI source-of-truth boundary, same
@@ -481,7 +481,7 @@ the scrubs are the actual contract. This means:
 
 ## Last Verified
 
-- **Contracts:** 2026-05-01 (Freedom Ford franchise-config reference).
+- **Contracts:** 2026-05-01 (Dealer OS franchise-config reference).
 - **Pivot reframing:** 2026-07-31 (SESSION_031 Phase 5) — title,
   companion-doc list, persona identity slot, and this section
   updated for Copper Canyon indie default. Underlying contracts

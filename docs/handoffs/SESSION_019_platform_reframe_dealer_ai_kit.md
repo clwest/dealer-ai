@@ -8,9 +8,9 @@ test_baseline: 1210
 # Session handoff — platform reframe
 
 SESSION_019 reframes the project's mental model. The codebase is
-no longer *"Freedom Ford AI"* — it is the **Dealer AI Kit**, a
+no longer *"Dealer OS AI"* — it is the **Dealer AI Kit**, a
 reusable AI sales assistant platform for franchise dealerships.
-**Sam Wampler's Freedom Ford McAlester** remains Dealer #1 and
+**Sam Wampler's Dealer OS McAlester** remains Dealer #1 and
 the default configuration shipped with the kit; future
 dealerships are added as additional configurations **inside this
 same repository**, not as forks or separate codebases.
@@ -33,8 +33,8 @@ Single source of truth for two distinct concepts:
 
 - **`DEFAULT_DEALER: DealerConfig`** — the active dealer
   fallback when the onboarding profile is empty. Today
-  Sam Wampler's Freedom Ford McAlester:
-  - `dealershipName` — *"Sam Wampler's Freedom Ford"*
+  Sam Wampler's Dealer OS McAlester:
+  - `dealershipName` — *"Sam Wampler's Dealer OS"*
   - `storeLocation` — *"McAlester"*
   - `tagline` — *"Sam Wampler Make It Happen"*
   - `brand` — *"Ford"*
@@ -77,12 +77,12 @@ flow through `useBrand()` because they are not dealer-specific.
 | `EmbedAssistantPage.tsx` — `<img src>` | hard-coded path | `DEFAULT_DEALER.logoPath` |
 | `EmbedAssistantPage.tsx` — `Powered by …` footer | string literal | `Powered by ${PRODUCT.productSubtitle}` |
 | `lib/brand.ts` — `FALLBACK` | inline literals | re-export of `DEFAULT_DEALER.{dealershipName, storeLocation, tagline}` |
-| `index.html` — `<title>` | `"Sam's Freedom Ford McAlester — Dealer OS"` | `"Dealer AI Kit — Sam Wampler's Freedom Ford McAlester"` |
+| `index.html` — `<title>` | `"Sam's Dealer OS McAlester — Dealer OS"` | `"Dealer AI Kit — Sam Wampler's Dealer OS McAlester"` |
 
 ### 4. Brand-neutral defaults in shared components
 
 - **`AssistantChat.tsx`** default `welcomeTitle` softened from
-  `"Hi — I'm Freedom Ford's sales assistant."` to
+  `"Hi — I'm Dealer OS's sales assistant."` to
   `"Hi — I'm your dealership's sales assistant."` — both call
   sites still override with brand-aware copy via the prop, but
   if a future surface ever forgets to override, the fallback
@@ -91,17 +91,17 @@ flow through `useBrand()` because they are not dealer-specific.
 ### 5. Brand-neutral placeholders in Setup
 
 `DealerOnboardingPage.tsx` placeholders that hinted at
-"Freedom Ford" / `freedomford.example.com` were softened so a
+"Dealer OS" / `freedomford.example.com` were softened so a
 hypothetical second dealer setting up doesn't see Dealer #1's
 identity bleeding into their hint copy:
 
 | Field | Was | Now |
 | --- | --- | --- |
-| Dealership name | `"Freedom Ford"` | `"Your dealership name"` |
+| Dealership name | `"Dealer OS"` | `"Your dealership name"` |
 | Website | `"https://freedomford.example.com"` | `"https://your-dealership.example.com"` |
 | Salesperson email | `"sarah@freedomford.example.com"` | `"sarah@your-dealership.example.com"` |
 | Personal intro | `"…right Ford for 12 years."` | `"…right vehicle for 12 years."` |
-| Dealership greeting | `"Welcome to Freedom Ford. …"` | `"Welcome to your dealership. …"` |
+| Dealership greeting | `"Welcome to Dealer OS. …"` | `"Welcome to your dealership. …"` |
 
 The Sarah Lin name and the brand-mix example
 (`"Ford (new) + multi-brand used"`) were left as concrete
@@ -160,10 +160,10 @@ docs/handoffs/SESSION_019_platform_reframe_dealer_ai_kit.md  NEW (this file)
 | `npx vite build` | ✓ 1.05s · 1717 modules · 48.54 kB CSS · 433.50 kB JS (gzip 120.99 kB) |
 | `context-kit doctor` (from project root) | ✓ 0 blocking, 5 warnings (all pre-existing — missing optional anchor docs, not introduced by SESSION_019) |
 | `context-kit orient --short` | ✓ resolves cleanly; flags the new SESSION_019 handoff after commit |
-| Playwright `/dealer-ai-overview` | Sidebar caption **DEALER AI KIT**; topbar `Sam Wampler's Freedom Ford · McAlester`; tab title `Dealer AI Kit — Sam Wampler's Freedom Ford McAlester`; console 0/0 |
-| Playwright `/dealer-ai-live-assistant` | Welcome `Hi — I'm Sam Wampler's Freedom Ford's sales assistant.`; footer `A Sam Wampler's Freedom Ford advisor confirms real numbers.`; sidebar tagline footer `Sam Wampler Make It Happen`; console 0/0 |
-| Playwright `/embed/assistant` | Brand bar `Sam Wampler's Freedom Ford Assistant`; footer `Powered by AI Sales Assistant` (now from PRODUCT); console 0/0 |
-| Playwright Public Preview dialog | Description `This is how the Sam Wampler's Freedom Ford assistant appears on your website.`; iframe renders the full brand-aware embed; console 0/0 |
+| Playwright `/dealer-ai-overview` | Sidebar caption **DEALER AI KIT**; topbar `Sam Wampler's Dealer OS · McAlester`; tab title `Dealer AI Kit — Sam Wampler's Dealer OS McAlester`; console 0/0 |
+| Playwright `/dealer-ai-live-assistant` | Welcome `Hi — I'm Sam Wampler's Dealer OS's sales assistant.`; footer `A Sam Wampler's Dealer OS advisor confirms real numbers.`; sidebar tagline footer `Sam Wampler Make It Happen`; console 0/0 |
+| Playwright `/embed/assistant` | Brand bar `Sam Wampler's Dealer OS Assistant`; footer `Powered by AI Sales Assistant` (now from PRODUCT); console 0/0 |
+| Playwright Public Preview dialog | Description `This is how the Sam Wampler's Dealer OS assistant appears on your website.`; iframe renders the full brand-aware embed; console 0/0 |
 | Logo asset loads | ✓ same shipped `/branding/sams-freedom-ford-logo.jpg` resolves through `DEFAULT_DEALER.logoPath` |
 
 Backend baseline unchanged — SESSION_019 is frontend + docs

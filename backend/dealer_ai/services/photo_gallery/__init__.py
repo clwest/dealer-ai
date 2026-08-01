@@ -65,12 +65,12 @@ from typing import Sequence
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import (
+from ...models import (
     Dealership,
     Vehicle,
     VehiclePhoto,
 )
-from . import photo_storage
+from .. import photo_storage
 
 
 # ---- Constants ------------------------------------------------------------

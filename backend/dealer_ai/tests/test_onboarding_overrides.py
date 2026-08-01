@@ -48,7 +48,7 @@ class LoadOverridesTests(TestCase):
 
     def test_loaded_profile_populates_fields(self):
         DealerOnboardingProfile.objects.create(
-            dealership_greeting="Welcome to Freedom Ford.",
+            dealership_greeting="Welcome to Dealer OS.",
             sales_tone="Warm + consultative",
             approved_phrases="Want a closer look?\nHappy to help",
             banned_phrases="guaranteed approval\nbest price ever",
@@ -57,7 +57,7 @@ class LoadOverridesTests(TestCase):
         )
         overrides = load_overrides()
         self.assertFalse(overrides.is_empty)
-        self.assertEqual(overrides.greeting, "Welcome to Freedom Ford.")
+        self.assertEqual(overrides.greeting, "Welcome to Dealer OS.")
         self.assertEqual(overrides.sales_tone, "Warm + consultative")
         self.assertEqual(
             overrides.approved_phrases, ["Want a closer look?", "Happy to help"]
@@ -148,10 +148,10 @@ class FormatStoreVoiceBlockTests(TestCase):
 
     def test_block_contains_header_and_greeting(self):
         block = format_store_voice_block(
-            OnboardingOverrides(greeting="Welcome to Freedom Ford.")
+            OnboardingOverrides(greeting="Welcome to Dealer OS.")
         )
         self.assertIn("DEALER VOICE OVERRIDES", block)
-        self.assertIn("Welcome to Freedom Ford.", block)
+        self.assertIn("Welcome to Dealer OS.", block)
         # Greeting line tells the LLM not to repeat it verbatim.
         self.assertIn("do NOT repeat verbatim", block)
 

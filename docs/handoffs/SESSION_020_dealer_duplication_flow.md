@@ -7,8 +7,8 @@ test_baseline: 1210
 
 # Session handoff — dealer duplication flow
 
-SESSION_019 reframed the codebase from "Freedom Ford AI" into
-the **Dealer AI Kit** with Sam Wampler's Freedom Ford McAlester
+SESSION_019 reframed the codebase from "Dealer OS AI" into
+the **Dealer AI Kit** with Sam Wampler's Dealer OS McAlester
 as Dealer #1. SESSION_020 makes that reframe operationally
 demonstrable: an operator-facing duplication guide spells out
 the no-fork path for adding Dealer #2, and a new
@@ -159,11 +159,11 @@ frontend/src/pages/DealerOnboardingPage.tsx              + DealerKitStatusCard +
 | `npx vite build` | ✓ 1.10s · 1717 modules · 48.54 kB CSS · 436.21 kB JS (gzip 121.72 kB) |
 | `context-kit doctor` | ✓ 0 blocking, 5 pre-existing warnings (missing optional anchor docs, unrelated to this session) |
 | `context-kit orient --short` | ✓ resolves cleanly; latest handoff still SESSION_019 (correct — SESSION_020 not committed yet) |
-| Playwright `/dealer-ai-onboarding` initial render | ✓ Card shows: Product **Dealer AI Kit**, Active dealer **Sam Wampler's Freedom Ford**, Location **McAlester**, Brand(s) **Ford (new) + multi-brand used**, Logo path with "(static — swap via config)" hint, "Single-dealer configuration" green-dot status. Footer hint with doc link visible. |
+| Playwright `/dealer-ai-onboarding` initial render | ✓ Card shows: Product **Dealer AI Kit**, Active dealer **Sam Wampler's Dealer OS**, Location **McAlester**, Brand(s) **Ford (new) + multi-brand used**, Logo path with "(static — swap via config)" hint, "Single-dealer configuration" green-dot status. Footer hint with doc link visible. |
 | Edit form to **Tulsa Chevrolet** / **Tulsa** / **Chevrolet (new) + multi-brand used** (no save) | ✓ Card mirrored each field as I typed; topbar still showed Sam Wampler's saved values (correct preview-before-save behavior) |
-| Revert form to Sam Wampler's values + Save | ✓ Persisted; topbar continues to show `Sam Wampler's Freedom Ford · McAlester` |
-| Navigate to `/dealer-ai-overview` after save | ✓ Topbar `Sam Wampler's Freedom Ford`, sidebar caption `Dealer AI Kit`, console 0/0 |
-| Navigate to `/embed/assistant` after save | ✓ Brand bar `Sam Wampler's Freedom Ford Assistant`, welcome `Hi — I'm Sam Wampler's Freedom Ford's sales assistant.`, console 0/0 |
+| Revert form to Sam Wampler's values + Save | ✓ Persisted; topbar continues to show `Sam Wampler's Dealer OS · McAlester` |
+| Navigate to `/dealer-ai-overview` after save | ✓ Topbar `Sam Wampler's Dealer OS`, sidebar caption `Dealer AI Kit`, console 0/0 |
+| Navigate to `/embed/assistant` after save | ✓ Brand bar `Sam Wampler's Dealer OS Assistant`, welcome `Hi — I'm Sam Wampler's Dealer OS's sales assistant.`, console 0/0 |
 | Console (every surface) | ✓ 0 errors, 0 warnings |
 
 Backend baseline unchanged — frontend + docs only. SESSION_011's

@@ -26,9 +26,9 @@ two-column shell:
 - **Sidebar** (`w-60`, `bg-muted/40`, `sm:flex` — hidden under `sm`)
   with five nav items: Overview / Live Assistant / Coaching Mode /
   Team / Setup. Active state = `text-primary` + `border-l-2
-  border-primary`. Title: "Freedom Ford AI". Footer: "Local · MVP".
+  border-primary`. Title: "Dealer OS AI". Footer: "Local · MVP".
 - **Topbar** (`h-14`, `border-b border-border`) shows store name
-  ("Freedom Ford") + scope ("Oklahoma · Dealer OS") on the left and
+  ("Dealer OS") + scope ("Oklahoma · Dealer OS") on the left and
   an **AI Active** indicator on the right (pulsing emerald dot,
   `text-xs font-medium`).
 - All chrome resolves through shadcn tokens (`bg-background`,

@@ -507,7 +507,7 @@ counterparty. `gross_realized` becomes the truth ledger against
 **Inherited from `INDEPENDENT_DEALER_PIVOT.md`:**
 
 - ❌ Do NOT delete the franchise config path.
-- ❌ Do NOT reintroduce hardcoded "Sam Wampler" / "Freedom Ford"
+- ❌ Do NOT reintroduce hardcoded "Sam Wampler" / "Dealer OS"
   / Ford-model strings in default paths.
 - ❌ Do NOT change chat behavior contracts. 1300-test baseline
   must stay green.

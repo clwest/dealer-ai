@@ -110,7 +110,7 @@ class AnalyzeVehicleTests(TestCase):
         self.assertNotIn(anchor.id, ids)
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class AnswerVehicleQuestionTests(TestCase):
     def test_uses_provider_and_returns_text(self):
         v = _make_vehicle("Q-1", "60000.00")
@@ -141,7 +141,7 @@ class AnswerVehicleQuestionTests(TestCase):
         answer = vehicle_assistant.answer_vehicle_question(
             v, "Tell me about the warranty", provider=provider
         )
-        self.assertIn("advisor from Freedom Ford", answer)
+        self.assertIn("advisor from Dealer OS", answer)
 
     def test_writes_to_session_when_provided(self):
         v = _make_vehicle("Q-1", "60000.00")
@@ -269,7 +269,7 @@ class VehicleAskEndpointTests(TestCase):
 # post-LLM scrub stack on the LLM's draft reply.
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class VehicleAssistantPostLLMSafetyTests(TestCase):
     """Confirms PROJECT_PIPELINE.md §6.1 is closed: per-vehicle Q&A
     replies now run through ``apply_post_llm_scrubs(kind="vehicle_ask")``,

@@ -1,5 +1,5 @@
 ---
-title: "Freedom Ford — Runtime Flow Map"
+title: "Dealer OS — Runtime Flow Map"
 status: live
 generated: 2026-05-01
 companion_docs: ["PROJECT_WHAT_IT_IS.md", "CONTEXT_KIT_INVENTORY.md", "../context/WHAT_IT_IS.md", "../context/INVENTORY.md", "../context/DO_NOTS.md"]
@@ -7,7 +7,7 @@ phase: 8r
 test_baseline: 253
 ---
 
-# Freedom Ford — Runtime Flow Map (PIPELINE.md)
+# Dealer OS — Runtime Flow Map (PIPELINE.md)
 
 > Companion to the project anchor (`PROJECT_WHAT_IT_IS.md`,
 > `context/WHAT_IT_IS.md`) and the behavior inventory

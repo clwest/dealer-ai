@@ -29,7 +29,7 @@ Use this snapshot to pick up at SESSION_009.
 - **Migration:** `backend/dealer_ai/migrations/0004_dealeronboardingprofile.py`.
 - **Serializer:** `DealerOnboardingProfileSerializer` + `ONBOARDING_DEFAULTS`
   in `backend/dealer_ai/serializers.py`. Defaults mirror the v0 frontend
-  seed values (`Freedom Ford` name, `Ford (new) + multi-brand used` brands,
+  seed values (`Dealer OS` name, `Ford (new) + multi-brand used` brands,
   the standard W.A.C. payment disclaimer).
 - **View:** `onboarding_profile` (`backend/dealer_ai/views.py:806`),
   `@api_view(["GET", "PUT", "PATCH"])`. GET always returns 200 with either
@@ -156,7 +156,7 @@ running Ollama before claiming done.
 
 ```json
 {
-  "dealership_name": "Freedom Ford",
+  "dealership_name": "Dealer OS",
   "store_location": "",
   "main_brands": "Ford (new) + multi-brand used",
   "sales_phone": "",

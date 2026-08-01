@@ -1297,6 +1297,44 @@ def store_vehicle_photo(
     return storage_key, metadata
 
 
+def _validate_vehicle_photo_storage_key(storage_key: str) -> None:
+    """Validate ``storage_key`` against :data:`_VEHICLE_PHOTO_KEY_PATTERN`.
+
+    Sibling of the M3.4 :func:`_validate_storage_key` (which enforces
+    the M3.4 condition-report shape). Kept as a distinct helper so
+    both key patterns stay independently enforceable — a caller
+    handling one shape cannot silently succeed with the other.
+    """
+    if not isinstance(storage_key, str) or not _VEHICLE_PHOTO_KEY_PATTERN.match(
+        storage_key
+    ):
+        raise InvalidStorageKeyError(
+            f"storage_key {storage_key!r} does not match the M6.2 "
+            f"vehicle-photo canonical pattern. Every storage_key "
+            f"entering this service must have been produced by "
+            f"``build_canonical_vehicle_photo_key``."
+        )
+
+
+def delete_vehicle_photo_object(storage_key: str) -> None:
+    """Delete the object at ``storage_key`` from the storage backend.
+
+    M6.2 vehicle-photo counterpart to the M3.4
+    :func:`delete_object`. Idempotent — already-missing = success.
+    Real backend failures raise :class:`ObjectStorageError`; the M7.5
+    reaper caller retains the DB row in that case so the storage
+    object doesn't get silently orphaned.
+
+    Re-validates ``storage_key`` against :data:`_VEHICLE_PHOTO_KEY_PATTERN`
+    (not the M3.4 :data:`_KEY_PATTERN`) before touching the backend —
+    defense-in-depth against a caller passing a condition-report key
+    into the vehicle-photo delete path.
+    """
+    _validate_vehicle_photo_storage_key(storage_key)
+    adapter = _get_default_adapter()
+    adapter.delete_object(storage_key)
+
+
 # ---- Public re-exports ---------------------------------------------------
 
 
@@ -1313,6 +1351,7 @@ __all__ = [
     "build_canonical_key",
     "build_canonical_vehicle_photo_key",
     "delete_object",
+    "delete_vehicle_photo_object",
     "generate_read_url",
     "generate_upload_target",
     "get_object_metadata",

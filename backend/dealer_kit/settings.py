@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -30,6 +31,16 @@ INSTALLED_APPS = [
     # provisions one (per-user or via ``manage.py drf_create_token``).
     "rest_framework.authtoken",
     "corsheaders",
+    # Milestone 7 · Increment 1 (SESSION_088) — DB-backed Celery Beat
+    # scheduler. Installs the ``django_celery_beat_*`` tables
+    # (PeriodicTask, CrontabSchedule, IntervalSchedule, etc.) so
+    # future M7.2-M7.5 job schedules can be edited via Django admin
+    # without a code deploy. Runtime scheduling is decoupled from this
+    # setting — a schedule dict lives in ``CELERY_BEAT_SCHEDULE`` for
+    # the code-first path, and the DatabaseScheduler picks up the DB
+    # rows on top. Empty schedule at M7.1 — job bodies land in
+    # M7.2-M7.5.
+    "django_celery_beat",
     "dealer_ai",
 ]
 
@@ -269,6 +280,157 @@ DEALER_AI_DEALER_NAME = os.getenv("DEALER_AI_DEALER_NAME", "")
 # configuration resolution".
 DEALER_AI_DEALER_TYPE = os.getenv("DEALER_AI_DEALER_TYPE", "")
 DEALER_AI_PRIMARY_MAKE = os.getenv("DEALER_AI_PRIMARY_MAKE", "")
+
+# Milestone 7 · Increment 1 (SESSION_088) — Celery + Redis async
+# infrastructure. VCP Phase 6 mandate: "no Celery earlier" — M7 is the
+# first milestone with recurring background work to run. Per
+# ``MILESTONE_7_PLANNING.md`` §5.a-§5.e (user-confirmed at SESSION_088
+# open): broker = Redis (§5.a), framework = Celery (§5.b),
+# observability = ``JobRunLog`` Django model (§5.e).
+#
+# ``CELERY_*`` keys are read by ``dealer_kit/celery.py`` via
+# :meth:`celery.Celery.config_from_object` with the ``CELERY``
+# namespace. E.g. ``CELERY_BROKER_URL`` here binds to
+# ``app.conf.broker_url``.
+#
+# **Broker + result backend.** Redis, one URL for both. Env-driven so
+# prod can point at a managed Redis (Upstash / AWS ElastiCache / DO
+# Managed Redis) without a code change.
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+
+
+def _is_running_tests() -> bool:
+    """Return True when Django's test runner is executing.
+
+    Mirrors ``dealer_ai.apps._is_running_tests`` — kept as a settings-
+    level twin so ``CELERY_TASK_ALWAYS_EAGER`` can be computed at
+    settings-import time (before ``AppConfig.ready`` runs). Detects
+    via ``sys.argv`` — ``manage.py test`` or ``manage.py test <app>``.
+    Also true when the runner is invoked programmatically (e.g.
+    ``django-admin test`` or a CI wrapper passing ``test`` as the first
+    positional arg).
+    """
+    if len(sys.argv) < 2:
+        return False
+    return sys.argv[1] == "test" or "test" in sys.argv
+
+
+# Test posture per M7 §5.f. ``ALWAYS_EAGER=True`` in tests → every
+# ``@shared_task`` invocation runs synchronously in the calling thread,
+# so the test suite never depends on a running broker or worker. In
+# dev / prod the setting is False — jobs land on the Redis broker and
+# a real Celery worker picks them up. ``EAGER_PROPAGATES=True`` in
+# tests so exceptions raised by task bodies propagate to the caller
+# (otherwise Celery swallows them into ``EagerResult.failed=True``,
+# which is worse for test signal).
+CELERY_TASK_ALWAYS_EAGER = _is_running_tests()
+CELERY_TASK_EAGER_PROPAGATES = _is_running_tests()
+
+# Beat schedule. M7.2 (SESSION_089) added the first entry: the daily
+# floor-plan interest accrual orchestrator. Each scheduled increment
+# appends its entry here. Kept as a dict (not ``None``) so downstream
+# code can call ``.get()`` / iterate without a guard.
+#
+# Timezone note: ``CELERY_TIMEZONE`` below binds these ``crontab``
+# entries to the project's ``TIME_ZONE`` (America/Chicago). A
+# ``crontab(hour=2, minute=0)`` entry therefore means "02:00 project-
+# time" — not 02:00 UTC. Per-tenant local time is deliberately not
+# supported at v1; see the tasks module docstring for the rationale.
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE: dict = {
+    "floor-plan-accrual-daily-02-00": {
+        "task": (
+            "dealer_ai.services.floor_plan.tasks"
+            ".accrue_daily_interest_for_all_tenants"
+        ),
+        # 02:00 project-time daily. Chosen because the M2 accrual is
+        # a whole-day arithmetic operation and 02:00 is late enough
+        # to be past midnight in every US timezone the operator base
+        # might sit in.
+        "schedule": crontab(hour=2, minute=0),
+        # No positional args; ``as_of_iso=None`` in the task kwargs
+        # means "default to today" at task-run time.
+        "kwargs": {},
+    },
+    "stage-aging-snapshot-daily-03-00": {
+        "task": (
+            "dealer_ai.services.lifecycle_aging.tasks"
+            ".snapshot_stage_ages_for_all_tenants"
+        ),
+        # 03:00 project-time daily — one hour after the M7.2
+        # floor-plan accrual job so both tasks do not contend for
+        # Celery workers in the same maintenance window. The snapshot
+        # job is read-heavy (scans every VehicleStage row per tenant)
+        # so keeping it isolated from the accrual job's ledger writes
+        # also simplifies operator triage if one starts failing.
+        "schedule": crontab(hour=3, minute=0),
+        # ``snapshot_at_iso=None`` in the task kwargs means each
+        # per-tenant task defaults to ``timezone.now()`` at the moment
+        # IT runs. See the M7.3 tasks docstring for the coordinated-
+        # snapshot alternative.
+        "kwargs": {},
+    },
+    "vendor-sla-scan-daily-04-00": {
+        "task": (
+            "dealer_ai.services.vendor_sla.tasks"
+            ".detect_sla_breaches_for_all_tenants"
+        ),
+        # 04:00 project-time daily — one hour after the M7.3 aging
+        # snapshot job. Continues the non-overlapping window pattern
+        # (M7.2 at 02:00, M7.3 at 03:00, M7.4 at 04:00) so operator
+        # triage is straightforward when one of the three job families
+        # starts failing.
+        "schedule": crontab(hour=4, minute=0),
+        # ``as_of_iso=None`` in the task kwargs means each per-tenant
+        # task defaults to today.
+        "kwargs": {},
+    },
+    "photo-tombstone-reaper-daily-05-00": {
+        "task": (
+            "dealer_ai.services.photo_gallery.tasks"
+            ".reap_tombstoned_photos_for_all_tenants"
+        ),
+        # 05:00 project-time daily — one hour after the M7.4 vendor
+        # SLA scan. Continues the non-overlapping window pattern
+        # (M7.2 at 02:00, M7.3 at 03:00, M7.4 at 04:00, M7.5 at
+        # 05:00) so the four job families stay in separate maintenance
+        # windows. Positioned last because it's the only job that
+        # physically deletes data — running it after every read-heavy
+        # aggregation job (M7.3 aging) and every DB-write accrual job
+        # (M7.2 floor-plan) means the day's snapshots + accruals ran
+        # against pre-reap data.
+        "schedule": crontab(hour=5, minute=0),
+        # ``as_of_iso=None`` in the task kwargs means each per-tenant
+        # task defaults to ``timezone.now()``.
+        "kwargs": {},
+    },
+}
+
+# DB-backed scheduler (django-celery-beat). PeriodicTask + CrontabSchedule
+# rows shipped by the ``django_celery_beat`` app hold the source of truth
+# in the DB so operators can edit schedules via Django admin without a
+# code deploy. The ``CELERY_BEAT_SCHEDULE`` dict above stays as the
+# code-first bootstrap; the DB rows layer on top at Beat start.
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# Timezone alignment. Beat schedules are interpreted in ``TIME_ZONE`` so
+# a ``crontab(hour=2, minute=0)`` entry means "02:00 America/Chicago"
+# rather than 02:00 UTC. Matches Django's ``USE_TZ=True`` posture — no
+# implicit UTC bounces at task-invocation time.
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Task-serialization pins. JSON only — no pickle. Guards against a
+# future ``services/**/tasks.py`` module accidentally passing a
+# non-serializable object (Django model instance, Decimal that isn't
+# str-cast, etc.) and having Celery silently pickle it. JSON forces the
+# error to surface at ``apply_async`` time.
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
 
 # Milestone 2 · Increment 4a — floor-plan APR env override. Consumed
 # by ``dealer_ai.services.dealer_config.get_floor_plan_apr`` which

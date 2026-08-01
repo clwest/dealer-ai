@@ -15,7 +15,7 @@ hand_written: true
 > The kit's **default dealer persona is Copper Canyon Auto**
 > (Yuma, AZ — invented independent, mixed-make used only) as of
 > SESSION_030 Phases 1–3 and SESSION_031 Phases 4–5. Franchise
-> dealers (e.g. Sam Wampler's Freedom Ford) remain a supported
+> dealers (e.g. Sam Wampler's Dealer OS) remain a supported
 > *alternate configuration* via env / setting overrides:
 >
 > - `DEALER_AI_DEALER_TYPE=franchise`
@@ -51,17 +51,18 @@ on OpenAI `gpt-5-mini` (Ollama llama3.2 also supported via
 
 ## Current baseline
 
-Verified 2026-08-01 (after SESSION_087 M6 closeout). Update if any row changes.
+Verified 2026-08-01 (after SESSION_093 M7 closeout). Update if any row changes.
 
 | Surface | State |
 |---|---|
-| Backend tests | **2948 passed, 1 skipped, 0 failed** (`cd backend && python3 manage.py test dealer_ai`) |
-| Milestones shipped | M1 (multi-tenancy + auth), M2 (investment ledger), M3 (structured condition report), M4 (recon automation), M5 (vehicle lifecycle stages + retail gating), **M6 (photography + listing generation — SESSION_087)** |
+| Backend tests | **3150 passed, 1 skipped, 0 failed** (`cd backend && python3 manage.py test dealer_ai`) |
+| Milestones shipped | M1 (multi-tenancy + auth), M2 (investment ledger), M3 (structured condition report), M4 (recon automation), M5 (vehicle lifecycle stages + retail gating), M6 (photography + listing generation), **M7 (async infrastructure — SESSION_093)** |
 | M5 lifecycle surface | 2 models + migration `0017` (bootstrap seeds every existing Vehicle to `frontline`/`off_market` + matching event) + 12-stage vocabulary + 4-trigger vocabulary + `services/vehicle_lifecycle.py` (5 fns + 4 distinct domain errors + 3 rule evaluators + 1 dataclass + read helper + annotation helper) + 2 Vehicle `@property` accessors + 3 M5.4 admin endpoints + M5.6 operator UI (`/dealer-ai-inventory/:stock/lifecycle`) + `customer_visible_vehicles()` filters on `stage=frontline` (choke-point flip; every retail-side surface inherits) |
-| M6 photo + listing surface | 2 models (`VehiclePhoto`, `VehicleListing`) + migrations `0018` (additive) + `0019` (public_id backfill) + `services/photo_gallery.py` (6 verbs + 4 domain errors + 3 module constants — 1024×768 dimension threshold + 8 photo count threshold) + `services/vehicle_listing.py` (5 verbs + 5 domain errors + M4.5-shape source-bundle assembly + LLM factory integration) + `services/photo_storage.py` extended (`store_vehicle_photo`, `put_bytes` on both adapters, `build_canonical_vehicle_photo_key`, `parse_canonical_vehicle_photo_key`) + `services/llm_safety.py::_RECON_COMM_KINDS` extended 2 → 3 (dispatch-only) + M6.4 rules (`_rule_photography_to_listing` filled + `_rule_listing_to_frontline` new) + 13 M6.5 admin/showroom endpoints + 2 M6.5 operator UI routes (`/dealer-ai-inventory/:stock/photos`, `/listing`) + SESSION_075 §5.i truthful-language refactor (customer-lookup path requires frontline + published listing) |
-| Tenancy carriers | 19 (M1 six + M3 three + M4 six + M5 two + M6 two) |
-| DRF admin endpoints | 34 (21 pre-M6 + 13 M6.5) |
-| Frontend operator routes | 7 (5 pre-M6 + 2 M6.5) |
+| M6 photo + listing surface | 2 models (`VehiclePhoto`, `VehicleListing`) + migrations `0018` (additive) + `0019` (public_id backfill) + `services/photo_gallery/` package (6 verbs + 4 domain errors + 3 module constants — 1024×768 dimension threshold + 8 photo count threshold; restructured from flat module to package at SESSION_092 M7.5 for reaper sibling) + `services/vehicle_listing.py` (5 verbs + 5 domain errors + M4.5-shape source-bundle assembly + LLM factory integration) + `services/photo_storage.py` extended (`store_vehicle_photo`, `put_bytes` on both adapters, `build_canonical_vehicle_photo_key`, `parse_canonical_vehicle_photo_key`, `delete_vehicle_photo_object` sibling added at M7.5) + `services/llm_safety.py::_RECON_COMM_KINDS` extended 2 → 3 (dispatch-only) + M6.4 rules (`_rule_photography_to_listing` filled + `_rule_listing_to_frontline` new) + 13 M6.5 admin/showroom endpoints + 2 M6.5 operator UI routes (`/dealer-ai-inventory/:stock/photos`, `/listing`) + SESSION_075 §5.i truthful-language refactor (customer-lookup path requires frontline + published listing) |
+| M7 async substrate | Celery 5.5.3 + Redis 6.4.0 + `django-celery-beat` 2.8.1 DatabaseScheduler. `backend/dealer_kit/celery.py` + settings block (`REDIS_URL` → broker + result backend; `CELERY_TASK_ALWAYS_EAGER=_is_running_tests()`; JSON-only serialization pins). Cross-cutting `@instrumented_task` decorator (`services/jobs/instrumentation.py`) with retry-on-transient-error policy. `JobRunLog` model + migration `0020` (composite `(task_name, -started_at)` index). Four scheduled job families at hourly cadence: **02:00** floor-plan interest accrual (`services/floor_plan/`) — extracted M2 command body verbatim; **03:00** aging-per-stage snapshot (`services/lifecycle_aging/`) with new `StageAgingSnapshot` model + migration `0021` (composite `(dealership, stage, -snapshot_at)` index); **04:00** vendor SLA warnings (`services/vendor_sla/`) — read-only, emits `logging.WARNING` per breach (three locked policy constants: 7-day approved-stale, 0-day ETA grace, outsourced-only); **05:00** photo tombstone reaper (`services/photo_gallery/reaper.py`) — 30-day retention, storage-first delete, iteration-level failure isolation. Every task wraps `@instrumented_task` writing one `JobRunLog` per invocation. |
+| Tenancy carriers | 21 (M1 six + M3 three + M4 six + M5 two + M6 two + M7 two — `JobRunLog` at M7.1, `StageAgingSnapshot` at M7.3) |
+| DRF admin endpoints | 34 (21 pre-M6 + 13 M6.5; M7 shipped no HTTP endpoints — background runtime only) |
+| Frontend operator routes | 7 (5 pre-M6 + 2 M6.5; M7 shipped no frontend) |
 | Public endpoints | +1 M6.5 showroom (`GET /api/dealer-ai/showroom/vehicles/<stock_number>/`) |
 | Frontend | typecheck + build clean (`cd frontend && npx tsc --noEmit && npx vite build`) |
 | LLM | OpenAI `gpt-5-mini` (API key in repo-root `.env`); Ollama llama3.2 supported via provider env |

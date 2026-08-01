@@ -55,7 +55,7 @@ off-nav (see "Known notes" below).
 - Error state: destructive banner; user can retry.
 - "New chat" button appears in the page header once `messages.length
   > 0`. Resets session + transcript.
-- Footer disclaimer: "Estimates only. A Freedom Ford advisor confirms
+- Footer disclaimer: "Estimates only. A Dealer OS advisor confirms
   real numbers." — kept *outside* the transcript so it doesn't read
   like an assistant utterance.
 

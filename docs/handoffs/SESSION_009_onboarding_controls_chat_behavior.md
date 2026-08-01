@@ -189,7 +189,7 @@ prove that branch).
 
 ```
 DEALER VOICE OVERRIDES (apply on top of the base style rules above):
-- Store greeting (use as a tone hint, do NOT repeat verbatim every reply): "Welcome to Freedom Ford."
+- Store greeting (use as a tone hint, do NOT repeat verbatim every reply): "Welcome to Dealer OS."
 - Voice: warm and consultative. Help the customer think through ...
 - Encouraged phrasing (use naturally when the moment fits — do NOT phrase-stuff): "Want a closer look?"; "Happy to help"
 - Phrasings the dealership has explicitly disallowed — do not use any of these: "guaranteed approval"

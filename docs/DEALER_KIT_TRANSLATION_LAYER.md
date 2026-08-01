@@ -21,7 +21,7 @@ companion_docs:
 > **Reference implementation note (2026-07-31 pivot):** the shipped
 > default dealer is Copper Canyon Auto (Yuma, AZ — indie). The three
 > Example Translations below are drawn from SESSION_008–010, which
-> pre-date the pivot and were captured against the Freedom Ford
+> pre-date the pivot and were captured against the Dealer OS
 > franchise reference implementation. **The truth-preservation
 > contract and Live Chat Mode rules are identical for the Copper
 > Canyon default** — those examples remain accurate as *historical

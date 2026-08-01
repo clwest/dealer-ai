@@ -27,7 +27,7 @@ target_persona: Copper Canyon Auto (Yuma, AZ)
   1261 → 1281 (+20), zero regressions. `seed_copper_canyon_demo`
   command (45 mixed-make used units). `seed_copper_canyon_scenarios`
   command (4 hand-crafted chat sessions + leads). New canonical
-  `docs/demo/COPPER_CANYON_DEMO_SCRIPT.md`. Existing Freedom Ford
+  `docs/demo/COPPER_CANYON_DEMO_SCRIPT.md`. Existing Dealer OS
   seed + scenarios intentionally preserved — additive approach.
 - **Deferred within Phase 2:** `seed_phase3_demo` indie
   counterpart (dashboard-population variant). Not blocking — the
@@ -48,7 +48,7 @@ target_persona: Copper Canyon Auto (Yuma, AZ)
   warranty_offering, credit_range_served, makes_carried) — needs
   a `DealerOnboardingProfile` migration first. `useBrand()`
   extension to expose the full DealerProfile — same migration
-  dependency. The Freedom Ford legacy asset
+  dependency. The Dealer OS legacy asset
   `public/sams-freedom-ford-logo.jpg` is intentionally not
   deleted (guardrail: pivot doc forbids Tier 3 asset removal).
 - **Phase 4 (Django package rename):** ✅ shipped in SESSION_031
@@ -75,7 +75,7 @@ target_persona: Copper Canyon Auto (Yuma, AZ)
 # Independent Dealer Pivot — Scoping & Execution Plan
 
 > **Decision (2026-07-31):** Full pivot. The kit's default / demo dealer
-> stops being Sam Wampler's Freedom Ford (McAlester, OK — franchise,
+> stops being Sam Wampler's Dealer OS (McAlester, OK — franchise,
 > single-make new+used) and becomes **Copper Canyon Auto** (Yuma, AZ —
 > independent, mixed-make used). Franchise-specific scaffolding
 > (OEM captive finance, CPO language, single-make inventory feeds) is
@@ -125,7 +125,7 @@ doc + Phase 1.
 
 ## Product-shape deltas — franchise → independent
 
-| Area | Franchise (Freedom Ford, was) | Independent (Copper Canyon, new) |
+| Area | Franchise (Dealer OS, was) | Independent (Copper Canyon, new) |
 |---|---|---|
 | Inventory source | OEM feed, single make | Dealer-managed mixed-make; VINs sourced from auction + trades + private-party |
 | Vehicle condition | New + CPO + used | Used only |
@@ -281,7 +281,7 @@ preserved but no longer the primary read.
 
 - ❌ **Do not delete the franchise config path.** Franchise remains a
   supported *configuration*; only the *default* changes.
-- ❌ **Do not re-introduce hardcoded "Sam Wampler" / "Freedom Ford" /
+- ❌ **Do not re-introduce hardcoded "Sam Wampler" / "Dealer OS" /
   Ford-model strings** in default paths. Everything routes through
   `useBrand()` / `get_dealer_profile()`.
 - ❌ **Do not change existing chat behavior contracts** — pre-LLM guards
@@ -299,7 +299,7 @@ preserved but no longer the primary read.
 
 - `python3 manage.py test` → **1218 + N pass, 1 skipped**, zero fail.
 - `npx tsc --noEmit` clean; `npx vite build` clean.
-- `grep -rn -E '\b(Ford|F-150|Maverick|Bronco|Sam Wampler|Freedom Ford)\b' backend/dealer_ai/services frontend/src`
+- `grep -rn -E '\b(Ford|F-150|Maverick|Bronco|Sam Wampler|Dealer OS)\b' backend/dealer_ai/services frontend/src`
   → zero results in default paths (matches allowed only inside
   `# franchise-config example` scoped blocks and inside `docs/handoffs/`).
 - Live walkthrough: onboarding profile empty → assistant introduces

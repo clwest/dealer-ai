@@ -1,4 +1,4 @@
-# Freedom Ford Dealer AI — Demo Script
+# Dealer OS Dealer AI — Demo Script
 
 This is the script to run when showing the system to dealership management. It
 assumes the app is running locally:

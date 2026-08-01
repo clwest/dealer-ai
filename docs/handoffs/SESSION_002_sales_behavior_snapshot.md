@@ -335,7 +335,7 @@ classifier + flex picker) into the API response.
   numbers — it describes what exists.
 - **`docs/CONTEXT_KIT_INVENTORY.md` is low-signal.** The auto-counts
   inventory the context-kit project's own scaffold shape (cli/,
-  templates/, starter/, tests/test_*.py at root), not Freedom Ford's
+  templates/, starter/, tests/test_*.py at root), not Dealer OS's
   layout (`backend/dealer_ai/tests/`, `frontend/src/`). `Tracked files:
   0` is genuinely accurate — no files in this repo have ever been
   committed (initial git status was all untracked). Don't trust the

@@ -15,3 +15,19 @@ openai==1.30.5
 # fresh resolve is what surfaced the incompatibility.
 httpx<0.28
 django-storages[s3]==1.14.6
+# Milestone 7 · Increment 1 (SESSION_088) — async infrastructure. VCP
+# Phase 6 mandate: "no Celery earlier" — M7 is the first milestone with
+# recurring background work to run (floor-plan interest accrual, aging
+# snapshots, vendor SLA warnings, photo tombstone reaper). Pins locked
+# against Django 5.0.x + Python 3.11:
+#   - ``celery[redis]==5.5.3`` — mature Django integration; redis
+#     transport bundled via the ``[redis]`` extra.
+#   - ``django-celery-beat==2.8.1`` — DatabaseScheduler for the Beat
+#     schedule; extends the M7.1 Celery app so scheduled entries can be
+#     managed via Django admin without touching source.
+#   - ``redis==6.4.0`` — Python client used both by Celery transport
+#     and by any future direct-cache reads. Pinned separately from the
+#     ``[redis]`` extra so upgrades are visible in the diff.
+celery[redis]==5.5.3
+django-celery-beat==2.8.1
+redis==6.4.0

@@ -117,7 +117,7 @@ class CopperCanyonSeedShape(TestCase):
         self.assertEqual(unavailable.count(), 0)
 
     def test_source_tag_isolates_from_franchise_seed(self):
-        # The Copper Canyon and Freedom Ford seeds must not collide —
+        # The Copper Canyon and Dealer OS seeds must not collide —
         # they use different source markers so an admin can load one
         # or both without duplicate stock_numbers.
         self.assertEqual(

@@ -374,7 +374,7 @@ didn't yet treat the page as a customer-facing trust surface.
   responded but `matched_vehicles` came back empty), and a
   retry affordance on the error banner.
 - **Customer-facing trust copy.** The footer disclaimer
-  ("Estimates only. A Freedom Ford advisor confirms real
+  ("Estimates only. A Dealer OS advisor confirms real
   numbers.") is a start. Audit every string on the page for
   customer voice — no debug copy, no internal jargon, no
   "demo" scaffolding leaking through. The "Tell me more about

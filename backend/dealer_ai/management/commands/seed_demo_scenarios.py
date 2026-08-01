@@ -104,7 +104,7 @@ SCENARIOS: List[Scenario] = [
                 "assistant",
                 (
                     "That helps a lot — a clean 2018 Escape can move the math meaningfully toward the Lariat. "
-                    "I can flag this for a Freedom Ford advisor to pull a real trade appraisal and put live numbers in "
+                    "I can flag this for a Dealer OS advisor to pull a real trade appraisal and put live numbers in "
                     "front of you. Want me to capture your contact info?"
                 ),
                 minutes_ago_offset=10,
@@ -175,7 +175,7 @@ SCENARIOS: List[Scenario] = [
                     "On the Escape Hybrid at $28,995 with $2,000 down: roughly $475/mo over 60 months or about "
                     "$415/mo over 72 months (W.A.C. — with approved credit). These are estimates only; final "
                     "rate and terms depend on credit and lender approval. "
-                    "You'd get a hybrid that does about 42 mpg and AWD. Want a Freedom Ford advisor to put real "
+                    "You'd get a hybrid that does about 42 mpg and AWD. Want a Dealer OS advisor to put real "
                     "numbers together?"
                 ),
                 minutes_ago_offset=38,
@@ -229,7 +229,7 @@ SCENARIOS: List[Scenario] = [
                 "assistant",
                 (
                     "Honest answer: I don't have live service pricing or recall lookup on my side yet. "
-                    "Freedom Ford's service department can quote the oil change in about a minute and check your VIN "
+                    "Dealer OS's service department can quote the oil change in about a minute and check your VIN "
                     "for any open recalls. Want me to flag this for them so they reach out?"
                 ),
                 minutes_ago_offset=119,
@@ -300,7 +300,7 @@ SCENARIOS: List[Scenario] = [
             ScenarioMessage(
                 "assistant",
                 (
-                    "Honest answer: I can't pull rate quotes — Freedom Ford's finance team works with multiple lenders "
+                    "Honest answer: I can't pull rate quotes — Dealer OS's finance team works with multiple lenders "
                     "and has flex programs for fair credit, including credit-rebuilding plans. The Ranger at $26,995 "
                     "with a typical trade gives you more room to land a workable monthly. Let me flag this so a finance "
                     "specialist can prep options before your visit."
@@ -377,7 +377,7 @@ SCENARIOS: List[Scenario] = [
                     "Yeah, three across in the second row with car seats is rough — the Explorer's third row gives "
                     "you breathing room and a small camper is well within its tow rating. With the 2.3L EcoBoost and "
                     "the BlueCruise package, longer highway road trips get a lot easier. Want me to flag this so a "
-                    "Freedom Ford advisor can confirm tow-package availability and set up a test drive?"
+                    "Dealer OS advisor can confirm tow-package availability and set up a test drive?"
                 ),
                 minutes_ago_offset=293,
             ),

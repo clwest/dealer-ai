@@ -11,12 +11,12 @@ SESSION_018 closes the loop between Setup and the rest of the OS.
 Until this session every brand surface — sidebar, topbar, mobile
 drawer, embed brand bar, embed footer disclaimer, Live Assistant
 welcome / footer, Public Preview dialog — hard-coded
-*"Sam's Freedom Ford"* / *"McAlester"*. The Onboarding profile
+*"Sam's Dealer OS"* / *"McAlester"*. The Onboarding profile
 already shipped `dealership_name` and `store_location` (used only
 by the Overview's Assistant Status card). SESSION_018 lifts those
 values into a small `useBrand()` hook and threads them through
 every chrome surface, with hard fallbacks to the verified
-Sam Wampler's Freedom Ford McAlester identity.
+Sam Wampler's Dealer OS McAlester identity.
 
 Setup is no longer cosmetic — when a manager edits and saves the
 dealership name or location, the next route mount picks it up
@@ -69,8 +69,8 @@ to a new route after a Setup save is enough to pick up the new
 values; no global cache to invalidate.
 
 **Decision: possessive helper.** `toPossessive("Sam Wampler's
-Freedom Ford")` returns the same string with `'s` appended →
-`"Sam Wampler's Freedom Ford's"`. Reads correctly grammatically:
+Dealer OS")` returns the same string with `'s` appended →
+`"Sam Wampler's Dealer OS's"`. Reads correctly grammatically:
 the outer possessive is the dealership's claim on the assistant;
 the inner `'s` is part of the dealership's own name. The helper
 short-circuits if the name already ends in `'s` (or smart-quote
@@ -109,14 +109,14 @@ Now consumes `useBrand()` at the top and propagates through the
 brand bar, welcome line, and footer:
 
 - **Brand-bar headline** → `brand.embedAssistantName` (e.g.
-  *"Sam Wampler's Freedom Ford Assistant"*)
+  *"Sam Wampler's Dealer OS Assistant"*)
 - **AssistantChat `welcomeTitle`** prop → *"Hi — I'm
   ${brand.possessiveName} sales assistant."*
 - **Footer disclaimer** → *"Estimates only. A
   ${brand.dealershipName} advisor confirms real numbers."*
 - **Logo-fallback chip** when the image errors → derives a
   two-letter monogram from `brand.dealershipName`
-  (`Sam Wampler's Freedom Ford` → `SF`). Replaces the previous
+  (`Sam Wampler's Dealer OS` → `SF`). Replaces the previous
   hard-coded `FF`.
 
 The `AssistantChat` component itself was **not** touched per
@@ -191,14 +191,14 @@ contract is "fresh route mount = fresh brand read".
 | --- | --- |
 | `npx tsc --noEmit` | ✓ 0 errors |
 | `npx vite build` | ✓ 1.04s · 1716 modules · 48.52 kB CSS · 433.32 kB JS (gzip 120.92 kB) |
-| Initial `/onboarding/profile/` GET | `{ dealership_name: "Sam Wampler's Freedom Ford", store_location: "McAlester, Oklahoma" }` |
-| Topbar at first paint | `Sam Wampler's Freedom Ford · McAlester, Oklahoma` ✓ |
+| Initial `/onboarding/profile/` GET | `{ dealership_name: "Sam Wampler's Dealer OS", store_location: "McAlester, Oklahoma" }` |
+| Topbar at first paint | `Sam Wampler's Dealer OS · McAlester, Oklahoma` ✓ |
 | Sidebar tagline footer | `Sam Wampler Make It Happen` ✓ |
 | Edit Setup — name unchanged, location → `McAlester` (drop the `, Oklahoma` suffix to verify the change actually flows), Save | ✓ |
 | Re-read profile after save | `{ store_location: "McAlester" }` ✓ |
-| Navigate to `/dealer-ai-overview` | Topbar updates to `Sam Wampler's Freedom Ford · McAlester` ✓ |
-| Navigate to `/embed/assistant` | Brand bar: `Sam Wampler's Freedom Ford Assistant`. Welcome: `Hi — I'm Sam Wampler's Freedom Ford's sales assistant.` Footer: `A Sam Wampler's Freedom Ford advisor confirms real numbers.` ✓ |
-| Open `Public Preview` dialog | Description: `This is how the Sam Wampler's Freedom Ford assistant appears on your website.` Iframe inside dialog renders the brand-aware embed verbatim. ✓ |
+| Navigate to `/dealer-ai-overview` | Topbar updates to `Sam Wampler's Dealer OS · McAlester` ✓ |
+| Navigate to `/embed/assistant` | Brand bar: `Sam Wampler's Dealer OS Assistant`. Welcome: `Hi — I'm Sam Wampler's Dealer OS's sales assistant.` Footer: `A Sam Wampler's Dealer OS advisor confirms real numbers.` ✓ |
+| Open `Public Preview` dialog | Description: `This is how the Sam Wampler's Dealer OS assistant appears on your website.` Iframe inside dialog renders the brand-aware embed verbatim. ✓ |
 | Console (every surface above) | 0 errors, 0 warnings ✓ |
 
 Backend baseline unchanged — frontend-only session.
@@ -240,7 +240,7 @@ docs/handoffs/SESSION_018_brand_settings_drive_ui.md NEW (this file)
   with this codebase would need the asset replaced manually.
   Multi-tenant logo upload is a separate session.
 - **`document.title`** in `index.html` is still the static
-  `Sam's Freedom Ford McAlester — Dealer OS`. Cosmetic; only
+  `Sam's Dealer OS McAlester — Dealer OS`. Cosmetic; only
   matters in the browser tab, and only when Setup hasn't been
   edited.
 - **Tagline is a constant** in `lib/brand.ts`. Onboarding
@@ -252,7 +252,7 @@ docs/handoffs/SESSION_018_brand_settings_drive_ui.md NEW (this file)
   which is grammatically defensible. If a real dealer hits a
   weird edge, the rule lives in one place.
 - **AssistantChat default `welcomeTitle` still mentions
-  "Freedom Ford".** Both call sites override the prop now, so
+  "Dealer OS".** Both call sites override the prop now, so
   the default never renders. Per spec guardrail, the shared
   component itself was not touched.
 - **Fetch-per-consumer cost.** Each `useBrand()` mount fires

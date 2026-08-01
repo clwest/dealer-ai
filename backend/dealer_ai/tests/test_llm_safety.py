@@ -91,7 +91,7 @@ class AdKindTests(TestCase):
         self.assertIn("invented_promotion", scrubs)
 
     def test_limited_time_scrubbed(self):
-        text = "Limited time offer — visit Freedom Ford today only!"
+        text = "Limited time offer — visit Dealer OS today only!"
         cleaned, scrubs, dropped = apply_post_llm_scrubs(text, kind="ad")
         self.assertNotIn("Limited time", cleaned)
         self.assertNotIn("today only", cleaned.lower())
@@ -164,7 +164,7 @@ class FollowUpKindTests(TestCase):
         # Appointment-promise phrases are follow-up-only. Ad copy that
         # happens to use "see you Saturday" is unusual but the ad scrub
         # set deliberately doesn't touch it (less false-positive risk).
-        text = "See you Saturday at 2 PM at Freedom Ford."
+        text = "See you Saturday at 2 PM at Dealer OS."
         _, scrubs, _ = apply_post_llm_scrubs(text, kind="ad")
         self.assertNotIn("invented_appointment", scrubs)
 

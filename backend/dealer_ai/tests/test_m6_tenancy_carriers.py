@@ -28,14 +28,23 @@ from dealer_ai.services.tenancy import _TENANT_CARRIER_MODEL_NAMES
 
 class TenancyCarriersExtended(TestCase):
     """The M6.1 extension adds ``VehiclePhoto`` + ``VehicleListing`` to
-    the 17-entry M5.1 tuple, yielding 19."""
+    the 17-entry M5.1 tuple, yielding at least 19.
 
-    def test_carrier_count_is_nineteen(self):
-        self.assertEqual(
+    Count is asserted with ``>=`` (not ``==``) so future milestones can
+    add carriers without breaking the M6.1 milestone-shape assertion.
+    The exact-count invariant is owned by each milestone's own carrier-
+    count test at its shipping time (e.g. ``test_carrier_count_is_twenty``
+    in ``test_m7_tenancy_carriers.py``).
+    """
+
+    def test_carrier_count_at_least_nineteen(self):
+        self.assertGreaterEqual(
             len(_TENANT_CARRIER_MODEL_NAMES),
             19,
             "Milestone 6 · Increment 1 extended the tenancy-carrier "
-            "tuple from 17 → 19 (added VehiclePhoto + VehicleListing).",
+            "tuple from 17 → 19 (added VehiclePhoto + VehicleListing). "
+            "Later milestones may extend further; this assertion is the "
+            "floor.",
         )
 
     def test_new_carriers_present(self):

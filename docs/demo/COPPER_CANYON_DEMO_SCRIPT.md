@@ -5,7 +5,7 @@ persona: Copper Canyon Auto (Yuma, AZ — invented independent-dealer persona)
 generated: 2026-07-31
 baseline_commit: 4041b91
 test_baseline: 1272 backend tests passing (dealer_ai suite)
-supersedes: Freedom Ford demo script (docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md)
+supersedes: Dealer OS demo script (docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md)
               is retained as the franchise-config reference.
 ---
 
@@ -231,7 +231,7 @@ If the backend is down mid-demo:
 - Explain that dealer identity is templated at runtime — Copper
   Canyon is the *shipped default*, but a franchise config
   (`DEALER_AI_DEALER_TYPE=franchise`, `DEALER_AI_PRIMARY_MAKE=Ford`,
-  etc.) re-enables the Freedom Ford voice without any code changes.
+  etc.) re-enables the Dealer OS voice without any code changes.
 
 ## What this script does NOT cover (yet)
 

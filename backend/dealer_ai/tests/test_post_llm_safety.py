@@ -738,7 +738,7 @@ class DetectExternalValueInquiryTests(TestCase):
             )
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class ChatEngineExternalValueGuardTests(TestCase):
     """End-to-end: BBV/KBB/trade-in-value questions short-circuit pre-LLM
     and never expose a fabricated dollar value to the customer."""
@@ -1195,7 +1195,7 @@ class ScrubDefaultAssumptionLanguageTests(TestCase):
 
     def test_clean_reply_unchanged(self):
         text = (
-            "Estimated $715/mo for 72 months (W.A.C.). A Freedom Ford "
+            "Estimated $715/mo for 72 months (W.A.C.). A Dealer OS "
             "advisor can pull a real quote when you're ready."
         )
         cleaned, changed = scrub_default_assumption_language(text)
@@ -1363,7 +1363,7 @@ class DetectHandoffRequestTests(TestCase):
             "Can I speak to an advisor",
             "Connect me with a salesperson",
             "I want a live agent",
-            "Talk to a Freedom Ford advisor please",
+            "Talk to a Dealer OS advisor please",
             "I'd like to speak with someone",
             "Can I chat with a real person",
             "Have someone call me",
@@ -1412,7 +1412,7 @@ class DetectHandoffRequestTests(TestCase):
             )
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class HandoffResponseShapeTests(TestCase):
     """The canned HANDOFF_RESPONSE must be honest, ask for the three
     contact-info pieces, and contain NO transfer-mechanic language or
@@ -1423,7 +1423,7 @@ class HandoffResponseShapeTests(TestCase):
         # IDENTITY_RESPONSE. The handoff response is now the simpler
         # advisor-connection text.
         body = _render(HANDOFF_RESPONSE).lower()
-        self.assertIn("freedom ford", body)
+        self.assertIn("dealer os", body)
         self.assertIn("advisor", body)
 
     def test_response_asks_for_name_phone_and_time(self):
@@ -1494,7 +1494,7 @@ class HandoffResponseShapeTests(TestCase):
         self.assertNotIn("immediately", body)
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class ChatEngineHandoffGuardTests(TestCase):
     """End-to-end: handoff requests short-circuit pre-LLM, return the
     canned response, never invoke the model, and surface
@@ -2025,7 +2025,7 @@ class DetectAppointmentRequestTests(TestCase):
             )
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class ChatEngineAppointmentGuardTests(TestCase):
     def test_appointment_with_current_vehicle_asks_name_phone_time(self):
         v = Vehicle.objects.create(
@@ -2257,11 +2257,11 @@ class DetectIdentityRequestTests(TestCase):
             )
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class IdentityResponseShapeTests(TestCase):
     def test_response_identifies_as_freedom_ford_ai(self):
         body = _render(IDENTITY_RESPONSE).lower()
-        self.assertIn("freedom ford", body)
+        self.assertIn("dealer os", body)
         self.assertIn("ai", body)
 
     def test_response_offers_advisor_handoff(self):
@@ -2276,7 +2276,7 @@ class IdentityResponseShapeTests(TestCase):
         self.assertNotIn("i am human", body)
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class ChatEngineIdentityGuardTests(TestCase):
     def _setup(self):
         session = ChatSession.objects.create()
@@ -2313,12 +2313,12 @@ class ChatEngineIdentityGuardTests(TestCase):
         )
 
     def test_identity_response_no_persona_drift(self):
-        # The reply must keep the Freedom Ford AI persona — not
+        # The reply must keep the Dealer OS AI persona — not
         # become a generic "I'm an AI assistant" response.
         engine, _, _, _ = self._setup()
         result = engine.handle_user_message("Am I talking to a person?")
         body = result.assistant_message.content.lower()
-        self.assertIn("freedom ford", body)
+        self.assertIn("dealer os", body)
 
 
 class DetectNegotiationRequestTests(TestCase):
@@ -2374,18 +2374,18 @@ class DetectNegotiationRequestTests(TestCase):
             )
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class NegotiationResponseShapeTests(TestCase):
     def test_response_acknowledges_request(self):
         body = _render(NEGOTIATION_RESPONSE).lower()
         self.assertIn("get what you're trying to do", body)
 
     def test_response_redirects_to_advisor(self):
-        # Phase 8p: redirect target is now the named Freedom Ford
+        # Phase 8p: redirect target is now the named Dealer OS
         # advisor (via {dealer_name} template) rather than a generic
         # "sales advisor".
         body = _render(NEGOTIATION_RESPONSE).lower()
-        self.assertIn("advisor from freedom ford", body)
+        self.assertIn("advisor from dealer os", body)
 
     def test_response_does_not_quote_numbers(self):
         # No dollar figures in the canned response.
@@ -2421,7 +2421,7 @@ class NegotiationResponseShapeTests(TestCase):
         self.assertIn("time", body)
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class ChatEngineNegotiationGuardTests(TestCase):
     def _setup(self):
         session = ChatSession.objects.create()
@@ -2506,7 +2506,7 @@ class ChatEngineHandoffPhase8oFlagTests(TestCase):
             self.assertNotIn(fake, body)
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class ScrubPostLLMOverrideTests(TestCase):
     """Wholesale-replace replies that contain forbidden negotiation /
     fake-transfer phrasings."""
@@ -2567,7 +2567,7 @@ class ScrubPostLLMOverrideTests(TestCase):
         self.assertEqual(cleaned, clean)
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class ChatEnginePostLLMOverrideTests(TestCase):
     """End-to-end: when the LLM returns negotiation or fake-transfer
     text, the engine wholesale-replaces the reply with the corresponding
@@ -2731,7 +2731,7 @@ class NegotiationGuardLiveBugReportPhrasingsTests(TestCase):
 # ---- Phase 8o+: per-vehicle endpoint pre-LLM guards ---------------------
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class VehicleAskPreLLMGuardTests(TestCase):
     """The /vehicles/<id>/ask/ path used to bypass every guard. Phase 8o+
     routes it through the same pre-LLM checks the chat path uses, so
@@ -2756,7 +2756,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
             v, "what's the lowest you'll take?", provider=provider
         )
         # Core safety phrasing intact.
-        self.assertIn("advisor from freedom ford", reply.lower())
+        self.assertIn("advisor from dealer os", reply.lower())
         self.assertIn("number and time", reply.lower())
         # Context-aware: references the focus vehicle.
         self.assertIn(v.display_name, reply)
@@ -2767,7 +2767,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
         reply = answer_vehicle_question(
             v, "give me your best price", provider=provider
         )
-        self.assertIn("advisor from freedom ford", reply.lower())
+        self.assertIn("advisor from dealer os", reply.lower())
         self.assertIn(v.display_name, reply)
         self.assertEqual(provider.calls, [])
 
@@ -2777,7 +2777,7 @@ class VehicleAskPreLLMGuardTests(TestCase):
             v, "what kind of discounts do you usually give?",
             provider=provider,
         )
-        self.assertIn("advisor from freedom ford", reply.lower())
+        self.assertIn("advisor from dealer os", reply.lower())
         self.assertIn(v.display_name, reply)
         self.assertEqual(provider.calls, [])
 
@@ -2878,7 +2878,7 @@ def _safe_negotiation_assertions(testcase, reply: str):
     """Shared safety assertions for any negotiation-guard reply."""
     body = reply.lower()
     # Core safe phrasing must be present.
-    testcase.assertIn("advisor from freedom ford", body)
+    testcase.assertIn("advisor from dealer os", body)
     testcase.assertRegex(body, r"\bnumber\b")
     testcase.assertRegex(body, r"\btime\b")
     # Banned: any agreement / quote / discount-authority phrasing.
@@ -2909,7 +2909,7 @@ def _safe_negotiation_assertions(testcase, reply: str):
         )
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class BuildNegotiationResponseHelperTests(TestCase):
     """Pure-function tests for build_negotiation_response. Verifies it
     pulls context from session+profile and falls back to the generic
@@ -3057,7 +3057,7 @@ class BuildNegotiationResponseHelperTests(TestCase):
         _safe_negotiation_assertions(self, reply)
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class ChatEngineNegotiationContextAwareTests(TestCase):
     """End-to-end: chat path uses build_negotiation_response so the
     canned reply references the customer's prior context."""
@@ -3148,7 +3148,7 @@ class ChatEngineNegotiationContextAwareTests(TestCase):
         _safe_negotiation_assertions(self, body)
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class VehicleAskNegotiationContextAwareTests(TestCase):
     """End-to-end: /vehicles/<id>/ask/ negotiation guard uses the same
     helper, with the input vehicle pinned as the focus."""

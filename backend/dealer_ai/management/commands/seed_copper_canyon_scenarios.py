@@ -6,7 +6,7 @@ Creates 4 hand-crafted chat sessions + leads pointed at
 Copper Canyon inventory stock numbers (CC-*) so the manager
 dashboard, lead pipeline, and trends panels have realistic
 indie-shaped content for a demo. Runs alongside the existing
-:mod:`seed_demo_scenarios` (Freedom Ford franchise scenarios).
+:mod:`seed_demo_scenarios` (Dealer OS franchise scenarios).
 
 Vehicles are looked up by stock number from the
 :mod:`seed_copper_canyon_demo` set — this command auto-runs

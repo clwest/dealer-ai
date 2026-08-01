@@ -12,7 +12,7 @@ export default {
         // signature slot, warm terracotta in the accent slot. Neutrals
         // unchanged — they're brand-agnostic across dealer configs.
         //
-        // Franchise deployments swap values here (e.g. Freedom Ford
+        // Franchise deployments swap values here (e.g. Dealer OS
         // used blue=#003478 and accent=#1c69d4). Consumers reference
         // brand.blue / brand.accent by role, not by literal color, so
         // a palette swap in this file recolors the whole UI without

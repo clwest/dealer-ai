@@ -11,7 +11,7 @@ session: SESSION_019
 
 This repository is the **Dealer AI Kit** — a reusable AI sales
 assistant platform for franchise auto dealerships. It ships with
-**Sam Wampler's Freedom Ford McAlester** as Dealer #1 and the
+**Sam Wampler's Dealer OS McAlester** as Dealer #1 and the
 default configuration. Future dealers (Chevy, Toyota, etc.) are
 added as additional dealer configurations **inside this same
 repository**, not as forks or separate codebases.
@@ -25,7 +25,7 @@ with separate identity.
 | Layer | Purpose | Source of truth |
 | --- | --- | --- |
 | **Product / platform** | The kit itself. Constant across every dealer. | `frontend/src/config/defaultDealer.ts` → `PRODUCT` |
-| **Default dealer** | The fallback dealer identity used when the onboarding profile is empty. Currently Sam Wampler's Freedom Ford. | `frontend/src/config/defaultDealer.ts` → `DEFAULT_DEALER` |
+| **Default dealer** | The fallback dealer identity used when the onboarding profile is empty. Currently Sam Wampler's Dealer OS. | `frontend/src/config/defaultDealer.ts` → `DEFAULT_DEALER` |
 | **Active dealer** | The runtime identity edited by the manager in Setup and persisted to the backend. | `OnboardingProfile` (PUT `/api/dealer-ai/onboarding/profile/`) |
 
 ### Resolution rule
@@ -51,8 +51,8 @@ voice. They appear in chrome that talks about *the platform*
 (sidebar caption, embed footer attribution). They never reflect
 the dealer.
 
-The dealer's voice ("Sam Wampler's Freedom Ford Assistant",
-"A Sam Wampler's Freedom Ford advisor confirms real numbers")
+The dealer's voice ("Sam Wampler's Dealer OS Assistant",
+"A Sam Wampler's Dealer OS advisor confirms real numbers")
 is always profile-driven, never product-driven.
 
 ## What's still Freedom-Ford-specific (intentional)
@@ -88,12 +88,12 @@ configuration:
 | Surface | Before | After |
 | --- | --- | --- |
 | Sidebar product caption | "DEALER OS" | "DEALER AI KIT" |
-| HTML `<title>` | "Sam's Freedom Ford McAlester — Dealer OS" | "Dealer AI Kit — Sam Wampler's Freedom Ford McAlester" |
+| HTML `<title>` | "Sam's Dealer OS McAlester — Dealer OS" | "Dealer AI Kit — Sam Wampler's Dealer OS McAlester" |
 | Embed footer attribution | "Powered by AI Sales Assistant" | "Powered by AI Sales Assistant" (now sourced from `PRODUCT.productSubtitle`) |
 | Logo path constant | inline string in `App.tsx` and `EmbedAssistantPage.tsx` | `DEFAULT_DEALER.logoPath` |
 | Brand fallbacks in `useBrand()` | inline `FALLBACK` object | re-export of `DEFAULT_DEALER` fields |
-| `AssistantChat` default `welcomeTitle` | "Hi — I'm Freedom Ford's sales assistant." | "Hi — I'm your dealership's sales assistant." (brand-neutral default; both call sites override) |
-| Setup placeholders | "Freedom Ford", "freedomford.example.com", "right Ford for 12 years", "Welcome to Freedom Ford…" | brand-neutral hints ("Your dealership name", "your-dealership.example.com", "right vehicle", "your dealership") |
+| `AssistantChat` default `welcomeTitle` | "Hi — I'm Dealer OS's sales assistant." | "Hi — I'm your dealership's sales assistant." (brand-neutral default; both call sites override) |
+| Setup placeholders | "Dealer OS", "freedomford.example.com", "right Ford for 12 years", "Welcome to Dealer OS…" | brand-neutral hints ("Your dealership name", "your-dealership.example.com", "right vehicle", "your dealership") |
 
 ## Adding a second dealer (future)
 
@@ -123,7 +123,7 @@ identity layer is per-dealer.
 
 ## Why this reframe matters
 
-Before SESSION_019, "Freedom Ford" was hard-coded into the
+Before SESSION_019, "Dealer OS" was hard-coded into the
 mental model of the project — both in code and in
 conversation. That's the trap that keeps software stuck as a
 custom project for one customer instead of a product. The

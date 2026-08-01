@@ -53,9 +53,9 @@ chrome. Pure widget.
 **Layout:**
 
 - **Mini brand bar** at the top: real
-  `Sam's Freedom Ford McAlester` shield logo (same asset as the
+  `Sam's Dealer OS McAlester` shield logo (same asset as the
   OS shell, committed in the branding pass) + the dealer name
-  styled as `Sam's Freedom Ford Assistant` + the SESSION_016
+  styled as `Sam's Dealer OS Assistant` + the SESSION_016
   trust row (Real inventory · Payment-aware · No pressure)
   inline beneath. A small `New chat` ghost button appears once
   the user has sent a message; otherwise hidden so the empty
@@ -64,8 +64,8 @@ chrome. Pure widget.
   `<AssistantChat />` rendering the same starters / transcript
   / composer the dealer-side page uses. Welcome line tweaked to
   read like a customer-facing intro:
-  *"Hi — I'm Sam's Freedom Ford's sales assistant."*
-- **Subtle footer**: *"Estimates only. A Sam's Freedom Ford
+  *"Hi — I'm Sam's Dealer OS's sales assistant."*
+- **Subtle footer**: *"Estimates only. A Sam's Dealer OS
   advisor confirms real numbers."* on the left, **"Powered by
   AI Sales Assistant"** on the right (hidden on mobile via
   `sm:inline` so the line stays clean at narrow widths).
@@ -216,7 +216,7 @@ docs/handoffs/SESSION_017_public_embed_preview.md    NEW (this file)
 | `npx tsc --noEmit` | ✓ 0 errors |
 | `npx vite build` | ✓ 1.04s · 1715 modules · 48.55 kB CSS · 432.08 kB JS (gzip 120.51 kB) |
 | Playwright `/embed/assistant` desktop (1366×900) | ✓ no sidebar / no topbar / no dashboard chrome |
-| Embed brand bar — shield logo + "Sam's Freedom Ford Assistant" + trust row | ✓ |
+| Embed brand bar — shield logo + "Sam's Dealer OS Assistant" + trust row | ✓ |
 | Embed empty state — bot avatar + welcome + 4 starters in 2-col grid | ✓ |
 | Embed footer — "Estimates only…" + "Powered by AI Sales Assistant" | ✓ |
 | Embed mobile (390×844) | ✓ brand bar wraps, starters stack, "Powered by…" hidden via sm:inline |
@@ -263,7 +263,7 @@ Screenshots saved locally as
   response. Explicitly out of scope per the SESSION_017 "no
   backend" guardrail; needs a backend-touching session.
 - **Setup dealership name does not yet drive OS / embed
-  branding.** The strings `Sam's Freedom Ford`, `McAlester`,
+  branding.** The strings `Sam's Dealer OS`, `McAlester`,
   and the trust-row labels are hard-coded constants in
   `App.tsx` and `EmbedAssistantPage.tsx`. The
   `OnboardingProfile.dealership_name` and `store_location`
@@ -290,7 +290,7 @@ The Setup page already collects the dealership's identity
 `OnboardingProfile`. Today those values are read by the
 Overview's Assistant Status card and nowhere else — every
 brand surface in the app shell and embed still hard-codes
-`Sam's Freedom Ford` / `McAlester`. SESSION_018 closes that
+`Sam's Dealer OS` / `McAlester`. SESSION_018 closes that
 loop so a manager who edits Setup sees the OS chrome update.
 
 **Scope:**

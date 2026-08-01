@@ -185,7 +185,7 @@ def _band_model_hint(price_low: int, price_high: Optional[int]) -> str:
 
     Manager-facing acquisition hint on the pipeline dashboard. Kept
     make-agnostic so the same rule works for a Copper Canyon-style
-    mixed-lot indie config, a Freedom Ford-style franchise config, or
+    mixed-lot indie config, a Dealer OS-style franchise config, or
     any other configuration — the manager knows the specific models
     they buy; the hint just tells them WHAT price/segment shape has
     demand outrunning supply.

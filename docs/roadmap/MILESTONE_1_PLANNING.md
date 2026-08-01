@@ -212,7 +212,7 @@ goes unaccounted-for.
 | 14 | Chat safety stack | `services/llm_safety.py` and all scrub modules | **NO IMPACT.** Milestone 1 does not touch the 16-stage pipeline. | None. |
 | 15 | Payment engine | `services/payment_engine.py` | **NO IMPACT.** Deterministic math is stateless. | None. |
 | 16 | Franchise env-override config path | `DEALER_AI_DEALER_TYPE=franchise`, `DEALER_AI_PRIMARY_MAKE=<OEM>` | **Preserved.** Must continue to work for single-tenant local dev. | The resolver's env-override layer stays intact and takes precedence over the (new) per-tenant DB row when no explicit tenant context exists. |
-| 17 | Freedom Ford demo assets | `docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`, `public/sams-freedom-ford-logo.jpg` | **NO IMPACT.** | None. |
+| 17 | Dealer OS demo assets | `docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md`, `public/sams-freedom-ford-logo.jpg` | **NO IMPACT.** | None. |
 | 18 | Django admin at `/admin/` | Uses `django.contrib.auth` today | **NO IMPACT.** Already authenticated. | None. |
 
 ---
@@ -624,7 +624,7 @@ and identifying Milestone 2 kickoff scope.
 - ❌ No per-role UI polish beyond what auth strictly requires.
 - ❌ No changes to the 16-stage scrub stack.
 - ❌ No changes to `services/payment_engine.py`.
-- ❌ No deletion of the franchise config path or Freedom Ford demo
+- ❌ No deletion of the franchise config path or Dealer OS demo
   assets.
 
 ---

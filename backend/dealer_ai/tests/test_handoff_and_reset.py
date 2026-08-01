@@ -57,7 +57,7 @@ def _make_lead_with_session(**lead_kwargs) -> CustomerLead:
 # ---- handoff_service unit tests --------------------------------------------
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class HandoffServiceTests(TestCase):
     def test_packet_includes_all_required_fields(self):
         v = _make_vehicle()
@@ -107,7 +107,7 @@ class HandoffServiceTests(TestCase):
         packet = build_handoff_packet(lead, provider=provider)
         # Fallback message addresses the customer by first name.
         self.assertIn("Hi Chris", packet["suggested_message"])
-        self.assertIn("Freedom Ford", packet["suggested_message"])
+        self.assertIn("Dealer OS", packet["suggested_message"])
 
     def test_packet_to_text_renders_clipboard_friendly_string(self):
         v = _make_vehicle()

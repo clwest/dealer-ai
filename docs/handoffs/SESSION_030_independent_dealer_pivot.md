@@ -9,7 +9,7 @@ persona: Copper Canyon Auto (Yuma, AZ)
 # Session handoff — independent-dealer pivot (Phases 1–3)
 
 The kit's *default* dealer persona pivoted from Sam Wampler's
-Freedom Ford (franchise, single-make new+used) to the invented
+Dealer OS (franchise, single-make new+used) to the invented
 Copper Canyon Auto (Yuma, AZ — independent, mixed-make used only).
 Franchise config path is preserved as a *supported alternative*
 via env / setting overrides — this was a default swap, not a
@@ -149,7 +149,7 @@ zero regressions.
   (14 trucks, 16 SUVs, 12 cars, 3 vans). Every unit
   `condition="used"`, prices $4k–$25k, years 2012–2020,
   `source="copper_canyon_demo"` (different marker than the
-  Freedom Ford seed's `"demo_seed"`). Idempotent by
+  Dealer OS seed's `"demo_seed"`). Idempotent by
   `stock_number`. Test contract locked by
   `test_copper_canyon_seed` (+11 cases): ≥6 distinct makes;
   no single make >40% share; price band ≤$6k min, ≤$27k max;
@@ -161,14 +161,14 @@ zero regressions.
   Toyota + trade-in / "which would you show first". Includes
   presenter talking points, setup steps, "if it goes
   off-script" guardrails, and honest scope notes on what
-  Phase 3–5 still owes. Freedom Ford demo script intentionally
+  Phase 3–5 still owes. Dealer OS demo script intentionally
   preserved as the franchise-config reference.
 - **`5f2e537` `feat(pivot): add seed_copper_canyon_scenarios — 4 indie chat sessions`**
   — 4 hand-crafted chat sessions + leads pointed at
   Copper Canyon inventory (CC-* stock). Auto-invokes
   `seed_copper_canyon_demo` if any referenced stock is
   missing. `demo_tag="copper_canyon_scenario"` isolates from
-  the Freedom Ford scenarios. Scenarios: cash work truck
+  the Dealer OS scenarios. Scenarios: cash work truck
   (Carlos, handed off), BHPH weekly-pay SUV (Michelle, poor
   credit, immediate, open), snowbird cash Pilot (Diane,
   excellent credit, this_week), first-time buyer + cosigner
@@ -235,7 +235,7 @@ build clean.
   `DealerOnboardingProfile` migration.
 - `useBrand()` extension exposing the full `DealerProfile` —
   same migration dependency.
-- Freedom Ford legacy JPG asset
+- Dealer OS legacy JPG asset
   `public/sams-freedom-ford-logo.jpg` intentionally preserved
   per pivot guardrail ("do not delete tier-3 assets").
 
@@ -248,7 +248,7 @@ build clean.
   results, search Ford-first) run under
   `@override_settings(DEALER_AI_PRIMARY_MAKE="Ford")` and
   still pin the franchise behavior.
-- ✅ No hardcoded "Sam Wampler" / "Freedom Ford" strings
+- ✅ No hardcoded "Sam Wampler" / "Dealer OS" strings
   reintroduced in default paths — every dealer identity in
   the shipped default flows through `useBrand()` /
   `get_dealer_profile()`.

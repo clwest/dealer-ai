@@ -65,14 +65,14 @@ def _good_drafts_json(channel: str = "sms") -> str:
                 "channel": channel,
                 "subject": None if channel == "sms" else "Following up on the Ranger",
                 "body": (
-                    "Hi Casey — Maria from Freedom Ford. Quick follow-up on the "
+                    "Hi Casey — Maria from Dealer OS. Quick follow-up on the "
                     "Ranger XLT (Stock #FF-USED-104). Want me to line up a time? "
                     "(Estimates W.A.C.) — Maria"
                 ),
             },
             {
                 "channel": channel,
-                "subject": None if channel == "sms" else "Quick note from Freedom Ford",
+                "subject": None if channel == "sms" else "Quick note from Dealer OS",
                 "body": (
                     "Hey Casey — checking in on the Ranger. Whenever works for "
                     "you, I'll line up a time. Thanks, Maria"
@@ -109,7 +109,7 @@ def _dirty_drafts_json() -> str:
                 "subject": None,
                 "body": (
                     "Hi Casey — I have you down for Saturday at 1 PM at "
-                    "Freedom Ford. See you then! Maria"
+                    "Dealer OS. See you then! Maria"
                 ),
             },
         ]
@@ -212,7 +212,7 @@ class FollowUpServiceTests(TestCase):
         self.assertTrue(any("LLM call failed" in w for w in result.warnings))
 
 
-@override_settings(DEALER_AI_DEALER_NAME="Freedom Ford")
+@override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class FollowUpParserResilienceTests(TestCase):
     """Phase 4 hardening: the layered parser must recover usable drafts
     when Ollama returns prose around the JSON, a single object instead
@@ -253,7 +253,7 @@ class FollowUpParserResilienceTests(TestCase):
                 "channel": "sms",
                 "subject": None,
                 "body": (
-                    "Hi Casey — Maria from Freedom Ford. Quick check-in. "
+                    "Hi Casey — Maria from Dealer OS. Quick check-in. "
                     "(W.A.C.) — Maria"
                 ),
             }
@@ -313,7 +313,7 @@ class FollowUpParserResilienceTests(TestCase):
         self.assertEqual(result.drafts[0]["source"], "fallback")
         self.assertEqual(result.drafts[0]["channel"], "email")
         self.assertIsNotNone(result.drafts[0]["subject"])
-        self.assertIn("Freedom Ford", result.drafts[0]["subject"])
+        self.assertIn("Dealer OS", result.drafts[0]["subject"])
 
     def test_fallback_when_lead_has_no_interested_vehicles(self):
         # Strip the vehicle relation — fallback should still produce a

@@ -1,4 +1,4 @@
-# Freedom Ford — Dealer AI MVP
+# Dealer OS — Dealer AI MVP
 
 A dealership AI concierge that helps customers search inventory, sketch
 realistic payments, compare vehicles, and hand off lead context to sales.
