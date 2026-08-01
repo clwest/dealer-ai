@@ -8,7 +8,7 @@ milestone: 5
 milestone_status: shipped
 increment: 7
 increment_status: shipped
-commit: TBD
+commit: 633a3aa
 ---
 
 # SESSION_081 — Milestone 5 · Increment 7 (M5.7 — closeout) + M6.0 (planning)
