@@ -30,6 +30,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from .models import (
     ROLE_DEALER_OWNER,
+    ROLE_RECON_MANAGER,
     ROLE_SALES_MANAGER,
     Salesperson,
     UserDealershipRole,
@@ -162,6 +163,44 @@ class IsSalesManagerOrOwnerAtActiveDealership(BasePermission):
             getattr(request, "user", None),
             dealership,
             (ROLE_SALES_MANAGER, ROLE_DEALER_OWNER),
+        )
+
+
+class IsReconManagerSalesManagerOrOwnerAtActiveDealership(BasePermission):
+    """Authenticated user holds ``recon_manager`` OR
+    ``sales_manager`` OR ``dealer_owner`` at
+    ``get_current_dealership(request)``.
+
+    Milestone 4 · Increment 6 — the M4 admin API surface (recon
+    dashboard, work orders, parts, vendor comms, vendor CRUD).
+    Composed from three existing role constants; no new role added.
+    Per :doc:`MILESTONE_4_PLANNING.md` §5.f matrix — every M4.6
+    admin endpoint uses this class (except the vendor delete
+    surface, which is refused at the schema layer via the PROTECT
+    contract from §5.b and does not have an endpoint at all).
+
+    ``recon_manager`` is the operational persona that owns recon
+    planning + WO approval + vendor comm drafting day-to-day. The
+    other two roles retain full access to M4 surfaces because
+    ``sales_manager`` supervises the entire back-of-house pipeline
+    and ``dealer_owner`` retains everything.
+
+    Advisor / porter / f_and_i_manager / collections all receive
+    ``False`` from this class — they see 403 on every M4 admin
+    endpoint (locked by the M4.6 permission-matrix test suite).
+    """
+
+    message = (
+        "Requires recon_manager, sales_manager, or dealer_owner at "
+        "the active dealership."
+    )
+
+    def has_permission(self, request, view) -> bool:
+        dealership = get_current_dealership(request)
+        return _user_holds_any_role_at(
+            getattr(request, "user", None),
+            dealership,
+            (ROLE_RECON_MANAGER, ROLE_SALES_MANAGER, ROLE_DEALER_OWNER),
         )
 
 

@@ -1,222 +1,231 @@
 ---
 state: active
 date: 2026-08-01
-last_session_shipped: SESSION_070
+last_session_shipped: SESSION_071
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
 milestone_4_status: in-progress
-next_session: SESSION_071
+next_session: SESSION_072
 next_milestone: 4
 next_milestone_name: "Recon automation"
-next_increment: 6
-next_increment_name: "M4.6 — Admin API + permission matrix"
+next_increment: 7
+next_increment_name: "M4.7 — Operator UI (VehicleReconPage + components)"
 ---
 
-# Next session — SESSION_071 · Milestone 4 · Increment 6 (M4.6 — admin API + permission matrix)
+# Next session — SESSION_072 · Milestone 4 · Increment 7 (M4.7 — operator UI)
 
-> **Milestone 4 · Increment 5 shipped at SESSION_070.**
-> New `services/vendor_comm.py` (4 functions) +
-> `_scrub_invented_recon_fact` extension to
-> `services/llm_safety.py`. 62 focused tests (29 scrub +
-> 33 service). Backend baseline **2,367 → 2,429 pass**, 1
-> skipped, 0 fail. Zero real LLM API access
-> (MockLLMProvider throughout). No SMTP / SMS wiring.
+> **Milestone 4 · Increment 6 shipped at SESSION_071.**
+> Eighteen admin API endpoints under
+> `/api/dealer-ai/admin/`, new permission class
+> `IsReconManagerSalesManagerOrOwnerAtActiveDealership`,
+> new view module `views_recon.py` (~750 lines), 89
+> focused endpoint tests. Backend baseline **2,429 →
+> 2,518 pass**, 1 skipped, 0 fail. Zero frontend changes.
+> Zero migrations. Endpoints delegate entirely to
+> `services/recon.py` + `services/vendor_comm.py`.
 >
-> **SESSION_071 opens M4.6 — the admin API + permission
-> matrix.** New DRF endpoints under
-> `/api/dealer-ai/admin/vehicles/<stock>/` and
-> `/api/dealer-ai/admin/vendors/` per planning §7 M4.6.
-> New permission class
-> `IsReconManagerSalesManagerOrOwnerAtActiveDealership`
-> per §5.f. Domain-error mapping to 409 / 404. Endpoints
-> delegate entirely to `services/recon.py` +
-> `services/vendor_comm.py`.
+> **SESSION_072 opens M4.7 — the frontend operator UI.**
+> New route `/dealer-ai-inventory/:stock/recon` +
+> `VehicleReconPage.tsx` + 7 extracted components +
+> typed API helpers for every M4.6 endpoint. Backend
+> stays frozen — this session is frontend-only.
 
 ## Governance layers (all apply, in this order on conflict)
 
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 4
-4. `docs/roadmap/AUTHENTICATION_MODEL.md` §8b — every
-   endpoint threads `dealership=` explicitly.
+4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_4_PLANNING.md`:
-   - §5.f — role permission matrix (per-endpoint role
-     access table).
-   - §7 M4.6 — endpoint list (Vendor CRUD, recon
-     dashboard, ReconDecision, WorkOrder create/approve/
-     start/complete/cancel/patch, findings attach/detach,
-     parts CRUD/transition, comm draft/approve/mark-sent/
-     log).
-6. `docs/handoffs/SESSION_070_m4_inc5_vendor_comm.md` —
-   this session's authoritative closeout + "Recommended
-   exact scope for SESSION_071".
-7. Prior handoffs (066, 067, 068, 069).
-8. `backend/dealer_ai/permissions.py` — existing role
-   classes; M4.6 composes an additive new class.
-9. `backend/dealer_ai/views.py` — M2.6 ledger + M3.6
-   condition-report admin endpoint patterns M4.6 mirrors.
-10. `docs/roadmap/MILESTONE_3_PLANNING.md` §7 M3.6A/B —
-    the exact shape M4.6 mirrors most closely.
+   - §1.7 (Vehicle read-model extension —
+     `open_work_orders` + `has_recon_decisions`).
+   - §5.g provenance rendering + human-approval visual
+     distinction.
+   - §7 M4.7 (frontend deliverable list + shape).
+6. `docs/handoffs/SESSION_071_m4_inc6_admin_api.md` — this
+   session's authoritative closeout + "Recommended exact
+   scope for SESSION_072".
+7. Prior M4 handoffs (066–070).
+8. `docs/handoffs/SESSION_063_m3_inc7_operator_ui.md` —
+   M3.7 operator UI, the closest analog M4.7 mirrors.
+9. `frontend/src/pages/VehicleConditionReportPage.tsx` —
+   M3.7's operator page + component extraction pattern.
+10. `CLAUDE.md` frontend stack notes — Tailwind v3 +
+    shadcn on the radix-nova bridged preset.
 
-## What M4.6 delivers
+## What M4.7 delivers
 
-**Admin API + permission class only.** No new service
-modules. No new domain errors. No migrations. No frontend
-(that's M4.7).
+**Frontend only.** No backend changes. No migrations. No
+new endpoints. No AI. No SMTP/SMS. Every screen surface
+consumes M4.6 admin API via `authFetch` per
+AUTHENTICATION_MODEL.md.
 
-### The new permission class
+### New route
 
-`IsReconManagerSalesManagerOrOwnerAtActiveDealership`
-in `backend/dealer_ai/permissions.py`. Composed from
-existing `ROLE_RECON_MANAGER` + `ROLE_SALES_MANAGER` +
-`ROLE_DEALER_OWNER` (all shipped M1 · 4A). Follows the
-existing composition pattern in
-`IsSalesManagerOrOwnerAtActiveDealership`.
+`/dealer-ai-inventory/:stock/recon` — inside `<RequireAuth>`
+in `frontend/src/main.tsx`. Sits alongside M2.7 ledger +
+M3.7 condition-report routes.
 
-Per-endpoint matrix locked at §5.f. Every M4.6 admin
-endpoint composes this new class. Advisor / porter /
-f_and_i_manager / collections get 403.
+### Page + extracted components
 
-### Endpoint list (per §7 M4.6)
+- `frontend/src/pages/VehicleReconPage.tsx` (~500 line
+  target — extract per M3.7 discipline).
+- Extracted components in `frontend/src/components/recon/`:
+  - `ReconDashboard` — the top-of-page recon summary
+    (report + decisions + WO list).
+  - `DecisionRow` — one recon decision line with
+    must/should/won't visual affordances.
+  - `WorkOrderCard` — one WorkOrder tile with all
+    metadata + action buttons per current status.
+  - `WorkOrderStatusBadge` — reusable status pill
+    (draft / approved / in_progress / completed /
+    cancelled).
+  - `PartRow` — one WorkOrderPart line with
+    transition-status dropdown.
+  - `VendorCommDraftPanel` — vendor comm draft display +
+    approve/edit/mark-sent affordances; renders
+    `source_provenance` alongside the draft body so
+    operators can see the AI-vs-human boundary.
+  - `VendorPickerModal` — modal for selecting a vendor
+    when creating an outsourced WO.
 
-Under `/api/dealer-ai/admin/`:
+### Typed API helpers
 
-- **Vendor CRUD** — list / create / detail / patch. No
-  delete surface (PROTECT contract from §5.b; deactivate
-  via `is_active=False` patch).
-- **GET vehicles/<stock>/recon/** — recon dashboard:
-  latest completed condition report + decisions + WOs +
-  parts + comms.
-- **POST vehicles/<stock>/findings/<id>/recon-decision/**
-  — record decision.
-- **POST vehicles/<stock>/work-orders/** — create draft.
-- **POST work-orders/<wo_id>/approve/** — approve.
-- **POST work-orders/<wo_id>/start/** — start.
-- **POST work-orders/<wo_id>/complete/** — complete.
-- **POST work-orders/<wo_id>/cancel/** — cancel.
-- **PATCH work-orders/<wo_id>/** — edit whitelisted
-  fields + revise-estimate re-ledger flow.
-- **POST work-orders/<wo_id>/findings/** — attach
-  findings.
-- **DELETE work-orders/<wo_id>/findings/<fid>/** —
-  detach finding.
-- **POST work-orders/<wo_id>/parts/** — add part.
-- **PATCH parts/<part_id>/** — update part / transition
-  status.
-- **DELETE parts/<part_id>/** — delete (draft-only).
-- **POST work-orders/<wo_id>/comms/draft/** — draft comm.
-- **POST comms/<comm_id>/approve/** — approve.
-- **POST comms/<comm_id>/mark-sent/** — mark sent.
-- **POST comms/log/** — log off-system comm.
+Extend `frontend/src/lib/api.ts` with typed helpers for
+every M4.6 endpoint. Each helper uses `authFetch` and
+maps the domain-error → HTTP status codes M4.6 documented
+(404 / 409 / 422 / 502 / 400) into distinct UI states.
 
-### Domain-error mapping
+### Role gating
 
-- `CrossTenantReconError` / `CrossTenantVendorCommError`
-  → 404 (never leak whether the resource exists across
-  tenants).
-- `ReconImmutableError` / `VendorCommImmutableError` →
-  409 Conflict.
-- `InvalidReconTransitionError` → 409.
-- `IncompleteConditionReportError` → 409.
-- `ReconFactScrubDroppedError` → 422 (unprocessable —
-  the operator should review and retry).
-- `EmptyDraftError` → 502 Bad Gateway (LLM upstream
-  returned nothing).
-- `ValueError` (invalid vocabulary / structural) → 400.
+Show write affordances only for `recon_manager` /
+`sales_manager` / `dealer_owner` (mirrors the M4.6 permission
+class). Read-only for other roles that somehow land on the
+page. Uses `useAuth()` to gate.
 
-### Provenance surfaces
+### Provenance rendering
 
-Comm serializer response includes `source_provenance`
-(the source_bundle + scrubs_fired + llm_provider) so the
-M4.7 UI can render "here's what the AI had to work from"
-alongside the draft.
+`source_provenance` on vendor comm rows contains
+`source_bundle` (the human-authored facts the AI drew
+from), `scrubs_fired` (which safety scrubs modified the
+output), and `llm_provider`. The UI renders the source
+bundle in a collapsible side panel so the operator can
+compare the AI draft against the ground truth.
 
-## What SESSION_071 should do
+### Distinct HTTP-status UX
+
+- 401 → redirect to `/login?next=<current>`.
+- 403 → "You don't have permission to modify this."
+- 404 → "Resource not found." (never leak cross-tenant
+  existence).
+- 409 → "This action conflicts with the current state.
+  Refresh and try again." (per-transition text may
+  provide more context.)
+- 422 → "The AI draft was rejected by the safety scrub.
+  Please review your inputs and retry." (specific to
+  vendor comm draft.)
+- 502 → "The AI service returned no draft. Please retry
+  in a moment."
+
+### Draft-vs-approved-vs-sent visual states
+
+Vendor comm rows visually distinct across all four states
+(draft, approved, sent, logged). Not merely disabled
+buttons — per planning §3 checklist for M4 frontend:
+"Draft-vs-approved-vs-sent UI states are visually
+distinct (not merely disabled) — same discipline as
+M3.7's CompletionBanner."
+
+## What SESSION_072 should do
 
 ### Recommended step sequence
 
 1. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_4_PLANNING.md` §5.f + §7 M4.6.
-   - `docs/handoffs/SESSION_070_m4_inc5_vendor_comm.md`
-     — the scope block above.
-   - `backend/dealer_ai/permissions.py` — the existing
-     `IsSalesManagerOrOwnerAtActiveDealership` composition
-     pattern M4.6 mirrors.
-   - `backend/dealer_ai/views.py` — M2.6 admin ledger
-     endpoints (`admin_vehicle_ledger`, etc.) and M3.6
-     condition-report endpoints. Note the tenant-scoping
-     + cross-tenant-fail-closed pattern.
-   - `backend/dealer_ai/urls.py` — route registration
-     pattern.
-   - `backend/dealer_ai/services/recon.py` +
-     `services/vendor_comm.py` — the service surfaces
-     M4.6 delegates to.
-   - `backend/dealer_ai/tests/test_admin_endpoints.py` +
-     `test_admin_endpoints_auth.py` — the M2.6 test shape
-     M4.6 mirrors.
+   - `docs/roadmap/MILESTONE_4_PLANNING.md` §1.7 +
+     §5.g + §7 M4.7.
+   - `docs/handoffs/SESSION_071_m4_inc6_admin_api.md` —
+     scope block above.
+   - `docs/handoffs/SESSION_063_m3_inc7_operator_ui.md` —
+     M3.7 operator UI closest analog.
+   - `frontend/src/pages/VehicleConditionReportPage.tsx` —
+     the M3.7 page pattern.
+   - `frontend/src/components/condition-report/` — extracted
+     components pattern.
+   - `frontend/src/lib/api.ts` — existing helper shape.
+   - `frontend/src/main.tsx` — where to register the new
+     route.
+   - `CLAUDE.md` frontend stack notes — Tailwind v3 +
+     shadcn bridge details.
 
 2. **Verify starting state.**
    - `git status` clean (or only pre-existing untracked).
-   - `python3 manage.py test dealer_ai` → **2,429 pass, 1
-     skipped, 0 fail**.
-   - `python3 manage.py check` clean.
-   - `python3 manage.py makemigrations --check --dry-run`
-     → "No changes detected."
+   - `python3 manage.py test dealer_ai` → **2,518 pass, 1
+     skipped, 0 fail** (backend frozen for this session).
+   - `npx tsc --noEmit` clean.
+   - `npx vite build` clean.
 
-3. **Add the permission class** to
-   `dealer_ai/permissions.py`. Follow the composition
-   pattern of the existing sales_manager/owner class.
+3. **Add typed API helpers** for every M4.6 endpoint to
+   `lib/api.ts`.
 
-4. **Add endpoint views** to `dealer_ai/views.py` (or a
-   new `views_recon.py` if the file is getting large —
-   check current size first; M3.6 stayed in views.py).
+4. **Create component files** in
+   `frontend/src/components/recon/`. Start with
+   `WorkOrderStatusBadge` (simplest; reusable across
+   other components). Then `DecisionRow`, `PartRow`,
+   `WorkOrderCard`, `VendorCommDraftPanel`,
+   `VendorPickerModal`, `ReconDashboard`.
 
-5. **Register routes** in `dealer_ai/urls.py`.
+5. **Create `VehicleReconPage.tsx`** that composes the
+   components and wires them to the API helpers via
+   `useQuery` / `useMutation` (or the existing fetch
+   pattern in this codebase — check `VehicleConditionReportPage`
+   for the choice).
 
-6. **Write ~90 focused endpoint tests** in
-   `backend/dealer_ai/tests/test_admin_recon_endpoints.py`
-   (or split by resource — vendor / recon / work-order /
-   parts / comms — if the single-file version gets
-   unwieldy).
+6. **Register the route** in `main.tsx` inside
+   `<RequireAuth>`.
 
-7. **Full-suite verification.** Target 2,429 → ~2,519 pass.
+7. **Add the "Recon" button** to the operator inventory
+   card wherever the M2.7 "Ledger" + M3.7 "Condition
+   Report" buttons live. Match style.
 
-8. **Ship handoff at
-   `docs/handoffs/SESSION_071_m4_inc6_admin_api.md`**
-   mirroring the previous handoff shape.
+8. **Verify frontend build.**
+   - `npx tsc --noEmit` clean.
+   - `npx vite build` clean.
+   - Manual browser walkthrough NOT required for M4.7 —
+     per M3.7 honesty precedent, deferred to operator
+     first-live-use.
 
-9. **Overwrite `00-START-NEXT-SESSION.md`** with M4.7
-   priority (frontend operator UI).
+9. **Ship handoff at
+   `docs/handoffs/SESSION_072_m4_inc7_operator_ui.md`**
+   mirroring the previous shape.
 
-## Explicit non-goals for SESSION_071
+10. **Overwrite `00-START-NEXT-SESSION.md`** with M4.8
+    priority (deferred send subset, or M4.9 closeout if
+    M4.8 is not landing per §5.i).
 
-- ❌ Do NOT add any new service module. Delegate
-  entirely to `services/recon.py` +
-  `services/vendor_comm.py`.
-- ❌ Do NOT modify M4.1 – M4.5 substrate.
-- ❌ Do NOT add outbound SMTP / SMS send. Planning §5.i
-  deferred.
-- ❌ Do NOT add any new domain errors — use the ones the
-  services already expose.
-- ❌ Do NOT touch frontend — M4.7.
-- ❌ Do NOT add real LLM API calls in tests.
-  MockLLMProvider only.
-- ❌ Do NOT add QC verification fields / endpoints
-  (§1.0.QC-GAP annotation defers to a future increment).
-- ❌ Do NOT introduce any new migration.
+## Explicit non-goals for SESSION_072
+
+- ❌ Do NOT touch backend files.
+- ❌ Do NOT add real SMTP/SMS send UI. Planning §5.i
+  defers.
+- ❌ Do NOT surface QC verification UI — §1.0.QC-GAP
+  annotation deferred to future increment.
+- ❌ Do NOT add any new endpoint — M4.6 is closed.
+- ❌ Do NOT modify any service module.
+- ❌ Do NOT introduce any migration.
+- ❌ Do NOT add real LLM API calls anywhere.
 
 ## NEXT TASK
 
-Start SESSION_071 with the read-first list above. Add the
-new permission class + admin endpoints + URL routes. Write
-~90 focused endpoint tests covering the permission matrix
-+ business flows + domain-error mapping + cross-tenant
-fail-closed 404s. Target baseline 2,429 → ~2,519. Ship the
-M4.6 handoff.
+Start SESSION_072 with the read-first list above. Extend
+`lib/api.ts` with typed helpers for all 18 M4.6
+endpoints. Build the seven recon components + one
+`VehicleReconPage.tsx`. Register the route + add the
+inventory-card button. Verify `tsc --noEmit` + `vite
+build` clean. Ship the M4.7 handoff.
 
-Backend baseline at SESSION_071 close: **~2,519 pass**.
-Frontend baseline: unchanged.
+Backend baseline at SESSION_072 close: **2,518 pass** (unchanged
+— frontend-only session).
 
 ---
 
@@ -227,16 +236,17 @@ Frontend baseline: unchanged.
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 4
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_4_PLANNING.md` (SESSION_066 +
-   SESSION_067 + SESSION_068 amendments; §5.f + §7 M4.6
-   anchor M4.6)
-6. `docs/handoffs/SESSION_070_m4_inc5_vendor_comm.md`
-7. Prior M4 handoffs (066, 067, 068, 069)
-8. `docs/handoffs/SESSION_065_m4_planning.md`
-9. `docs/roadmap/MILESTONE_3_PLANNING.md` §7 M3.6A/B (the
-   endpoint shape M4.6 mirrors most closely)
-10. `docs/CAPABILITY_MATRIX.md` §7c + §7d
-11. Most recent handoffs
-    (`SESSION_070_m4_inc5_vendor_comm.md`,
+   SESSION_067 + SESSION_068 amendments; §7 M4.7 anchors)
+6. `docs/handoffs/SESSION_071_m4_inc6_admin_api.md`
+7. Prior M4 handoffs (066, 067, 068, 069, 070)
+8. `docs/handoffs/SESSION_063_m3_inc7_operator_ui.md`
+9. `docs/handoffs/SESSION_065_m4_planning.md`
+10. `frontend/src/pages/VehicleConditionReportPage.tsx`
+11. `CLAUDE.md` frontend stack notes
+12. `docs/CAPABILITY_MATRIX.md` §7c + §7d
+13. Most recent handoffs
+    (`SESSION_071_m4_inc6_admin_api.md`,
+    `SESSION_070_m4_inc5_vendor_comm.md`,
     `SESSION_069_m4_inc4_parts.md`,
     `SESSION_068_m4_inc3_ledger.md`,
     `SESSION_067_m4_inc2_service_state_machine.md`,
@@ -256,32 +266,38 @@ Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_070 — M4.5 vendor comm drafting + scrub shipped)
+## Operational state (post-SESSION_071 — M4.6 admin API shipped)
 
 - **Backend (local):** Django on `:8001`. Migrations
   `0001`–`0016` (unchanged since SESSION_066). Test
-  baseline: **2,429 pass**, 1 skipped, 0 fail (up from
-  2,367; +62 M4.5 tests).
+  baseline: **2,518 pass**, 1 skipped, 0 fail (up from
+  2,429; +89 M4.6 endpoint tests).
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`. `tsc --noEmit`
   clean. `vite build` clean. Unchanged.
 - **Frontend (prod):** NONE.
-- **DRF defaults + CSRF + permissions:** unchanged. New
-  permission class lands in M4.6.
+- **DRF admin surface:** 18 new M4.6 endpoints under
+  `/api/dealer-ai/admin/` for vendors, recon dashboard,
+  work orders, parts, and vendor comms. All gated by
+  `IsReconManagerSalesManagerOrOwnerAtActiveDealership`.
 - **Milestone 4 status:** M4.1 + M4.2 + M4.3 + M4.4 +
-  M4.5 shipped; admin API + permission matrix (M4.6) is
+  M4.5 + M4.6 shipped; frontend operator UI (M4.7) is
   the next in-scope increment.
-- **Dev DB seeded users:** `smoke_owner` + `smoke_advisor`.
-- **New M4 tables:** unchanged from SESSION_066.
+- **Dev DB seeded users:** `smoke_owner` +
+  `smoke_advisor`. Neither has `recon_manager` role yet;
+  M4.7 verification should create a `smoke_recon` user
+  with `recon_manager` role for smoke testing (or
+  extend `smoke_owner` with an additional membership).
 - **Service surface:**
-  - `services/recon.py`: 11 recon + 4 parts + 2 Vehicle
-    read helpers + 4 domain errors + ledger integration.
-  - `services/vendor_comm.py`: 4 functions
-    (draft/approve/mark_sent/log) + 4 domain errors.
-- **Scrub surface:** `apply_post_llm_scrubs` now accepts
-  `recon_source_bundle=` kwarg. `_scrub_invented_recon_fact`
-  fires on `kind in {"vendor_comm", "parts_order"}`.
-- **LLM path:** existing provider factory unchanged.
-  Vendor comm drafting stubbed via MockLLMProvider in
-  tests. Real LLM path via Ollama / OpenAI wired but
-  never exercised in the automated suite.
+  - `services/recon.py`: 11 recon + 1 revise_estimate + 4
+    parts + 2 Vehicle read helpers + 4 domain errors + 5
+    ledger helpers.
+  - `services/vendor_comm.py`: 4 functions + 4 domain
+    errors.
+- **View surface:** `views.py` (M1 – M3 endpoints, ~2,400
+  lines) + `views_recon.py` (M4.6 endpoints, ~750 lines).
+- **Permission classes:**
+  `IsAdvisorForSlug`, `IsDealerOwnerForAdvisorSlug`,
+  `IsSalesManagerOrOwnerAtActiveDealership`,
+  `IsReconManagerSalesManagerOrOwnerAtActiveDealership`
+  (M4.6), `IsDealerOwnerAtActiveDealership`, `ReadOnly`.

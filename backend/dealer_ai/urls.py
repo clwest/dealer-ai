@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_recon
 
 app_name = "dealer_ai"
 
@@ -170,5 +170,103 @@ urlpatterns = [
         "<int:finding_id>/photos/local-upload/",
         views.admin_condition_photo_local_upload_receiver,
         name="admin-condition-photo-local-upload",
+    ),
+    # ---- Milestone 4 · Increment 6 — recon admin API -----------------
+    # Vendor CRUD.
+    path(
+        "admin/vendors/",
+        views_recon.admin_vendor_list,
+        name="admin-vendor-list",
+    ),
+    path(
+        "admin/vendors/<slug:slug>/",
+        views_recon.admin_vendor_detail,
+        name="admin-vendor-detail",
+    ),
+    # Recon dashboard.
+    path(
+        "admin/vehicles/<str:stock_number>/recon/",
+        views_recon.admin_recon_dashboard,
+        name="admin-recon-dashboard",
+    ),
+    # Recon decision.
+    path(
+        "admin/vehicles/<str:stock_number>/"
+        "findings/<int:finding_id>/recon-decision/",
+        views_recon.admin_recon_decision_create,
+        name="admin-recon-decision-create",
+    ),
+    # WorkOrder lifecycle.
+    path(
+        "admin/vehicles/<str:stock_number>/work-orders/",
+        views_recon.admin_work_order_create,
+        name="admin-work-order-create",
+    ),
+    path(
+        "admin/work-orders/<int:wo_id>/approve/",
+        views_recon.admin_work_order_approve,
+        name="admin-work-order-approve",
+    ),
+    path(
+        "admin/work-orders/<int:wo_id>/start/",
+        views_recon.admin_work_order_start,
+        name="admin-work-order-start",
+    ),
+    path(
+        "admin/work-orders/<int:wo_id>/complete/",
+        views_recon.admin_work_order_complete,
+        name="admin-work-order-complete",
+    ),
+    path(
+        "admin/work-orders/<int:wo_id>/cancel/",
+        views_recon.admin_work_order_cancel,
+        name="admin-work-order-cancel",
+    ),
+    path(
+        "admin/work-orders/<int:wo_id>/",
+        views_recon.admin_work_order_patch,
+        name="admin-work-order-patch",
+    ),
+    path(
+        "admin/work-orders/<int:wo_id>/findings/",
+        views_recon.admin_work_order_attach_findings,
+        name="admin-work-order-attach-findings",
+    ),
+    path(
+        "admin/work-orders/<int:wo_id>/findings/<int:finding_id>/",
+        views_recon.admin_work_order_detach_finding,
+        name="admin-work-order-detach-finding",
+    ),
+    # Parts.
+    path(
+        "admin/work-orders/<int:wo_id>/parts/",
+        views_recon.admin_work_order_part_create,
+        name="admin-work-order-part-create",
+    ),
+    path(
+        "admin/parts/<int:part_id>/",
+        views_recon.admin_part_detail,
+        name="admin-part-detail",
+    ),
+    # Vendor communications.
+    path(
+        "admin/work-orders/<int:wo_id>/comms/draft/",
+        views_recon.admin_work_order_comm_draft,
+        name="admin-work-order-comm-draft",
+    ),
+    path(
+        "admin/comms/<int:comm_id>/approve/",
+        views_recon.admin_comm_approve,
+        name="admin-comm-approve",
+    ),
+    path(
+        "admin/comms/<int:comm_id>/mark-sent/",
+        views_recon.admin_comm_mark_sent,
+        name="admin-comm-mark-sent",
+    ),
+    path(
+        "admin/comms/log/",
+        views_recon.admin_comm_log,
+        name="admin-comm-log",
     ),
 ]
