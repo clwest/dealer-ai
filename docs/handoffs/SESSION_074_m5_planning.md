@@ -8,7 +8,7 @@ milestone: 5
 milestone_status: planning
 increment: 0
 increment_status: shipped
-commit: TBD
+commit: ec2b611
 ---
 
 # SESSION_074 — Milestone 5 · Increment 0 (M5.0 — planning pass)
