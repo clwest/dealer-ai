@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: in-progress
 increment: 3
 increment_status: shipped
-commit: TBD
+commit: 568d81e
 ---
 
 # SESSION_068 — Milestone 4 · Increment 3 (M4.3 — ledger integration + estimate retirement)
