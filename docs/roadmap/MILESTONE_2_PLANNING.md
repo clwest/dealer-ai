@@ -407,7 +407,7 @@ view or via post_save signal on `VehicleAcquisition`, but:
 3. The operator can `--dry-run` before committing — a signal has
    no dry-run.
 
-### 1.5 Acquisition-price scrub (17th safety pipeline stage)
+### 1.5 Acquisition-price scrub (defense-in-depth)
 
 - **Business question answered.** *Prevents* the ledger from
   answering customer-facing questions it must never answer
@@ -439,9 +439,13 @@ view or via post_save signal on `VehicleAcquisition`, but:
   - Runs *after* the existing dealer-cost-safety detector
     (`detect_unsafe_response`) so the pre-existing wholesale
     rewrite still takes precedence when its pattern fires.
-- **Extend.** §3.1 llm_safety stack — one additional stage. The
-  16-stage count becomes 17. `apply_post_llm_scrubs` signature
-  unchanged. No existing scrub is modified.
+- **Extend.** §3.1 llm_safety stack — one additional partial
+  scrub joining the always-runs section of `apply_post_llm_scrubs`.
+  `apply_post_llm_scrubs` signature unchanged. No existing scrub
+  is modified. Deliberately NOT called "stage 17" in code (the
+  numbered-stage count is documentation, not a code contract; the
+  scrub name `acquisition_price` recorded in `scrubs_fired` is
+  the durable identifier — see SESSION_051 handoff).
 - **Leave untouched.** Every existing scrub (pre-LLM guards,
   post-LLM partial scrubs, wholesale rewrites, invented_promotion,
   invented_appointment, indie_prohibited). The 1,466 test baseline
@@ -1313,11 +1317,38 @@ scope-discipline reminders above still apply to every increment.
   `daily_floor_plan_interest` as the source of truth (no
   duplicated math).
 
-- **M2.5 — Acquisition-price safety scrub (safety pipeline
-  stage 17).** `services/llm_safety.py::_scrub_acquisition_price`
+- **M2.5 — Acquisition-price safety scrub (SHIPPED at
+  SESSION_051).** `services/llm_safety.py::_scrub_acquisition_price`
   + `_ACQUISITION_PRICE_PATTERNS` block + branch in
-  `apply_post_llm_scrubs` firing on every `kind`. Positive AND
-  negative tests. Existing 16 scrub stages untouched.
+  `apply_post_llm_scrubs` firing on every `kind` (`chat`,
+  `vehicle_ask`, `ad`, `follow_up`). Verbal-framing patterns
+  anchored on cost-ownership signals (never a generic dollar
+  detector — favor false negatives over broad false positives).
+  Neutral substitutions per pattern; no fabricated
+  customer-facing numbers. Text-only — zero DB access. Runs
+  AFTER the existing dealer-cost wholesale rewrite so
+  precedence is preserved: "we paid $X" and "our cost was $X"
+  still trigger the stronger wholesale rewrite (existing
+  behavior); the acquisition-price scrub adds coverage for
+  phrases NOT in the pre-existing forbidden list — "we're in
+  it for $X", "we've got $X in", "purchase price was $X",
+  "our purchase price", "acquired for $X", "total
+  investment", "our investment in this piece", "floor plan
+  interest", "spent $X on recon", "recon costs were $X".
+  71 focused tests: positive per phrase family, capitalization
+  / punctuation / contraction / spacing variants, multiple
+  leakages in one response, every `kind`, coherent remainder
+  after substitution, plus a strong negative corpus covering
+  asking price / sale price / monthly payment / down payment /
+  trade value / budget / discount / APR-and-taxes / warranty /
+  product pricing / affordability / "our current pricing" /
+  customer-side investment framing / "purchase price IS"
+  boundary. Precedence tests lock that existing wholesale
+  rewrites (dealer-cost, negotiation) still fire first.
+  Deliberately NOT called "stage 17" in code — the numbered-
+  stage abstraction is documentation, not a code contract;
+  the scrub name (`acquisition_price`) is recorded in
+  `scrubs_fired` and that is the durable identifier.
 
 - **M2.6 — Ledger API + permission matrix.** Three endpoints
   under `/api/dealer-ai/admin/vehicles/<stock_number>/…`:
