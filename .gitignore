@@ -31,3 +31,6 @@ docs/research/**/*.png
 .idea/
 .DS_Store
 db.migration_check.sqlite3
+
+# Obsidian vault (project-local knowledge base, not part of the repo)
+Dealer OS/

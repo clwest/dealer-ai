@@ -8,7 +8,7 @@ milestone: 7
 milestone_status: in-progress
 increment: 4
 increment_status: shipped
-commit: TBD
+commit: 6ea221d
 ---
 
 # SESSION_091 — Milestone 7 · Increment 4 (M7.4 — vendor SLA warnings)

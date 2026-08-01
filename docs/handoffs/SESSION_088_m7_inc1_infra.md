@@ -8,7 +8,7 @@ milestone: 7
 milestone_status: in-progress
 increment: 1
 increment_status: shipped
-commit: TBD
+commit: 6ea221d
 ---
 
 # SESSION_088 — Milestone 7 · Increment 1 (M7.1 — async infrastructure)

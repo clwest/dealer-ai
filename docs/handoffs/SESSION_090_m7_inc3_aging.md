@@ -8,7 +8,7 @@ milestone: 7
 milestone_status: in-progress
 increment: 3
 increment_status: shipped
-commit: TBD
+commit: 6ea221d
 ---
 
 # SESSION_090 — Milestone 7 · Increment 3 (M7.3 — aging snapshot job)

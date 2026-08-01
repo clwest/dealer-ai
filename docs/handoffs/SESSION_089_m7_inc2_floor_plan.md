@@ -8,7 +8,7 @@ milestone: 7
 milestone_status: in-progress
 increment: 2
 increment_status: shipped
-commit: TBD
+commit: 6ea221d
 ---
 
 # SESSION_089 — Milestone 7 · Increment 2 (M7.2 — floor-plan accrual job)
