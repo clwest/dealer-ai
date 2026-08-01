@@ -29,9 +29,10 @@ vocabulary is locked at planning §5.e (five families:
 ``estimate:<seq>``, ``estimate_reversal:<seq>``,
 ``completion_estimate_reversal``, ``estimate_reversal:cancel``,
 ``actual``). Every helper is idempotent via reference lookup so
-transition replay is safe. The service does NOT:
-- Own :class:`WorkOrderPart` transitions (add/order/receive/
-  install/return). Parts service lands in M4.4.
+transition replay is safe. As of M4.4 the service also owns
+:class:`WorkOrderPart` writes + transitions (add / update /
+transition_status / delete). The service does NOT:
+
 - Draft or send :class:`VendorCommunication` rows. Vendor comm
   drafting + `_scrub_invented_recon_fact` land in M4.5.
 - Expose HTTP endpoints or enforce permissions — M4.6.
@@ -181,6 +182,15 @@ from ..models import (
     ReconDecision,
     Vehicle,
     VehicleCost,
+    WORK_ORDER_PART_STATUS_BACKORDERED,
+    WORK_ORDER_PART_STATUS_CHOICES,
+    WORK_ORDER_PART_STATUS_INSTALLED,
+    WORK_ORDER_PART_STATUS_NEEDED,
+    WORK_ORDER_PART_STATUS_ORDERED,
+    WORK_ORDER_PART_STATUS_RECEIVED,
+    WORK_ORDER_PART_STATUS_RETURNED,
+    WORK_ORDER_PART_SOURCE_IN_STOCK,
+    WORK_ORDER_PART_SOURCE_TYPE_CHOICES,
     WORK_ORDER_STATUS_APPROVED,
     WORK_ORDER_STATUS_CANCELLED,
     WORK_ORDER_STATUS_COMPLETED,
@@ -188,6 +198,7 @@ from ..models import (
     WORK_ORDER_STATUS_IN_PROGRESS,
     WorkOrder,
     WorkOrderFinding,
+    WorkOrderPart,
 )
 from .condition_report import (
     latest_completed_condition_report as _latest_completed_condition_report,
@@ -1457,6 +1468,365 @@ def cancel_work_order(
         )
 
         return wo
+
+
+# ---- Parts service (M4.4) -------------------------------------------------
+#
+# Per SESSION_069 brief + planning §5.h: operational tracking data
+# only. No live marketplace, no auto-order, no vendor payment.
+# **Parts do not independently post to VehicleCost** — a part's cost
+# lives on the parent WorkOrder's estimate/actual aggregate, which
+# M4.3 posts via the ledger helpers above. Parts rows are
+# documentation about the physical goods flowing through the recon
+# process; they contribute to the WO estimate/actual sum, not to a
+# separate ledger family.
+
+# States that permit parts changes on the parent WO. Terminal WOs
+# (completed / cancelled) freeze the parts set. Kept module-level
+# so tests can import it and lock the exact vocabulary.
+_PART_MUTATION_ALLOWED_WORK_ORDER_STATUSES = frozenset(
+    {
+        WORK_ORDER_STATUS_DRAFT,
+        WORK_ORDER_STATUS_APPROVED,
+        WORK_ORDER_STATUS_IN_PROGRESS,
+    }
+)
+
+# Whitelist of fields ``update_part`` may set. Deliberately excludes
+# ``work_order``, ``dealership`` (re-parenting / re-scoping is not
+# an editing operation), ``status`` (that's what
+# ``transition_part_status`` is for), the four per-state timestamps
+# (auto-populated by the transition function), and the ORM-managed
+# ``id`` / ``created_at`` / ``updated_at``. Kept module-level so
+# tests can lock the exact surface.
+_UPDATE_PART_ALLOWED_FIELDS = frozenset(
+    {
+        "name",
+        "description",
+        "part_number",
+        "quantity",
+        "unit_cost",
+        "source_type",
+        "source_name",
+        "notes",
+    }
+)
+
+_VALID_WORK_ORDER_PART_STATUS_KEYS = frozenset(
+    key for key, _ in WORK_ORDER_PART_STATUS_CHOICES
+)
+
+_VALID_WORK_ORDER_PART_SOURCE_TYPE_KEYS = frozenset(
+    key for key, _ in WORK_ORDER_PART_SOURCE_TYPE_CHOICES
+)
+
+# Part-status transition table (planning §1.5 + §5.h + SESSION_069
+# brief). Each entry maps a from-state to the set of allowed
+# to-states. Every allowed transition also has an associated
+# timestamp field to auto-populate (or None if the transition does
+# not carry a timestamp — currently only the backordered path).
+_PART_ALLOWED_TRANSITIONS = {
+    WORK_ORDER_PART_STATUS_NEEDED: {
+        WORK_ORDER_PART_STATUS_ORDERED: "ordered_at",
+    },
+    WORK_ORDER_PART_STATUS_ORDERED: {
+        WORK_ORDER_PART_STATUS_RECEIVED: "received_at",
+        WORK_ORDER_PART_STATUS_BACKORDERED: None,  # waiting; no ts
+        WORK_ORDER_PART_STATUS_RETURNED: "returned_at",
+    },
+    WORK_ORDER_PART_STATUS_BACKORDERED: {
+        # Re-order after back-order clears. Timestamp refresh —
+        # the operator ordering again is a new event.
+        WORK_ORDER_PART_STATUS_ORDERED: "ordered_at",
+    },
+    WORK_ORDER_PART_STATUS_RECEIVED: {
+        WORK_ORDER_PART_STATUS_INSTALLED: "installed_at",
+        WORK_ORDER_PART_STATUS_RETURNED: "returned_at",
+    },
+    # Terminal for the parts lifecycle in M4.4.
+    WORK_ORDER_PART_STATUS_INSTALLED: {},
+    WORK_ORDER_PART_STATUS_RETURNED: {},
+}
+
+
+def _assert_part_tenant(
+    part: WorkOrderPart, dealership: Dealership
+) -> None:
+    """Raise :class:`CrossTenantReconError` when the target
+    WorkOrderPart or its parent WorkOrder does not belong to the
+    caller's dealership. Mirrors :func:`_assert_work_order_tenant`
+    shape.
+    """
+    if part.dealership_id != dealership.pk:
+        raise CrossTenantReconError(
+            f"WorkOrderPart #{part.pk} belongs to dealership "
+            f"{part.dealership_id}, not {dealership.pk} "
+            "(AUTHENTICATION_MODEL.md §1 layer 4)."
+        )
+    parent_dealership_id = getattr(
+        part.work_order, "dealership_id", None
+    )
+    if (
+        parent_dealership_id is not None
+        and parent_dealership_id != dealership.pk
+    ):
+        raise CrossTenantReconError(
+            f"WorkOrderPart #{part.pk} references WorkOrder in "
+            f"dealership {parent_dealership_id}, not {dealership.pk} "
+            "(AUTHENTICATION_MODEL.md §1 layer 4)."
+        )
+
+
+def add_part(
+    work_order: WorkOrder,
+    *,
+    dealership: Dealership,
+    name: str,
+    quantity: int = 1,
+    part_number: str = "",
+    description: str = "",
+    source_type: str = WORK_ORDER_PART_SOURCE_IN_STOCK,
+    source_name: str = "",
+    unit_cost=None,
+    notes: str = "",
+) -> WorkOrderPart:
+    """Create a new WorkOrderPart on the parent WO.
+
+    Preconditions:
+
+    - Parent WO tenant matches (raises
+      :class:`CrossTenantReconError`).
+    - Parent WO status is one of ``draft``, ``approved``, or
+      ``in_progress`` (raises
+      :class:`InvalidReconTransitionError` on ``completed`` /
+      ``cancelled`` — a finished WO's parts set is history).
+    - ``source_type`` is one of the seven canonical values
+      (raises :class:`ValueError`).
+    - Structural M4.1 clean guards (``quantity >= 1`` via
+      ``MinValueValidator(1)``; canonical status vocabulary)
+      surface via ``full_clean()``.
+
+    Always creates in ``status='needed'``. Callers advance the
+    part through its lifecycle via :func:`transition_part_status`.
+    """
+    _assert_work_order_tenant(work_order, dealership)
+    if source_type not in _VALID_WORK_ORDER_PART_SOURCE_TYPE_KEYS:
+        raise ValueError(
+            f"Unknown WorkOrderPart source_type: {source_type!r}. "
+            "Valid values live in "
+            "``dealer_ai.models.WORK_ORDER_PART_SOURCE_TYPE_CHOICES``."
+        )
+
+    with transaction.atomic():
+        wo = _load_for_transition(work_order)
+        if wo.status not in _PART_MUTATION_ALLOWED_WORK_ORDER_STATUSES:
+            raise InvalidReconTransitionError(
+                f"Cannot add part to WorkOrder #{wo.pk}: current "
+                f"status is {wo.status!r}. Parts changes are allowed "
+                "only on nonterminal WorkOrders "
+                "(draft / approved / in_progress)."
+            )
+        part = WorkOrderPart(
+            work_order=wo,
+            dealership=dealership,
+            name=name,
+            quantity=quantity,
+            part_number=part_number,
+            description=description,
+            source_type=source_type,
+            source_name=source_name,
+            unit_cost=unit_cost,
+            notes=notes,
+            status=WORK_ORDER_PART_STATUS_NEEDED,
+        )
+        part.full_clean()
+        part.save()
+        return part
+
+
+def update_part(
+    part: WorkOrderPart,
+    *,
+    dealership: Dealership,
+    **updates,
+) -> WorkOrderPart:
+    """Update a whitelisted subset of fields on a WorkOrderPart.
+
+    Whitelist (locked at :data:`_UPDATE_PART_ALLOWED_FIELDS`):
+    ``name``, ``description``, ``part_number``, ``quantity``,
+    ``unit_cost``, ``source_type``, ``source_name``, ``notes``.
+
+    Rejects any other kwarg with :class:`ValueError` — notably
+    ``status`` (that's :func:`transition_part_status`), the four
+    per-state timestamps (auto-populated by transitions),
+    ``work_order`` / ``dealership`` (re-parenting / re-scoping),
+    and any typo'd field name.
+
+    Preconditions:
+
+    - Part tenant matches (raises :class:`CrossTenantReconError`).
+    - Parent WO status is nonterminal (raises
+      :class:`InvalidReconTransitionError` otherwise — a finished
+      WO's parts detail is history).
+    - ``source_type``, if supplied, is one of the seven canonical
+      values.
+    - Structural M4.1 clean guards surface via ``full_clean()``.
+    """
+    _assert_part_tenant(part, dealership)
+
+    unknown = set(updates.keys()) - _UPDATE_PART_ALLOWED_FIELDS
+    if unknown:
+        raise ValueError(
+            f"update_part: unknown or forbidden field(s): "
+            f"{sorted(unknown)}. Whitelisted fields: "
+            f"{sorted(_UPDATE_PART_ALLOWED_FIELDS)}. Status "
+            "transitions go through ``transition_part_status``; "
+            "timestamps are auto-populated by transitions."
+        )
+
+    if "source_type" in updates:
+        source_type = updates["source_type"]
+        if source_type not in _VALID_WORK_ORDER_PART_SOURCE_TYPE_KEYS:
+            raise ValueError(
+                f"Unknown WorkOrderPart source_type: {source_type!r}. "
+                "Valid values live in "
+                "``dealer_ai.models.WORK_ORDER_PART_SOURCE_TYPE_CHOICES``."
+            )
+
+    with transaction.atomic():
+        # select_for_update the parent WO to lock the status
+        # check + subsequent part save.
+        wo = _load_for_transition(part.work_order)
+        if wo.status not in _PART_MUTATION_ALLOWED_WORK_ORDER_STATUSES:
+            raise InvalidReconTransitionError(
+                f"Cannot update WorkOrderPart #{part.pk}: parent "
+                f"WorkOrder #{wo.pk} status is {wo.status!r}. Parts "
+                "changes are allowed only on nonterminal "
+                "WorkOrders (draft / approved / in_progress)."
+            )
+        refreshed = WorkOrderPart.objects.select_for_update().get(
+            pk=part.pk
+        )
+        for field, value in updates.items():
+            setattr(refreshed, field, value)
+        refreshed.full_clean()
+        refreshed.save()
+        return refreshed
+
+
+def transition_part_status(
+    part: WorkOrderPart,
+    *,
+    dealership: Dealership,
+    new_status: str,
+    actor=None,
+) -> WorkOrderPart:
+    """Transition a WorkOrderPart to a new status.
+
+    Allowed transitions (planning §1.5 + §5.h + SESSION_069):
+
+    - ``needed → ordered`` (sets ``ordered_at``)
+    - ``ordered → received`` (sets ``received_at``)
+    - ``ordered → backordered`` (no timestamp — waiting)
+    - ``backordered → ordered`` (allowed re-order; refreshes
+      ``ordered_at``)
+    - ``ordered → returned`` (sets ``returned_at``)
+    - ``received → installed`` (sets ``installed_at``)
+    - ``received → returned`` (sets ``returned_at``)
+
+    Terminal: ``installed``, ``returned``. Any other transition
+    raises :class:`InvalidReconTransitionError`.
+
+    Preconditions:
+
+    - Part tenant matches.
+    - Parent WO status is nonterminal (matches ``add_part`` +
+      ``update_part`` gating — cannot mutate parts on a finished
+      WO). Raises :class:`InvalidReconTransitionError`.
+    - ``new_status`` is one of the six canonical part-status
+      values. Raises :class:`ValueError` otherwise.
+
+    Concurrency: uses ``select_for_update`` + ``refresh_from_db``
+    inside a ``transaction.atomic()`` block, matching the
+    WorkOrder-transition pattern from M4.2. ``actor`` is accepted
+    for future audit-trail extension; not currently persisted on
+    ``WorkOrderPart`` (planning §1.5 does not specify an actor
+    field per-transition — the parent WO's provenance covers
+    "who ordered this recon").
+    """
+    _assert_part_tenant(part, dealership)
+    if new_status not in _VALID_WORK_ORDER_PART_STATUS_KEYS:
+        raise ValueError(
+            f"Unknown WorkOrderPart status: {new_status!r}. Valid "
+            "values live in "
+            "``dealer_ai.models.WORK_ORDER_PART_STATUS_CHOICES``."
+        )
+
+    with transaction.atomic():
+        wo = _load_for_transition(part.work_order)
+        if wo.status not in _PART_MUTATION_ALLOWED_WORK_ORDER_STATUSES:
+            raise InvalidReconTransitionError(
+                f"Cannot transition WorkOrderPart #{part.pk}: parent "
+                f"WorkOrder #{wo.pk} status is {wo.status!r}. Parts "
+                "transitions are allowed only on nonterminal "
+                "WorkOrders."
+            )
+        refreshed = WorkOrderPart.objects.select_for_update().get(
+            pk=part.pk
+        )
+        allowed = _PART_ALLOWED_TRANSITIONS.get(refreshed.status, {})
+        if new_status not in allowed:
+            raise InvalidReconTransitionError(
+                f"Cannot transition WorkOrderPart #{refreshed.pk} "
+                f"from {refreshed.status!r} to {new_status!r}. "
+                "Allowed transitions from this state: "
+                f"{sorted(allowed.keys()) or 'none — terminal state'}."
+            )
+
+        refreshed.status = new_status
+        timestamp_field = allowed[new_status]
+        if timestamp_field is not None:
+            setattr(refreshed, timestamp_field, timezone.now().date())
+        refreshed.full_clean()
+        refreshed.save()
+        return refreshed
+
+
+def delete_part(
+    part: WorkOrderPart, *, dealership: Dealership
+) -> None:
+    """Hard-delete a WorkOrderPart. Only permitted while parent
+    WO is ``draft``.
+
+    Rationale: an approved / in_progress WO's parts detail is
+    part of the authorized scope — deletion would corrupt the
+    audit trail of what the operator planned. Parts on
+    approved / in_progress / completed / cancelled WOs stay as
+    historical documentation; if a part was ordered in error, the
+    right verb is
+    ``transition_part_status(new_status='returned')``, not
+    deletion.
+
+    Preconditions:
+
+    - Part tenant matches (raises
+      :class:`CrossTenantReconError`).
+    - Parent WO status is ``draft``. Raises
+      :class:`InvalidReconTransitionError` otherwise.
+    """
+    _assert_part_tenant(part, dealership)
+
+    with transaction.atomic():
+        wo = _load_for_transition(part.work_order)
+        if wo.status != WORK_ORDER_STATUS_DRAFT:
+            raise InvalidReconTransitionError(
+                f"Cannot delete WorkOrderPart #{part.pk}: parent "
+                f"WorkOrder #{wo.pk} status is {wo.status!r}. "
+                "Deletion is allowed only from draft. For parts "
+                "already ordered/received in error, transition to "
+                "'returned' instead."
+            )
+        WorkOrderPart.objects.filter(pk=part.pk).delete()
 
 
 # ---- Vehicle read helpers -------------------------------------------------

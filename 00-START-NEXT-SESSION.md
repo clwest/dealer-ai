@@ -1,202 +1,232 @@
 ---
 state: active
 date: 2026-08-01
-last_session_shipped: SESSION_068
+last_session_shipped: SESSION_069
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
 milestone_4_status: in-progress
-next_session: SESSION_069
+next_session: SESSION_070
 next_milestone: 4
 next_milestone_name: "Recon automation"
-next_increment: 4
-next_increment_name: "M4.4 — Parts tracking service"
+next_increment: 5
+next_increment_name: "M4.5 — Vendor communication drafting + invented_recon_fact scrub"
 ---
 
-# Next session — SESSION_069 · Milestone 4 · Increment 4 (M4.4 — parts service)
+# Next session — SESSION_070 · Milestone 4 · Increment 5 (M4.5 — vendor comm drafting + scrub)
 
-> **Milestone 4 · Increment 3 shipped at SESSION_068.**
-> Ledger integration wired into the M4.2 recon service.
-> Five reference-key constants, five `_post_*` helpers,
-> `revise_estimate` public function, category mapping
-> table, transition-function refactors (approve /
-> complete / cancel + estimate revision). Backend baseline
-> **2,285 → 2,318 pass**, 1 skipped, 0 fail. Frontend
-> unchanged. Planning §5.e appendix added for the category
-> mapping.
+> **Milestone 4 · Increment 4 shipped at SESSION_069.**
+> Parts-service functions (`add_part`, `update_part`,
+> `transition_part_status`, `delete_part`) added to
+> `services/recon.py`. 7-transition FSM, whitelist
+> updates, per-state timestamp auto-population, cross-
+> tenant guard, `select_for_update` concurrency. 49
+> focused tests. Backend baseline **2,318 → 2,367 pass**,
+> 1 skipped, 0 fail. Zero VehicleCost side effects.
 >
-> **SESSION_069 opens M4.4 — the parts service.** Four new
-> service functions (`add_part`, `update_part`,
-> `transition_part_status`, `delete_part`) in
-> `services/recon.py`. Whitelisted-field updates, six-value
-> status transition table, per-state timestamp population.
-> **No ledger integration** — parts cost lives on the
-> WorkOrder's estimate / actual aggregate; parts rows
-> themselves do not post to VehicleCost independently.
+> **SESSION_070 opens M4.5 — the AI-drafted vendor comm
+> path.** New module `services/vendor_comm.py` (4
+> functions), plus `_scrub_invented_recon_fact` extension
+> to `services/llm_safety.py` firing on `kind="vendor_comm"`
+> and `kind="parts_order"`. LLM path stubbed via mock
+> provider — zero real API access in tests.
 
 ## Governance layers (all apply, in this order on conflict)
 
-1. `docs/PROJECT_RULES.md` — six project-work rules.
-2. `docs/DOC_GOVERNANCE.md` — documentation rules.
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 4.
-4. `docs/roadmap/AUTHENTICATION_MODEL.md` §8b — every
-   service entry threads `dealership=` explicitly.
-5. `docs/roadmap/MILESTONE_4_PLANNING.md` — §1.5
-   (WorkOrderPart shape), §5.h (parts procurement scope),
-   §7 M4.4 (service signatures).
-6. `docs/handoffs/SESSION_068_m4_inc3_ledger.md` — this
-   session's authoritative closeout.
-7. `docs/handoffs/SESSION_067_m4_inc2_service_state_machine.md`
-   — the M4.2 state machine + tenancy guard pattern M4.4
-   mirrors.
-8. `docs/handoffs/SESSION_066_m4_inc1_core_models.md` —
-   the M4.1 WorkOrderPart model shape.
-9. `docs/research/RECON_MAPPING.md` §6.1–§6.6 (parts
-   sourcing operational context).
+1. `docs/PROJECT_RULES.md`
+2. `docs/DOC_GOVERNANCE.md`
+3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 4
+4. `docs/roadmap/AUTHENTICATION_MODEL.md` §8b
+5. `docs/roadmap/MILESTONE_4_PLANNING.md`:
+   - §1.6 + §1.6.SHIPPED — VendorCommunication shape and
+     the SESSION_067 enum reconciliation (kind /
+     channel / status vocabularies as shipped in M4.1).
+   - §5.g — AI boundary (what AI may / may NOT invent) +
+     the four regex families for `_scrub_invented_recon_fact`
+     + the JSON source-bundle contract.
+   - §5.i — send deferred to post-M4 prod-readiness pass.
+   - §7 M4.5 — service signatures.
+6. `docs/handoffs/SESSION_069_m4_inc4_parts.md` — this
+   session's authoritative closeout + "Recommended exact
+   scope for SESSION_070".
+7. Prior handoffs (066, 067, 068).
+8. `backend/dealer_ai/services/llm_safety.py` — the
+   existing scrub stack M4.5 extends additively per M2.5
+   pattern.
+9. `docs/research/RECON_MAPPING.md` §5.6 + §14.7 + §14.8
+   + §16.5 (vendor comm research).
 
-## What M4.4 delivers
+## What M4.5 delivers
 
-**Parts service only.** No migrations. No new endpoints. No
-frontend. No AI. **No ledger integration** — parts do not
-independently post to VehicleCost; their cost lives on the
-WorkOrder's estimate/actual aggregate. Planning §5.h locks
-the "operational tracking data only" scope; live
-marketplace / auto-order / vendor payment are all deferred.
+**Vendor comm service + safety scrub only.** No migrations.
+No new endpoints. No frontend. No SMTP / SMS wiring
+(planning §5.i deferred).
 
-### The four parts-service functions (per §7 M4.4)
+### New module `services/vendor_comm.py` — 4 functions
 
-Added to `backend/dealer_ai/services/recon.py`:
+- **`draft_communication(work_order, *, dealership,
+  drafted_by, kind, channel, extra_notes="") -> VendorCommunication`**
+  — assembles a source bundle from the WO + linked findings
+  + parts per §5.g:
+  ```python
+  source = {
+      "vehicle": {stock, year, make, model, vin_last_6},
+      "vendor": {name},
+      "findings": [{id, category, severity, description}, ...],
+      "authorized_cost": str_two_decimals or None,
+      "estimated_completion_date": iso or None,
+      "parts_needed": [{name, part_number, quantity, source_type}, ...],
+      "operator_notes": str,
+  }
+  ```
+  Renders the bundle into an LLM prompt via existing
+  provider factory. Runs the LLM output through
+  `apply_post_llm_scrubs(kind="vendor_comm", ...)`. If the
+  scrub rejects (dropped_reason set), the service raises
+  a domain error rather than persisting a rejected draft.
+  On success, persists `VendorCommunication(status='draft',
+  drafted_by=drafted_by, drafted_at=timezone.now(),
+  source_provenance=<sentence→source_key map>,
+  draft_content=<scrubbed text>)`. Enforces cross-tenant
+  guard + `full_clean()` before save.
 
-1. **`add_part(work_order, *, dealership, name,
-   quantity=1, part_number="", source_type="in_stock",
-   source_name="", unit_cost=None, notes="") -> WorkOrderPart`**
-   — refuses when WO status is not one of `draft`,
-   `approved`, `in_progress` (a completed / cancelled WO
-   doesn't get new parts). Validates `source_type` against
-   `WORK_ORDER_PART_SOURCE_TYPE_CHOICES`.
-   `MinValueValidator(1)` on quantity surfaces via
-   `full_clean()`.
+- **`approve_communication(comm, *, dealership,
+  approved_by) -> VendorCommunication`** — draft→approved
+  transition. Sets `approved_by` + `approved_at`. Uses
+  `select_for_update` + `refresh_from_db` per M4.2
+  concurrency pattern.
 
-2. **`update_part(part, *, dealership, **updates) -> WorkOrderPart`**
-   — whitelist enforced: `name`, `description`,
-   `part_number`, `quantity`, `unit_cost`, `source_type`,
-   `source_name`, `notes`. Rejects any other kwarg
-   (including `status` — that's what
-   `transition_part_status` is for). Refuses when parent
-   WO is not in a state that permits parts changes.
+- **`mark_sent(comm, *, dealership, sent_by,
+  sent_content=None) -> VendorCommunication`** —
+  approved→sent transition. Captures optional edited
+  `sent_content` (falls back to `draft_content` if omitted).
+  Sets `sent_by` + `sent_at`. Full model-layer sent-state
+  invariant matrix from M4.1 surfaces via `full_clean`.
 
-3. **`transition_part_status(part, *, dealership,
-   new_status, actor)`** — validates transition against
-   the allowed table:
-   - `needed → ordered` (sets `ordered_at`)
-   - `ordered → received` (sets `received_at`)
-   - `received → installed` (sets `installed_at`)
-   - `ordered → backordered` (no timestamp — waiting)
-   - `backordered → ordered` (allowed re-order)
-   - `ordered → returned` (sets `returned_at`)
-   - `received → returned` (sets `returned_at`)
-   
-   All other transitions raise
-   `InvalidReconTransitionError`. Uses
-   `select_for_update` + `refresh_from_db` per M4.2
-   concurrency pattern.
+- **`log_communication(work_order, *, dealership,
+  logged_by, kind, channel, direction, body) -> VendorCommunication`**
+  — records an off-system comm (operator-recorded phone,
+  in-person, inbound email). Creates directly at
+  `status='logged'` with `draft_content=body`, `sent_by=logged_by`,
+  `sent_at=timezone.now()`. Refuses if `kind` implies
+  AI-drafted (i.e. `vendor_comm` or `parts_order` — the
+  SESSION_066 refinement "AI-generated content may never
+  jump directly to logged" is enforced here at the service
+  layer, since the model layer cannot distinguish
+  AI-drafted from operator-recorded).
 
-4. **`delete_part(part, *, dealership) -> None`** — only
-   when parent WO is `draft`. Deleted rows are gone from
-   the DB (no soft-delete); parts on approved / in-progress
-   WOs stay as historical documentation.
+### `_scrub_invented_recon_fact` — new post-LLM scrub
 
-### Test coverage target
+Extends `services/llm_safety.py::apply_post_llm_scrubs`.
+Fires on `kind="vendor_comm"` and `kind="parts_order"`
+(both new `kind` values recognized by
+`apply_post_llm_scrubs`). Runs after
+`detect_unsafe_response`. Text-only, zero DB access at
+scrub time — source-bundle values are passed as scrub
+parameters.
 
-~30 focused parts-service tests covering:
+Four detection regex families per §5.g:
 
-- `add_part` gating on WO status (draft/approved/in_progress
-  allowed; completed/cancelled refused).
-- `add_part` cross-tenant refusal.
-- `add_part` invalid source_type refused.
-- `update_part` whitelist enforcement.
-- `update_part` gating on WO status.
-- Every allowed part-status transition succeeds and sets
-  the expected timestamp.
-- Every disallowed part-status transition raises
-  `InvalidReconTransitionError`.
-- `delete_part` refuses on non-draft WOs.
-- Parts survive WO cancellation (documentation).
-- `full_clean` runs before every save (regression coverage
-  from M4.2 pattern).
+- **Invented finding IDs** — draft mentions "Finding #123"
+  but 123 is not in `source["findings"][*]["id"]`.
+  Rewrite: strip the ID reference; retain the description
+  if present in source.
+- **Invented part numbers** — draft mentions a part number
+  pattern (`[A-Z0-9-]{5,}`) not in
+  `source["parts_needed"][*]["part_number"]`. Rewrite:
+  strip the part number.
+- **Invented dollar amounts** — draft mentions a `$\d+`
+  amount not matching `authorized_cost` or the sum of
+  `parts_needed[*].unit_cost * quantity`. Rewrite: strip
+  the amount; log for operator review.
+- **Invented dates** — draft mentions a date not matching
+  `estimated_completion_date`. Rewrite: replace with a
+  neutral phrase or strip.
 
-## What SESSION_069 should do
+## What SESSION_070 should do
 
 ### Recommended step sequence
 
 1. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_4_PLANNING.md` — §1.5
-     (WorkOrderPart field shape), §5.h (parts scope), §7
-     M4.4 (service signatures).
-   - `docs/handoffs/SESSION_068_m4_inc3_ledger.md` — the
-     "Recommended exact scope for SESSION_069" section.
-   - `backend/dealer_ai/services/recon.py` — the M4.2 +
-     M4.3 shipped module. New functions land alongside the
-     WorkOrder state machine + ledger helpers.
-   - `backend/dealer_ai/models.py::WorkOrderPart` — the
-     M4.1 model shape including the 6-value status enum
-     and 7-value source-type enum.
-   - `backend/dealer_ai/tests/test_work_order.py`
-     `WorkOrderPart*` classes — persistence-layer coverage
-     already locked; M4.4 layers service semantics on top.
+   - `docs/roadmap/MILESTONE_4_PLANNING.md` §1.6 +
+     §1.6.SHIPPED + §5.g + §5.i + §7 M4.5.
+   - `docs/handoffs/SESSION_069_m4_inc4_parts.md` — the
+     scope block above.
+   - `backend/dealer_ai/services/llm_safety.py` — the
+     existing scrub stack. Understand how M2.5's
+     `_scrub_acquisition_price` was layered in — M4.5
+     mirrors the same additive shape.
+   - `backend/dealer_ai/services/llm/` — the mock provider
+     pattern for stubbed LLM calls.
+   - `backend/dealer_ai/services/ad_copy.py` +
+     `services/follow_up.py` — the "AI drafts N variants;
+     safety stack scrubs; operator picks + edits" three-
+     step pattern M4.5 mirrors (per planning §3.3).
+   - `backend/dealer_ai/models.py::VendorCommunication` —
+     the M4.1 model shape, especially the invariant matrix
+     for sent / approved / logged states.
+   - `backend/dealer_ai/services/recon.py` — the
+     cross-tenant guard pattern M4.5 mirrors.
 
 2. **Verify starting state.**
    - `git status` clean (or only pre-existing untracked).
-   - `python3 manage.py test dealer_ai` → **2,318 pass, 1
+   - `python3 manage.py test dealer_ai` → **2,367 pass, 1
      skipped, 0 fail**.
    - `python3 manage.py check` clean.
    - `python3 manage.py makemigrations --check --dry-run`
      → "No changes detected."
 
-3. **Add the four service functions** to
-   `services/recon.py` in a new section after the ledger
-   helpers. Each starts with a cross-tenant guard against
-   the parent WO's tenant; each write path calls
-   `full_clean()` before save.
+3. **Extend `services/llm_safety.py`** with the new scrub
+   function + register it against `kind="vendor_comm"`
+   and `kind="parts_order"`.
 
-4. **Write ~30 focused parts-service tests** in
-   `backend/dealer_ai/tests/test_recon_parts.py`.
+4. **Draft `services/vendor_comm.py`** with the four
+   functions. LLM path stubbed via existing mock provider.
+   Every function threads `dealership=` explicitly, calls
+   `full_clean()` before save, and re-raises raw scrub /
+   validation errors as domain errors where the translation
+   carries meaning.
 
-5. **Full-suite verification.** Target 2,318 → ~2,348
-   pass. Zero regressions.
+5. **Write ~55 focused tests:**
+   - `test_vendor_comm_service.py` — draft happy path,
+     source_provenance recording, state transitions,
+     human-approval-required-before-send, log skips
+     approval, AI-drafted cannot jump to logged.
+   - `test_llm_safety_recon_scrub.py` — each regex family
+     strips the invented content, correctly-attributed
+     content passes untouched.
 
-6. **Ship handoff at
-   `docs/handoffs/SESSION_069_m4_inc4_parts.md`**
-   mirroring `SESSION_068_m4_inc3_ledger.md` shape.
+6. **Full-suite verification.** Target 2,367 → ~2,422 pass.
+   Zero regressions.
 
-7. **Overwrite `00-START-NEXT-SESSION.md`** with M4.5
-   priority (vendor comm drafting +
-   `_scrub_invented_recon_fact`).
+7. **Ship handoff at
+   `docs/handoffs/SESSION_070_m4_inc5_vendor_comm.md`**
+   mirroring `SESSION_069_m4_inc4_parts.md` shape.
 
-## Explicit non-goals for SESSION_069
+8. **Overwrite `00-START-NEXT-SESSION.md`** with M4.6
+   priority (admin API + permission matrix).
 
-- ❌ Do NOT post any WorkOrderPart cost to VehicleCost
-  independently. Parts cost lives on the WorkOrder's
-  estimate/actual aggregate (planning §5.h).
-- ❌ Do NOT add live parts marketplace / auto-order
-  integration (planning §5.h explicit out-of-scope).
-- ❌ Do NOT modify M4.1 model shapes.
-- ❌ Do NOT modify M4.2 state-machine semantics.
-- ❌ Do NOT modify M4.3 ledger helpers.
-- ❌ Do NOT touch M4.5+ scope.
+## Explicit non-goals for SESSION_070
+
+- ❌ Do NOT wire outbound SMTP / SMS send. Planning §5.i
+  defers to prod-readiness pass.
+- ❌ Do NOT add real LLM API calls in tests. Mock provider
+  only.
+- ❌ Do NOT touch M4.1/M4.2/M4.3/M4.4 substrate.
 - ❌ Do NOT add any endpoint — M4.6.
 - ❌ Do NOT add new permission class — M4.6.
-- ❌ Do NOT introduce any AI role.
-- ❌ Do NOT touch frontend.
+- ❌ Do NOT touch frontend — M4.7.
+- ❌ Do NOT introduce any new migration.
 
 ## NEXT TASK
 
-Start SESSION_069 with the read-first list above. Add the
-four parts-service functions to `services/recon.py`. Write
-~30 focused parts-service tests. Target baseline 2,318 →
-~2,348. Ship the M4.4 handoff.
+Start SESSION_070 with the read-first list above. Extend
+`services/llm_safety.py` with `_scrub_invented_recon_fact`.
+Draft `services/vendor_comm.py` (four functions). Write
+~55 focused tests split across service + scrub. Target
+baseline 2,367 → ~2,422. Ship the M4.5 handoff.
 
-Backend baseline at SESSION_069 close: **~2,348 pass**.
+Backend baseline at SESSION_070 close: **~2,422 pass**.
 Frontend baseline: unchanged.
 
 ---
@@ -208,20 +238,22 @@ Frontend baseline: unchanged.
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 4
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_4_PLANNING.md` (SESSION_066
-   refinements at §1.2 + §1.3 + §1.6 + §3 + §5.b + §5.e +
-   §7 M4.3; SESSION_067 amendments at §1.0.QC-GAP +
-   §1.6.SHIPPED; SESSION_068 category-mapping table at §5.e)
-6. `docs/handoffs/SESSION_068_m4_inc3_ledger.md`
-7. `docs/handoffs/SESSION_067_m4_inc2_service_state_machine.md`
-8. `docs/handoffs/SESSION_066_m4_inc1_core_models.md`
-9. `docs/handoffs/SESSION_065_m4_planning.md`
-10. `docs/roadmap/MILESTONE_2_PLANNING.md` (add_cost API)
-11. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` §6 lessons
-12. `docs/roadmap/MILESTONE_3_RETROSPECTIVE.md` §6 + §8
-13. `docs/research/RECON_MAPPING.md` §6.1–§6.6 (parts)
-14. `docs/CAPABILITY_MATRIX.md` §7c + §7d
-15. Most recent handoffs
-    (`SESSION_068_m4_inc3_ledger.md`,
+   refinements + SESSION_067 amendments + SESSION_068
+   category-mapping table; §5.g anchors M4.5)
+6. `docs/handoffs/SESSION_069_m4_inc4_parts.md`
+7. `docs/handoffs/SESSION_068_m4_inc3_ledger.md`
+8. `docs/handoffs/SESSION_067_m4_inc2_service_state_machine.md`
+9. `docs/handoffs/SESSION_066_m4_inc1_core_models.md`
+10. `docs/handoffs/SESSION_065_m4_planning.md`
+11. `backend/dealer_ai/services/llm_safety.py` (M2.5
+    scrub pattern the M4.5 scrub mirrors)
+12. `docs/research/RECON_MAPPING.md` §2.6 (AI must never
+    invent findings) + §5.6 + §14.7 + §14.8 + §16.5
+    (vendor comm operational context).
+13. `docs/CAPABILITY_MATRIX.md` §7c + §7d
+14. Most recent handoffs
+    (`SESSION_069_m4_inc4_parts.md`,
+    `SESSION_068_m4_inc3_ledger.md`,
     `SESSION_067_m4_inc2_service_state_machine.md`,
     `SESSION_066_m4_inc1_core_models.md`,
     `SESSION_065_m4_planning.md`,
@@ -239,38 +271,37 @@ Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_068 — M4.3 ledger integration shipped)
+## Operational state (post-SESSION_069 — M4.4 parts service shipped)
 
 - **Backend (local):** Django on `:8001`. Migrations
-  `0001`–`0016` (unchanged from SESSION_066). Test
-  baseline: **2,318 pass**, 1 skipped, 0 fail (up from
-  2,285; +33 M4.3 ledger tests).
-- **Backend (prod):** NOT active (per §5.j — deferred to
-  pre-pilot pass).
+  `0001`–`0016` (unchanged since SESSION_066). Test
+  baseline: **2,367 pass**, 1 skipped, 0 fail (up from
+  2,318; +49 M4.4 parts-service tests).
+- **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`. `tsc --noEmit`
   clean. `vite build` clean. Unchanged.
 - **Frontend (prod):** NONE.
-- **DRF defaults + CSRF + permissions:** unchanged. No new
-  permission class yet (M4.6).
-- **Milestone 4 status:** M4.1 + M4.2 + M4.3 shipped;
-  parts service (M4.4) is the next in-scope increment.
-  Planning artifact `status: draft` (flips at M4.9).
-  Amendments landed through SESSION_068: §1.0.QC-GAP,
-  §1.6.SHIPPED (SESSION_067); §1.2 + §1.3 + §1.6 + §3 +
-  §5.b + §5.e (including new category-mapping table at
-  SESSION_068) + §7 M4.3 (SESSION_066).
+- **DRF defaults + CSRF + permissions:** unchanged.
+- **Milestone 4 status:** M4.1 + M4.2 + M4.3 + M4.4
+  shipped; vendor comm + scrub (M4.5) is the next
+  in-scope increment. Planning artifact `status: draft`
+  (flips at M4.9). Amendments landed through SESSION_068
+  (category-mapping table at §5.e).
 - **`docs/roadmap/DEFERRED_IDEAS.md`** — still does not
   exist.
 - **Dev DB seeded users:** `smoke_owner` + `smoke_advisor`.
-- **New M4 tables:** unchanged from SESSION_066 (still
-  empty at dev-DB level; test-DB populated during test
-  runs).
-- **Service surface:** `services/recon.py` now exposes
-  eleven public functions (ten from M4.2 + `revise_estimate`
-  from M4.3), four domain errors, five reference-key
-  constants, and the WO→VehicleCost category mapping table.
+- **New M4 tables:** unchanged from SESSION_066.
+- **Service surface:** `services/recon.py` now exposes:
+  - 11 recon-related public functions (10 M4.2 originals
+    + `revise_estimate` from M4.3).
+  - 4 parts-service public functions (M4.4).
+  - 2 Vehicle-property read helpers (M4.2).
+  - 4 domain errors.
+  - Ledger-integration constants + helpers (M4.3).
+  - Parts constants + mutation whitelist + transition
+    table (M4.4).
 - **Ledger behavior:** every M4.3 auto-minted VehicleCost
   row carries a `WORKORDER:<id>:*` reference matching one
-  of five families. Net estimate contribution on any
-  terminal WO is `Decimal("0.00")` by design (verified by
-  test).
+  of five families. Net estimate on any terminal WO =
+  `Decimal("0.00")`. Parts do NOT independently post to
+  VehicleCost (M4.4 boundary; planning §5.h).
