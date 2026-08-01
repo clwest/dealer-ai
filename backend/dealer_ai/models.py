@@ -629,6 +629,22 @@ class DealerOnboardingProfile(models.Model):
     credit_range_served = models.CharField(max_length=255, blank=True, default="")
     makes_carried = models.TextField(blank=True, default="")
 
+    # Milestone 2 · Increment 4a — per-tenant floor-plan APR.
+    # Consumed by ``services.dealer_config.get_floor_plan_apr`` which
+    # layers DB (this field) → env (``DEALER_AI_FLOOR_PLAN_APR``) →
+    # Copper Canyon default (Decimal("8.5")). Nullable so the field
+    # migration is additive (existing profiles keep NULL, resolver
+    # falls through to env / default). Expressed in **percent units**
+    # to match ``DEFAULT_APR`` in ``services/payment_engine.py`` and
+    # every existing APR call site. Range validation lives in the
+    # accrual engine (``daily_floor_plan_interest`` raises on
+    # negative APR), NOT at the DB layer — field constraints stay
+    # permissive so future operator-facing surfaces can accept
+    # incrementally-entered values without validator friction.
+    floor_plan_apr = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

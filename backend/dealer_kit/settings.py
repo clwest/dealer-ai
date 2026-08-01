@@ -191,3 +191,14 @@ DEALER_AI_DEALER_NAME = os.getenv("DEALER_AI_DEALER_NAME", "")
 # configuration resolution".
 DEALER_AI_DEALER_TYPE = os.getenv("DEALER_AI_DEALER_TYPE", "")
 DEALER_AI_PRIMARY_MAKE = os.getenv("DEALER_AI_PRIMARY_MAKE", "")
+
+# Milestone 2 · Increment 4a — floor-plan APR env override. Consumed
+# by ``dealer_ai.services.dealer_config.get_floor_plan_apr`` which
+# layers DB (``DealerOnboardingProfile.floor_plan_apr``) → this env →
+# Copper Canyon default (8.5%). Empty string = "unset, resolver falls
+# through to next layer." Expressed in **percent units** to match
+# ``DEFAULT_APR`` in ``services/payment_engine.py`` and every existing
+# APR-in-payment-engine call site. Example:
+# ``DEALER_AI_FLOOR_PLAN_APR=6.25`` sets the tenant's floor-plan APR
+# to 6.25% for every accrual until a real profile value is saved.
+DEALER_AI_FLOOR_PLAN_APR = os.getenv("DEALER_AI_FLOOR_PLAN_APR", "")

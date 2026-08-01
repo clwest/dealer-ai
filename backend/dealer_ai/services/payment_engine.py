@@ -4,12 +4,17 @@ Standard auto-loan amortization plus a BHPH (buy-here-pay-here) variant
 for independent-dealer configurations that carry their own paper.
 V1 uses configurable defaults; sales reps will refine numbers during
 handoff. Numbers here are guidance, not quotes.
+
+Milestone 2 · Increment 4a adds the pure floor-plan-interest
+calculator :func:`daily_floor_plan_interest`. See its docstring for
+the load-bearing financial rules (behavior at zero / negative
+inputs, rounding, day-count convention, APR unit convention).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 
@@ -203,6 +208,118 @@ def estimate_bhph_payment(
             price_f, down_pct=min_down_pct
         ),
     )
+
+
+# ---- Milestone 2 · Increment 4a — floor-plan interest math ---------------
+#
+# Pure financial engine. Zero DB access, zero Dealership knowledge, zero
+# Vehicle knowledge, zero ledger side-effects. Reusable for future
+# payoff, curtailment, and lender-balance calculations — the caller
+# supplies whichever "principal" is meaningful in context (purchase
+# price for v1 accrual per MILESTONE_2_PLANNING §1.4; post-curtailment
+# balance later; per-lender payoff later; etc.).
+#
+# The accrual command that consumes this function is Milestone 2 ·
+# Increment 5, NOT this module's concern. Do not tempt-scope-creep a
+# "run this over a queryset" helper here.
+
+# Days-per-year convention. 365 chosen over 360 (bankers' method)
+# because most modern indie floor-plan lenders quote APR against a
+# calendar year and the arithmetic stays intuitive (a 30-day period
+# always produces 30/365 of the annual interest). If a future
+# integration with a 360-day lender is scoped, add an optional
+# ``days_per_year: int = 365`` parameter — the day-count convention
+# is documented explicitly here so the addition is a conscious change.
+_DAYS_PER_YEAR = Decimal("365")
+
+# Result precision. Every ``daily_floor_plan_interest`` return value
+# quantizes to cents so:
+#   1. Downstream ``VehicleCost.amount`` (DecimalField(10, 2)) inserts
+#      without silent precision loss.
+#   2. Repeated accrual runs against the same inputs produce equal
+#      outputs (bitwise-comparable Decimals — no float drift).
+#   3. Sums of many accruals remain cent-accurate.
+# ``ROUND_HALF_UP`` chosen over ``ROUND_HALF_EVEN`` (banker's) because
+# it matches consumer expectation for money math and is what most floor-
+# plan lenders' statements use. Locked by
+# ``test_daily_floor_plan_interest.DecimalPrecisionAndRounding``.
+_CENTS = Decimal("0.01")
+
+
+def daily_floor_plan_interest(
+    principal: Decimal,
+    apr: Decimal,
+    days_elapsed: int,
+) -> Decimal:
+    """Return the interest accrued on ``principal`` at ``apr`` for
+    ``days_elapsed`` days.
+
+    Pure. No I/O. No side effects. No dealership knowledge. Callers
+    supply the meaningful principal (purchase price for v1 accrual;
+    post-curtailment balance later; per-lender payoff later).
+
+    APR-unit convention: ``apr`` is expressed in **percent units**
+    (e.g. ``Decimal("8.5")`` for an 8.5% annual rate) — matching the
+    existing :data:`DEFAULT_APR` convention above.
+
+    Day-count convention: 365 (calendar year). See ``_DAYS_PER_YEAR``.
+
+    Formula:
+
+        interest = principal * apr * days_elapsed / 36500
+
+    Multiplication before the single final division preserves Decimal
+    precision. Result is quantized to cents (``Decimal("0.01")``) with
+    ``ROUND_HALF_UP``.
+
+    Financial rules (locked by tests in
+    ``test_daily_floor_plan_interest``):
+
+    - ``apr == 0`` → ``Decimal("0.00")``. Zero rate → zero interest.
+    - ``principal == 0`` → ``Decimal("0.00")``. Zero balance → zero
+      interest.
+    - ``days_elapsed == 0`` → ``Decimal("0.00")``. No time → no
+      interest. Also the idempotency escape hatch for accrual commands
+      that re-run on the same day.
+    - ``days_elapsed < 0`` → ``Decimal("0.00")``. Negative days are
+      not a valid accrual scenario; returning zero (rather than
+      raising) makes the accrual command idempotent even when a stale
+      ``--as-of`` is passed by mistake.
+    - ``principal < 0`` → :class:`ValueError`. Negative principal
+      would be data corruption (we never *owe* the lender less than
+      nothing). Raising loudly is the right shape — silent zero would
+      hide the underlying bug.
+    - ``apr < 0`` → :class:`ValueError`. Same reasoning as negative
+      principal.
+
+    All valid returns are :class:`Decimal` quantized to two decimal
+    places.
+    """
+    if not isinstance(principal, Decimal):
+        principal = Decimal(str(principal))
+    if not isinstance(apr, Decimal):
+        apr = Decimal(str(apr))
+
+    if principal < 0:
+        raise ValueError(
+            f"principal must be >= 0 (got {principal}); negative "
+            "principal is not a valid floor-plan-interest scenario."
+        )
+    if apr < 0:
+        raise ValueError(
+            f"apr must be >= 0 (got {apr}); negative APR is not a "
+            "valid floor-plan-interest scenario."
+        )
+
+    if days_elapsed <= 0 or principal == 0 or apr == 0:
+        return Decimal("0.00")
+
+    # Multiply first, divide last, quantize at the end. Preserves as
+    # much precision as Decimal allows before the final rounding step.
+    # Divide by 100 (percent → decimal fraction) then by days-per-year
+    # in one denominator to avoid an extra rounding cycle.
+    raw = principal * apr * Decimal(days_elapsed) / (_DAYS_PER_YEAR * Decimal("100"))
+    return raw.quantize(_CENTS, rounding=ROUND_HALF_UP)
 
 
 def affordable_max_price(

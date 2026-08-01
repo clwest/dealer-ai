@@ -58,6 +58,7 @@ Django app registry to be ready, so DB access is lazy and swallowed.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Literal, Optional
 
 from django.conf import settings
@@ -66,6 +67,14 @@ if TYPE_CHECKING:  # pragma: no cover — typing-only import
     from ..models import Dealership
 
 _FALLBACK_DEALER_NAME = "the dealership"
+
+# Milestone 2 · Increment 4a — floor-plan APR default. Copper Canyon
+# baseline chosen at 8.5% per ``MILESTONE_2_PLANNING.md`` §1.4.
+# Consumers should pass this Decimal straight into
+# ``services.payment_engine.daily_floor_plan_interest`` which expects
+# APR in percent units. Change here + the M2.4a env override + the
+# per-tenant DB field are the only three places floor-plan APR lives.
+_FALLBACK_FLOOR_PLAN_APR = Decimal("8.5")
 
 DealerType = Literal["independent", "franchise"]
 
@@ -303,3 +312,54 @@ def get_dealer_profile(
         credit_range_served=credit_range_served,
         makes_carried=makes_carried,
     )
+
+
+def get_floor_plan_apr(
+    dealership: Optional["Dealership"] = None,
+) -> Decimal:
+    """Return the floor-plan APR (in percent units) for the tenant.
+
+    Layered resolution (first non-null / non-empty wins), mirroring
+    :func:`get_dealer_name` / :func:`get_dealer_profile`:
+
+    1. ``DealerOnboardingProfile.floor_plan_apr`` (per-tenant, saved
+       via the Setup UI in a future M2.7 field).
+    2. ``settings.DEALER_AI_FLOOR_PLAN_APR`` env override — accepts
+       string / int / float and coerces to :class:`Decimal`. Silent
+       fall-through when the env value is empty or unparseable
+       (matches the ``DEALER_AI_DEALER_TYPE`` env fall-through
+       shape — a bad env override should NEVER crash a running
+       process; it should fall through to the next layer with the
+       operator able to notice via the resolver's own return).
+    3. :data:`_FALLBACK_FLOOR_PLAN_APR` — Copper Canyon baseline
+       (8.5%). Documented in the module preamble.
+
+    Return type: :class:`Decimal` in percent units. Consumers pass
+    the result straight into
+    :func:`services.payment_engine.daily_floor_plan_interest`, which
+    handles percent-unit APR by convention.
+
+    Range validation (rejecting negative APR, e.g.) lives in the
+    accrual engine — see the ``daily_floor_plan_interest`` docstring.
+    This resolver never raises on out-of-range values from any layer;
+    it simply returns whatever was configured and lets the downstream
+    consumer decide whether that's a domain error.
+    """
+    profile = _load_onboarding_profile(dealership)
+    if profile is not None and profile.floor_plan_apr is not None:
+        return profile.floor_plan_apr
+
+    env_value = (
+        getattr(settings, "DEALER_AI_FLOOR_PLAN_APR", "") or ""
+    ).strip()
+    if env_value:
+        try:
+            return Decimal(env_value)
+        except (InvalidOperation, ValueError):
+            # Bad env value → silent fall-through to the default.
+            # Matches the DEALER_AI_DEALER_TYPE pattern (invalid env
+            # → default). A future observability pass may want to
+            # log this event; deferred to Milestone 8.
+            pass
+
+    return _FALLBACK_FLOOR_PLAN_APR
