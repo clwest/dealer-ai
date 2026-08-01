@@ -325,6 +325,91 @@ class Vehicle(models.Model):
         except VehicleAcquisition.DoesNotExist:
             return None
 
+    # ---- Milestone 3 · Increment 3 — Vehicle-as-condition-report-read-model
+    #
+    # Two thin ``@property`` delegators to
+    # :mod:`services.condition_report`. Callers holding a
+    # ``Vehicle`` instance can ask "what is the current inspection
+    # state of this stock number?" without knowing that
+    # :class:`ConditionReport` exists as a distinct row.
+    #
+    # Layer contract (mirrors the M2.3 ledger read-model above):
+    #
+    # - ``Vehicle`` = read model. Thin delegator. Never filters,
+    #   orders, aggregates, or caches. Never writes.
+    # - ``services/condition_report.py`` = business layer + write
+    #   model. All query shape, ordering, tenant guards, and state
+    #   transitions live there.
+    #
+    # Caching contract:
+    #
+    # - Both properties are plain ``@property`` — **not**
+    #   ``@cached_property``. Rationale: the M2.3
+    #   :attr:`ledger_totals` cached-property pattern is proven for
+    #   read-heavy repeated-access data (nine per-total delegators
+    #   would otherwise fire nine queries against the ledger). The
+    #   condition-report accessors are lighter — the operator UI
+    #   reads at most both once per page load — and the natural
+    #   query profile deserves to be measured before optimization.
+    #   If subsequent operator UI work reveals repeated access on
+    #   the same instance, promote to ``@cached_property`` with
+    #   evidence rather than assumption. Locked by the
+    #   ``assertNumQueries(1)`` tests in
+    #   ``tests/test_vehicle_condition_report_properties.py``.
+    #
+    # See ``docs/roadmap/MILESTONE_3_PLANNING.md`` §1.3 + §7 M3.3
+    # for the design memo.
+
+    @property
+    def latest_condition_report(self):
+        """The most recent condition report for this vehicle, or
+        ``None`` if the vehicle has never been inspected.
+
+        Any status (``draft`` or ``complete``). Deterministic
+        ordering — matches the underlying service function's
+        ``(-inspected_at, -created_at)`` sort.
+
+        Tenant resolves from ``self.dealership`` — the vehicle
+        borrows its own tenant. Cross-tenant leakage is impossible
+        here by construction (a vehicle IS in its dealership); the
+        service-layer ``CrossTenantConditionReportError`` would
+        only fire if a caller manually mutated
+        ``vehicle.dealership_id`` in memory to a different value
+        before reading this property.
+        """
+        # Local import — ``services/condition_report.py`` imports
+        # ``ConditionReport`` from this module, so a top-of-module
+        # import here would create a cycle at import time. Same
+        # guard as :attr:`ledger_totals` above (M2.3 pattern) and
+        # ``services/tenancy.py``.
+        from .services.condition_report import latest_condition_report
+
+        return latest_condition_report(self, dealership=self.dealership)
+
+    @property
+    def latest_completed_condition_report(self):
+        """The most recent *completed* condition report for this
+        vehicle, or ``None`` if the vehicle has no signed-off
+        inspection yet.
+
+        Filtered to ``status="complete"`` — the accessor the M4
+        recon-plan drafting and the M3.7 operator UI's "inspected
+        on YYYY-MM-DD" badge will hit most often, because a draft
+        report has not been signed off yet.
+
+        Same ordering, tenant-resolution, and no-caching contract
+        as :attr:`latest_condition_report`.
+        """
+        # Local import — see :attr:`latest_condition_report` for
+        # the cycle rationale.
+        from .services.condition_report import (
+            latest_completed_condition_report,
+        )
+
+        return latest_completed_condition_report(
+            self, dealership=self.dealership
+        )
+
 
 class ChatSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

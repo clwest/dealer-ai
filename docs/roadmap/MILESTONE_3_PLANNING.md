@@ -1416,7 +1416,7 @@ No AI.
   `services/llm_safety.py`, `permissions.py`, migrations,
   requirements, frontend — all untouched.
 
-### Increment 3 (M3.3) — Vehicle read-model extension
+### Increment 3 (M3.3) — Vehicle read-model extension — SHIPPED at SESSION_058
 
 **Scope.** Two `@property` accessors on `Vehicle`, delegating to
 `services/condition_report.py`:
@@ -1441,6 +1441,69 @@ exactly one query.
 
 **Boundary.** Test baseline: ~1,843 → ~1,858 pass. No migrations.
 No API. No frontend.
+
+**Shipped surface (SESSION_058).**
+
+- `backend/dealer_ai/models.py::Vehicle` — two `@property`
+  accessors appended at the end of the class (before
+  `class ChatSession`), preceded by a comment-block header
+  documenting the read-model layer contract and the
+  no-caching rationale. Each property is a one-line
+  delegator to the M3.2 service, passing `self` and
+  `dealership=self.dealership`.
+- **Import-cycle handling.** `services/condition_report.py`
+  imports `ConditionReport`, `ConditionFinding`, `Vehicle`,
+  `Dealership`, and enum constants from `..models`; a
+  top-of-module import from `models.py` back to the service
+  would cycle at Python import time. Each property uses a
+  **function-local import** (`from .services.condition_report
+  import latest_condition_report` inside the property body)
+  with a code comment naming the cycle it avoids and
+  cross-referencing the existing `ledger_totals` (M2.3) and
+  `services/tenancy.py` uses of the same pattern. No module
+  restructuring performed — the pattern is already the
+  house style.
+- **Query behavior locked.**
+  - `assertNumQueries(1)` per property access when the
+    caller has `.select_related('dealership')`-fetched the
+    vehicle (the natural shape production callers should
+    use). This proves the property adds exactly one
+    `ConditionReport` lookup query beyond what's already in
+    memory.
+  - `assertNumQueries(2)` for two consecutive reads on the
+    same instance. This is the observable *absence* of
+    caching — if a future edit promotes either property to
+    `@cached_property`, the assertion fails and forces the
+    change to be deliberate.
+- **Tests:** `backend/dealer_ai/tests/test_vehicle_condition_report_properties.py`
+  — **20 tests** across three classes:
+  - `LatestConditionReport` (8 tests) — no reports, one
+    draft, one complete, multiple drafts, multiple complete,
+    mixed-newest-draft-wins, tenant isolation, deterministic
+    repeated reads.
+  - `LatestCompletedConditionReport` (6 tests) — no
+    completed, no reports at all, ignores drafts and returns
+    older complete, newest complete when multiple, tenant
+    isolation, deterministic repeated reads.
+  - `VehicleContract` (6 tests) — delegation-via-mock for
+    both properties (patches
+    `dealer_ai.services.condition_report.<fn>` and asserts
+    call arguments), no-mutation-on-read
+    (`updated_at` byte-identical before/after), single-query
+    for each property when dealership prefetched,
+    no-caching (2 consecutive reads = 2 queries).
+
+**Baseline delta.** 1,874 → 1,894 pass, 1 skipped, 0 fail
+(20 new tests). No migrations. No API. No frontend. No
+storage. No service changes. No admin changes. No AI.
+
+**Files changed (SESSION_058).**
+
+- Modified: `backend/dealer_ai/models.py` — 85 additive
+  lines (comment header + two `@property` methods with
+  function-local imports). No deletions.
+- New: `backend/dealer_ai/tests/test_vehicle_condition_report_properties.py`.
+- No modifications to any other file.
 
 ### Increment 4 (M3.4) — Storage story (S3-compatible + CDN)
 
