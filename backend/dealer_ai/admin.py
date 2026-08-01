@@ -9,6 +9,8 @@ from .models import (
     Salesperson,
     UserDealershipRole,
     Vehicle,
+    VehicleAcquisition,
+    VehicleCost,
 )
 
 
@@ -140,6 +142,60 @@ class DealerOnboardingProfileAdmin(admin.ModelAdmin):
     inspection and emergency edits."""
 
     list_display = ("dealership_name", "store_location", "pilot_approved", "updated_at")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(VehicleAcquisition)
+class VehicleAcquisitionAdmin(admin.ModelAdmin):
+    """Milestone 2 · Increment 1 — read-mostly admin for the buying-event
+    record. Primary operator surface is the M2.3 ledger UI; this admin
+    is here for internal debugging + emergency corrections."""
+
+    list_display = (
+        "vehicle",
+        "source",
+        "purchase_price",
+        "purchase_date",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("source", "dealership", "purchase_date")
+    search_fields = (
+        "vehicle__stock_number",
+        "vehicle__vin",
+        "source_detail",
+        "notes",
+    )
+    autocomplete_fields = ("vehicle", "dealership")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(VehicleCost)
+class VehicleCostAdmin(admin.ModelAdmin):
+    """Milestone 2 · Increment 1 — read-mostly admin for post-acquisition
+    cost rows. Same rationale as `VehicleAcquisitionAdmin`. Filters on
+    ``category`` + ``is_estimate`` support the common "what's still
+    projected vs. committed?" query."""
+
+    list_display = (
+        "vehicle",
+        "category",
+        "amount",
+        "incurred_at",
+        "vendor",
+        "is_estimate",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("category", "is_estimate", "dealership")
+    search_fields = (
+        "vehicle__stock_number",
+        "vehicle__vin",
+        "vendor",
+        "reference",
+        "notes",
+    )
+    autocomplete_fields = ("vehicle", "dealership", "created_by")
     readonly_fields = ("created_at", "updated_at")
 
 

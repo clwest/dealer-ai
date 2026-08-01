@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -434,6 +435,324 @@ class DealerOnboardingProfile(models.Model):
 
     def __str__(self) -> str:
         return self.dealership_name or "Dealer onboarding profile"
+
+
+# Milestone 2 · Increment 1 — VehicleAcquisition source vocabulary.
+# Kept as module-level constants so the M2.2 API + service layer, the
+# M2.2 accrual command, and every test file import the canonical
+# string literals without redeclaring them (mirrors the ``ROLE_*``
+# pattern above). Source-of-truth: ``docs/roadmap/MILESTONE_2_PLANNING.md``
+# §1.1 and ``docs/research/INVENTORY_ACQUISITION_MAPPING.md`` §2.
+SOURCE_AUCTION = "auction"
+SOURCE_TRADE = "trade"
+SOURCE_WHOLESALE = "wholesale"
+SOURCE_PRIVATE = "private"
+SOURCE_OFF_LEASE = "off_lease"
+SOURCE_RENTAL = "rental"
+SOURCE_REPO = "repo"
+SOURCE_FLEET = "fleet"
+
+ACQUISITION_SOURCE_CHOICES = (
+    (SOURCE_AUCTION, "Auction"),
+    (SOURCE_TRADE, "Trade-in"),
+    (SOURCE_WHOLESALE, "Wholesale (dealer-to-dealer)"),
+    (SOURCE_PRIVATE, "Private party"),
+    (SOURCE_OFF_LEASE, "Off-lease"),
+    (SOURCE_RENTAL, "Rental return"),
+    (SOURCE_REPO, "Repossession"),
+    (SOURCE_FLEET, "Fleet disposal"),
+)
+
+
+class VehicleAcquisition(models.Model):
+    """Milestone 2 · Increment 1 — per-vehicle acquisition record.
+
+    OneToOne with :class:`Vehicle`. Captures the *buying event* — how
+    the physical car arrived in inventory and every dollar that
+    attached to it at acquisition time (purchase price, auction /
+    broker fees, transportation, title acquisition). Post-acquisition
+    costs (recon, flooring interest, admin) live on
+    :class:`VehicleCost` — see the design note in
+    ``docs/roadmap/MILESTONE_2_PLANNING.md`` §1.1 for why the split
+    is worth having.
+
+    Every business question Milestone 2 answers ("what have we got
+    invested?", "what's the projected gross?") starts from this
+    row's totals plus the sum of related ``VehicleCost`` rows.
+
+    Note: ``Vehicle.source`` (import-provenance) and ``source`` here
+    (physical-acquisition-source) are distinct concerns and must not
+    collapse — see §1.1 "Leave untouched" in the planning doc.
+    """
+
+    vehicle = models.OneToOneField(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="acquisition",
+    )
+    # Denormalized tenancy FK. Redundant with ``vehicle.dealership`` at
+    # the schema level, but keeps tenant-scoped read paths uniform
+    # across every M1/M2 model and lets tenant-scoped querysets on
+    # this table skip a join. ``clean()`` guards against divergence.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vehicle_acquisitions",
+    )
+    source = models.CharField(
+        max_length=32,
+        choices=ACQUISITION_SOURCE_CHOICES,
+    )
+    # Free text for "Manheim Phoenix, lane 4, run #217" or "trade
+    # from CustomerLead #482" or a wholesale seller's business name.
+    source_detail = models.CharField(max_length=255, blank=True, default="")
+    purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
+    purchase_date = models.DateField()
+    # Auction house buyer fee. Zero when the source has no fee
+    # (private party, trade). Kept separate from ``purchase_price``
+    # because §2.3 of ACCOUNTING_DEPARTMENT_MAPPING treats them as
+    # distinct settlement lines the operator will want to see broken
+    # out on the ledger UI.
+    buyer_fees = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0
+    )
+    arbitration_fees = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0
+    )
+    transportation_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0
+    )
+    title_acquisition_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-purchase_date", "-created_at")
+        verbose_name = "Vehicle acquisition"
+        verbose_name_plural = "Vehicle acquisitions"
+
+    def __str__(self) -> str:
+        return f"Acquisition for #{self.vehicle.stock_number} ({self.get_source_display()})"
+
+    def clean(self) -> None:
+        """Guard against cross-tenant contamination at the model layer.
+
+        The denormalized ``dealership`` FK must match the parent
+        Vehicle's tenant. A view that resolves tenant from
+        ``get_current_dealership(request)`` and writes an acquisition
+        against a vehicle owned by a different dealership would
+        silently corrupt tenant scoping. ``clean()`` raises before
+        that reaches the DB.
+
+        Data-scoping is layer 4 in ``AUTHENTICATION_MODEL.md`` §1;
+        this check makes the invariant enforceable at the ORM layer
+        so violations surface at the earliest possible point.
+        """
+        super().clean()
+        # ``vehicle_id`` is required (OneToOne, not-null); access
+        # ``self.vehicle`` after that check to avoid RelatedObjectDoesNotExist.
+        if self.vehicle_id is None or self.dealership_id is None:
+            return
+        if self.vehicle.dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "VehicleAcquisition.dealership must match the parent "
+                        "Vehicle's dealership. Cross-tenant contamination "
+                        "guard (see AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+
+
+# Milestone 2 · Increment 1 — VehicleCost category vocabulary.
+# ~26 categories spanning flooring, reconditioning, administrative,
+# and photography — enumerated per ``VEHICLE_CENTRIC_PIVOT.md``
+# §Investment ledger scope and cross-referenced against
+# ``ACCOUNTING_DEPARTMENT_MAPPING.md`` §2.5–§2.10 for terminology.
+# Acquisition-day costs (purchase_price, auction_fees, arbitration,
+# transportation, title_acquisition) live on ``VehicleAcquisition``
+# — they are NOT categories in ``VehicleCost``.
+#
+# Category-set groupings (FLOORING_CATEGORIES, RECON_CATEGORIES,
+# ADMIN_CATEGORIES) are deliberately deferred to Milestone 2 ·
+# Increment 2, where the ``services/vehicle_ledger.compute_totals``
+# function first consumes them. Keeping the grouping out of M2.1
+# tightens the "no business logic in the persistence layer" boundary
+# the user set for this increment.
+
+# Flooring / floor plan expenses (5).
+CATEGORY_FLOOR_PLAN_INTEREST = "floor_plan_interest"
+CATEGORY_FLOOR_PLAN_FEES = "floor_plan_fees"
+CATEGORY_CURTAILMENT = "curtailment"
+CATEGORY_WIRE_FEES = "wire_fees"
+CATEGORY_BANKING_FEES = "banking_fees"
+
+# Reconditioning expenses (13).
+CATEGORY_PARTS = "parts"
+CATEGORY_MECHANICAL_LABOR = "mechanical_labor"
+CATEGORY_TIRES = "tires"
+CATEGORY_BRAKES = "brakes"
+CATEGORY_BATTERY = "battery"
+CATEGORY_OIL_SERVICE = "oil_service"
+CATEGORY_DIAGNOSTICS = "diagnostics"
+CATEGORY_GLASS = "glass"
+CATEGORY_BODY_WORK = "body_work"
+CATEGORY_PAINT = "paint"
+CATEGORY_UPHOLSTERY = "upholstery"
+CATEGORY_WHEEL_REPAIR = "wheel_repair"
+CATEGORY_DETAIL = "detail"
+
+# Administrative expenses (7).
+CATEGORY_FUEL = "fuel"
+CATEGORY_LISTING_FEES = "listing_fees"
+CATEGORY_ADVERTISING_ALLOCATION = "advertising_allocation"
+CATEGORY_REGISTRATION = "registration"
+CATEGORY_TITLE_WORK = "title_work"
+CATEGORY_SHIPPING = "shipping"
+CATEGORY_MISC_DEALER_EXPENSES = "misc_dealer_expenses"
+
+# Photography (1) — separate from recon so M6 photography can
+# distinguish "shot for listing" from "shot for damage doc" without
+# recategorizing historical rows.
+CATEGORY_PHOTOGRAPHY = "photography"
+
+VEHICLE_COST_CATEGORY_CHOICES = (
+    (CATEGORY_FLOOR_PLAN_INTEREST, "Floor plan interest"),
+    (CATEGORY_FLOOR_PLAN_FEES, "Floor plan fees"),
+    (CATEGORY_CURTAILMENT, "Curtailment"),
+    (CATEGORY_WIRE_FEES, "Wire fees"),
+    (CATEGORY_BANKING_FEES, "Banking fees"),
+    (CATEGORY_PARTS, "Parts"),
+    (CATEGORY_MECHANICAL_LABOR, "Mechanical labor"),
+    (CATEGORY_TIRES, "Tires"),
+    (CATEGORY_BRAKES, "Brakes"),
+    (CATEGORY_BATTERY, "Battery"),
+    (CATEGORY_OIL_SERVICE, "Oil service"),
+    (CATEGORY_DIAGNOSTICS, "Diagnostics"),
+    (CATEGORY_GLASS, "Glass"),
+    (CATEGORY_BODY_WORK, "Body work"),
+    (CATEGORY_PAINT, "Paint"),
+    (CATEGORY_UPHOLSTERY, "Upholstery"),
+    (CATEGORY_WHEEL_REPAIR, "Wheel repair"),
+    (CATEGORY_DETAIL, "Detail"),
+    (CATEGORY_FUEL, "Fuel"),
+    (CATEGORY_LISTING_FEES, "Listing fees"),
+    (CATEGORY_ADVERTISING_ALLOCATION, "Advertising allocation"),
+    (CATEGORY_REGISTRATION, "Registration"),
+    (CATEGORY_TITLE_WORK, "Title work"),
+    (CATEGORY_SHIPPING, "Shipping"),
+    (CATEGORY_MISC_DEALER_EXPENSES, "Miscellaneous dealer expenses"),
+    (CATEGORY_PHOTOGRAPHY, "Photography"),
+)
+
+
+class VehicleCost(models.Model):
+    """Milestone 2 · Increment 1 — per-vehicle post-acquisition cost row.
+
+    Many-per-Vehicle. Every post-acquisition expense that attaches to
+    a stock number lands here: recon parts and labor, flooring
+    interest (posted by the M2.2 accrual command), admin fees. The
+    running total of these rows plus the parent
+    :class:`VehicleAcquisition` totals equals the vehicle's current
+    investment (see ``docs/roadmap/MILESTONE_2_PLANNING.md`` §1.3).
+
+    **Negative amounts are permitted** — this is the correction
+    pattern per §1.6 design note in the planning doc (mirrors
+    accounting §2.11 practice). Update / delete on cost rows is not
+    supported in v1; corrections happen by posting a reversing row
+    whose ``reference`` points at the original.
+
+    ``created_by`` provides authorship provenance and is nullable +
+    SET_NULL so seed / management-command writes (which have no
+    request-scoped user) don't require a synthetic user account.
+    """
+
+    vehicle = models.ForeignKey(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="costs",
+    )
+    # Denormalized tenancy FK — same rationale as
+    # ``VehicleAcquisition.dealership``. ``clean()`` guards against
+    # divergence from the parent Vehicle's tenant.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vehicle_costs",
+    )
+    category = models.CharField(
+        max_length=32,
+        choices=VEHICLE_COST_CATEGORY_CHOICES,
+    )
+    # Signed. Positive = expense; negative = correction/reversal.
+    # Kept as Decimal to avoid float-drift in aggregation.
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # When the expense actually occurred (vendor invoice date, floor
+    # plan accrual date, etc.) — distinct from ``created_at`` which
+    # records when the row was posted to the ledger.
+    incurred_at = models.DateTimeField()
+    # Free text until Milestone 4 introduces a ``Vendor`` entity that
+    # can data-migrate this column into an FK. Blank when the row
+    # doesn't have a counterparty (e.g. floor plan interest posted
+    # by the accrual command names the lender via ``reference``).
+    vendor = models.CharField(max_length=255, blank=True, default="")
+    # Invoice #, PO #, or accrual-run stamp ("ACCRUAL:2026-08-15").
+    reference = models.CharField(max_length=128, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    # Separates committed spend (invoice received / paid) from
+    # projected spend (estimate against a work order that hasn't
+    # completed). Named in ``VEHICLE_CENTRIC_PIVOT.md`` as a required
+    # distinction.
+    is_estimate = models.BooleanField(default=False)
+    # Provenance for who posted the cost. Nullable + SET_NULL so
+    # historical rows survive user deletion (mirrors
+    # ``Salesperson.user`` SET_NULL rationale in Increment 4A).
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-incurred_at", "-created_at")
+        verbose_name = "Vehicle cost"
+        verbose_name_plural = "Vehicle costs"
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_category_display()} ${self.amount} "
+            f"on #{self.vehicle.stock_number}"
+        )
+
+    def clean(self) -> None:
+        """Guard against cross-tenant contamination at the model layer.
+
+        Same invariant as :meth:`VehicleAcquisition.clean` — the
+        denormalized ``dealership`` FK must match the parent
+        Vehicle's tenant. Prevents a mis-scoped view from writing a
+        cost row against a vehicle in a different dealership.
+        """
+        super().clean()
+        if self.vehicle_id is None or self.dealership_id is None:
+            return
+        if self.vehicle.dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "VehicleCost.dealership must match the parent "
+                        "Vehicle's dealership. Cross-tenant contamination "
+                        "guard (see AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
 
 
 class UserDealershipRole(models.Model):

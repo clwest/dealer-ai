@@ -86,6 +86,19 @@ else:
         }
     }
 
+# Milestone 2 · Increment 1 — dedicated migration-verification alias.
+# Per `MILESTONE_1_RETROSPECTIVE.md` §6 lesson 2: SESSION_038 verified
+# `migrate dealer_ai zero` → `migrate` against the live dev DB and
+# wiped ~200 rows of seed data. The right pattern is a separate DB
+# alias reserved for destructive migration probes. SQLite file at
+# `backend/db.migration_check.sqlite3` — cheap, gitignored, and
+# always safe to drop and recreate. Invoked with
+# `python3 manage.py migrate --database=migration_check ...`.
+DATABASES["migration_check"] = {
+    "ENGINE": "django.db.backends.sqlite3",
+    "NAME": BASE_DIR / "db.migration_check.sqlite3",
+}
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

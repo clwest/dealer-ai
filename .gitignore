@@ -30,3 +30,4 @@ docs/research/**/*.png
 .vscode/
 .idea/
 .DS_Store
+db.migration_check.sqlite3
