@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: in-progress
 increment: 6
 increment_status: shipped
-commit: TBD
+commit: b031f09
 ---
 
 # SESSION_071 — Milestone 4 · Increment 6 (M4.6 — admin API + permission matrix)
