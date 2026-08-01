@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: in-progress
 increment: 4
 increment_status: shipped
-commit: TBD
+commit: 3dd56f7
 ---
 
 # SESSION_059 — Milestone 3 · Increment 4 (M3.4 — provider-neutral photo storage)
