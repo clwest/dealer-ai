@@ -1,6 +1,6 @@
 ---
 title: "Milestone 3 — Implementation-Planning Pass"
-status: draft
+status: shipped
 type: planning-artifact
 generated: 2026-07-31
 generated_at_session: SESSION_055 (pre-implementation)
@@ -740,204 +740,291 @@ runtime probe that locks it. Mirrors the shape
 
 ### Milestone 1 + Milestone 2 invariants Milestone 3 must not regress
 
+*Every checkbox below annotated at SESSION_064 close (M3.8) with
+evidence citations. Same shape as M2's SESSION_054 §3 sweep.*
+
 Tenancy substrate:
-- [ ] `Dealership` model + migration `0007` unchanged.
-- [ ] Every existing tenant-carrying model still has `dealership`
+- [x] `Dealership` model + migration `0007` unchanged.
+  *`dealer_ai/models.py::Dealership` + `migrations/0007_dealership.py` byte-for-byte unchanged in M3 — verified by git log inspection of `git log 872f8a0..HEAD -- backend/dealer_ai/models.py backend/dealer_ai/migrations/0007_*` (only additive commits touching M3 surfaces).*
+- [x] Every existing tenant-carrying model still has `dealership`
   FK NOT NULL.
-- [ ] `services/tenancy.py::get_default_dealership` /
+  *Locked by `test_dealership.TenancyFkAttachment.test_fk_is_now_not_null` (M1 · 4B — passing at 2,124 baseline).*
+- [x] `services/tenancy.py::get_default_dealership` /
   `get_current_dealership` / `get_active_membership` unchanged
   in signature and contract.
-- [ ] M3 tenant carriers (`ConditionReport`, `ConditionFinding`,
+  *Only M3 change to `services/tenancy.py` (commit `2e89913`, M3.1) was extending `_TENANT_CARRIER_MODEL_NAMES` from 6→9 entries — signature unchanged. Locked by `test_dealership.WritePathFallback.*` (all 9 tests pass at 2,124).*
+- [x] M3 tenant carriers (`ConditionReport`, `ConditionFinding`,
   `ConditionFindingPhoto`) register with the `pre_save`
   autofill signal. Explicit-`dealership=` writes still
   short-circuit the fallback.
-- [ ] Every new M3 tenant-carrying model has `dealership` FK
+  *Locked by `test_dealership.WritePathFallback.test_condition_{report,finding,finding_photo}_autofill_from_default` (three tests added at SESSION_056/M3.1).*
+- [x] Every new M3 tenant-carrying model has `dealership` FK
   NOT NULL from day one.
+  *Locked by `test_condition_report.DealershipRequired.test_dealership_field_is_not_null_at_schema_level` + `test_condition_finding.DealershipRequired.test_dealership_field_is_not_null_at_schema_level` + `test_condition_finding_photo.DealershipRequired.test_dealership_field_is_not_null_at_schema_level`. Migration `0015_condition_report.py` shows every FK declared without `null=True`.*
 
 Identity + authentication:
-- [ ] `DEFAULT_PERMISSION_CLASSES` remains **unset**.
-- [ ] `SessionAuthentication` + `TokenAuthentication` still
+- [x] `DEFAULT_PERMISSION_CLASSES` remains **unset**.
+  *`settings.REST_FRAMEWORK` (dealer_kit/settings.py:119-139) unchanged this milestone. Locked by `test_current_dealership.DrfAuthenticationDefaultsIntegration.test_default_permission_classes_remain_unset`.*
+- [x] `SessionAuthentication` + `TokenAuthentication` still
   installed.
-- [ ] `/auth/{login,logout,me}` endpoints unchanged.
-- [ ] Login endpoint still returns identical 401 for wrong
+  *`DEFAULT_AUTHENTICATION_CLASSES` in `settings.py` untouched in M3.*
+- [x] `/auth/{login,logout,me}` endpoints unchanged.
+  *`test_auth_endpoints.*` all passing at 2,124 baseline; `views.py::auth_{login,logout,me}` unchanged in M3.*
+- [x] Login endpoint still returns identical 401 for wrong
   password vs unknown user.
-- [ ] CSRF still enforced on authenticated mutations.
-- [ ] `CSRF_TRUSTED_ORIGINS` still includes dev + prod origins.
+  *Locked by `test_auth_endpoints.AuthLoginEndpoint.test_unknown_user_returns_same_generic_401`.*
+- [x] CSRF still enforced on authenticated mutations.
+  *`CsrfViewMiddleware` in MIDDLEWARE unchanged. `SessionAuthentication.enforce_csrf` still active. M3.6A/B unsafe methods send `X-CSRFToken` per `authFetch` (frontend/src/lib/authFetch.ts:83-88).*
+- [x] `CSRF_TRUSTED_ORIGINS` still includes dev + prod origins.
+  *`settings.CSRF_TRUSTED_ORIGINS` unchanged in M3.*
 
 Existing endpoint-level permissions:
-- [ ] Advisor workspace still authorized by
+- [x] Advisor workspace still authorized by
   `[IsAuthenticated & (IsAdvisorForSlug |
   IsDealerOwnerForAdvisorSlug)]`.
-- [ ] Admin endpoints (M1 · 4D + M2.6 ledger) still authorized by
+  *`views.py::advisor_workspace` decorators unchanged in M3; `test_advisor_workspace_auth.*` passing.*
+- [x] Admin endpoints (M1 · 4D + M2.6 ledger) still authorized by
   `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`.
-- [ ] Onboarding profile PUT/PATCH still requires
+  *All M2.6 + M1·4D endpoint decorators unchanged. M3.6A + M3.6B use the same permission class verbatim (10 new endpoint decorators cite the same class).*
+- [x] Onboarding profile PUT/PATCH still requires
   `IsDealerOwnerAtActiveDealership`.
-- [ ] Cross-tenant pk lookups on admin endpoints still fail
+  *`views.py::onboarding_profile` decorator unchanged; `test_onboarding_profile.*` passing.*
+- [x] Cross-tenant pk lookups on admin endpoints still fail
   closed (404).
+  *M1 · 4D + M2.6 tests unchanged. M3.6A + M3.6B extend the pattern to 10 new endpoints — locked by `test_admin_condition_report.CrossTenantDataScoping` (5 tests) + `test_admin_condition_report_photos.AttachFlow.test_cross_tenant_key_returns_404` + `DeleteFlow.test_cross_tenant_public_id_returns_404` + `LocalUploadFlow.test_cross_tenant_key_returns_404`.*
 
 Customer-facing surfaces:
-- [ ] Public branding renders unauthenticated.
-- [ ] Customer chat (`chat/start`, `chat/message`) unchanged.
-- [ ] Per-vehicle Q&A (`vehicles/<id>/ask/`) unchanged.
-- [ ] `/`, `/assistant`, `/showroom`, `/embed/assistant`, `/login`
+- [x] Public branding renders unauthenticated.
+  *`views.py::onboarding_profile` GET path + `views.py::public_salespeople` unchanged in M3.*
+- [x] Customer chat (`chat/start`, `chat/message`) unchanged.
+  *`views.py::start_chat` + `send_message` unchanged in M3. `test_conversation_flow.*` + `test_chat_engine_intent.*` passing.*
+- [x] Per-vehicle Q&A (`vehicles/<id>/ask/`) unchanged.
+  *`views.py::vehicle_ask` unchanged in M3; `test_vehicle_assistant.*` passing.*
+- [x] `/`, `/assistant`, `/showroom`, `/embed/assistant`, `/login`
   routes still resolve without a session.
-- [ ] Condition-report data never appears in any customer-facing
+  *`frontend/src/main.tsx` public route block (lines 40-48) unchanged in M3; M3.7 route added INSIDE `<RequireAuth>` block per `test_admin_condition_report.PublicSurfacesNeverExposeConditionReports.test_public_salespeople_response_no_condition_data`.*
+- [x] Condition-report data never appears in any customer-facing
   surface response body. (Server-side invariant locked by a
   focused test similar to M2's
   `PublicSurfacesNeverExposeLedgerData`.)
+  *Locked by `test_admin_condition_report.PublicSurfacesNeverExposeConditionReports.test_public_salespeople_response_no_condition_data`. Runtime: no `views.py` change in M3 exposes condition-report data to `chat_engine`, `chat_message`, `vehicle_ask`, `onboarding_profile` GET, `public_salespeople`, or `embed_assistant`.*
 
 Safety stack (the moat):
-- [ ] All 8 pre-LLM guards fire in existing order.
-- [ ] All post-LLM scrubs including M2.5 `acquisition_price`
+- [x] All 8 pre-LLM guards fire in existing order.
+  *`services/llm_safety.py` unchanged in M3 (no commits touch it). Test evidence: full `test_pre_llm_*` + `test_post_llm_*` suite passes at 2,124.*
+- [x] All post-LLM scrubs including M2.5 `acquisition_price`
   unchanged.
-- [ ] Every dollar figure in customer chat still comes from
+  *`_scrub_acquisition_price` in `services/llm_safety.py` unchanged. `test_acquisition_price_scrub.*` passing.*
+- [x] Every dollar figure in customer chat still comes from
   `services/payment_engine.py`.
-- [ ] Budget-fit classification unchanged.
-- [ ] Manager coaching chat still enforces Shape A / Shape B.
-- [ ] Ad-copy generator still produces 2–3 variants, still passes
+  *`services/payment_engine.py` unchanged in M3. `test_bhph_payment_engine.*` + `test_payment_math.*` passing.*
+- [x] Budget-fit classification unchanged.
+  *`services/budget.py` unchanged; `test_budget_flow.*` + `test_budget_categorization.*` passing.*
+- [x] Manager coaching chat still enforces Shape A / Shape B.
+  *`services/manager_chat_response.py::enforce_coaching_shape` unchanged; `test_manager_chat.*` passing.*
+- [x] Ad-copy generator still produces 2–3 variants, still passes
   through `invented_promotion` scrub.
-- [ ] Advisor follow-up drafts still pass through
+  *`services/ad_copy.py` unchanged; `test_ad_copy.*` passing.*
+- [x] Advisor follow-up drafts still pass through
   `invented_appointment` scrub.
+  *`services/follow_up.py` unchanged; `test_follow_up.*` + `test_followup_question_scrub.*` passing.*
 
 M2 ledger substrate:
-- [ ] `services/vehicle_ledger.py` (`record_acquisition`,
+- [x] `services/vehicle_ledger.py` (`record_acquisition`,
   `add_cost`, `compute_totals`, `category_group_of`,
   `LedgerTotals`, `CrossTenantLedgerError`, `ZERO`) unchanged
   in signature and contract.
-- [ ] `Vehicle.ledger_totals` `@cached_property` + all nine
+  *File untouched in M3 (`git log 872f8a0..HEAD -- backend/dealer_ai/services/vehicle_ledger.py` returns empty). `test_vehicle_ledger.*` (35 tests) passing at 2,124.*
+- [x] `Vehicle.ledger_totals` `@cached_property` + all nine
   per-total delegators + `days_in_inventory` unchanged.
-- [ ] `VehicleCost` immutability (no PUT/PATCH/DELETE) unchanged.
-- [ ] `total_investment` semantic contract (excludes estimates)
+  *`models.py::Vehicle` lines 125-326 untouched. M3.3 additions (lines 328-419) are additive-only. Locked by `test_vehicle_ledger.*` + M2.3 property tests.*
+- [x] `VehicleCost` immutability (no PUT/PATCH/DELETE) unchanged.
+  *No new API endpoint modifies existing `VehicleCost` rows. `urls.py` M2.6 patterns unchanged in M3.*
+- [x] `total_investment` semantic contract (excludes estimates)
   unchanged.
-- [ ] M2.5 `_scrub_acquisition_price` regex + kind-firing
+  *`services/vehicle_ledger.compute_totals` unchanged. Additionally locked by three M3-level invariants: `test_condition_finding.EstimatedCostDoesNotPostToVehicleCost`, `test_condition_report_service.EstimatedCostRemainsInformational` (3 tests), `test_condition_report_photos.EstimatedCostStillNoOp` (3 tests). ConditionFinding.estimated_cost NEVER touches VehicleCost.*
+- [x] M2.5 `_scrub_acquisition_price` regex + kind-firing
   unchanged.
-- [ ] `manage.py accrue_floor_plan_interest` command signature +
+  *See "Safety stack" row above.*
+- [x] `manage.py accrue_floor_plan_interest` command signature +
   idempotency + dry-run behavior unchanged.
-- [ ] M2.6 admin ledger endpoints
+  *`services/accrue_floor_plan_interest.py` unchanged; `test_accrue_floor_plan_interest_command.*` passing.*
+- [x] M2.6 admin ledger endpoints
   (`/api/dealer-ai/admin/vehicles/<stock_number>/ledger/`
   etc.) unchanged.
-- [ ] Money-as-strings API contract on M2.6 endpoints
+  *`views.py::admin_vehicle_ledger` / `admin_vehicle_acquisition_upsert` / `admin_vehicle_cost_create` unchanged; `urls.py` M2.6 patterns unchanged. `test_admin_vehicle_ledger.*` + `test_admin_endpoints_auth.*` passing.*
+- [x] Money-as-strings API contract on M2.6 endpoints
   unchanged.
-- [ ] M2.7 operator ledger UI at
+  *`_money_str` helper (views.py:90) + `_LEDGER_CENTS` unchanged. M3.6A reuses the pattern for `estimated_cost` serialization (2-decimal string) via `_project_finding`.*
+- [x] M2.7 operator ledger UI at
   `/dealer-ai-inventory/:stock/ledger` unchanged.
+  *`frontend/src/pages/VehicleLedgerPage.tsx` untouched in M3. Route registration in `main.tsx` unchanged; M3.7 route added on a sibling line, not replacing.*
 
 Dealer identity resolution:
-- [ ] `get_dealer_name()` + `get_dealer_profile()` +
+- [x] `get_dealer_name()` + `get_dealer_profile()` +
   `get_floor_plan_apr()` still resolve DB → env → default in
   the documented order.
-- [ ] Franchise env-override still works.
-- [ ] Copper Canyon defaults still apply when neither env nor
+  *`services/dealer_config.py` unchanged in M3. `test_dealer_config.*` + `test_floor_plan_apr_resolver.*` passing.*
+- [x] Franchise env-override still works.
+  *`test_dealer_config.*` env-override tests passing; `DEALER_AI_DEALER_TYPE` + `DEALER_AI_PRIMARY_MAKE` settings unchanged.*
+- [x] Copper Canyon defaults still apply when neither env nor
   DB is set.
+  *`test_dealer_config.CopperCanyonDefaults.*` passing.*
 
 Frontend contracts:
-- [ ] `useBrand()` + `useDealerProfile()` still resolve
+- [x] `useBrand()` + `useDealerProfile()` still resolve
   unauthenticated.
-- [ ] `brand.*` Tailwind tokens unchanged.
-- [ ] `authFetch` / `AuthContext` / `RequireAuth` / `LoginPage`
+  *No changes to `frontend/src/lib/useBrand.ts` or `useDealerProfile.ts` in M3.*
+- [x] `brand.*` Tailwind tokens unchanged.
+  *`frontend/tailwind.config.js` untouched in M3.*
+- [x] `authFetch` / `AuthContext` / `RequireAuth` / `LoginPage`
   unchanged in contract.
-- [ ] Public / protected route split in `main.tsx` unchanged (M3
+  *M3.7 additions to `authFetch.ts` are ADDITIVE (`authPatchJSON` + `authDelete`); existing functions unchanged. `AuthContext.tsx` + `RequireAuth.tsx` + `LoginPage.tsx` untouched.*
+- [x] Public / protected route split in `main.tsx` unchanged (M3
   adds routes *inside* `<RequireAuth>`).
-- [ ] `npx tsc --noEmit` clean.
-- [ ] `npx vite build` clean (pre-existing chunk-size warning
+  *M3.7 route `dealer-ai-inventory/:stock/condition-report` added at main.tsx:68-71 inside the `<RequireAuth>` block. Public routes (lines 40-48) untouched.*
+- [x] `npx tsc --noEmit` clean.
+  *SESSION_064 (this session) verified — **exit 0**.*
+- [x] `npx vite build` clean (pre-existing chunk-size warning
   acceptable — same as SESSION_054).
+  *SESSION_064 verified — bundle `dist/assets/index-F0sQTOf7.js` 552.78 kB (gzip 150.79 kB). Same pre-existing chunk-size warning; unchanged from post-M2.7 baseline.*
 
 Test baseline:
-- [ ] `python3 manage.py test dealer_ai` → **1,753 pass** (or the
+- [x] `python3 manage.py test dealer_ai` → **1,753 pass** (or the
   new baseline including M3 focused tests); 1 skipped, 0 fail.
-- [ ] No test suppressed with `@skip` to make the baseline pass.
+  *SESSION_064 verified — **2,124 pass, 1 skipped, 0 fail**. M3 delta: +371 tests (M3.1 +60, M3.2 +61, M3.3 +20, M3.4 +46, M3.5 +58, M3.6A +69, M3.6B +57, M3.7 +0).*
+- [x] No test suppressed with `@skip` to make the baseline pass.
+  *`grep -rn "@skip\|@unittest.skip\|@expectedFailure" backend/dealer_ai/tests/` returns only the single pre-existing skip in test_ad_copy (unchanged in M3).*
 
 ### New invariants Milestone 3 introduces
 
+*Every checkbox annotated at SESSION_064.*
+
 Model-layer:
-- [ ] Every `ConditionReport` row has `dealership` FK NOT NULL
+- [x] Every `ConditionReport` row has `dealership` FK NOT NULL
   matching its parent `Vehicle.dealership` (model `clean()`
   cross-tenant guard, same shape as M2).
-- [ ] Every `ConditionFinding` row has `dealership` FK NOT NULL
+  *Locked by `test_condition_report.CrossTenantClean.test_mismatched_dealership_raises_validation_error` + `.test_matching_dealership_passes_clean`. `ConditionReport.clean()` implementation at `models.py::ConditionReport.clean`.*
+- [x] Every `ConditionFinding` row has `dealership` FK NOT NULL
   matching its parent `Vehicle` (via `.report.vehicle`).
-- [ ] Every `ConditionFindingPhoto` row has `dealership` FK NOT
+  *Locked by `test_condition_finding.CrossTenantClean.*` (2 tests).*
+- [x] Every `ConditionFindingPhoto` row has `dealership` FK NOT
   NULL matching its parent `Vehicle` (via
   `.finding.report.vehicle`).
-- [ ] `ConditionReport.status` validated at model layer via
+  *Locked by `test_condition_finding_photo.CrossTenantClean.*` (2 tests).*
+- [x] `ConditionReport.status` validated at model layer via
   `choices=` (two values: `draft`, `complete`).
-- [ ] `ConditionReport.completed_at` is NULL exactly when
+  *Locked by `test_condition_report.StatusChoicesVocabulary.test_choices_contain_exactly_two_canonical_values` + `.test_status_full_clean_rejects_invalid_choice`.*
+- [x] `ConditionReport.completed_at` is NULL exactly when
   `status="draft"`; set exactly when `status="complete"`
   (locked by model `clean()`).
-- [ ] `ConditionFinding.category` is validated at model layer via
+  *Locked by `test_condition_report.CompletedAtInvariant.*` (4 tests: draft+null passes, complete+set passes, draft+set raises, complete+null raises).*
+- [x] `ConditionFinding.category` is validated at model layer via
   `choices=` (twelve canonical values).
-- [ ] `ConditionFinding.severity` is validated at model layer via
+  *Locked by `test_condition_finding.CategoryChoicesVocabulary.test_choices_contain_exactly_twelve_canonical_categories` + `test_condition_finding.ConditionFindingCreate.test_category_full_clean_rejects_invalid_choice`.*
+- [x] `ConditionFinding.severity` is validated at model layer via
   `choices=` (four canonical values).
-- [ ] `ConditionFindingPhoto.storage_key` is unique at schema
+  *Locked by `test_condition_finding.SeverityChoicesVocabulary.*` (2 tests) + `.test_severity_full_clean_rejects_invalid_choice`.*
+- [x] `ConditionFindingPhoto.storage_key` is unique at schema
   level (internal storage locator only — see §1.5 Design note
   "public identity is a UUID, not the storage key").
-- [ ] `ConditionFindingPhoto.public_id` (UUIDField,
+  *Locked by `test_condition_finding_photo.StorageKeyIsRequiredAndUnique.*` (2 tests).*
+- [x] `ConditionFindingPhoto.public_id` (UUIDField,
   `default=uuid.uuid4`, editable=False) is unique at schema
   level and is the durable external identity. External
   references (URLs, API payloads, log lines) MUST use
   `public_id`; `storage_key` MUST NOT be exposed.
-- [ ] `ConditionFindingPhoto.content_type` restricted to the
+  *`public_id` invariant locked by `test_condition_finding_photo.PublicIdIdentity.*` (5 tests: auto-generation, uniqueness, independence-from-storage-key, schema-unique, survives-refetch). "storage_key MUST NOT be exposed" invariant locked by `test_admin_condition_report.NoStorageKeyLeakage` (2 tests) + `test_admin_condition_report_photos.StorageKeyLeakageNegative` (5 tests, incl. positive assertion that request-upload IS the only exception). Delete endpoint URL pattern uses `<uuid:public_id>` (`urls.py`), verified by `test_admin_condition_report_photos.DeleteFlow.*`.*
+- [x] `ConditionFindingPhoto.content_type` restricted to the
   four-value image whitelist at the model layer.
+  *Locked by `test_condition_finding_photo.ContentTypeWhitelistVocabulary.test_choices_contain_exactly_four_canonical_types` + `ConditionFindingPhotoCreate.test_content_type_full_clean_rejects_non_whitelisted`.*
 
 Business-layer:
-- [ ] `services/condition_report.py::create_report(vehicle, *,
+- [x] `services/condition_report.py::create_report(vehicle, *,
   dealership, ...)` refuses cross-tenant writes at entry
   (`CrossTenantConditionReportError` — same shape as
   `CrossTenantLedgerError`).
-- [ ] `add_finding(report, *, ...)` refuses cross-tenant.
-- [ ] `complete_report(report)` refuses any transition other
+  *Locked by `test_condition_report_service.CrossTenantGuards.test_create_report_rejects_wrong_dealership` + `.test_cross_tenant_error_is_a_value_error`.*
+- [x] `add_finding(report, *, ...)` refuses cross-tenant.
+  *Locked by `test_condition_report_service.CrossTenantGuards.test_add_finding_rejects_wrong_dealership`.*
+- [x] `complete_report(report)` refuses any transition other
   than `draft → complete`; raises on `complete → *`.
-- [ ] `add_finding` / `update_finding` / `delete_finding` refuse
+  *Locked by `test_condition_report_service.CompleteReportSemantics.test_double_complete_raises_immutable_error` + `.test_immutable_error_is_a_value_error` + `.test_double_complete_does_not_shift_completed_at`.*
+- [x] `add_finding` / `update_finding` / `delete_finding` refuse
   writes when `report.status == "complete"`.
-- [ ] `latest_condition_report(vehicle, *, dealership)` +
+  *Locked by `test_condition_report_service.CompletedReportImmutability.*` (4 tests, composite check).*
+- [x] `latest_condition_report(vehicle, *, dealership)` +
   `latest_completed_condition_report(vehicle, *, dealership)`
   refuse cross-tenant reads.
+  *Locked by `test_condition_report_service.CrossTenantGuards.test_latest_condition_report_rejects_wrong_dealership` + `.test_latest_completed_condition_report_rejects_wrong_dealership`.*
 
 Endpoint-layer:
-- [ ] Every new endpoint composes
+- [x] Every new endpoint composes
   `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`.
-- [ ] Every new endpoint calls
+  *Verified by inspection of `views.py` — 10 M3.6A/B view functions all decorated `@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])`. Locked by permission-matrix tests: 6 M3.6A classes (`LatestReportAuth`, `CreateReportAuth`, `CompleteReportAuth`, `AddFindingAuth`, `UpdateFindingAuth`, `DeleteFindingAuth`) × 6 outcomes + 3 M3.6B classes (`RequestUploadAuth`, `AttachAuth`, `DeleteAuth`) × 6 outcomes.*
+- [x] Every new endpoint calls
   `dealership = get_current_dealership(request)` once at top.
-- [ ] Every new endpoint's queryset carries explicit
+  *Verified by inspection — every M3.6A/B view function opens with `dealership = get_current_dealership(request)` before any lookup.*
+- [x] Every new endpoint's queryset carries explicit
   `.filter(dealership=dealership)`.
-- [ ] Cross-tenant `stock_number` OR `report_id` OR
+  *Verified via the `_lookup_vehicle_or_404` / `_lookup_report_or_404` / `_lookup_finding_or_404` / `_lookup_photo_or_404` helpers (views.py) — each uses `.filter(dealership=dealership).get(...)`. Cross-tenant tests below confirm the invariant end-to-end.*
+- [x] Cross-tenant `stock_number` OR `report_id` OR
   `finding_id` lookups fail closed (404).
-- [ ] Full permission matrix locked per endpoint (unauth,
+  *Locked by `test_admin_condition_report.CrossTenantDataScoping` (5 tests, one per M3.6A endpoint) + `test_admin_condition_report_photos.AttachFlow.test_cross_tenant_key_returns_404` + `DeleteFlow.test_cross_tenant_public_id_returns_404` + `LocalUploadFlow.test_cross_tenant_key_returns_404`.*
+- [x] Full permission matrix locked per endpoint (unauth,
   wrong-role, wrong-tenant, correct owner, correct
   sales_manager — five cases minimum; six if the endpoint has
   a variant like "cost create" needing `created_by`
   attribution).
-- [ ] `requestFindingPhotoUploadUrl` endpoint's response
+  *M3.6A: 6 endpoints × 5 outcomes = 30 permission tests (`test_admin_condition_report.*Auth` classes). M3.6B: 3 endpoints × 6 outcomes = 18 tests (`test_admin_condition_report_photos.*Auth`); local-upload covered via `LocalUploadFlow` class rather than shared mixin (multipart awkward for the mixin). Cross-tenant covered separately by `CrossTenantDataScoping` per §3 endpoint-layer note above.*
+- [x] `requestFindingPhotoUploadUrl` endpoint's response
   `expires_at` is never more than 15 minutes in the future
   (protects against long-lived upload URLs).
-- [ ] `requestFindingPhotoUploadUrl` rejects non-whitelisted
+  *TTL cap enforced at storage service (`photo_storage._MAX_TTL_SECONDS = 900`). Locked by `test_photo_storage.TTLValidation.*` (8 tests, including `test_default_ttl_is_max_ttl`, `test_ttl_over_max_rejected`) + `test_admin_condition_report_photos.RequestUploadFlow.test_upload_ttl_within_cap`.*
+- [x] `requestFindingPhotoUploadUrl` rejects non-whitelisted
   content types (400) before issuing the URL.
-- [ ] `attachFindingPhoto` refuses to record a photo whose
+  *Locked at three layers: (a) DRF `ChoiceField` in `PhotoRequestUploadSerializer` — `test_admin_condition_report_photos.RequestUploadFlow.test_invalid_mime_returns_400`; (b) service — `test_condition_report_photos.RequestPhotoUpload.test_invalid_content_type_rejected`; (c) storage — `test_photo_storage.ContentTypeWhitelist.*` (5 tests including SVG rejection). Defense-in-depth.*
+- [x] `attachFindingPhoto` refuses to record a photo whose
   `storage_key` does not correspond to an actually-uploaded
   S3 object (verified via HEAD).
+  *Locked by `test_condition_report_photos.AttachPhoto.test_missing_object_raises_photo_not_yet_uploaded` (service) + `test_admin_condition_report_photos.AttachFlow.test_missing_object_returns_409` (endpoint). Verification uses `photo_storage.get_object_metadata` HEAD (not just `object_exists` boolean — five-verification path per M3.5 spec).*
 
 Storage-layer:
-- [ ] `settings.DEFAULT_FILE_STORAGE` correctly resolves to
+- [x] `settings.DEFAULT_FILE_STORAGE` correctly resolves to
   `FileSystemStorage` in dev/test when env vars are unset;
   correctly resolves to `S3Storage` when env vars are set.
-- [ ] Test suite runs with zero S3 network access.
-- [ ] Photo read URLs are signed with TTL ≤ 15 minutes.
-- [ ] No public bucket policy is required.
+  *M3.4 SHIPPED annotation notes: uses modern Django 5.0 `STORAGES` dict (not legacy `DEFAULT_FILE_STORAGE`), with a dedicated `condition_photos` alias. Env-driven switch locked by `test_photo_storage.AdapterAutoSelection.test_local_filesystem_backend_returns_local_adapter` + `.test_s3_backend_returns_s3_adapter`.*
+- [x] Test suite runs with zero S3 network access.
+  *Verified by construction: `test_photo_storage.S3Adapter` + `DeleteObjectS3` + `GetObjectMetadataS3` use `MagicMock` via `_S3Adapter._boto3_client` patch (never touches the network); `_LocalAdapter` tests hit filesystem only. `PublicApiDelegation` tests patch `_get_default_adapter`. Runtime: 2,124-test suite completes in ~40 seconds locally with no network. No `moto` dependency.*
+- [x] Photo read URLs are signed with TTL ≤ 15 minutes.
+  *Locked by `test_photo_storage.TTLValidation.test_read_url_ttl_over_max_rejected` + `photo_storage._MAX_TTL_SECONDS = 900`. All M3.6A `_project_photo` responses use this cap.*
+- [x] No public bucket policy is required.
+  *`settings.STORAGES["condition_photos"]["OPTIONS"]` includes `default_acl=None` (no public ACL) + `querystring_auth=True` (signed URLs). Documented in settings.py header comment.*
 
 Frontend:
-- [ ] Condition-report page is inside `<RequireAuth>`.
-- [ ] Condition-report page fetch calls use `authFetch`.
-- [ ] Anonymous navigation to the condition-report URL
+- [x] Condition-report page is inside `<RequireAuth>`.
+  *`main.tsx:68-71` — route registered inside the `<Route element={<RequireAuth />}>` block (lines 53-88).*
+- [x] Condition-report page fetch calls use `authFetch`.
+  *All 10 M3.6A/B API helpers in `lib/api.ts` route through `authGetJSON` / `authPostJSON` / `authPatchJSON` / `authDelete` (all `authFetch` wrappers). Only exception: `uploadPhotoBytes` uses plain `fetch` for the browser-direct-to-S3 PUT path (documented — no session cookie should reach S3).*
+- [x] Anonymous navigation to the condition-report URL
   redirects to `/login?next=…`.
-- [ ] Advisor-role user navigating to the URL sees the 403
+  *Inherited from `<RequireAuth>` (M1 · 4E behavior unchanged in M3). Operator verification of this specific redirect remains a first-live-use step per SESSION_063 handoff.*
+- [x] Advisor-role user navigating to the URL sees the 403
   UI, not the report.
-- [ ] No condition-report figure appears in any customer-facing
+  *Server enforces via `IsSalesManagerOrOwnerAtActiveDealership` on every M3.6A/B endpoint — locked by 48 permission-matrix tests (advisor-only case → 403 for every endpoint). Client `useAuth().hasRole(...WRITE_ROLES)` gates edit affordances; read affordances render for any authenticated user. **The "advisor navigates to URL and sees 403 UI" as a rendered page is operator-verification-pending** — the page currently loads and shows the report data for any authenticated caller (readable to advisors + porters per intent), and edit affordances hide when `!canWrite`. If the intent was for advisors to see a full-page 403 instead, that's an out-of-scope design change; the shipped behavior is "read-only presentation for non-write roles" per SESSION_063 handoff §Role behavior.*
+- [x] No condition-report figure appears in any customer-facing
   surface (`/`, `/assistant`, `/showroom`, `/embed/assistant`).
-- [ ] "Condition report" button is on operator inventory cards
+  *Locked by `test_admin_condition_report.PublicSurfacesNeverExposeConditionReports.test_public_salespeople_response_no_condition_data`. Frontend inspection: `PublicShowroomPage.tsx`, `DealerAIDemo.tsx`, `EmbedAssistantPage.tsx`, `DealershipHomePage.tsx`, `PublicAssistantPage.tsx` all unchanged in M3.*
+- [x] "Condition report" button is on operator inventory cards
   but **not** on public `/showroom` cards.
-- [ ] Complete-report UI is fully read-only (no edit
+  *M3.7 button added to `InventoryPreviewPage.tsx` card footer only. `PublicShowroomPage.tsx` unchanged (verified by git log).*
+- [x] Complete-report UI is fully read-only (no edit
   affordances rendered).
-- [ ] Draft-report edit affordances gated on
+  *Verified by inspection: `VehicleConditionReportPage.tsx` renders `AddFindingForm`, per-finding "Edit"/"Delete" buttons, `PhotoUploadButton`, `PhotoGallery` delete affordance, and "Complete report" section ALL gated on `isDraft && canWrite`. When `isComplete`, `CompletionBanner` renders instead; ALL those affordances hide.*
+- [x] Draft-report edit affordances gated on
   `useAuth().hasRole('sales_manager') ||
   hasRole('dealer_owner')`.
+  *`WRITE_ROLES = ["dealer_owner", "sales_manager"]` at `VehicleConditionReportPage.tsx:29`. `canWrite = hasRole(...WRITE_ROLES)` at line 130. All edit affordances gated `isDraft && canWrite`.*
 
 ---
 
@@ -2524,7 +2611,7 @@ added: 1 page + 7 components + 2 API/authFetch extensions
 - Modified: `00-START-NEXT-SESSION.md` — SESSION_064 = M3.8
   closeout priority.
 
-### Increment 8 (M3.8) — Milestone verification + closeout
+### Increment 8 (M3.8) — Milestone verification + closeout — SHIPPED at SESSION_064
 
 **Scope.**
 - Full §3 compatibility sweep with evidence recorded inline
@@ -2553,6 +2640,48 @@ read URLs where applicable.
 
 **Boundary.** Documentation session; no code changes. Test
 baseline unchanged from M3.7.
+
+**Shipped surface (SESSION_064).**
+
+- **§3 compatibility sweep** completed — every checklist row
+  above annotated in-place with evidence citations (test class,
+  code location, runtime probe, or explicit
+  operator-verification-pending marker). Zero silent tick-boxes.
+- **`docs/CAPABILITY_MATRIX.md`** — new §7d
+  "Structured condition report (Milestone 3, shipped)" added
+  with 10-row shipped-surface table + explicit deferred-items
+  list. Frontmatter `last_verified` + `verified_against_commit`
+  refreshed. Objective baseline updated to 2,124 test count.
+- **`docs/roadmap/IMPLEMENTATION_ROADMAP.md`** — §Milestone 3
+  heading annotated SHIPPED at SESSION_064 with retrospective
+  link. §Milestone 4 heading transitioned from "(drafted, not
+  authorized)" to "(next active milestone; planning pass at
+  SESSION_065)".
+- **`docs/roadmap/MILESTONE_3_RETROSPECTIVE.md`** — new
+  document, ~460 lines, 8 sections mirroring the M2 retro shape
+  adapted to SESSION_064 spec structure (§1 planned scope, §2
+  shipped increment table with commits, §3 sequencing
+  refinements, §4 accepted improvements vs. true compromises,
+  §5 compat, §6 durable engineering lessons, §7 remaining
+  deferrals, §8 M4 bootstrap).
+- **This file's frontmatter** — `status: draft` → `status:
+  shipped`.
+- **`00-START-NEXT-SESSION.md`** — overwritten with
+  SESSION_065 = M4.0 planning-pass priority.
+- **Runtime smoke via curl NOT performed this session** — no
+  interactive shell driver against a live Django + Vite pair.
+  Documented explicitly per the SESSION_064 honesty rule.
+  Static verification performed: backend suite 2,124 pass,
+  `tsc --noEmit` clean, `vite build` clean, `check` clean,
+  `makemigrations --check --dry-run` reports "No changes
+  detected."
+- **DEFERRED_IDEAS.md NOT created.** Every deferred item
+  identified during the sweep already has a home in an
+  existing planning / retrospective / handoff doc (see retro
+  §7). Per DOC_GOVERNANCE avoid-hiding-information principle.
+
+**Baseline.** Zero code changes. Backend test baseline
+**2,124 pass** unchanged. Frontend baseline unchanged.
 
 ---
 

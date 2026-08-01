@@ -476,7 +476,14 @@ gross $5,425"* on the operator ledger page.
 
 ---
 
-### Milestone 3 — Structured condition report
+### Milestone 3 — Structured condition report — SHIPPED at SESSION_064
+
+*Full delivery record: `docs/roadmap/MILESTONE_3_PLANNING.md` §7
+(annotated SHIPPED per increment) and
+`docs/roadmap/MILESTONE_3_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7d. Test baseline
+delta: 1,753 → 2,124 (+371, zero regressions). Sessions
+055 → 064. Frontend `tsc --noEmit` + `vite build` clean.*
 
 **Business objective.** Capture, in structured human-authored
 form, what needs to happen before a vehicle is front-line
@@ -534,7 +541,7 @@ that the AI role is zero in this phase.
 
 ---
 
-### Milestone 4 — Recon automation (drafted, not authorized)
+### Milestone 4 — Recon automation (next active milestone; planning pass at SESSION_065)
 
 **Business objective.** Reduce the "chase vendor for status,
 chase vendor for invoice, chase parts store for order" pain by

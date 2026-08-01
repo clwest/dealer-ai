@@ -1,8 +1,8 @@
 ---
 title: "Dealer AI Kit — Verified Capability Matrix"
 status: living
-last_verified: 2026-07-31
-verified_against_commit: f20564f
+last_verified: 2026-08-01
+verified_against_commit: 8e9a5b2
 ---
 
 # Dealer AI Kit — Verified Capability Matrix
@@ -37,11 +37,12 @@ dealership.
 
 ## Objective baseline
 
-- **Backend test suite:** `python3 manage.py test dealer_ai` → **1300 pass, 1
-  skipped**. ~3.6s. Run from `backend/`.
+- **Backend test suite:** `python3 manage.py test dealer_ai` → **2,124
+  pass, 1 skipped**. ~40s. Run from `backend/`.
 - **Frontend typecheck:** `npx tsc --noEmit` → clean. Run from `frontend/`.
-- **Frontend build:** `npx vite build` → clean, ~490 kB bundle / ~134 kB
-  gzip.
+- **Frontend build:** `npx vite build` → clean, ~553 kB bundle / ~151 kB
+  gzip (pre-existing chunk-size warning acceptable — unchanged since
+  M2.7).
 
 If those three numbers drift, the rest of this matrix is suspect —
 refresh before trusting any claim below.
@@ -289,6 +290,70 @@ research trigger; every item recorded in `MILESTONE_2_PLANNING.md`
   need bulk aggregates).
 - `floor_plan_apr` field in the operator Setup UI (M2.7-adjacent;
   land whenever the Setup UI takes its next extension).
+
+---
+
+## 7d. Structured condition report (Milestone 3, shipped)
+
+Milestone 3 (SESSION_055 → SESSION_064) shipped a complete
+condition-report substrate: multi-photo per-finding evidence,
+draft → complete lifecycle with immutable-once-complete
+semantics, and a provider-neutral storage abstraction. Every
+subsequent milestone that reads inspection provenance (M4 Recon
+Automation, M5 Lifecycle gating, M8 Operational Intelligence,
+M11+ warranty defense) inherits this substrate. See
+`docs/roadmap/MILESTONE_3_RETROSPECTIVE.md` for what shipped
+vs. what remained deferred, and
+`docs/roadmap/MILESTONE_3_PLANNING.md` for the full acceptance
+contract.
+
+| Concern | Shipped surface | Notes |
+| --- | --- | --- |
+| Condition report | `models.ConditionReport` (many-per-Vehicle; `dealership` FK NOT NULL; `authored_by` FK nullable SET_NULL; `inspector_name` CharField required; `inspected_at` DateTimeField required; `mileage_at_inspection` PositiveIntegerField required; `status` CharField default `draft`; `completed_at` DateTimeField nullable; `notes` TextField blank; timestamps) + migration `0015`. Model `clean()` enforces cross-tenant guard + `completed_at` ↔ `status` invariant. | Draft rows are editable; complete rows are immutable at the service layer (see below). |
+| Condition finding | `models.ConditionFinding` (many-per-ConditionReport; `dealership` FK NOT NULL; `category` CharField 12-value enum from `CONDITION_CATEGORY_CHOICES`; `severity` CharField 4-value enum from `CONDITION_SEVERITY_CHOICES`; `description` TextField required; `estimated_cost` Decimal `max_digits=10, decimal_places=2` nullable; `notes` TextField blank; timestamps) + migration `0015`. Model `clean()` enforces cross-tenant guard via `report.vehicle.dealership`. | `estimated_cost` is **documentation only** — never posts to `VehicleCost`. Locked by three separate test classes across model/service/endpoint layers. |
+| Condition finding photo | `models.ConditionFindingPhoto` (many-per-ConditionFinding; `public_id` UUIDField unique editable=False `default=uuid.uuid4` — durable external identity; `dealership` FK NOT NULL; `storage_key` CharField required unique — internal locator only, never exposed publicly; `content_type` CharField 4-value whitelist from `CONDITION_PHOTO_CONTENT_TYPE_CHOICES`; `size_bytes` PositiveIntegerField; `caption` CharField blank; `uploaded_by` FK nullable SET_NULL; `created_at`) + migration `0015`. | Public identity is `public_id` (UUID). External references (URLs, API payloads, log lines) bind here; `storage_key` is never surfaced. |
+| Condition-report service | `services/condition_report.py`: `create_report(vehicle, *, dealership, authored_by, inspector_name, inspected_at, mileage_at_inspection, notes="") → ConditionReport`; `complete_report(report, *, dealership) → ConditionReport` one-way draft→complete; `add_finding(report, *, dealership, category, severity, description, estimated_cost=None, notes="") → ConditionFinding`; `update_finding(finding, *, dealership, **updates) → ConditionFinding` with 5-field whitelist; `delete_finding(finding, *, dealership) → None`; `latest_condition_report(vehicle, *, dealership) → Optional[ConditionReport]`; `latest_completed_condition_report(vehicle, *, dealership) → Optional[ConditionReport]`; `request_photo_upload(finding, *, dealership, content_type, uploaded_by=None) → UploadTarget`; `attach_photo(finding, *, dealership, storage_key, content_type, size_bytes, caption="", uploaded_by=None) → ConditionFindingPhoto`; `delete_photo(photo, *, dealership) → None` (storage-first strategy). Domain errors: `CrossTenantConditionReportError`, `ConditionReportImmutableError`, `PhotoNotYetUploadedError`, `PhotoMetadataMismatchError`, `PhotoAlreadyAttachedError` (all subclass `ValueError`). | 10 public functions. Every function threads `dealership=` explicitly per `AUTHENTICATION_MODEL.md` §8b. Every write calls `full_clean()` before `save()`. Five-verification attach path (cross-tenant guard + parent draft + canonical shape + namespace match + actual HEAD metadata match). Storage-first delete retains DB row on real provider failure. |
+| Vehicle read-model extension | `Vehicle.latest_condition_report` + `Vehicle.latest_completed_condition_report` `@property` accessors (both function-local imports to avoid the models↔service cycle — same pattern as M2.3 `ledger_totals`). Not `@cached_property` in v1. | Each property costs exactly 1 query when `.select_related('dealership')` prefetched — locked by `assertNumQueries(1)` tests. No-caching contract locked (2 consecutive reads = 2 queries). |
+| Provider-neutral photo storage | `services/photo_storage.py`: `build_canonical_key(*, dealership, photo_uuid) → str` deterministic key builder; `generate_upload_target(*, dealership, photo_uuid, content_type, ttl_seconds=900) → UploadTarget` (PUT with Content-Type binding); `object_exists(storage_key) → bool`; `get_object_metadata(storage_key) → ObjectMetadata` (HEAD returning content_type + size_bytes + exists); `parse_canonical_key(storage_key) → tuple[str, UUID]`; `delete_object(storage_key) → None` idempotent on missing; `generate_read_url(*, storage_key, ttl_seconds=900) → str` short-TTL signed URL; `store_local_upload(*, storage_key, content_type, data) → ObjectMetadata` local-only writer. `_PhotoStorageAdapter` protocol + `_LocalAdapter` + `_S3Adapter` (boto3 client). Domain errors: `InvalidStorageKeyError`, `InvalidContentTypeError`, `InvalidTTLError`, `ObjectStorageError` (RuntimeError), `LocalUploadNotAvailableError`. Markers: `LOCAL_UPLOAD_URL_MARKER`, `LOCAL_READ_URL_MARKER`. | Canonical key shape: `dealerships/<slug>/condition-findings/<uuid>/original`. Path-traversal-safe via regex validation. TTL cap 900 s (15 min). No `boto3` / `storages` imports in `condition_report.py`. |
+| Storage settings | `settings.STORAGES["condition_photos"]` alias (Django 5.0 modern `STORAGES` dict, not legacy `DEFAULT_FILE_STORAGE`). Env-driven switch: `AWS_STORAGE_BUCKET_NAME` present → `S3Storage` (`default_acl=None`, `querystring_auth=True`, `file_overwrite=False`); unset → `FileSystemStorage` under `MEDIA_ROOT/condition-photos`. **Default alias untouched** to protect any future non-condition-photo file field. Env: `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME`, `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_CUSTOM_DOMAIN`. | Requirements: `django-storages[s3]==1.14.6` + `httpx<0.28` transitive pin. Zero real S3 network access in tests (mock via `mock.patch` + botocore stubs — no `moto`). |
+| Condition-report admin API — core | Six endpoints under `/api/dealer-ai/admin/vehicles/<stock_number>/`: `GET .../condition-report/latest/` (vehicle header + report projection or null; findings ordered per model Meta severity/category/created_at; photos included with signed read URLs), `POST .../condition-reports/` (create draft — server owns `dealership`, `authored_by=request.user`, `status="draft"`, `completed_at=null`), `POST .../condition-reports/<report_id>/complete/` (draft→complete transition), `POST .../condition-reports/<report_id>/findings/` (add finding), `PATCH .../findings/<finding_id>/` + `DELETE .../findings/<finding_id>/` (shared view; method dispatch — Django URL routing is method-agnostic). All 6: permission_classes `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]` (M1·4D class reused unchanged). Cross-tenant + nonexistent `stock_number` OR `report_id` OR `finding_id` → 404 identical body (no existence leak). | Response projections use dict-builder helpers (matches M2.6 `admin_vehicle_ledger` pattern). `estimated_cost` serialized as 2-decimal string. `storage_key` NEVER in response. `authored_by` = `request.user.username` (client cannot spoof). Locked by 69 focused tests including full permission matrix (6 endpoints × 5 outcomes) + `NoStorageKeyLeakage` (2 tests) + `PublicSurfacesNeverExposeConditionReports` (1 test). |
+| Condition-report admin API — photos | Four endpoints under same prefix: `POST .../findings/<finding_id>/photos/request-upload/` (returns `UploadTarget` — the ONLY response body that includes `storage_key`, because the client hands it back to attach), `POST .../findings/<finding_id>/photos/` (attach after HEAD verification), `DELETE .../photos/<uuid:public_id>/` (path uses `public_id`, NOT `storage_key`), `POST .../findings/<finding_id>/photos/local-upload/` (multipart receiver — **returns 404 in S3 mode** to avoid advertising dev-only surface). All 4: same permission class as core endpoints. Domain-error → HTTP mapping: `PhotoNotYetUploadedError`/`PhotoMetadataMismatchError`/`PhotoAlreadyAttachedError` → 409; `InvalidStorageKeyError`/`InvalidContentTypeError`/`InvalidTTLError` → 400; `ObjectStorageError` → 502 with sanitized detail (provider text never leaks); `LocalUploadNotAvailableError` → 404. | 57 focused tests including `StorageKeyLeakageNegative` (5 tests: storage_key ABSENT from attach/latest/update/delete responses; PRESENT in request-upload response as the invariant's sole exception). Local receiver never creates the `ConditionFindingPhoto` row — attach still performs metadata verification. |
+| Operator condition-report UI | `/dealer-ai-inventory/:stock/condition-report` route inside `<RequireAuth>`. `frontend/src/pages/VehicleConditionReportPage.tsx` (~506 lines) orchestrates the workflow — presentation extracted into 7 small components in `frontend/src/components/condition-report/`: `SeverityBadge` (badge + icon + text — a11y not color-only), `CompletionBanner` (visible locked state, not merely disabled), `PhotoUploadButton` (three-step request→upload→attach orchestrator with per-step humanized error UI), `PhotoGallery` (per-finding), `FindingCard`, `AddFindingForm`, `CreateReportForm`. Ten typed `lib/api.ts` helpers via `authFetch`. Two new `authFetch` helpers: `authPatchJSON`, `authDelete`. Findings grouped by CATEGORY, then severity within category (safety > required > recommended > advisory). "Condition Report" button on operator inventory cards (URL-encoded stock; **not** exposed on public `/showroom`). Role-gated write forms via `useAuth().hasRole('sales_manager') || hasRole('dealer_owner')`. Draft-vs-complete visual distinction (locked banner + all edit controls hidden on complete; data itself fully visible). Distinct 401/403/404/409/502 UX. | `estimated_cost` rendered exactly as backend returns (2-decimal string) with "Documentation only — not yet part of vehicle investment" note. Never summed. **`storage_key` / `LOCAL_UPLOAD_URL_MARKER` / bucket / provider NEVER rendered** — verified by code inspection. Photo upload workflow branches on `LOCAL_UPLOAD_URL_MARKER` prefix (local receiver via `authPostForm`) vs. real presigned URL (browser-direct PUT via plain `fetch`). Frontend `tsc --noEmit` + `vite build` clean; browser walkthrough deferred to operator first-live-use per SESSION_063 handoff. |
+
+**What is NOT shipped in Milestone 3** (deferred to the
+milestone that first needs it — every item recorded in
+`MILESTONE_3_PLANNING.md` §5.b + `MILESTONE_3_RETROSPECTIVE.md`
+§7):
+
+- Persistent upload-intent binding
+  (`UploadIntent` model deferred; attach-side verification
+  is sufficient for M3 v1).
+- `recon_manager` permission class (M4 first surfaces the
+  role).
+- Automated recon planning / work-order drafting from
+  findings (M4).
+- AI-authored vendor emails citing findings (M4, requires
+  a new post-LLM scrub).
+- Image processing (thumbnails, EXIF stripping, resizing —
+  every image concern deferred to whatever milestone first
+  needs it).
+- `VehicleCost` integration for findings' `estimated_cost`
+  (M4).
+- Report scoring / completion percentage (deferred).
+- Lifecycle-stage gating on completed reports (M5).
+- Aggregate analytics across `ConditionReport` history (M8).
+- Deal-jacket attachment for warranty defense (M11+).
+- `assertNumQueries` locked on
+  `admin_condition_report_latest` endpoint (targeted
+  query-hardening pass in a later session).
+- Frontend component-test framework (no Vitest / Jest /
+  RTL — same discipline as M2.7).
+- Operator browser walkthrough of the 12 M3.7 workflow
+  steps (deferred to operator first-live-use).
+- Three ambiguous 400-expected tests in
+  `test_salesperson_and_assignment.py` (surfaced at M3.4
+  compat patch; pass under both buggy and correct body
+  shapes — deferred test-hardening).
 
 ---
 
