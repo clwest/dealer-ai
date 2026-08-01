@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: in-progress
 increment: 1
 increment_status: shipped
-commit: TBD
+commit: 2e89913
 ---
 
 # SESSION_056 — Milestone 3 · Increment 1 (M3.1 — core condition-report models)
