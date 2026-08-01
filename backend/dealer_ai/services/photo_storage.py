@@ -265,6 +265,37 @@ class UploadTarget:
     expires_at: datetime
 
 
+@dataclass(frozen=True)
+class ObjectMetadata:
+    """Provider-neutral HEAD / stat result for a single storage object.
+
+    Returned by :func:`get_object_metadata`. Used by M3.5's
+    ``attach_photo`` to authoritatively verify what actually landed
+    on the storage backend against what the client claimed:
+
+    - ``content_type`` MUST match the value declared at
+      ``request_photo_upload`` time.
+    - ``size_bytes`` MUST match the value declared at
+      ``attach_photo`` time.
+
+    ``exists`` is always ``True`` for a returned instance — a missing
+    object surfaces as :class:`InvalidStorageKeyError`-adjacent
+    behavior (see :func:`get_object_metadata` for the exact
+    contract). The field is included so callers can compose calls
+    across adapters uniformly, and so future extensions (e.g.
+    tombstone semantics) don't require signature changes.
+
+    ``etag`` is intentionally NOT part of the public contract.
+    S3 exposes an ETag; local FS does not. If a future caller
+    genuinely needs checksum verification (as opposed to size + type
+    verification), that is a separate design memo.
+    """
+
+    content_type: str
+    size_bytes: int
+    exists: bool
+
+
 # ---- Adapter protocol + implementations ---------------------------------
 
 
@@ -293,6 +324,27 @@ class _PhotoStorageAdapter(Protocol):
     ) -> str:
         """Return a short-lived signed read URL for the object.
         Never returns a permanent public URL."""
+
+    def get_object_metadata(self, storage_key: str) -> ObjectMetadata:
+        """Return provider-neutral HEAD metadata for a stored object.
+
+        Missing objects surface as :class:`InvalidStorageKeyError`
+        raised by :func:`get_object_metadata` (the public function)
+        — adapters raise :class:`ObjectStorageError` for backend
+        faults but a specific sentinel result for
+        "object legitimately does not exist" so the public function
+        can translate it. Adapters return ``ObjectMetadata(exists=False,
+        content_type='', size_bytes=0)`` for missing objects; the
+        public function decides whether to raise or return the
+        sentinel."""
+
+    def delete_object(self, storage_key: str) -> None:
+        """Best-effort delete. Already-missing = success (idempotent).
+        Real backend faults raise :class:`ObjectStorageError`.
+
+        Per M3.5 delete strategy: this runs BEFORE the DB row
+        deletion, so the caller can retain the row and surface the
+        error if delete fails for a real reason (not "not found")."""
 
 
 class _LocalAdapter:
@@ -337,6 +389,117 @@ class _LocalAdapter:
         # detects the prefix and generates its own authenticated
         # download route.
         return f"{LOCAL_READ_URL_MARKER}:{storage_key}"
+
+    def get_object_metadata(self, storage_key: str) -> ObjectMetadata:
+        storage = storages["condition_photos"]
+        try:
+            if not storage.exists(storage_key):
+                return ObjectMetadata(
+                    content_type="", size_bytes=0, exists=False
+                )
+            size = storage.size(storage_key)
+        except OSError as exc:
+            raise ObjectStorageError(
+                f"Local storage stat failed for {storage_key!r}: {exc}"
+            ) from exc
+        # FileSystemStorage doesn't record content type — it lives on
+        # the wire, not on disk. Read from the ``.content_type``
+        # sidecar file written by :meth:`store_local_upload` (see
+        # its docstring for the sidecar-file rationale).
+        content_type = self._read_content_type_sidecar(storage_key)
+        return ObjectMetadata(
+            content_type=content_type, size_bytes=size, exists=True
+        )
+
+    def delete_object(self, storage_key: str) -> None:
+        storage = storages["condition_photos"]
+        try:
+            # ``FileSystemStorage.delete`` silently no-ops on missing
+            # files (Django convention). Explicit `.exists()` guard
+            # keeps behavior identical to S3's delete_object contract:
+            # already-missing = success (idempotent).
+            if storage.exists(storage_key):
+                storage.delete(storage_key)
+            # Sidecar file (see store_local_upload) — delete if
+            # present, ignore if not.
+            sidecar_key = self._content_type_sidecar_key(storage_key)
+            if storage.exists(sidecar_key):
+                storage.delete(sidecar_key)
+        except OSError as exc:
+            raise ObjectStorageError(
+                f"Local storage delete failed for {storage_key!r}: {exc}"
+            ) from exc
+
+    # ---- Local-only helpers (not part of _PhotoStorageAdapter) --------
+
+    def store_local_upload(
+        self,
+        *,
+        storage_key: str,
+        content_type: str,
+        data: bytes,
+    ) -> ObjectMetadata:
+        """Write bytes directly into local ``condition_photos`` storage.
+
+        Local-mode substitute for a real browser-to-S3 PUT. The M3.6
+        API endpoint (later increment) will invoke this when it
+        detects the ``LOCAL_UPLOAD_URL_MARKER`` prefix in a presigned
+        "URL" returned by :func:`generate_upload_target`.
+
+        Writes the object body to ``storage_key`` and a companion
+        content-type sidecar file to ``<key>.content-type`` so
+        :meth:`get_object_metadata` can round-trip the content type
+        (FileSystemStorage does not record content type on disk).
+        The sidecar is an implementation detail of the local adapter
+        only — S3 stores content type on the object itself.
+        """
+        storage = storages["condition_photos"]
+        from django.core.files.base import ContentFile
+
+        try:
+            # Overwrite semantics: writing to the same key twice
+            # replaces the first. FileSystemStorage's default is to
+            # append a suffix on collision — use `.delete()` first
+            # to force replacement (idempotent write per canonical
+            # key).
+            if storage.exists(storage_key):
+                storage.delete(storage_key)
+            sidecar_key = self._content_type_sidecar_key(storage_key)
+            if storage.exists(sidecar_key):
+                storage.delete(sidecar_key)
+            storage.save(storage_key, ContentFile(data))
+            storage.save(sidecar_key, ContentFile(content_type.encode()))
+        except OSError as exc:
+            raise ObjectStorageError(
+                f"Local storage write failed for {storage_key!r}: {exc}"
+            ) from exc
+        return ObjectMetadata(
+            content_type=content_type,
+            size_bytes=len(data),
+            exists=True,
+        )
+
+    @staticmethod
+    def _content_type_sidecar_key(storage_key: str) -> str:
+        return f"{storage_key}.content-type"
+
+    def _read_content_type_sidecar(self, storage_key: str) -> str:
+        storage = storages["condition_photos"]
+        sidecar_key = self._content_type_sidecar_key(storage_key)
+        if not storage.exists(sidecar_key):
+            # Object exists but sidecar missing — either the object
+            # was placed by hand (dev tinkering) or store_local_upload
+            # was bypassed. Return empty string so callers can detect
+            # the missing sidecar via the equality check in
+            # ``attach_photo`` and raise the standard mismatch error.
+            return ""
+        try:
+            with storage.open(sidecar_key, "rb") as f:
+                return f.read().decode("utf-8", errors="replace")
+        except OSError as exc:
+            raise ObjectStorageError(
+                f"Local storage sidecar read failed for {storage_key!r}: {exc}"
+            ) from exc
 
 
 class _S3Adapter:
@@ -430,6 +593,49 @@ class _S3Adapter:
         except botocore.exceptions.BotoCoreError as exc:
             raise ObjectStorageError(
                 f"Failed to issue read URL for {storage_key!r}: {exc}"
+            ) from exc
+
+    def get_object_metadata(self, storage_key: str) -> ObjectMetadata:
+        client = self._boto3_client()
+        try:
+            response = client.head_object(
+                Bucket=self._bucket, Key=storage_key
+            )
+        except botocore.exceptions.ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code", "")
+            if error_code in ("404", "NoSuchKey", "NotFound"):
+                return ObjectMetadata(
+                    content_type="", size_bytes=0, exists=False
+                )
+            raise ObjectStorageError(
+                f"S3 HEAD metadata failed for {storage_key!r}: {exc}"
+            ) from exc
+        except botocore.exceptions.BotoCoreError as exc:
+            raise ObjectStorageError(
+                f"S3 HEAD metadata failed for {storage_key!r}: {exc}"
+            ) from exc
+        return ObjectMetadata(
+            content_type=response.get("ContentType", ""),
+            size_bytes=int(response.get("ContentLength", 0)),
+            exists=True,
+        )
+
+    def delete_object(self, storage_key: str) -> None:
+        client = self._boto3_client()
+        try:
+            # S3's DeleteObject is idempotent by contract — returns 204
+            # whether the key existed or not. AccessDenied etc. raise.
+            client.delete_object(Bucket=self._bucket, Key=storage_key)
+        except botocore.exceptions.ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code", "")
+            if error_code in ("404", "NoSuchKey", "NotFound"):
+                return  # already-missing = idempotent success
+            raise ObjectStorageError(
+                f"S3 delete failed for {storage_key!r}: {exc}"
+            ) from exc
+        except botocore.exceptions.BotoCoreError as exc:
+            raise ObjectStorageError(
+                f"S3 delete failed for {storage_key!r}: {exc}"
             ) from exc
 
 
@@ -628,6 +834,168 @@ def generate_read_url(
     )
 
 
+# ---- Public: canonical key parser (M3.5) ---------------------------------
+
+
+# Group-captured version of _KEY_PATTERN. Anchored + named groups so
+# the parser returns typed values without positional confusion.
+_KEY_PATTERN_GROUPED = re.compile(
+    r"^dealerships/(?P<slug>[-a-zA-Z0-9_]+)/condition-findings/"
+    r"(?P<photo_uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+    r"/original$"
+)
+
+
+def parse_canonical_key(storage_key: str) -> tuple[str, uuid.UUID]:
+    """Return ``(dealership_slug, photo_uuid)`` for a canonical key.
+
+    The only place condition-report service code should touch the key
+    format. Callers that need the UUID (M3.5's ``attach_photo``) go
+    through here so no regex or string-slicing lives in
+    ``services/condition_report.py``.
+
+    Raises :class:`InvalidStorageKeyError` on any mismatch — same
+    defense-in-depth guard as :func:`object_exists` and
+    :func:`generate_read_url` use.
+    """
+    if not isinstance(storage_key, str):
+        raise InvalidStorageKeyError(
+            f"storage_key must be a str, got {type(storage_key).__name__}."
+        )
+    match = _KEY_PATTERN_GROUPED.match(storage_key)
+    if match is None:
+        raise InvalidStorageKeyError(
+            f"storage_key {storage_key!r} does not match the canonical "
+            f"pattern; cannot extract dealership slug + photo UUID."
+        )
+    slug = match.group("slug")
+    try:
+        parsed_uuid = uuid.UUID(match.group("photo_uuid"))
+    except (ValueError, TypeError) as exc:
+        # Regex enforces the UUID shape so this should be unreachable;
+        # kept for defense-in-depth if the pattern is ever loosened.
+        raise InvalidStorageKeyError(
+            f"storage_key {storage_key!r} carries an unparseable UUID "
+            f"segment: {exc}."
+        ) from exc
+    return slug, parsed_uuid
+
+
+# ---- Public: object metadata + delete (M3.5) -----------------------------
+
+
+def get_object_metadata(storage_key: str) -> ObjectMetadata:
+    """Return provider-neutral HEAD metadata for a stored object.
+
+    Missing objects surface as an :class:`ObjectMetadata` with
+    ``exists=False`` rather than a raised exception — the caller
+    (M3.5's ``attach_photo``) needs to distinguish "not yet uploaded"
+    from "backend fault" and raise the correct domain error.
+
+    Re-validates ``storage_key`` against :data:`_KEY_PATTERN` before
+    touching the backend.
+
+    :class:`ObjectStorageError` still raises for real backend faults
+    (auth failure, network, permissions).
+    """
+    _validate_storage_key(storage_key)
+    adapter = _get_default_adapter()
+    return adapter.get_object_metadata(storage_key)
+
+
+def delete_object(storage_key: str) -> None:
+    """Delete the object at ``storage_key`` from the storage backend.
+
+    Idempotent — already-missing = success. Real backend failures
+    raise :class:`ObjectStorageError`; the caller (M3.5's
+    ``delete_photo``) must retain the DB row in that case so the
+    storage object doesn't get silently orphaned.
+
+    Re-validates ``storage_key`` before touching the backend.
+    """
+    _validate_storage_key(storage_key)
+    adapter = _get_default_adapter()
+    adapter.delete_object(storage_key)
+
+
+# ---- Public: local-mode upload helper (dev / test only) ----------------
+
+
+# Reasonable ceiling for local uploads. Real photos are typically
+# 1–10 MB; HEIC can reach ~15 MB. 25 MB is a soft ceiling that flags
+# runaway inputs without blocking legitimate photos. Not configurable
+# in v1 — bump deliberately if operator evidence surfaces a case.
+_LOCAL_UPLOAD_MAX_BYTES = 25 * 1024 * 1024
+
+
+class LocalUploadNotAvailableError(RuntimeError):
+    """Raised when :func:`store_local_upload` is invoked against a
+    non-local adapter (i.e. production S3 mode). This is a caller
+    bug — production uploads must go through the presigned PUT URL
+    generated by :func:`generate_upload_target`, not through this
+    helper.
+
+    Distinct from :class:`ObjectStorageError` (backend fault): this
+    is a configuration / routing error, not a storage failure.
+    """
+
+
+def store_local_upload(
+    *,
+    storage_key: str,
+    content_type: str,
+    data: bytes,
+) -> ObjectMetadata:
+    """Write ``data`` directly into the local ``condition_photos``
+    storage under ``storage_key``.
+
+    Local-mode substitute for a real browser-to-S3 PUT. The M3.6
+    upload endpoint (later increment) will call this when it detects
+    the :data:`LOCAL_UPLOAD_URL_MARKER` prefix in a presigned "URL."
+
+    Requirements enforced here (defense-in-depth around whatever the
+    caller checked):
+
+    - Active adapter MUST be :class:`_LocalAdapter`
+      (:class:`LocalUploadNotAvailableError` otherwise).
+    - ``storage_key`` MUST match the canonical pattern.
+    - ``content_type`` MUST be in the M3.1 whitelist.
+    - ``len(data)`` MUST be > 0 and ≤ :data:`_LOCAL_UPLOAD_MAX_BYTES`.
+
+    Never accepts arbitrary filesystem paths — the storage key is
+    the ONLY path input, and it's regex-validated. There is no
+    ``file_path=`` or ``upload_from=`` parameter and there never
+    should be.
+    """
+    _validate_storage_key(storage_key)
+    _validate_content_type(content_type)
+    if not isinstance(data, (bytes, bytearray)):
+        raise InvalidStorageKeyError(
+            f"data must be bytes, got {type(data).__name__}."
+        )
+    size = len(data)
+    if size == 0:
+        raise InvalidStorageKeyError(
+            "Refusing to store zero-byte local upload."
+        )
+    if size > _LOCAL_UPLOAD_MAX_BYTES:
+        raise InvalidStorageKeyError(
+            f"Local upload size {size} exceeds the "
+            f"{_LOCAL_UPLOAD_MAX_BYTES}-byte ceiling."
+        )
+    adapter = _get_default_adapter()
+    if not isinstance(adapter, _LocalAdapter):
+        raise LocalUploadNotAvailableError(
+            "store_local_upload is only available when the "
+            "condition_photos storage backend is FileSystemStorage. "
+            "Production uploads must use the presigned PUT URL "
+            "returned by generate_upload_target."
+        )
+    return adapter.store_local_upload(
+        storage_key=storage_key, content_type=content_type, data=bytes(data)
+    )
+
+
 # ---- Public re-exports ---------------------------------------------------
 
 
@@ -637,10 +1005,16 @@ __all__ = [
     "InvalidTTLError",
     "LOCAL_READ_URL_MARKER",
     "LOCAL_UPLOAD_URL_MARKER",
+    "LocalUploadNotAvailableError",
+    "ObjectMetadata",
     "ObjectStorageError",
     "UploadTarget",
     "build_canonical_key",
+    "delete_object",
     "generate_read_url",
     "generate_upload_target",
+    "get_object_metadata",
     "object_exists",
+    "parse_canonical_key",
+    "store_local_upload",
 ]

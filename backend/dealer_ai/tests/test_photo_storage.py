@@ -66,15 +66,21 @@ from dealer_ai.services.photo_storage import (
     InvalidContentTypeError,
     InvalidStorageKeyError,
     InvalidTTLError,
+    LocalUploadNotAvailableError,
+    ObjectMetadata,
     ObjectStorageError,
     UploadTarget,
     _get_default_adapter,
     _LocalAdapter,
     _S3Adapter,
     build_canonical_key,
+    delete_object,
     generate_read_url,
     generate_upload_target,
+    get_object_metadata,
     object_exists,
+    parse_canonical_key,
+    store_local_upload,
 )
 
 
@@ -702,3 +708,394 @@ class PublicApiDelegation(TestCase):
                     content_type="text/html",
                 )
         mock_adapter.generate_upload_url.assert_not_called()
+
+
+# =========================================================================
+# Milestone 3 · Increment 5 additions
+# =========================================================================
+# The M3.5 photo attachment workflow needs three new storage primitives:
+# get_object_metadata / parse_canonical_key / delete_object, plus a
+# local-only store_local_upload helper. Tests below lock the shape.
+# =========================================================================
+
+
+class ParseCanonicalKey(TestCase):
+    """`parse_canonical_key` is the single place condition-report
+    service code touches the key format. Every canonical shape must
+    parse; every malformed shape must raise."""
+
+    def setUp(self):
+        self.default = Dealership.objects.get(slug="default")
+
+    def test_parses_slug_and_uuid_from_canonical_key(self):
+        key = build_canonical_key(
+            dealership=self.default, photo_uuid=_FIXED_UUID
+        )
+        slug, parsed_uuid = parse_canonical_key(key)
+        self.assertEqual(slug, "default")
+        self.assertEqual(parsed_uuid, _FIXED_UUID)
+
+    def test_parses_key_for_alternate_tenant(self):
+        other = Dealership.objects.create(name="Other", slug="other-33p")
+        key = build_canonical_key(dealership=other, photo_uuid=_FIXED_UUID)
+        slug, parsed_uuid = parse_canonical_key(key)
+        self.assertEqual(slug, "other-33p")
+        self.assertEqual(parsed_uuid, _FIXED_UUID)
+
+    def test_rejects_malformed_key(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            parse_canonical_key("random-string")
+
+    def test_rejects_key_with_path_traversal(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            parse_canonical_key(
+                "dealerships/../etc/condition-findings/"
+                f"{_FIXED_UUID}/original"
+            )
+
+    def test_rejects_key_missing_original_suffix(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            parse_canonical_key(
+                f"dealerships/default/condition-findings/{_FIXED_UUID}"
+            )
+
+    def test_rejects_non_string_input(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            parse_canonical_key(12345)  # type: ignore[arg-type]
+
+    def test_returns_uuid_object_not_string(self):
+        # Locks the return type — condition_report.attach_photo binds
+        # the returned uuid to ConditionFindingPhoto.public_id which
+        # is a UUIDField.
+        key = build_canonical_key(
+            dealership=self.default, photo_uuid=_FIXED_UUID
+        )
+        _, parsed_uuid = parse_canonical_key(key)
+        self.assertIsInstance(parsed_uuid, uuid.UUID)
+
+
+class GetObjectMetadataLocal(TestCase):
+    """Local adapter's `get_object_metadata` round-trips through
+    `store_local_upload`."""
+
+    def setUp(self):
+        self.default = Dealership.objects.get(slug="default")
+        self.key = build_canonical_key(
+            dealership=self.default, photo_uuid=_FIXED_UUID
+        )
+        # Ensure clean state between tests.
+        try:
+            delete_object(self.key)
+        except InvalidStorageKeyError:
+            pass
+
+    def tearDown(self):
+        try:
+            delete_object(self.key)
+        except Exception:
+            pass
+
+    def test_missing_object_returns_exists_false(self):
+        metadata = get_object_metadata(self.key)
+        self.assertFalse(metadata.exists)
+        self.assertEqual(metadata.size_bytes, 0)
+        self.assertEqual(metadata.content_type, "")
+
+    def test_after_store_local_upload_metadata_reflects_stored_object(self):
+        payload = b"\x89PNG\r\n\x1a\n" + b"x" * 100  # 108 bytes
+        store_local_upload(
+            storage_key=self.key,
+            content_type=CONDITION_PHOTO_CONTENT_TYPE_PNG,
+            data=payload,
+        )
+        metadata = get_object_metadata(self.key)
+        self.assertTrue(metadata.exists)
+        self.assertEqual(metadata.size_bytes, len(payload))
+        self.assertEqual(
+            metadata.content_type, CONDITION_PHOTO_CONTENT_TYPE_PNG
+        )
+
+    def test_invalid_key_rejected_before_backend_touch(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            get_object_metadata("garbage-key")
+
+
+@override_settings(
+    STORAGES={
+        **settings.STORAGES,
+        "condition_photos": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                "bucket_name": "test-bucket",
+                "region_name": "us-east-1",
+            },
+        },
+    }
+)
+class GetObjectMetadataS3(TestCase):
+    """S3 adapter's `get_object_metadata` — fully mocked HEAD."""
+
+    def setUp(self):
+        self.default = Dealership.objects.get(slug="default")
+        self.key = build_canonical_key(
+            dealership=self.default, photo_uuid=_FIXED_UUID
+        )
+
+    def _adapter_with(self, mock_client):
+        adapter = _S3Adapter()
+        adapter._boto3_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
+        return adapter
+
+    def test_head_success_returns_content_type_and_size(self):
+        mock_client = MagicMock()
+        mock_client.head_object.return_value = {
+            "ContentType": "image/jpeg",
+            "ContentLength": 24680,
+        }
+        adapter = self._adapter_with(mock_client)
+        metadata = adapter.get_object_metadata(self.key)
+        self.assertTrue(metadata.exists)
+        self.assertEqual(metadata.content_type, "image/jpeg")
+        self.assertEqual(metadata.size_bytes, 24680)
+
+    def test_head_404_returns_exists_false(self):
+        mock_client = MagicMock()
+        mock_client.head_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "404", "Message": "Not Found"}},
+            "HeadObject",
+        )
+        adapter = self._adapter_with(mock_client)
+        metadata = adapter.get_object_metadata(self.key)
+        self.assertFalse(metadata.exists)
+        self.assertEqual(metadata.size_bytes, 0)
+
+    def test_head_access_denied_raises_object_storage_error(self):
+        mock_client = MagicMock()
+        mock_client.head_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "Forbidden"}},
+            "HeadObject",
+        )
+        adapter = self._adapter_with(mock_client)
+        with self.assertRaises(ObjectStorageError):
+            adapter.get_object_metadata(self.key)
+
+
+class DeleteObjectLocal(TestCase):
+    """Local adapter's `delete_object` is idempotent on missing
+    objects and clears the sidecar."""
+
+    def setUp(self):
+        self.default = Dealership.objects.get(slug="default")
+        self.key = build_canonical_key(
+            dealership=self.default, photo_uuid=_FIXED_UUID
+        )
+
+    def tearDown(self):
+        try:
+            delete_object(self.key)
+        except Exception:
+            pass
+
+    def test_delete_missing_object_is_noop(self):
+        # Should not raise.
+        delete_object(self.key)
+        metadata = get_object_metadata(self.key)
+        self.assertFalse(metadata.exists)
+
+    def test_delete_after_store_removes_object_and_sidecar(self):
+        store_local_upload(
+            storage_key=self.key,
+            content_type=CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+            data=b"payload-bytes",
+        )
+        self.assertTrue(get_object_metadata(self.key).exists)
+        delete_object(self.key)
+        self.assertFalse(get_object_metadata(self.key).exists)
+
+    def test_delete_invalid_key_rejected_before_backend(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            delete_object("garbage-key")
+
+
+@override_settings(
+    STORAGES={
+        **settings.STORAGES,
+        "condition_photos": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                "bucket_name": "test-bucket",
+                "region_name": "us-east-1",
+            },
+        },
+    }
+)
+class DeleteObjectS3(TestCase):
+    """S3 adapter's `delete_object` treats 404 as success and wraps
+    real failures in ObjectStorageError."""
+
+    def setUp(self):
+        self.default = Dealership.objects.get(slug="default")
+        self.key = build_canonical_key(
+            dealership=self.default, photo_uuid=_FIXED_UUID
+        )
+
+    def _adapter_with(self, mock_client):
+        adapter = _S3Adapter()
+        adapter._boto3_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
+        return adapter
+
+    def test_delete_succeeds_when_boto_returns_normally(self):
+        mock_client = MagicMock()
+        mock_client.delete_object.return_value = {}
+        adapter = self._adapter_with(mock_client)
+        # Must not raise.
+        adapter.delete_object(self.key)
+        mock_client.delete_object.assert_called_once_with(
+            Bucket="test-bucket", Key=self.key
+        )
+
+    def test_delete_404_is_treated_as_idempotent_success(self):
+        mock_client = MagicMock()
+        mock_client.delete_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "404", "Message": "Not Found"}},
+            "DeleteObject",
+        )
+        adapter = self._adapter_with(mock_client)
+        # Must not raise.
+        adapter.delete_object(self.key)
+
+    def test_delete_access_denied_raises_object_storage_error(self):
+        mock_client = MagicMock()
+        mock_client.delete_object.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "Forbidden"}},
+            "DeleteObject",
+        )
+        adapter = self._adapter_with(mock_client)
+        with self.assertRaises(ObjectStorageError):
+            adapter.delete_object(self.key)
+
+
+class StoreLocalUpload(TestCase):
+    """`store_local_upload` is dev-only, key-shape-enforcing, and
+    size-capped."""
+
+    def setUp(self):
+        self.default = Dealership.objects.get(slug="default")
+        self.key = build_canonical_key(
+            dealership=self.default, photo_uuid=_FIXED_UUID
+        )
+
+    def tearDown(self):
+        try:
+            delete_object(self.key)
+        except Exception:
+            pass
+
+    def test_valid_upload_writes_object(self):
+        result = store_local_upload(
+            storage_key=self.key,
+            content_type=CONDITION_PHOTO_CONTENT_TYPE_HEIC,
+            data=b"heic-bytes-here",
+        )
+        self.assertTrue(result.exists)
+        self.assertEqual(result.size_bytes, len(b"heic-bytes-here"))
+        self.assertEqual(
+            result.content_type, CONDITION_PHOTO_CONTENT_TYPE_HEIC
+        )
+
+    def test_invalid_storage_key_rejected(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            store_local_upload(
+                storage_key="my-file.jpg",
+                content_type=CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+                data=b"bytes",
+            )
+
+    def test_invalid_content_type_rejected(self):
+        with self.assertRaises(InvalidContentTypeError):
+            store_local_upload(
+                storage_key=self.key,
+                content_type="text/html",
+                data=b"bytes",
+            )
+
+    def test_non_bytes_data_rejected(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            store_local_upload(
+                storage_key=self.key,
+                content_type=CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+                data="not-bytes",  # type: ignore[arg-type]
+            )
+
+    def test_zero_byte_upload_rejected(self):
+        with self.assertRaises(InvalidStorageKeyError):
+            store_local_upload(
+                storage_key=self.key,
+                content_type=CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+                data=b"",
+            )
+
+    def test_upload_over_ceiling_rejected(self):
+        # 26 MB > 25 MB ceiling.
+        payload = b"x" * (26 * 1024 * 1024)
+        with self.assertRaises(InvalidStorageKeyError):
+            store_local_upload(
+                storage_key=self.key,
+                content_type=CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+                data=payload,
+            )
+
+    def test_replaces_previous_object_at_same_key(self):
+        store_local_upload(
+            storage_key=self.key,
+            content_type=CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+            data=b"first-payload",
+        )
+        store_local_upload(
+            storage_key=self.key,
+            content_type=CONDITION_PHOTO_CONTENT_TYPE_PNG,
+            data=b"second-payload-longer",
+        )
+        metadata = get_object_metadata(self.key)
+        self.assertEqual(metadata.size_bytes, len(b"second-payload-longer"))
+        self.assertEqual(metadata.content_type, CONDITION_PHOTO_CONTENT_TYPE_PNG)
+
+    @override_settings(
+        STORAGES={
+            **settings.STORAGES,
+            "condition_photos": {
+                "BACKEND": "storages.backends.s3.S3Storage",
+                "OPTIONS": {
+                    "bucket_name": "test-bucket",
+                    "region_name": "us-east-1",
+                },
+            },
+        }
+    )
+    def test_raises_when_adapter_is_s3(self):
+        with self.assertRaises(LocalUploadNotAvailableError):
+            store_local_upload(
+                storage_key=self.key,
+                content_type=CONDITION_PHOTO_CONTENT_TYPE_JPEG,
+                data=b"payload",
+            )
+
+
+class ObjectMetadataDataclass(TestCase):
+    """`ObjectMetadata` is a frozen dataclass — hashable + safe to
+    pass across service boundaries."""
+
+    def test_fields_populated(self):
+        m = ObjectMetadata(
+            content_type="image/jpeg", size_bytes=123, exists=True
+        )
+        self.assertEqual(m.content_type, "image/jpeg")
+        self.assertEqual(m.size_bytes, 123)
+        self.assertTrue(m.exists)
+
+    def test_frozen_dataclass_is_immutable(self):
+        m = ObjectMetadata(
+            content_type="image/jpeg", size_bytes=123, exists=True
+        )
+        with self.assertRaises(Exception):
+            m.size_bytes = 456  # type: ignore[misc]

@@ -1751,7 +1751,7 @@ minimal-scope compat patches:
   `services/llm_safety.py`, `permissions.py`, `views.py`, or
   any other production code file.
 
-### Increment 5 (M3.5) — Condition-finding photo model + upload flow
+### Increment 5 (M3.5) — Condition-finding photo model + upload flow — SHIPPED at SESSION_060
 
 **Scope.**
 - `ConditionFindingPhoto` model + migration (probably `0016`).
@@ -1780,6 +1780,165 @@ cross-tenant guards.
 
 **Boundary.** Test baseline: ~1,883 → ~1,913 pass. One migration.
 No API. No frontend.
+
+**Shipped surface (SESSION_060) — six reviewed refinements.**
+
+The M3.5 planning entry above pre-dates M3.1 (which shipped the
+`ConditionFindingPhoto` model + migration at SESSION_056) and
+pre-dates the SESSION_060 spec tightening. As shipped, M3.5
+consists of service functions + storage-service extensions
+**only** — no model change, no migration, no admin change (all
+of those landed at M3.1).
+
+Six refinements vs. the scope text above:
+
+1. **No model / migration / admin ships in M3.5** — M3.1
+   shipped `ConditionFindingPhoto` + migration `0015` + admin.
+   M3.5 consumes the M3.1 surface without extending it.
+2. **`object_exists()` is NOT sufficient for `attach_photo`.**
+   Per SESSION_060 spec: presigned PUT does not enforce upload
+   size (M3.4 documented this honestly), so a Boolean HEAD is
+   inadequate. Shipped: extend `photo_storage.py` with
+   `ObjectMetadata` dataclass +
+   `get_object_metadata(storage_key) -> ObjectMetadata`
+   returning `content_type`, `size_bytes`, and `exists`.
+   `attach_photo` HEAD-verifies actual metadata against
+   client-declared values. Distinct domain errors:
+   `PhotoNotYetUploadedError` (object missing),
+   `PhotoMetadataMismatchError` (size / type differs).
+3. **Storage-first delete strategy.** `delete_photo` runs
+   `photo_storage.delete_object(storage_key)` BEFORE dropping
+   the DB row. Already-missing = idempotent success. Real
+   provider failure = retain the row and raise
+   `ObjectStorageError`. This fails in the safer direction — a
+   partial failure leaves both sides consistent OR leaves the
+   row present pointing at an already-missing object (next
+   delete handles idempotently). Not fully transactional
+   across DB + object store, but no outbox / queue in v1 per
+   spec.
+4. **Canonical key parsing lives in `photo_storage.py`.**
+   `parse_canonical_key(storage_key) -> (slug, uuid)` extracts
+   the dealership slug + photo UUID from a canonical key.
+   `attach_photo` uses this to (a) obtain the `public_id` for
+   the row and (b) verify the key namespace matches the
+   caller's dealership. **No regex or string-slicing lives in
+   `services/condition_report.py`.** Verified: no `boto3` or
+   `storages` import in `condition_report.py`.
+5. **Duplicate `storage_key` returns a predictable domain
+   error.** `attach_photo` runs a pre-save `.exists()` check
+   and raises `PhotoAlreadyAttachedError` — Django's
+   `full_clean()` would otherwise surface duplicate keys as
+   `ValidationError` (from `validate_unique`), which is not a
+   stable API contract for M3.6 to catch. Belt +
+   suspenders: an `IntegrityError` from a race between the
+   pre-check and the save is also caught + re-raised as
+   `PhotoAlreadyAttachedError`.
+6. **`store_local_upload` is dev-only + narrow.** Local
+   substitute for a browser-to-S3 PUT — writes bytes directly
+   to `storages["condition_photos"]` under a canonical key.
+   `LocalUploadNotAvailableError` raised when the active
+   adapter is `_S3Adapter` (production callers must go through
+   the presigned URL). Also enforces: canonical key shape,
+   MIME whitelist, 25 MB size ceiling, non-empty bytes, no
+   arbitrary filesystem paths. **No Django view or multipart
+   endpoint ships in M3.5** — HTTP transport is M3.6.
+
+**Shipped surface — storage primitives added
+(`services/photo_storage.py`).**
+
+- `ObjectMetadata` — frozen dataclass with `content_type`,
+  `size_bytes`, `exists`.
+- `get_object_metadata(storage_key) -> ObjectMetadata` — HEAD
+  via adapter; missing object returns `exists=False`; backend
+  fault raises `ObjectStorageError`.
+- `parse_canonical_key(storage_key) -> tuple[str, uuid.UUID]`
+  — regex-parses canonical shape; raises `InvalidStorageKeyError`
+  on any mismatch.
+- `delete_object(storage_key) -> None` — idempotent on missing;
+  raises `ObjectStorageError` on real backend fault.
+- `store_local_upload(*, storage_key, content_type, data)
+  -> ObjectMetadata` — local-only writer.
+- `LocalUploadNotAvailableError(RuntimeError)` — raised when
+  `store_local_upload` invoked in S3 mode.
+- `_PhotoStorageAdapter` protocol extended with
+  `get_object_metadata` + `delete_object` methods.
+- `_LocalAdapter` also implements `store_local_upload` and
+  uses a per-key `.content-type` sidecar file to round-trip
+  MIME through FileSystemStorage (which doesn't record content
+  type on disk).
+- `_S3Adapter` uses `head_object` for metadata + `delete_object`
+  for delete (both wrap `ClientError` 404 as
+  idempotent-success; `AccessDenied` / other `ClientError`
+  raise `ObjectStorageError`).
+
+**Shipped surface — service functions added
+(`services/condition_report.py`).**
+
+- Three new public functions:
+  - `request_photo_upload(finding, *, dealership, content_type,
+    uploaded_by=None) -> UploadTarget` — authorizes an upload;
+    fresh UUID per call; NO row persisted.
+  - `attach_photo(finding, *, dealership, storage_key,
+    content_type, size_bytes, caption="", uploaded_by=None)
+    -> ConditionFindingPhoto` — five-verification path:
+    (1) cross-tenant guard on finding, (2) parent report is
+    draft, (3) canonical key shape via
+    `parse_canonical_key`, (4) key namespace matches
+    dealership slug, (5) actual object metadata matches
+    declared. Row created only after all five succeed.
+  - `delete_photo(photo, *, dealership) -> None` — storage-
+    first strategy per refinement #3.
+- Three new domain errors (all subclass `ValueError`):
+  - `PhotoNotYetUploadedError` — object missing at attach time.
+  - `PhotoMetadataMismatchError` — actual size / content type
+    differs from declared.
+  - `PhotoAlreadyAttachedError` — same storage_key already on
+    a row.
+- One new private helper: `_assert_photo_tenant(photo,
+  dealership)` — verifies the photo's denormalized
+  `dealership` + delegates to `_assert_finding_tenant` for
+  the finding-report-vehicle chain.
+- Every new function threads `dealership=` explicitly (M3.2
+  pattern preserved).
+
+**Tests:**
+- `backend/dealer_ai/tests/test_condition_report_photos.py` —
+  **29 tests** across 4 classes: `RequestPhotoUpload` (7),
+  `AttachPhoto` (12), `DeletePhoto` (6),
+  `EstimatedCostStillNoOp` (3 — composite invariant with
+  photos present).
+- `backend/dealer_ai/tests/test_photo_storage.py` — extended
+  with **29 new tests** across 6 classes: `ParseCanonicalKey`
+  (7), `GetObjectMetadataLocal` (3), `GetObjectMetadataS3` (3),
+  `DeleteObjectLocal` (3), `DeleteObjectS3` (3),
+  `StoreLocalUpload` (8), `ObjectMetadataDataclass` (2).
+  Total storage-tests: 46 → 75.
+
+**Baseline delta.** 1,940 → 1,998 pass, 1 skipped, 0 fail
+(+58 tests total; 0 regressions). No migrations. No API. No
+frontend. No changes to any model, admin, non-storage service,
+permissions, safety stack, or M2 ledger substrate.
+
+**Files changed (SESSION_060).**
+
+- Modified: `backend/dealer_ai/services/photo_storage.py` —
+  `ObjectMetadata`, `get_object_metadata`, `parse_canonical_key`,
+  `delete_object`, `store_local_upload`,
+  `LocalUploadNotAvailableError`, adapter protocol extensions,
+  `_LocalAdapter` sidecar-file logic, `_S3Adapter`
+  `head_object` + `delete_object` implementations.
+- Modified: `backend/dealer_ai/services/condition_report.py` —
+  imports `photo_storage`, adds 3 domain errors + 3 public
+  functions + `_assert_photo_tenant` helper. No `boto3` /
+  `storages` imports.
+- Modified: `backend/dealer_ai/tests/test_photo_storage.py` —
+  +29 tests for the new primitives.
+- New: `backend/dealer_ai/tests/test_condition_report_photos.py`
+  — 29 tests for the photo workflow.
+- No modifications to any model, admin, migration, view,
+  frontend, `services/vehicle_ledger.py`, `services/tenancy.py`,
+  `services/llm_safety.py`, `services/dealer_config.py`,
+  `permissions.py`, or `requirements.txt`.
 
 ### Increment 6 (M3.6) — Condition-report admin API + permission matrix
 

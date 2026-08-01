@@ -79,9 +79,11 @@ Deferred (do NOT add in M3.2):
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Optional
 
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.utils import timezone
 
 from ..models import (
@@ -90,9 +92,16 @@ from ..models import (
     CONDITION_REPORT_STATUS_DRAFT,
     CONDITION_SEVERITY_CHOICES,
     ConditionFinding,
+    ConditionFindingPhoto,
     ConditionReport,
     Dealership,
     Vehicle,
+)
+from . import photo_storage
+from .photo_storage import (
+    ObjectMetadata,
+    ObjectStorageError,
+    UploadTarget,
 )
 
 
@@ -149,6 +158,54 @@ class ConditionReportImmutableError(ValueError):
     combinations. This error guards against a *transition* — the
     row is internally consistent, but the requested operation
     would corrupt the historical truth of a completed inspection.
+    """
+
+
+class PhotoNotYetUploadedError(ValueError):
+    """Raised by :func:`attach_photo` when the storage backend
+    reports no object at the supplied ``storage_key``.
+
+    The client called ``request_photo_upload`` (which returned an
+    :class:`UploadTarget`), then called ``attach_photo`` before
+    actually PUT-ing bytes to the presigned URL. Or the PUT failed
+    silently on the client side. Either way: no metadata row is
+    created, and the client must retry the upload before calling
+    ``attach_photo`` again.
+
+    Distinct from :class:`ObjectStorageError` (real backend fault)
+    and :class:`InvalidStorageKeyError` (malformed key). Callers
+    (M3.6 API) map this to HTTP 409 Conflict with a message
+    indicating the upload has not completed.
+    """
+
+
+class PhotoMetadataMismatchError(ValueError):
+    """Raised by :func:`attach_photo` when the actual object metadata
+    on the storage backend does not match what the client declared.
+
+    Client-supplied ``content_type`` and ``size_bytes`` are HEAD-
+    verified against the actual stored object via
+    :func:`photo_storage.get_object_metadata`. Any mismatch — the
+    presigned PUT's Content-Type binding is *supposed* to prevent
+    the type from drifting, but size cannot be bound at PUT time —
+    fails closed here.
+
+    Distinct from :class:`PhotoNotYetUploadedError` (object missing)
+    so callers can surface a more specific "upload landed but
+    doesn't match the request" message.
+    """
+
+
+class PhotoAlreadyAttachedError(ValueError):
+    """Raised by :func:`attach_photo` when a
+    :class:`ConditionFindingPhoto` row already exists for the
+    supplied ``storage_key``.
+
+    The schema's ``storage_key unique`` constraint would produce an
+    :class:`IntegrityError` at ``save()`` time; this service catches
+    that class of failure and re-raises as a predictable domain
+    error so callers (M3.6 API) can map it to HTTP 409 without
+    string-matching Django exception text.
     """
 
 
@@ -491,6 +548,249 @@ def delete_finding(
     finding.delete()
 
 
+# ---- Photo workflow (M3.5) ------------------------------------------------
+
+
+def _assert_photo_tenant(
+    photo: ConditionFindingPhoto, dealership: Dealership
+) -> None:
+    """Raise :class:`CrossTenantConditionReportError` when the target
+    photo's finding, report, or parent vehicle does not belong to
+    the caller's dealership.
+
+    Verifies BOTH the photo's own denormalized ``dealership`` and
+    every parent in the chain
+    (``finding → report → vehicle``). Same defense-in-depth posture
+    as :func:`_assert_finding_tenant`.
+    """
+    if photo.dealership_id != dealership.pk:
+        raise CrossTenantConditionReportError(
+            f"ConditionFindingPhoto #{photo.pk} belongs to dealership "
+            f"{photo.dealership_id}, not {dealership.pk} "
+            "(AUTHENTICATION_MODEL.md §1 layer 4)."
+        )
+    _assert_finding_tenant(photo.finding, dealership)
+
+
+def request_photo_upload(
+    finding: ConditionFinding,
+    *,
+    dealership: Dealership,
+    content_type: str,
+    uploaded_by=None,
+) -> UploadTarget:
+    """Authorize one upload for ``finding``. Returns an
+    :class:`UploadTarget` the client uses to PUT bytes.
+
+    **Does NOT create a** :class:`ConditionFindingPhoto` **row.**
+    The row lands only after :func:`attach_photo` HEAD-verifies the
+    upload actually landed (see ``MILESTONE_3_PLANNING.md`` §1.5
+    "photo rows represent attached objects, never upload
+    intentions"). The returned :class:`UploadTarget` is
+    *authorization to upload*, not proof of upload.
+
+    Fresh :class:`uuid.UUID` per call. Canonical key built via
+    :func:`photo_storage.build_canonical_key`. Content type
+    validated at both the service layer (early error message) and
+    the storage layer (whitelist enforced at presigned-URL
+    issuance). ``uploaded_by`` is accepted for future
+    request-context wiring in M3.6 but has no effect in M3.5 (the
+    row is created by ``attach_photo``, which takes its own
+    ``uploaded_by``).
+
+    Refuses when the parent report is complete
+    (:class:`ConditionReportImmutableError`); refuses cross-tenant
+    (:class:`CrossTenantConditionReportError`).
+    """
+    _assert_finding_tenant(finding, dealership)
+    _refresh_and_assert_draft(
+        finding.report, operation="request photo upload"
+    )
+
+    # Fresh UUID per call — the client cannot supply one, closes an
+    # otherwise-latent enumeration seam.
+    photo_uuid = uuid.uuid4()
+    return photo_storage.generate_upload_target(
+        dealership=dealership,
+        photo_uuid=photo_uuid,
+        content_type=content_type,
+    )
+
+
+def attach_photo(
+    finding: ConditionFinding,
+    *,
+    dealership: Dealership,
+    storage_key: str,
+    content_type: str,
+    size_bytes: int,
+    caption: str = "",
+    uploaded_by=None,
+) -> ConditionFindingPhoto:
+    """Verify the uploaded object and create the metadata row.
+
+    Five verifications run before the row is created:
+
+    1. **Cross-tenant guard** on the parent finding (belt +
+       suspenders across ``finding.dealership``,
+       ``finding.report.dealership``, and
+       ``finding.report.vehicle.dealership``).
+    2. **Parent report is draft** — completed reports are immutable
+       (raises :class:`ConditionReportImmutableError`).
+    3. **Canonical key shape** — ``storage_key`` matches the
+       ``build_canonical_key`` output shape
+       (:func:`photo_storage.parse_canonical_key` raises
+       :class:`photo_storage.InvalidStorageKeyError`).
+    4. **Key belongs to the caller's dealership namespace** — the
+       ``dealership_slug`` embedded in the key MUST match
+       ``dealership.slug`` (raises
+       :class:`CrossTenantConditionReportError`).
+    5. **Actual object metadata matches declared metadata** —
+       :func:`photo_storage.get_object_metadata` HEAD-checks the
+       object. Missing object raises
+       :class:`PhotoNotYetUploadedError`. Actual
+       ``size_bytes`` / ``content_type`` mismatching the declared
+       values raises :class:`PhotoMetadataMismatchError`.
+
+    Only after all five verifications succeed does the row get
+    created via ``full_clean()`` + ``save()``. Duplicate storage
+    keys (schema-level unique constraint) surface as
+    :class:`PhotoAlreadyAttachedError` — the underlying
+    :class:`IntegrityError` is caught + wrapped so callers get a
+    predictable domain error.
+
+    ``uploaded_by`` is persisted on the row for provenance
+    (nullable + SET_NULL per M3.1 model shape).
+    """
+    _assert_finding_tenant(finding, dealership)
+    _refresh_and_assert_draft(finding.report, operation="attach photo")
+
+    # Verify canonical shape + extract embedded slug + uuid. The
+    # parser raises :class:`InvalidStorageKeyError` (a subclass of
+    # ``ValueError``) if the key is malformed.
+    parsed_slug, photo_uuid = photo_storage.parse_canonical_key(
+        storage_key
+    )
+
+    # Verify the key namespace matches the caller's dealership.
+    # Any drift is a cross-tenant attempt — attacker crafted a
+    # valid-shape key but with someone else's slug.
+    if parsed_slug != dealership.slug:
+        raise CrossTenantConditionReportError(
+            f"storage_key {storage_key!r} carries dealership slug "
+            f"{parsed_slug!r}, not the requesting tenant's slug "
+            f"{dealership.slug!r} "
+            "(AUTHENTICATION_MODEL.md §1 layer 4)."
+        )
+
+    # HEAD-verify what actually landed on the storage backend.
+    metadata = photo_storage.get_object_metadata(storage_key)
+    if not metadata.exists:
+        raise PhotoNotYetUploadedError(
+            f"No object at storage_key {storage_key!r}. The upload "
+            "has not completed. Retry the PUT to the presigned URL "
+            "before calling attach_photo again."
+        )
+
+    # Content-type mismatch — the presigned PUT bound Content-Type,
+    # but re-check here defense-in-depth (and to catch S3-side drift
+    # or a caller that bypassed the presigned URL).
+    if metadata.content_type != content_type:
+        raise PhotoMetadataMismatchError(
+            f"content_type mismatch for {storage_key!r}: declared "
+            f"{content_type!r}, actual {metadata.content_type!r}."
+        )
+
+    # Size mismatch — the presigned PUT canNOT bind size, so this
+    # HEAD check is the ONLY authoritative size verification. See
+    # ``photo_storage`` module docstring "PUT vs POST" note.
+    if metadata.size_bytes != size_bytes:
+        raise PhotoMetadataMismatchError(
+            f"size_bytes mismatch for {storage_key!r}: declared "
+            f"{size_bytes}, actual {metadata.size_bytes}."
+        )
+
+    # Pre-check duplicate ``storage_key`` before construction — the
+    # schema's UNIQUE constraint surfaces to ``full_clean`` as a
+    # ``ValidationError`` (Django's validate_unique runs a SELECT
+    # against the DB). Detect the duplicate here and raise a
+    # predictable domain error so callers (M3.6 API) don't
+    # string-match Django ValidationError message keys.
+    if ConditionFindingPhoto.objects.filter(
+        storage_key=storage_key
+    ).exists():
+        raise PhotoAlreadyAttachedError(
+            f"A ConditionFindingPhoto already exists for "
+            f"storage_key {storage_key!r}."
+        )
+
+    photo = ConditionFindingPhoto(
+        public_id=photo_uuid,
+        finding=finding,
+        dealership=dealership,
+        storage_key=storage_key,
+        content_type=content_type,
+        size_bytes=size_bytes,
+        caption=caption,
+        uploaded_by=uploaded_by,
+    )
+    try:
+        photo.full_clean()
+        photo.save()
+    except IntegrityError as exc:
+        # Belt + suspenders: race between the pre-check above and
+        # the save could still surface as IntegrityError. Translate.
+        raise PhotoAlreadyAttachedError(
+            f"A ConditionFindingPhoto already exists for "
+            f"storage_key {storage_key!r}."
+        ) from exc
+    return photo
+
+
+def delete_photo(
+    photo: ConditionFindingPhoto, *, dealership: Dealership
+) -> None:
+    """Delete a photo from a draft finding.
+
+    **Storage-first strategy** per the M3.5 spec:
+
+    1. Attempt storage deletion via
+       :func:`photo_storage.delete_object`. Already-missing =
+       success (idempotent — both adapters handle this).
+    2. If the provider returns a real failure
+       (:class:`ObjectStorageError`), **retain the DB row** and
+       re-raise. Silently deleting the row would orphan the
+       storage object and destroy the only cleanup reference.
+    3. Delete the DB row only after storage-side success (or
+       confirmed absence).
+
+    This is not fully transactional across DB and object storage
+    — the DB row could be deleted successfully after storage
+    delete but before the transaction commits. But it fails in
+    the safer direction: any partial failure leaves both sides
+    consistent OR leaves both sides present (with the row
+    pointing at an already-missing object, which the next
+    delete attempt handles idempotently).
+
+    Refuses when the parent report is complete
+    (:class:`ConditionReportImmutableError`) and on cross-tenant
+    access (:class:`CrossTenantConditionReportError`).
+    """
+    _assert_photo_tenant(photo, dealership)
+    _refresh_and_assert_draft(
+        photo.finding.report, operation="delete photo"
+    )
+
+    # Storage delete first. Any ObjectStorageError bubbles up
+    # unchanged; the DB row stays intact so the operator can
+    # retry once the backend fault is resolved.
+    photo_storage.delete_object(photo.storage_key)
+
+    # Only after storage succeeds (or object was already missing)
+    # do we drop the row.
+    photo.delete()
+
+
 # ---- Reads ---------------------------------------------------------------
 
 
@@ -556,12 +856,18 @@ def latest_completed_condition_report(
 __all__ = [
     "ConditionReportImmutableError",
     "CrossTenantConditionReportError",
+    "PhotoAlreadyAttachedError",
+    "PhotoMetadataMismatchError",
+    "PhotoNotYetUploadedError",
     "ValidationError",
     "add_finding",
+    "attach_photo",
     "complete_report",
     "create_report",
     "delete_finding",
+    "delete_photo",
     "latest_completed_condition_report",
     "latest_condition_report",
+    "request_photo_upload",
     "update_finding",
 ]
