@@ -1309,7 +1309,7 @@ zero regressions).
 **Baseline delta.** 1,753 → 1,813 pass, 1 skipped, 0 fail
 (60 new tests: 57 model tests + 3 tenancy autofill).
 
-### Increment 2 (M3.2) — Condition-report service layer
+### Increment 2 (M3.2) — Condition-report service layer — SHIPPED at SESSION_057
 
 **Scope.** `services/condition_report.py` module with:
 - `create_report(vehicle, *, dealership, authored_by,
@@ -1346,6 +1346,75 @@ runs before save on every write.
 **Boundary.** Test baseline: ~1,793 → ~1,843 pass. No migrations.
 No API. No frontend. No `Vehicle` `@property` methods (that is
 M3.3).
+
+**Shipped surface (SESSION_057).**
+
+- Service module: `backend/dealer_ai/services/condition_report.py`
+  (567 lines) exporting seven public functions per the scope list
+  above.
+- **Reviewed refinement — `dealership=` on every function.** The
+  planning contract above names `dealership=` on `create_report`
+  and the two `latest_*` accessors. As shipped, `complete_report`,
+  `add_finding`, `update_finding`, and `delete_finding` also take
+  `dealership=` explicitly. Every call site must state its
+  tenant intent; the service refuses to touch a report or finding
+  whose denormalized `dealership` disagrees. This is a
+  *tightening*, not a divergence — no user-visible surface exists
+  yet (M3.6 lands the endpoints); the tightening keeps the
+  security posture uniform across all seven functions.
+- **Domain errors** (both subclass `ValueError`):
+  - `CrossTenantConditionReportError` — fail-closed guard at the
+    entry of every function.
+  - `ConditionReportImmutableError` — refuses edits, additions,
+    deletions, or re-completion when `report.status` is
+    already `complete`. Distinct class so the M3.6 API layer can
+    map it to HTTP 409 Conflict specifically, while cross-tenant
+    maps to 404/403.
+- **Finding-level cross-tenant check** verifies BOTH
+  `finding.dealership == dealership` AND
+  `finding.report.vehicle.dealership == dealership`. Per
+  SESSION_057 spec: a finding sits two FK hops away from the
+  vehicle and either drift is a cross-tenant leak.
+- **Immutability guard** (`_refresh_and_assert_draft`) refreshes
+  the parent report from DB on every mutation entry — narrow race
+  handling for "another process completed while I was holding a
+  stale in-memory draft."
+- **`update_finding` whitelist:** `category`, `severity`,
+  `description`, `estimated_cost`, `notes`. Attempting to set
+  any other field (including `report`, `dealership`, `id`,
+  `dealership_id`) raises `ValueError`. Re-parenting /
+  re-scoping is not an editing operation.
+- **`estimated_cost` locked as documentation-only** at the
+  service layer with three focused tests
+  (`EstimatedCostRemainsInformational` class) — no service
+  operation ever creates or modifies a `VehicleCost` row.
+- **Deterministic reads** — two focused tests verify repeated
+  `latest_*` calls with identical arguments return identical
+  results.
+- **Tests:** `backend/dealer_ai/tests/test_condition_report_service.py`
+  — **61 tests** across thirteen test classes covering: cross-
+  tenant on all 7 functions, `create_report` semantics,
+  `complete_report` semantics + double-complete refusal +
+  `completed_at` never shifts on refusal, `add_finding` +
+  invalid category/severity + empty description, `update_finding`
+  + whitelist enforcement + re-validation, `delete_finding`,
+  composite completed-report immutability, `estimated_cost`
+  no-op on `VehicleCost`, `latest_*` accessors, deterministic
+  reads, `full_clean` fires before save, transaction behavior
+  on refusal (no partial state), full-severity-coverage smoke.
+
+**Baseline delta.** 1,813 → 1,874 pass, 1 skipped, 0 fail
+(61 new tests). No migrations. No API. No frontend. No storage.
+No AI.
+
+**Files changed (SESSION_057).**
+
+- New: `backend/dealer_ai/services/condition_report.py`.
+- New: `backend/dealer_ai/tests/test_condition_report_service.py`.
+- No modifications to any existing file. `models.py`,
+  `admin.py`, `services/tenancy.py`, `services/vehicle_ledger.py`,
+  `services/llm_safety.py`, `permissions.py`, migrations,
+  requirements, frontend — all untouched.
 
 ### Increment 3 (M3.3) — Vehicle read-model extension
 
