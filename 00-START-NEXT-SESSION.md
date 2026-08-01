@@ -1,245 +1,278 @@
 ---
 state: active
 date: 2026-08-01
-last_session_shipped: SESSION_073
+last_session_shipped: SESSION_074
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
 milestone_4_status: shipped
-next_session: SESSION_074
+milestone_5_status: planning
+next_session: SESSION_075
 next_milestone: 5
 next_milestone_name: "Vehicle lifecycle stages + retail gating"
-next_increment: 0
-next_increment_name: "M5.0 — Planning pass (docs-only)"
+next_increment: 1
+next_increment_name: "M5.1 — Core persistence (VehicleStage + VehicleStageEvent)"
 ---
 
-# Next session — SESSION_074 · Milestone 5 · Increment 0 (M5.0 — planning pass)
+# Next session — SESSION_075 · Milestone 5 · Increment 1 (M5.1 — core persistence)
 
-> **Milestone 4 closed at SESSION_073.**
-> Nine increments (M4.0 → M4.9) minus M4.8 (deferred per
-> §5.i / §5.j). Backend baseline **2,124 → 2,518 pass**
-> across M4.1 – M4.6; M4.7 was frontend-only; M4.9 was
-> docs-only. Full delivery record at
-> `docs/roadmap/MILESTONE_4_RETROSPECTIVE.md`; shipped
-> surface enumerated at `docs/CAPABILITY_MATRIX.md` §7e;
-> planning artifact `status: shipped`.
+> **Milestone 5 planning pass shipped at SESSION_074.**
+> `docs/roadmap/MILESTONE_5_PLANNING.md` (1,472 lines)
+> resolves seven load-bearing decisions and leaves four
+> for user confirmation at SESSION_075 top per the
+> SESSION_073 mandate ("Do not silently pick a load-
+> bearing decision option without user review"). Backend
+> baseline **2,518 pass** unchanged. Frontend unchanged.
 >
-> **SESSION_074 opens M5.0 — the Milestone 5 planning
-> pass.** Documentation-only session mirroring
-> SESSION_055 (M3.0) + SESSION_065 (M4.0) invocations.
-> Deliverable: `docs/roadmap/MILESTONE_5_PLANNING.md`
-> anchoring subsequent increments M5.1 – M5.N.
+> **SESSION_075 opens M5.1 — the persistence layer, but
+> only after the user confirms the four §9 decisions.**
+> Two models (`VehicleStage`, `VehicleStageEvent`) +
+> migration `0017` (with bootstrap data migration) +
+> admin + module-level enum constants + cross-tenant
+> `clean()` guards + `_TENANT_CARRIER_MODEL_NAMES`
+> tuple 15 → 17. **Zero services, zero endpoints, zero
+> frontend, zero retail-gating refactor.**
+
+## First thing SESSION_075 must do — CONFIRM THE FOUR DECISIONS
+
+Before any code lands, the user needs to confirm (or
+override) four load-bearing decisions from
+`MILESTONE_5_PLANNING.md` §9:
+
+1. **§5.a Stage enum vocabulary** — recommendation:
+   Option C hybrid (12 stages: `incoming → inspection
+   → recon → qc → detail → photography → listing →
+   frontline → sold`, plus `wholesale_out`,
+   `hold_reserved`, `off_market`; `sold` stubbed until
+   M9; `detail` kept distinct in v1).
+
+2. **§5.b Allowed transition table** — recommendation:
+   the table drafted at §5.b (14 permitted transitions;
+   `frontline → sold` deferred to M9).
+
+3. **§5.e `Vehicle.is_available` disposition** —
+   recommendation: Option D (keep intact for backwards
+   compat; add `is_retail_eligible` as new authoritative;
+   docstring deprecation flag with scheduled removal in
+   M9 or later).
+
+4. **§5.f Role permission matrix** — recommendation:
+   reuse M4.6 + M2.6 permission classes; no new class;
+   fine-grained per-transition gating at service layer.
+   Especially: is `recon_manager` authorized to mark
+   `hold_reserved`? Recommendation: yes.
+
+**Do not write M5.1 code until these are confirmed or
+overridden.** If the user overrides any decision, amend
+`MILESTONE_5_PLANNING.md` narrowly at session top (per
+SESSION_066 refinement precedent) before implementation.
 
 ## Governance layers (all apply, in this order on conflict)
 
 1. `docs/PROJECT_RULES.md` — six project-work rules.
-2. `docs/DOC_GOVERNANCE.md` — documentation rules
-   (planning artifact goes in `docs/roadmap/`).
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 5 —
-   business objective + related research + operational
-   pain + reusable primitives + gap + scope boundary +
-   recommended order.
+2. `docs/DOC_GOVERNANCE.md` — documentation rules.
+3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 5
+   — business objective + scope boundary.
 4. `docs/roadmap/AUTHENTICATION_MODEL.md` — every M5
-   service entry inherits the tenancy substrate; new
-   permission classes compose from existing role
-   constants where possible.
-5. `docs/handoffs/SESSION_073_m4_closeout.md` — this
-   session's authoritative closeout + "Recommended exact
-   scope for SESSION_074".
-6. `docs/roadmap/MILESTONE_4_RETROSPECTIVE.md` — §8 M5
-   bootstrap notes: read-model prerequisites shipped
-   (`Vehicle.open_work_orders`, `Vehicle.has_recon_decisions`,
-   `services/recon.py::open_work_orders_for_vehicle`,
-   `has_recon_decisions_for_vehicle`). §6 lessons M5
-   inherits.
-7. `docs/roadmap/MILESTONE_4_PLANNING.md` — the 8-section
-   shape M5.0 mirrors most closely.
-8. `docs/roadmap/MILESTONE_3_PLANNING.md` — same shape
-   reference (M3.0 was the first planning-pass example).
-9. `docs/research/RECON_MAPPING.md` §"pains" (recon ETA
-   mismatch drives the stage-truth need — Sales pain #4
-   "waiting on recon"; recon pain #12 "ETAs that don't
-   match reality").
-10. `docs/research/INVENTORY_ACQUISITION_MAPPING.md`
-    §"Inventory categorization" — the seven-value stage
-    vocabulary M5 will formalize (front-line ready, in
-    recon, incoming, wholesale-out, company use,
-    hold/reserved, off-market).
-11. `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 4 +
-    §"Retail eligibility rule" — the VCP semantic
-    contract M5 implements.
-12. `docs/CAPABILITY_MATRIX.md` §7e — M4 shipped surfaces
-    M5 reads.
+   model inherits the four-layer separation. Cross-
+   tenant guards at model layer are load-bearing (belt-
+   and-suspenders with the M5.2 service + M5.4 endpoint
+   layers).
+5. `docs/roadmap/MILESTONE_5_PLANNING.md` — §1.1
+   `VehicleStage`, §1.2 `VehicleStageEvent`, §2
+   migration impact, §3 M5 invariants M5.1 must
+   satisfy, §5.a stage enum decision (once confirmed),
+   §5.b transition table (informs
+   `Meta.constraints`), §5.c bootstrap decision
+   (informs data migration), §7 M5.1 detail.
+6. `docs/handoffs/SESSION_074_m5_planning.md` — the
+   4-decision resolutions authoritative for this
+   session.
+7. `docs/roadmap/MILESTONE_4_RETROSPECTIVE.md` §6
+   lessons (ten inherit unchanged) + §8 M5 bootstrap.
+8. `docs/roadmap/MILESTONE_3_RETROSPECTIVE.md` §6
+   lessons.
+9. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` §6
+   lessons.
+10. `docs/research/VEHICLE_CENTRIC_PIVOT.md` §"Data-
+    model changes".
+11. `docs/research/INVENTORY_ACQUISITION_MAPPING.md`
+    §6 seven-category taxonomy (informs Option C stage
+    enum).
 
-## What M5.0 delivers
+## What M5.1 delivers
 
-**Documentation only.** No code changes. No migrations.
-No frontend. Backend baseline **2,518 pass** unchanged.
+**Persistence layer only.** Two new Django models +
+migration `0017` (with bootstrap data migration) + admin
++ module-level enum constants + cross-tenant `clean()`
+guards + tenancy resolver extension. No service module.
+No endpoints. No frontend. No retail-gating refactor.
+No AI role.
 
-The single deliverable is
-`docs/roadmap/MILESTONE_5_PLANNING.md`, structured to
-mirror `MILESTONE_4_PLANNING.md` (which mirrored
-`MILESTONE_3_PLANNING.md`, which mirrored
-`MILESTONE_2_PLANNING.md`). 8 sections:
+### The two models (per `MILESTONE_5_PLANNING.md` §1)
 
-**§0 Engineering practices to preserve from M2 + M3 + M4.**
-Synthesize the ten lessons from `MILESTONE_4_RETROSPECTIVE.md`
-§6 as the carry-forward set for M5.
+1. **`VehicleStage`** (§1.1) — OneToOne with Vehicle.
+   Fields: `vehicle` OneToOne CASCADE, `dealership` FK
+   NOT NULL, `current_stage` choices (12 values per
+   §5.a Option C — once confirmed), `entered_at`
+   DateTimeField, `entered_by` FK SET_NULL nullable,
+   `trigger` choices (4 values per §5.b —
+   `manual/rule/import/bootstrap`), `last_transition_note`
+   TextField blank, timestamps.
 
-**§1 Design memo — start with operational questions.**
-Frame the four operational questions M5 must answer
-(candidates):
-- Q1: "Is this vehicle front-line ready?" (VCP retail-
-  eligibility rule).
-- Q2: "What stage is this vehicle in?" (INVENTORY §
-  categorization enum).
-- Q3: "When and by whom did each stage transition happen?"
-  (audit trail).
-- Q4: "Which recon-completion events triggered which
-  stage transitions?" (M4 → M5 causal chain).
+2. **`VehicleStageEvent`** (§1.2) — many-per-Vehicle.
+   Fields: `vehicle` FK CASCADE, `dealership` FK NOT
+   NULL, `from_stage` choices nullable (only for the
+   bootstrap event), `to_stage` choices NOT NULL,
+   `entered_at` DateTimeField, `by` FK SET_NULL
+   nullable, `trigger` choices matching `VehicleStage`,
+   `rule_name` CharField blank, `notes` TextField
+   blank, `created_at`.
 
-Then §1.1 – §1.N one entry per subsystem:
-- §1.1 `VehicleStage` entity (1:1 with Vehicle, current
-  stage, entered_at). Or refactor `Vehicle.is_available`
-  into a computed property backed by the stage enum.
-- §1.2 `VehicleStageEvent` entity (audit trail:
-  from_stage, to_stage, actor, trigger, notes).
-- §1.3 Retail-gating service (public chat retrieval path
-  filters on `stage='frontline'` — one-line change with
-  test-suite ripple).
-- §1.4 Deterministic stage-transition rules per VCP:
-  inspection → recon when a completed condition report
-  has ≥1 recommended-or-higher finding; recon → qc when
-  all `must_do` / `safety` WorkOrders are complete;
-  photography → listing at photo threshold; listing →
-  frontline when published + price > 0.
-- §1.5 Manual stage transitions with actor logging.
-- §1.6 Vehicle read-model extension (new @property
-  accessors as needed).
-- §1.7 What M5 enables for downstream milestones (M6
-  photography stage; M7 async aging warnings; M8
-  aging-per-stage analytics; M11+ sale-eligibility gate).
+### Migration + tenancy + admin
 
-**§2 Migration impact review.** Every existing surface M5
-touches with the concrete work required. M4 substrate is
-read-only from M5's perspective — no changes needed to
-`services/recon.py` or `services/vendor_comm.py`.
+- **Migration `0017`** — creates both models. **Data-
+  migration step per §5.c Option C**: inserts a
+  `VehicleStage` row for every existing `Vehicle` where
+  `current_stage='frontline'` when `is_available=True`
+  else `current_stage='off_market'`;
+  `trigger='bootstrap'`; `entered_at=now()`.
+- **`services/tenancy.py::_TENANT_CARRIER_MODEL_NAMES`**
+  extended from 15 → 17 entries (two new carriers).
+  Verify `register_default_dealership_autofill` still
+  wires cleanly on app-ready.
+- **Admin registrations** for both models following the
+  M4.1 admin pattern (`VendorAdmin`,
+  `ReconDecisionAdmin`, etc.).
 
-**§3 Compatibility checklist.** M1 + M2 + M3 + M4
-invariants M5 must not regress.
+### Enum constants (module-level in `models.py`)
 
-**§4 Reusable primitives review.** Every primitive M5
-should extend or directly reuse.
+- `VEHICLE_STAGE_INCOMING` = `"incoming"` (and so on
+  for every value in the enum decided at §5.a).
+- `VEHICLE_STAGE_CHOICES` — tuple of (value, label)
+  pairs.
+- `VEHICLE_STAGE_TRIGGER_MANUAL` = `"manual"` (and
+  same for `rule`, `import`, `bootstrap`).
+- `VEHICLE_STAGE_TRIGGER_CHOICES` — tuple of (value,
+  label) pairs.
 
-**§5 Load-bearing decisions + deferrals.** Candidates for
-M5.0:
-- §5.a State-machine granularity (7 states from
-  INVENTORY §, or a smaller v1 subset?).
-- §5.b Auto-transitions from M4 recon completion vs
-  manual transitions (hybrid?).
-- §5.c Retail gating: hard-block (chat cannot surface
-  non-frontline units at all) vs advisory (chat can
-  mention with a warning)?
-- §5.d Aging-per-stage: measured in M5 or deferred to
-  M8?
-- §5.e Existing `Vehicle.is_available` — deprecate,
-  refactor to computed, or leave as an override switch?
-- §5.f Role permission matrix (new class needed?).
-- Additional decisions surfaced during the memo pass.
+Follow the M4.1 enum-constant house pattern (module-
+level constants for every individual value + choice
+tuples).
 
-**§6 Anchors that win on conflict.**
+### Cross-tenant `clean()` guards
 
-**§7 Increment sequencing.** Target: 5–7 sub-increments,
-one per session, ending at M5.N closeout mirroring M3.8 /
-M4.9.
+Mirror `VehicleAcquisition.clean` +
+`ConditionReport.clean` +
+`WorkOrder.clean` patterns. On both models, `clean()`
+raises `ValidationError` when the model's `dealership`
+FK does not match the parent Vehicle's tenant.
 
-**§8 Related documents.**
-
-## What SESSION_074 should do
+## What SESSION_075 should do
 
 ### Recommended step sequence
 
+0. **Confirm the four §9 decisions with the user.** Do
+   NOT write code until every `[NEEDS-DECISION-BEFORE-M5.1]`
+   item is resolved. If the user overrides any
+   recommendation, amend `MILESTONE_5_PLANNING.md`
+   narrowly at session top before implementation.
+
 1. **Read first (in order):**
-   - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone
-     5 — the business framing.
-   - `docs/handoffs/SESSION_073_m4_closeout.md` — the
-     scope block above.
-   - `docs/roadmap/MILESTONE_4_RETROSPECTIVE.md` §8 —
-     the M4 → M5 bootstrap surface.
-   - `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 4 +
-     §"Retail eligibility rule".
-   - `docs/research/INVENTORY_ACQUISITION_MAPPING.md`
-     §"Inventory categorization".
-   - `docs/research/RECON_MAPPING.md` pains #12 (recon
-     ETA mismatch) + Sales pain #4 (waiting on recon).
-   - `docs/roadmap/MILESTONE_4_PLANNING.md` — the 8-
-     section shape M5.0 mirrors.
-   - `docs/roadmap/MILESTONE_3_PLANNING.md` — same shape
-     reference.
-   - `backend/dealer_ai/services/recon.py` — the M4
-     surface M5 reads.
-   - `backend/dealer_ai/models.py::Vehicle` — the
-     current `is_available` field + M3/M4 @property
-     accessors.
+   - `docs/roadmap/MILESTONE_5_PLANNING.md` — §1.1,
+     §1.2, §2, §3, §5.a (once confirmed), §5.b, §5.c,
+     §7 M5.1.
+   - `docs/handoffs/SESSION_074_m5_planning.md` — the
+     four-decision resolutions.
+   - `backend/dealer_ai/models.py` — reread
+     `VehicleAcquisition`, `VehicleCost`,
+     `ConditionReport`, `ConditionFinding`,
+     `WorkOrder`, `VendorCommunication` (persistence-
+     layer template).
+   - `backend/dealer_ai/services/tenancy.py` — the
+     `_TENANT_CARRIER_MODEL_NAMES` tuple + the
+     `register_default_dealership_autofill` function.
+   - `backend/dealer_ai/tests/test_condition_report.py`
+     + `test_vendor.py` (M4.1) — test shape M5.1
+     mirrors.
+   - `backend/dealer_ai/migrations/0009_backfill_dealership_fks.py`
+     — data-migration pattern M5.1's `0017` bootstrap
+     migration mirrors.
 
 2. **Verify starting state.**
-   - `git status` clean (or only pre-existing untracked).
-   - `python3 manage.py test dealer_ai` → **2,518 pass,
-     1 skipped, 0 fail**.
+   - `git status` clean (or only pre-existing
+     untracked).
+   - `python3 manage.py test dealer_ai` → **2,518
+     pass, 1 skipped, 0 fail**.
    - `python3 manage.py check` clean.
-   - `python3 manage.py makemigrations --check --dry-run`
-     → "No changes detected."
+   - `python3 manage.py makemigrations --check
+     --dry-run` → "No changes detected."
    - `npx tsc --noEmit` clean.
    - `npx vite build` clean.
 
-3. **Draft `docs/roadmap/MILESTONE_5_PLANNING.md`** —
-   8 sections per the shape above. Cite research
-   corpus + VCP + INVENTORY mapping wherever an
-   assertion is made. Aim for ~1,500 – 2,000 lines
-   (M3.0 was 1,342 lines; M4.0 was 1,712 → 2,061 after
-   amendments; M5.0 should land in the same ballpark).
+3. **Draft models + enum constants + admin** in
+   `backend/dealer_ai/models.py` +
+   `backend/dealer_ai/admin.py`. Follow M4.1 shape:
+   choices as `[("value", "Label"), ...]` tuples; FK
+   `related_name` explicit and readable; `Meta.ordering`
+   set explicitly per model.
 
-4. **Resolve every load-bearing decision** at §5. If a
-   decision needs user input, mark it as
-   `[NEEDS-DECISION-BEFORE-M5.1]` in the draft. Do not
-   silently pick an option for a decision the user should
-   see.
+4. **Extend tenancy resolver.** Append two entries to
+   `_TENANT_CARRIER_MODEL_NAMES` (15 → 17).
 
-5. **Sequence increments at §7.** Target 5–7 sub-
-   increments. Each ends with a healthy test baseline +
-   a shipped surface + a handoff.
+5. **Generate + apply migration `0017`.** Verify with
+   `sqlmigrate` before applying. Confirm
+   `makemigrations --check --dry-run` clean after.
+   **Include the data-migration step** for bootstrap
+   `VehicleStage` rows.
 
-6. **Ship handoff at
-   `docs/handoffs/SESSION_074_m5_planning.md`** mirroring
-   `SESSION_055_milestone_3_planning.md` and
-   `SESSION_065_m4_planning.md` shape.
+6. **Write ~40 focused tests** — schema, choices,
+   cascade, cross-tenant clean, tenancy-carrier
+   registration, bootstrap data migration verifies
+   against a seeded fixture.
 
-7. **Overwrite `00-START-NEXT-SESSION.md`** with M5.1
-   priority (first M5 implementation increment).
+7. **Full-suite verification.** Target 2,518 → ~2,558
+   pass. Zero regressions.
 
-## Explicit non-goals for SESSION_074
+8. **Ship handoff at
+   `docs/handoffs/SESSION_075_m5_inc1_core_models.md`**
+   mirroring `SESSION_066_m4_inc1_core_models.md`
+   shape.
 
-- ❌ Any code change (M5.0 is docs-only per SESSION_055
-  + SESSION_065 precedent).
-- ❌ Any migration.
-- ❌ Any endpoint / permission / frontend change.
-- ❌ Silently picking a load-bearing decision option
-  without user review. Mark it
-  `[NEEDS-DECISION-BEFORE-M5.1]` in the draft instead.
-- ❌ Committing to M5.8 or later before M5.1 has landed.
-  Plan the next 5–7 sub-increments; leave later scope
-  for later planning refinement.
+9. **Overwrite `00-START-NEXT-SESSION.md`** with M5.2
+   priority (lifecycle service + state machine).
+
+## Explicit non-goals for SESSION_075
+
+- ❌ Do NOT write `services/vehicle_lifecycle.py` — M5.2.
+- ❌ Do NOT modify `services/chat_engine.py` or
+  `services/inventory_search.py` — M5.5.
+- ❌ Do NOT add `Vehicle.current_stage` or
+  `Vehicle.is_retail_eligible` `@property` accessors
+  — those belong to M5.2 alongside the service.
+- ❌ Do NOT add any endpoint — M5.4.
+- ❌ Do NOT touch frontend — M5.6.
+- ❌ Do NOT modify `Vehicle.is_available` field per
+  §5.e Option D (assuming user confirms).
+- ❌ Do NOT modify any M2/M3/M4 substrate.
+- ❌ Do NOT introduce any new domain error class —
+  M5.2 introduces `CrossTenantLifecycleError` /
+  `InvalidStageTransitionError` /
+  `StageAlreadyCurrentError`.
+- ❌ Do NOT introduce any AI role.
 
 ## NEXT TASK
 
-Start SESSION_074 with the read-first list above. Draft
-`docs/roadmap/MILESTONE_5_PLANNING.md` (8 sections;
-~1,500 – 2,000 lines target; every load-bearing decision
-resolved or marked for user review). Ship the M5.0
-handoff. Overwrite start-here for M5.1.
+Start SESSION_075 with (a) confirming the four §9
+decisions with the user, (b) the read-first list, then
+(c) draft the two models + migration `0017` (with
+bootstrap data migration) + admin + enum constants +
+cross-tenant `clean()` guards + tenancy carrier
+extension. ~40 focused tests. Target baseline 2,518 →
+~2,558. Ship the M5.1 handoff.
 
-Backend baseline at SESSION_074 close: **2,518 pass**
-unchanged (M5.0 is docs-only).
+Backend baseline at SESSION_075 close: **~2,558 pass**.
+Frontend baseline: unchanged.
 
 ---
 
@@ -247,19 +280,22 @@ unchanged (M5.0 is docs-only).
 
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 5
+3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone
+   5
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/handoffs/SESSION_073_m4_closeout.md`
-6. `docs/roadmap/MILESTONE_4_RETROSPECTIVE.md`
-7. `docs/roadmap/MILESTONE_4_PLANNING.md`
-8. `docs/roadmap/MILESTONE_3_PLANNING.md`
-9. `docs/roadmap/MILESTONE_3_RETROSPECTIVE.md`
-10. `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 4
-11. `docs/research/INVENTORY_ACQUISITION_MAPPING.md`
-12. `docs/research/RECON_MAPPING.md`
-13. `docs/CAPABILITY_MATRIX.md` §7e
-14. Most recent handoffs
-    (`SESSION_073_m4_closeout.md`,
+5. `docs/roadmap/MILESTONE_5_PLANNING.md`
+6. `docs/handoffs/SESSION_074_m5_planning.md`
+7. `docs/roadmap/MILESTONE_4_RETROSPECTIVE.md` §6 + §8
+8. `docs/roadmap/MILESTONE_3_RETROSPECTIVE.md` §6
+9. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` §6
+10. `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 4 +
+    §"Data-model changes"
+11. `docs/research/INVENTORY_ACQUISITION_MAPPING.md` §6
+12. `docs/CAPABILITY_MATRIX.md` §7e (M4 substrate M5
+    reads)
+13. Most recent handoffs
+    (`SESSION_074_m5_planning.md`,
+    `SESSION_073_m4_closeout.md`,
     `SESSION_072_m4_inc7_operator_ui.md`,
     `SESSION_071_m4_inc6_admin_api.md`,
     `SESSION_070_m4_inc5_vendor_comm.md`,
@@ -269,62 +305,53 @@ unchanged (M5.0 is docs-only).
     `SESSION_066_m4_inc1_core_models.md`,
     `SESSION_065_m4_planning.md`,
     `SESSION_064_m3_inc8_closeout.md`,
-    `SESSION_063_m3_inc7_operator_ui.md`,
-    `SESSION_062_m3_inc6b_photo_api.md`,
-    `SESSION_061_m3_inc6a_admin_api.md`,
-    `SESSION_060_m3_inc5_upload_flow.md`,
-    `SESSION_059_m3_inc4_storage.md`,
-    `SESSION_058_m3_inc3_read_model.md`,
-    `SESSION_057_m3_inc2_service_layer.md`,
-    `SESSION_056_m3_inc1_core_models.md`).
+    `SESSION_063_m3_inc7_operator_ui.md`).
 
-Narrative docs are claims. Rules + research + code are facts.
+Narrative docs are claims. Rules + research + code are
+facts.
 
 ---
 
-## Operational state (post-SESSION_073 — Milestone 4 shipped)
+## Operational state (post-SESSION_074 — Milestone 5 planning-pass shipped)
 
 - **Backend (local):** Django on `:8001`. Migrations
-  `0001`–`0016` (unchanged since SESSION_066). Test
-  baseline: **2,518 pass**, 1 skipped, 0 fail (unchanged
-  since SESSION_071; M4.7 was frontend-only; M4.9 was
-  docs-only).
-- **Backend (prod):** NOT active (per M4 planning §5.j
-  deferred to pre-pilot pass).
+  `0001`–`0016`. Test baseline: **2,518 pass**, 1
+  skipped, 0 fail (unchanged since SESSION_071; M4.7
+  was frontend-only; M4.9 + M5.0 were docs-only).
+- **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`. `tsc --noEmit`
-  clean. `vite build` clean. M4.7 recon UI + inventory-
-  card button shipped.
+  clean. `vite build` clean.
 - **Frontend (prod):** NONE.
-- **DRF admin surface:** 18 M4.6 recon endpoints under
-  `/api/dealer-ai/admin/` (unchanged since SESSION_071).
-- **Milestone 4 status:** **SHIPPED**. Planning artifact
-  `status: shipped`. Retrospective at
-  `docs/roadmap/MILESTONE_4_RETROSPECTIVE.md`. Capability
-  matrix §7e enumerates every surface. M4.8 (outbound
-  send) deferred per §5.i / §5.j.
-- **Milestone 5 status:** **NEXT** — planning pass at
-  SESSION_074.
+- **DRF admin surface:** 18 M4.6 recon endpoints
+  (unchanged); M5.4 lifecycle endpoints land at
+  SESSION_078.
+- **Milestone 4 status:** **SHIPPED** at SESSION_073.
+- **Milestone 5 status:** planning-pass shipped;
+  ready for M5.1 core-persistence drafting once user
+  confirms the four §9 decisions.
+  `MILESTONE_5_PLANNING.md` frontmatter
+  `status: draft` (flips to `shipped` at M5.7).
 - **`docs/roadmap/DEFERRED_IDEAS.md`** — still does not
-  exist. Every deferred item has a home in an existing
-  planning / retrospective / handoff doc.
-- **Dev DB seeded users:** `smoke_owner` + `smoke_advisor`.
-  Neither has `recon_manager` role. For M4 verification
-  smoke testing, either extend `smoke_owner` with an
-  additional `recon_manager` membership or create a
-  `smoke_recon` user.
+  exist.
+- **Dev DB seeded users:** `smoke_owner` +
+  `smoke_advisor`. Neither has `recon_manager` role.
 - **Service surface:**
-  - `services/recon.py`: 15 public functions + 4 domain
-    errors + ledger integration constants + parts
-    functions + Vehicle read helpers.
-  - `services/vendor_comm.py`: 4 public functions + 4
-    domain errors.
-- **View surface:** `views.py` (M1 – M3, ~2,400 lines) +
-  `views_recon.py` (M4.6, ~750 lines).
+  - `services/recon.py` — 15 public functions + 4 domain
+    errors (M4).
+  - `services/vendor_comm.py` — 4 public functions + 4
+    domain errors (M4).
+  - `services/vehicle_lifecycle.py` — **not yet
+    created**; lands at SESSION_076 (M5.2).
+- **View surface:** `views.py` (M1 – M3) +
+  `views_recon.py` (M4.6). M5.4 view module lands at
+  SESSION_078.
 - **Permission classes:**
   `IsAdvisorForSlug`, `IsDealerOwnerForAdvisorSlug`,
   `IsSalesManagerOrOwnerAtActiveDealership`,
   `IsReconManagerSalesManagerOrOwnerAtActiveDealership`
-  (M4.6), `IsDealerOwnerAtActiveDealership`, `ReadOnly`.
-- **Frontend surface:** M4.7 recon page + 6 components +
-  18 typed API helpers + "Recon" button on operator
-  inventory card.
+  (M4.6), `IsDealerOwnerAtActiveDealership`,
+  `ReadOnly`. M5 reuses M2.6 + M4.6 classes per §5.f
+  recommendation.
+- **Load-bearing decisions requiring user review:**
+  four items at `MILESTONE_5_PLANNING.md` §9 — must be
+  confirmed at SESSION_075 top before M5.1 code lands.
