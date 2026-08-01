@@ -357,12 +357,17 @@ class BootstrapMigrationReverseRestoresBaseline(TestCase):
 
 
 class TenancyCarriersExtended(TestCase):
-    """``_TENANT_CARRIER_MODEL_NAMES`` extended from 15 → 17. Verified
-    against the actual tuple in ``services.tenancy``."""
+    """``_TENANT_CARRIER_MODEL_NAMES`` extended by two entries in M5.1
+    (``VehicleStage`` + ``VehicleStageEvent``). Verified against the
+    actual tuple in ``services.tenancy``.
 
-    def test_carrier_count_is_seventeen(self):
-        from dealer_ai.services.tenancy import _TENANT_CARRIER_MODEL_NAMES
-        self.assertEqual(len(_TENANT_CARRIER_MODEL_NAMES), 17)
+    The absolute count check moved to
+    ``test_m6_tenancy_carriers.TenancyCarriersExtended.test_carrier_count_is_nineteen``
+    when M6.1 extended the tuple from 17 → 19 (SESSION_082). This
+    class continues to verify the M5.1 delta (that ``VehicleStage``
+    and ``VehicleStageEvent`` are members) without pinning an absolute
+    count that naturally grows with each milestone.
+    """
 
     def test_new_carriers_include_stage_and_event(self):
         from dealer_ai.services.tenancy import _TENANT_CARRIER_MODEL_NAMES

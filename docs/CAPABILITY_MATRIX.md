@@ -37,8 +37,8 @@ dealership.
 
 ## Objective baseline
 
-- **Backend test suite:** `python3 manage.py test dealer_ai` → **2,124
-  pass, 1 skipped**. ~40s. Run from `backend/`.
+- **Backend test suite:** `python3 manage.py test dealer_ai` → **2,948
+  pass, 1 skipped**. ~85s. Run from `backend/`.
 - **Frontend typecheck:** `npx tsc --noEmit` → clean. Run from `frontend/`.
 - **Frontend build:** `npx vite build` → clean, ~553 kB bundle / ~151 kB
   gzip (pre-existing chunk-size warning acceptable — unchanged since
@@ -474,13 +474,13 @@ shipped vs. deferred.
   until every known consumer has migrated AND a
   repository-wide audit proves removal safe.
 - **Deterministic `photography → listing` rule** —
-  M6 will provide the `VehiclePhoto.count ≥ N`
-  predicate; M5.3 returns a structured unmet
-  prerequisite in the meantime.
-- **Deterministic `listing → frontline` rule** — M6
-  will provide the `VehicleListing.published`
-  predicate; M5 keeps this transition manual-only per
-  §5.h SESSION_075 refined.
+  M6.4 filled this stub with the real photo-count
+  predicate (`listing_ready_count ≥ 8`); see §7g
+  below.
+- **Deterministic `listing → frontline` rule** — M6.4
+  added this rule reading
+  `VehicleListing.status='published' AND
+  Vehicle.price > 0`; see §7g below.
 - **Aging analytics per stage** — M8 aggregates the
   raw `entered_at` data M5 records.
 - **Bottleneck detection / stuck-vehicle alerts** — M7
@@ -488,6 +488,72 @@ shipped vs. deferred.
 - **AI-drafted stage-transition suggestions** — no
   AI role in M5; if a future increment adds one, it
   routes through the shared safety stack.
+
+---
+
+## 7g. Photography + listing generation (Milestone 6, shipped)
+
+Milestone 6 (SESSION_082 → SESSION_087) shipped the
+full photo-gallery + AI-drafted listing subsystem plus
+the SESSION_075 §5.i truthful customer-language
+refactor. Every retail-facing per-vehicle direct
+lookup now requires BOTH `stage=frontline` AND a
+published `VehicleListing` — the operator has to
+approve customer-facing copy before a vehicle appears
+on the showroom URL. See
+`docs/roadmap/MILESTONE_6_PLANNING.md` +
+`docs/roadmap/MILESTONE_6_RETROSPECTIVE.md` for what
+shipped vs. deferred.
+
+| Domain | Surface (M6.1 – M6.5) | Notes |
+| --- | --- | --- |
+| Persistence — photo gallery | `models.VehiclePhoto` (many-per-Vehicle; `dealership` FK NOT NULL; `public_id` UUIDField unique editable=False from M6.2; `storage_key` CharField unique; `content_type` from 3-value `VEHICLE_PHOTO_CONTENT_TYPE_CHOICES`; `width_px` + `height_px` PositiveIntegerField; `sort_order` IntegerField default 0; `is_primary` BooleanField default False; `caption` CharField blank; `uploaded_by` SET_NULL; `uploaded_at`; safer-direction `marked_deleted_at` DateTimeField nullable; `deleted_by` SET_NULL; `updated_at`). Cross-tenant `clean()` mirrors M4/M5 pattern. Admin registration diagnostic. | 3 content types per §1.1: JPEG / PNG / WebP. **HEIC deliberately excluded** (customer-facing showroom content; browser support gaps). `is_primary` uniqueness is a service-layer invariant, NOT a DB constraint (per §1.1 — would force swap into two-step delete-then-insert dance). |
+| Persistence — listing | `models.VehicleListing` (OneToOne with Vehicle; `dealership` FK NOT NULL; `status` from 4-value `VEHICLE_LISTING_STATUS_CHOICES` default `draft`; `title` CharField blank; `body` TextField blank; `source_provenance` JSONField default dict; four (actor, timestamp) pairs — drafted/approved/published/unpublished; `unpublished_reason` CharField max_length=255). Cross-tenant `clean()`. Admin registration diagnostic. | 4 statuses per §5.a Option A: draft → approved → published → unpublished. **`archived` deliberately not shipped** (rejected Option C). |
+| Migrations | `0018_vehicle_photo_and_listing` (pure additive `CreateModel` — no data migration; M6 has no rows to bootstrap). `0019_vehicle_photo_public_id` (three-step: nullable AddField → RunPython backfill → NOT NULL + unique AlterField — future-safe even though M6.1 empty-table path only exercises steps 1 + 3). | |
+| Tenancy carriers | `_TENANT_CARRIER_MODEL_NAMES` extended 17 → **19** (added `VehiclePhoto`, `VehicleListing`). Same `pre_save` autofill safety net as M1/M2/M3/M4/M5 carriers. | |
+| Service — photo storage extension (M6.2) | `services/photo_storage.py` extended: new constants `_VALID_VEHICLE_PHOTO_CONTENT_TYPES`, `_STOCK_NUMBER_PATTERN`, `_VEHICLE_PHOTO_KEY_PATTERN` (+ grouped variant), `_VEHICLE_PHOTO_MAX_BYTES=25MB`; new public functions `build_canonical_vehicle_photo_key`, `parse_canonical_vehicle_photo_key`, `store_vehicle_photo`; new `put_bytes` method on both `_LocalAdapter` (delegates to existing `store_local_upload`) and `_S3Adapter` (fresh `boto3 put_object`). | Canonical key shape per SESSION_083 §1 Option A: `dealerships/<slug>/vehicles/<stock>/photos/<uuid>/original`. Reuses `storages["condition_photos"]` FileSystemStorage alias (contract identical; key alone determines what lives where). |
+| Service — photo gallery (M6.2) | `services/photo_gallery.py` — 6 verbs: `upload_photo` (writes bytes + persists metadata atomically); `set_primary` (atomic swap via `transaction.atomic()` + `select_for_update()`); `reorder` (bulk sort_order update wrapped in atomic transaction); `mark_deleted` (safer-direction, clears is_primary); `restore_deleted`; `listing_ready_count` (drives M6.4 rule). Constants `LISTING_READY_MIN_WIDTH_PX=1024`, `LISTING_READY_MIN_HEIGHT_PX=768`, `LISTING_READY_PHOTO_COUNT=8`. 4 distinct domain errors: `CrossTenantPhotoError`, `PhotoValidationError`, `PhotoAlreadyDeletedError`, `PhotoNotDeletedError`. | Dimension threshold per SESSION_083 §3 Option A. Count threshold per SESSION_082 §5.b Option C (fixed for v1; per-dealer configurability deferred). |
+| Service — vehicle listing (M6.3) | `services/vehicle_listing.py` — 5 verbs mirroring M4.5 vendor-comm shape: `draft_listing` (LLM factory + safety stack; source bundle assembles Vehicle + latest completed condition report + findings + M6.2 photo counts; refuses if listing exists); `regenerate_draft` (replaces body; refused on non-draft; `transaction.atomic()` + `select_for_update()`); `approve_listing`, `publish_listing`, `unpublish_listing` (each transition wrapped in atomic + select_for_update). 5 distinct domain errors: `CrossTenantListingError` → 404, `InvalidListingTransitionError` → 409, `ListingImmutableError` → 409, `ListingScrubDroppedError` → 422, `EmptyListingDraftError` → 422. | LLM prompt pins: no pricing, no internal-detail leakage, no invented specs, no APR/rate/promotion language, no photo-URL references. **Publish semantics per §5.e:** `status='published'` = visible on `/showroom/vehicles/<stock>/`. M6 v1 does NOT push to Facebook Marketplace / AutoTrader (Milestone 11+). |
+| AI safety stack extension (M6.3) | `services/llm_safety.py::_RECON_COMM_KINDS` frozenset 2 → **3** (added `"vehicle_listing"`). Dispatch-only addition; no new scrub logic. The M4.5 `_scrub_invented_recon_fact` scrub now fires on 3 kinds (`vendor_comm`, `parts_order`, `vehicle_listing`). | Per SESSION_084 §5.d Option A user-confirmed: reuse over fork. `_scrub_invented_photo_claim` deferred pending operator evidence. |
+| Deterministic rules (M6.4) | `services/vehicle_lifecycle.py`: **filled** `_rule_photography_to_listing` with real photo-count predicate (active when `listing_ready_count >= 8`; structured unmet-prereq with shortfall count otherwise); **added new** `_rule_listing_to_frontline` reading `VehicleListing.status='published' AND Vehicle.price > 0` (always returns SuggestedTransition; per-condition unmet-prereq — no listing / not published / price ≤ 0). Extended `suggest_transitions` composition dispatch with one new `elif` for LISTING stage. | Both rules always return a `SuggestedTransition` (matches M5.3 photography stub contract). Preserves the "no `price > 0`-only rule" guard — the two-condition structure requires BOTH published listing AND positive price. |
+| Vehicle read-model | Unchanged from M5 (4 `@property` accessors: `open_work_orders`, `has_recon_decisions`, `current_stage`, `is_retail_eligible`). M6 added no new properties — retail-lookup helpers land as module-level functions in `services/chat_engine.py` per M5 §6 lesson 10. | |
+| §5.i truthful-language refactor (M6.5) | Extended `services/chat_engine.py` with two module-level helpers: `customer_lookup_visible_vehicle_by_id(vehicle_id)` and `customer_lookup_visible_vehicle_by_stock(stock_number)`. Both filter through `customer_visible_vehicles()` (frontline gate) AND additionally require `listing__status=VEHICLE_LISTING_STATUS_PUBLISHED`. New constant `CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY = "That vehicle is not currently available for retail."` (exact SESSION_075 §5.i language, test-locked). Refactored `vehicle_detail` + `vehicle_ask` in `views.py` to use the helper and return the truthful copy on refusal. | **Two-tier customer-visibility gate:** batch-query surfaces (chat matched-vehicles, inventory search, lever-flex) continue to use `customer_visible_vehicles` (frontline-only) to avoid over-filtering. Per-vehicle direct-access paths (`vehicle_detail`, `vehicle_ask`, showroom endpoint) use the stricter frontline + published gate. |
+| Admin API — photo (M6.5) | `views_photos.py` — 6 DRF endpoints under `/api/dealer-ai/admin/vehicles/<stock_number>/photos/` (vehicle-scoped: GET list, POST upload multipart, POST reorder) and `/api/dealer-ai/admin/vehicle-photos/<uuid:public_id>/` (photo-scoped: POST set-primary, DELETE mark-deleted, POST restore). Response projection includes short-lived signed read URL (15 min TTL). | Domain-error → HTTP: CrossTenant → 404, PhotoValidation / InvalidStorageKey → 400, AlreadyDeleted / NotDeleted → 409, **InvalidContentType → 415**, **ObjectStorage → 502**. |
+| Admin API — listing (M6.5) | `views_listings.py` — 6 DRF endpoints under `/api/dealer-ai/admin/vehicles/<stock_number>/listing/`: GET read, POST draft / regenerate / approve / publish / unpublish. Body for unpublish requires `{"reason": "..."}` (nonblank). | Domain-error → HTTP: CrossTenant → 404, InvalidTransition / Immutable → 409, ScrubDropped / EmptyDraft → **422**. |
+| Public showroom endpoint (M6.5) | `views_showroom.py` — 1 DRF endpoint: `GET /api/dealer-ai/showroom/vehicles/<stock_number>/`. `AllowAny` permission — the retail gate IS the authorization. Returns public-safe Vehicle subset + published listing body + primary photo signed URL + gallery (up to 20 non-deleted photos). Non-visible vehicles return HTTP 404 with `CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY`. | URL segment `stock_number` per SESSION_086 §2 Option A (customer-friendly URLs; matches M6.2 canonical photo-key namespacing). Response deliberately excludes internal cost / margin fields (locked by `test_body_never_exposes_price_data`). |
+| Operator UI (M6.5) | Two new pages inside `<RequireAuth>`: `pages/VehiclePhotoGalleryPage.tsx` (route `/dealer-ai-inventory/:stock/photos`; three panels — active gallery grid with set-primary + delete, upload form with client-side dimension probe, recently-deleted panel with restore) and `pages/VehicleListingEditorPage.tsx` (route `/dealer-ai-inventory/:stock/listing`; status badge + provenance timestamps + body view + status-appropriate action buttons). API helpers + typed DTOs in `lib/api.ts` (16 new). Role-gated to recon_manager / sales_manager / dealer_owner. Detailed 400/403/404/409/415/422/502 error UX. | Follows M5.6 `VehicleLifecyclePage` pattern. |
+| Test baseline | +194 tests (M5 close 2,754 → M6 close **2,948**). Zero regressions. Zero migrations flagged by `makemigrations --check --dry-run`. `tsc --noEmit` + `vite build` clean. | Distribution: M6.1 +38, M6.2 +39, M6.3 +40, M6.4 +24, M6.5 +52, M6.6 +0 (docs-only). |
+
+**What is NOT shipped in Milestone 6** (deferred per
+`MILESTONE_6_RETROSPECTIVE.md` §4):
+
+- **`_scrub_invented_photo_claim` (dedicated
+  photo-verifiable-claim scrub)** — Option A shipped
+  (reuse M4.5 recon-fact scrub); the dedicated
+  photo-claim scrub deferred pending operator
+  evidence.
+- **Per-dealer `DealerOnboardingProfile.listing_ready_photo_count`
+  field** — fixed at 8 for v1; per-dealer
+  configurability deferred pending operator
+  evidence that 8 is wrong for enough dealers.
+- **`Vehicle.public_id` UUID for tenant-safe
+  external URLs** — stock_number in URLs shipped;
+  add `public_id` when observed abuse or product
+  requirement surfaces.
+- **Cross-platform syndication** (Facebook
+  Marketplace / AutoTrader / Cars.com / CarGurus)
+  — explicitly out-of-scope per §5.e (publish =
+  local showroom only). Vendor integrations named
+  for Milestone 11+.
+- **Photo re-shoot analytics + listing
+  performance analytics** — Milestone 8.
+- **Image processing** (crop / brighten /
+  thumbnail / EXIF stripping) — deferred
+  indefinitely.
+- **Physical-delete reaper for tombstoned photos**
+  — safer-direction deletion is shipped; the
+  eventual reaper is deferred to Milestone 7 async
+  infrastructure.
 
 ---
 

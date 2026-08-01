@@ -716,11 +716,22 @@ def _profile_from_request(request) -> dict:
 
 @api_view(["GET"])
 def vehicle_detail(request, vehicle_id):
-    try:
-        vehicle = Vehicle.objects.get(id=vehicle_id)
-    except Vehicle.DoesNotExist:
+    # Milestone 6 · Increment 5 (SESSION_086) — SESSION_075 §5.i
+    # truthful-language refactor. The stock-specific customer
+    # lookup path now requires both ``stage='frontline'`` AND a
+    # published :class:`VehicleListing`. Non-visible vehicles
+    # surface as HTTP 404 with the truthful copy per §5.i rather
+    # than exposing internals (recon, stage, ETA, vendor, etc.).
+    from .services.chat_engine import (
+        CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY,
+        customer_lookup_visible_vehicle_by_id,
+    )
+
+    vehicle = customer_lookup_visible_vehicle_by_id(vehicle_id)
+    if vehicle is None:
         return Response(
-            {"detail": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND
+            {"detail": CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY},
+            status=status.HTTP_404_NOT_FOUND,
         )
 
     profile = _profile_from_request(request)
@@ -747,11 +758,18 @@ def vehicle_detail(request, vehicle_id):
 
 @api_view(["POST"])
 def vehicle_ask(request, vehicle_id):
-    try:
-        vehicle = Vehicle.objects.get(id=vehicle_id)
-    except Vehicle.DoesNotExist:
+    # Milestone 6 · Increment 5 (SESSION_086) — SESSION_075 §5.i
+    # truthful-language refactor. See ``vehicle_detail`` above.
+    from .services.chat_engine import (
+        CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY,
+        customer_lookup_visible_vehicle_by_id,
+    )
+
+    vehicle = customer_lookup_visible_vehicle_by_id(vehicle_id)
+    if vehicle is None:
         return Response(
-            {"detail": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND
+            {"detail": CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY},
+            status=status.HTTP_404_NOT_FOUND,
         )
 
     serializer = VehicleAskSerializer(data=request.data)

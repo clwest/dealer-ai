@@ -3137,6 +3137,11 @@ def customer_visible_vehicles():
     vehicles can't leak into the matched_vehicles surface a
     customer reads AND so non-frontline units (in recon /
     photography / on hold / etc.) are never surfaced.
+
+    **Related helper:** :func:`customer_lookup_visible_vehicle_by_id`
+    tightens this gate for the stock-specific lookup path (M6.5
+    §5.i refactor) — that helper additionally requires a
+    published :class:`VehicleListing`.
     """
     from .vehicle_lifecycle import annotate_retail_eligible
 
@@ -3144,6 +3149,79 @@ def customer_visible_vehicles():
         annotate_retail_eligible(Vehicle.objects.all())
         .filter(_lifecycle_retail_eligible=True)
         .exclude(stock_number__iregex=_CUSTOMER_VISIBLE_DEBUG_PATTERN)
+    )
+
+
+# Milestone 6 · Increment 5 (SESSION_086) — truthful stock-specific
+# customer language per SESSION_075 §5.i deferral.
+#
+# The chat matched-vehicles surface funnels through
+# :func:`customer_visible_vehicles` (frontline stage only). But the
+# per-vehicle direct-access endpoints (``/api/dealer-ai/vehicles/<id>/``
+# + ``/api/dealer-ai/vehicles/<id>/ask/``) do direct
+# ``Vehicle.objects.get(pk=id)`` lookups that bypass the gate. A
+# customer with a stock-specific URL (from a marketing link, a stale
+# search result, etc.) could reach details for a non-retail vehicle.
+#
+# The M6.5 refactor tightens this gate for the stock-specific path:
+# retail visibility now requires **both** ``stage='frontline'`` AND
+# a published :class:`VehicleListing`. The truthful copy per §5.i is
+# returned when either condition fails.
+
+CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY = (
+    "That vehicle is not currently available for retail."
+)
+
+
+def customer_lookup_visible_vehicle_by_id(vehicle_id):
+    """Return the :class:`Vehicle` at ``vehicle_id`` iff it is
+    customer-visible AND has a published :class:`VehicleListing`;
+    return ``None`` otherwise.
+
+    Used by the M6.5-refactored ``vehicle_detail`` +
+    ``vehicle_ask`` endpoints to enforce the SESSION_075 §5.i
+    truthful-language contract. Callers translate ``None`` into
+    the :data:`CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY` response.
+
+    The stricter gate matches operator intent: a vehicle at
+    ``frontline`` without a published listing is a still-in-
+    preparation state (the operator has confirmed the vehicle is
+    ready but hasn't yet drafted / approved / published listing
+    copy). Exposing it via a stock-specific direct-access URL
+    would leak operational readiness before the operator has
+    signed off on the customer-facing copy.
+    """
+    from ..models import VEHICLE_LISTING_STATUS_PUBLISHED
+
+    return (
+        customer_visible_vehicles()
+        .filter(
+            pk=vehicle_id,
+            listing__status=VEHICLE_LISTING_STATUS_PUBLISHED,
+        )
+        .first()
+    )
+
+
+def customer_lookup_visible_vehicle_by_stock(stock_number: str):
+    """Same gate as :func:`customer_lookup_visible_vehicle_by_id`,
+    keyed by ``stock_number``.
+
+    Used by the M6.5 public showroom endpoint
+    (``/api/dealer-ai/showroom/vehicles/<stock_number>/``) per
+    SESSION_086 §2 Option A user-confirmed. Stock-number keying
+    matches the M6.2 canonical photo-key namespacing
+    (``vehicles/<stock>/photos/...``).
+    """
+    from ..models import VEHICLE_LISTING_STATUS_PUBLISHED
+
+    return (
+        customer_visible_vehicles()
+        .filter(
+            stock_number=stock_number,
+            listing__status=VEHICLE_LISTING_STATUS_PUBLISHED,
+        )
+        .first()
     )
 
 

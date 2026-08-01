@@ -1,9 +1,10 @@
 ---
 title: "Milestone 6 — Implementation-Planning Pass"
-status: draft
+status: shipped
 type: planning-artifact
 generated: 2026-08-01
 generated_at_session: SESSION_081 (post-M5-closeout)
+shipped_at_session: SESSION_087 (M6.6 closeout)
 milestone: 6
 milestone_name: "Photography + listing generation"
 sources:

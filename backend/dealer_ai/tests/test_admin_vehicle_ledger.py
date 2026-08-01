@@ -1140,6 +1140,26 @@ class PublicSurfacesNeverExposeLedgerData(TestCase):
             amount=Decimal("500"),
             incurred_at=timezone.now(),
         )
+        # Milestone 6 · Increment 5 (SESSION_086) — the customer-
+        # facing vehicle_detail endpoint now requires both
+        # ``stage=frontline`` (M5.5 test-only auto-bootstrap seeds
+        # this) AND a published :class:`VehicleListing`. Publish a
+        # test-fixture listing so the ledger-leakage security check
+        # can actually reach the endpoint's 200 path.
+        from dealer_ai.models import (
+            VEHICLE_LISTING_STATUS_PUBLISHED,
+            VehicleListing,
+        )
+        now = timezone.now()
+        VehicleListing.objects.create(
+            vehicle=self.vehicle,
+            dealership=self.default,
+            status=VEHICLE_LISTING_STATUS_PUBLISHED,
+            body="Ledger security test fixture — published listing.",
+            drafted_at=now,
+            approved_at=now,
+            published_at=now,
+        )
         self.anon = APIClient()
 
     def _assert_no_ledger_keywords(self, response_body: str, url: str) -> None:

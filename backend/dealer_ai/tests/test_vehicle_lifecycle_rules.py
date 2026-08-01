@@ -482,14 +482,19 @@ class RulePhotographyToListingAlwaysReturnsPrerequisite(TestCase):
         )
         self.assertGreater(len(result.unmet_prerequisites), 0)
 
-    def test_prerequisite_mentions_m6(self):
-        """Truthful language — the prerequisite cites the milestone
-        that will provide the missing predicate."""
+    def test_prerequisite_names_photo_count(self):
+        """M6.4 SESSION_085 replaced the M5.3 "M6 not shipped" stub
+        language with the real photo-count predicate. The
+        prerequisite now describes exactly how many more listing-
+        ready photos are needed."""
+        # A fresh vehicle has zero photos.
         result = _rule_photography_to_listing(
             self.vehicle, dealership=self.default
         )
         joined = " ".join(result.unmet_prerequisites)
-        self.assertIn("M6", joined)
+        self.assertIn("listing-ready", joined)
+        # Threshold is 8 per SESSION_082 §5.b Option C confirmed.
+        self.assertIn("8", joined)
 
 
 # ============================================================================
@@ -570,12 +575,19 @@ class SuggestTransitionsCompositionByStage(TestCase):
         result = suggest_transitions(v, dealership=self.default)
         self.assertEqual(result, [])
 
-    def test_listing_stage_returns_empty(self):
-        """§5.h — listing → frontline is manual-only in M5. No rule
-        may ever fire at listing stage."""
+    def test_listing_stage_composes_listing_to_frontline(self):
+        """M6.4 SESSION_085 shipped ``_rule_listing_to_frontline``,
+        replacing the M5 "manual-only" invariant. The rule always
+        returns a SuggestedTransition (active or unmet-prereq); at
+        listing stage with no VehicleListing row + no price, the
+        composition returns the unmet-prereq variant."""
         v = self._seed("M53-COMPOSE-LIST", VEHICLE_STAGE_LISTING)
         result = suggest_transitions(v, dealership=self.default)
-        self.assertEqual(result, [])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].to_stage, VEHICLE_STAGE_FRONTLINE)
+        self.assertEqual(result[0].rule_name, "listing_to_frontline")
+        # Fresh vehicle has no listing → unmet.
+        self.assertGreater(len(result[0].unmet_prerequisites), 0)
 
     def test_frontline_stage_returns_empty(self):
         v = self._seed("M53-COMPOSE-FRONT", VEHICLE_STAGE_FRONTLINE)
@@ -597,25 +609,28 @@ class SuggestTransitionsCrossTenant(TestCase):
             suggest_transitions(v, dealership=other)
 
 
-class NoListingToFrontlineRuleEverFires(TestCase):
-    """§5.h SESSION_075 refined — no deterministic `listing →
-    frontline` rule ships in M5. Locked so future edits don't
-    silently add one."""
+class NoPriceOnlyListingToFrontlineRuleEverFires(TestCase):
+    """M6.4 SESSION_085 replaced the M5 "no listing_to_frontline rule
+    ever fires" invariant with the real published-listing predicate.
+    But the guard against a naive ``price > 0``-only rule (which
+    would claim a gate the system could not evaluate) is preserved:
+    ``price > 0`` alone with NO published listing must NOT fire an
+    active suggestion. Locked here so future edits don't silently
+    loosen the predicate."""
 
-    def test_composition_at_listing_never_suggests_frontline(self):
+    def test_price_only_without_listing_returns_unmet(self):
         default = Dealership.objects.get(slug="default")
-        v = _make_vehicle("M53-NORULE-LIST", default)
+        v = _make_vehicle("M64-PRICEONLY", default)
         ensure_current_stage(
             v, dealership=default, initial_stage=VEHICLE_STAGE_LISTING
         )
-        # Set price > 0 (a plausible false trigger for a bad rule).
+        # Set price > 0 but leave no VehicleListing row.
         v.price = Decimal("29999.00")
         v.save()
         result = suggest_transitions(v, dealership=default)
-        for suggestion in result:
-            self.assertNotEqual(
-                suggestion.to_stage,
-                VEHICLE_STAGE_FRONTLINE,
-                "No M5 rule may suggest listing → frontline "
-                "(§5.h — manual-only).",
-            )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].to_stage, VEHICLE_STAGE_FRONTLINE)
+        # Unmet because no VehicleListing exists.
+        self.assertGreater(len(result[0].unmet_prerequisites), 0)
+        joined = " ".join(result[0].unmet_prerequisites)
+        self.assertIn("VehicleListing", joined)

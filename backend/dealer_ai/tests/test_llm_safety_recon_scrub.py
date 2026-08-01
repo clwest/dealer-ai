@@ -37,9 +37,19 @@ from dealer_ai.services.llm_safety import (
 
 class ReconCommKindsMembership(TestCase):
     def test_recon_comm_kinds_exact_membership(self):
+        # SESSION_084 M6.3 extended this set with 'vehicle_listing' per
+        # §5.d Option A user-confirmed — reuses the M4.5
+        # ``_scrub_invented_recon_fact`` via dispatch extension, not a
+        # new scrub. See ``services/llm_safety.py``.
         self.assertEqual(
-            _RECON_COMM_KINDS, frozenset({"vendor_comm", "parts_order"})
+            _RECON_COMM_KINDS,
+            frozenset({"vendor_comm", "parts_order", "vehicle_listing"}),
         )
+
+    def test_m45_recon_comm_kinds_still_members(self):
+        """M4.5 additions preserved — additive-only extension."""
+        self.assertIn("vendor_comm", _RECON_COMM_KINDS)
+        self.assertIn("parts_order", _RECON_COMM_KINDS)
 
 
 # ============================================================================

@@ -1,205 +1,214 @@
 ---
 state: active
 date: 2026-08-01
-last_session_shipped: SESSION_081
+last_session_shipped: SESSION_087
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
 milestone_4_status: shipped
 milestone_5_status: shipped
-milestone_6_status: planning
-next_session: SESSION_082
-next_milestone: 6
-next_milestone_name: "Photography + listing generation"
+milestone_6_status: shipped
+milestone_7_status: planning
+next_session: SESSION_088
+next_milestone: 7
+next_milestone_name: "Async infrastructure"
 next_increment: 1
-next_increment_name: "M6.1 — Core persistence (VehiclePhoto + VehicleListing)"
+next_increment_name: "M7.1 — Celery + Redis infrastructure"
 ---
 
-# Next session — SESSION_082 · Milestone 6 · Increment 1 (M6.1 — core persistence)
+# Next session — SESSION_088 · Milestone 7 · Increment 1 (M7.1 — Celery + Redis + observability)
 
-> **SESSION_081 shipped Milestone 5 closeout +
-> `MILESTONE_6_PLANNING.md`.** M5 retrospective +
-> capability matrix §7f + roadmap flip + planning
-> frontmatter shipped. M6 planning drafted in the same
-> shape as M4/M5 (9 sections, 3 `[NEEDS-DECISION-BEFORE-M6.1]`
-> items requiring user review). All M5 code +
-> M5 docs + M6 planning committed and pushed to
-> origin/main in one coordinated push per user
-> directive.
+> **SESSION_087 shipped M6 closeout + M7 planning +
+> coordinated commit + push.** All M6.1–M6.6 stages
+> committed and pushed to origin/main in one
+> coordinated push per user directive.
 >
-> **Backend baseline: 2,754 pass, 1 skipped, 0 fail.**
-> Frontend `tsc --noEmit` + `vite build` clean.
+> **Backend baseline: 2,948 pass, 1 skipped, 0 fail**
+> (unchanged — M6.6 was documentation-only). Frontend
+> `tsc --noEmit` + `vite build` clean.
 >
-> **SESSION_082 opens M6.1 — core persistence for the
-> photo gallery + listing model.** Two new models
-> (`VehiclePhoto` + `VehicleListing`) + migration
-> `0018` + admin registrations + module-level enum
-> constants + cross-tenant `clean()` guards +
-> `_TENANT_CARRIER_MODEL_NAMES` extended 17 → 19.
-> **NO service module, NO endpoints, NO rules, NO
-> frontend, NO AI role.** Persistence layer only.
+> **SESSION_088 opens M7.1 — Celery + Redis
+> infrastructure + observability substrate.** Django
+> Celery app wiring + `django-celery-beat` scheduler
+> + `@instrumented_task` decorator + `JobRunLog`
+> model + migration `0020`. **NO scheduled job
+> bodies yet** — infrastructure only. Job bodies
+> land in M7.2–M7.5.
 
-## First thing SESSION_082 must do — CONFIRM THE THREE DECISIONS
+## First thing SESSION_088 must do — CONFIRM THE FIVE §9 DECISIONS
 
 Before any code lands, the user needs to confirm (or
-override) three load-bearing decisions from
-`MILESTONE_6_PLANNING.md` §9:
+override) five load-bearing decisions from
+`MILESTONE_7_PLANNING.md` §9:
 
-1. **§5.a — `VehicleListing` status vocabulary.**
-   Recommendation: **Option A** (4 states —
-   `draft` / `approved` / `published` / `unpublished`).
-   Mirrors M4.5 vendor-comm shape; keeps the approve
-   gesture explicit (matches "AI drafts, human
-   approves, human publishes" contract).
+1. **§5.a — Broker choice.** Recommendation: **Option
+   A (Redis)** per VCP mandate.
+2. **§5.b — Task queue framework.** Recommendation:
+   **Option A (Celery)** per VCP mandate.
+3. **§5.c — Aging snapshot strategy.** Recommendation:
+   **Option A** (persist snapshots via new
+   `StageAgingSnapshot` model + scheduled job).
+4. **§5.d — Photo retention threshold.**
+   Recommendation: **Option A** (fixed 30 days for
+   v1; per-dealer configurability deferred).
+5. **§5.e — Job-run observability substrate.**
+   Recommendation: **Option A** (new `JobRunLog`
+   Django model).
 
-2. **§5.b — Listing-ready photo count threshold.**
-   Recommendation: **Option C** (fixed at 8 for v1;
-   per-dealer configurable via
-   `DealerOnboardingProfile.listing_ready_photo_count`
-   in a future increment). Ship v1 with a sensible
-   default; add configurability when operator evidence
-   surfaces need.
-
-3. **§5.c — Photo storage layer reuse.**
-   Recommendation: **Option A** (extend M3.4's
-   `services/photo_storage.py` with a new
-   `store_vehicle_photo(...)` verb). Reuse over fork —
-   M3.4 primitive is proven; adding a vehicle-photo
-   verb is additive without disturbing condition-
-   report photos.
-
-**Do not write M6.1 code until these are confirmed or
+**Do not write M7.1 code until these are confirmed or
 overridden.** If the user overrides any decision,
-amend `MILESTONE_6_PLANNING.md` narrowly at session
+amend `MILESTONE_7_PLANNING.md` narrowly at session
 top (per SESSION_075 precedent — §0.a change-log
 entry) before implementation.
 
-## What M6.1 delivers
+## What M7.1 delivers
 
-**Persistence layer only.** Two new Django models +
-migration `0018` + admin + module-level enum constants +
-cross-tenant `clean()` guards + tenancy resolver
-extension. No service module. No endpoints. No
-frontend. No AI role.
+**Infrastructure only.** No scheduled job bodies.
 
-### The two models (per `MILESTONE_6_PLANNING.md` §1)
+### Celery app + broker wiring
 
-1. **`VehiclePhoto`** (§1.1) — many-per-Vehicle.
-   Fields per planning + user's confirmed decisions.
-   Cross-tenant `clean()`. Uploaded/deleted actor
-   provenance. Safer-direction `marked_deleted_at` +
-   `deleted_by` per §7 lesson 7.
+- **New `backend/dealer_kit/celery.py`** — Celery app
+  instance, autodiscovery for `services/**/tasks.py`
+  modules, Beat schedule import.
+- **New `backend/dealer_kit/__init__.py` extension** —
+  ensure Celery app loads with Django (per Django-
+  Celery docs pattern).
+- **Settings additions:**
+  - `CELERY_BROKER_URL` from
+    `settings.REDIS_URL` env var (default
+    `redis://localhost:6379/0`).
+  - `CELERY_RESULT_BACKEND` same.
+  - `CELERY_TASK_ALWAYS_EAGER = _is_running_tests()`
+    (test-only synchronous mode — mirrors M5.5
+    signal-registration pattern).
+  - `CELERY_BEAT_SCHEDULE = {}` (empty for M7.1;
+    filled per-increment).
+- **`requirements.txt`:** `celery[redis]`,
+  `django-celery-beat`, `redis`.
 
-2. **`VehicleListing`** (§1.2) — OneToOne with
-   Vehicle. Status vocabulary per §5.a (Option A
-   pending confirmation). Draft/approve/publish/
-   unpublish actor + timestamp pairs. AI-drafted
-   `body` + `source_provenance` JSONField mirroring
-   M4.5 shape.
+### `@instrumented_task` decorator
 
-### Migration + tenancy + admin
+Shared decorator that wraps every Celery task with
+uniform:
 
-- **Migration `0018`** — creates both models. No data-
-  migration needed (unlike M5.1's `0017` — M6 has no
-  existing rows to bootstrap).
-- **`services/tenancy.py::_TENANT_CARRIER_MODEL_NAMES`**
-  extended 17 → 19.
-- **Admin registrations** for both models following
-  the M5.1 diagnostic-only pattern.
+- Structured log on start (task name + args + kwargs).
+- Structured log on end (duration + status).
+- `JobRunLog` model write on both success + failure.
+- Retry-on-transient-error policy (network / DB
+  deadlock → retry with exponential backoff, max 3).
+- Fail-fast-on-programming-error (raise + log).
 
-### Enum constants (module-level)
+### `JobRunLog` model + migration `0020`
 
-- `VEHICLE_LISTING_STATUS_*` constants per §5.a
-  decision.
-- `VEHICLE_LISTING_STATUS_CHOICES` tuple.
+Per §5.e Option A user-confirmed. Fields:
 
-## What SESSION_082 should do
+- `id` (BigAutoField).
+- `task_name` (CharField).
+- `status` (`started` / `succeeded` / `failed` /
+  `retried`).
+- `started_at`, `ended_at` (DateTimeField).
+- `duration_ms` (PositiveIntegerField nullable).
+- `error_message` (TextField blank — nonblank on
+  failure).
+- `args_summary` (CharField max_length=255 —
+  truncated repr of args + kwargs for audit; NOT
+  the full payload, which may contain sensitive
+  data).
+- `dealership` FK (nullable — jobs may or may not
+  be tenant-scoped).
+- Cross-tenant `clean()` when `dealership` is
+  populated + the task-side context implies a
+  tenant.
+
+Extended `_TENANT_CARRIER_MODEL_NAMES` 19 → 20 if
+`JobRunLog` is tenant-scoped (probably yes —
+per-tenant job history is useful for M8 dashboards).
+
+### Non-goals for M7.1
+
+- ❌ No scheduled job bodies (M7.2–M7.5).
+- ❌ No Beat schedule entries (empty schedule).
+- ❌ No operator UI for job history (deferred; log
+  inspection acceptable for v1 per roadmap).
+- ❌ No Prometheus integration (Option B deferred).
+
+## What SESSION_088 should do
 
 ### Recommended step sequence
 
-0. **Confirm the three §9 decisions with the user.**
+0. **Confirm the five §9 decisions with the user.**
    Do NOT write code until every
-   `[NEEDS-DECISION-BEFORE-M6.1]` item is resolved.
-   Amend planning narrowly at session top if any
-   decision is overridden.
+   `[NEEDS-DECISION-BEFORE-M7.1]` item is resolved.
 
 1. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_6_PLANNING.md` — §1.1,
-     §1.2, §2, §3, §5 (once confirmed), §7 M6.1.
-   - `docs/handoffs/SESSION_081_m5_closeout.md` — the
-     just-shipped M5 closeout.
-   - `docs/roadmap/MILESTONE_5_RETROSPECTIVE.md` §6
-     lessons.
-   - `backend/dealer_ai/models.py` — reread
-     `VehicleStage` + `VehicleStageEvent` (M5.1
-     shape M6.1 mirrors).
-   - `backend/dealer_ai/models.py` — reread
-     `ConditionFindingPhoto` (M3.1 photo model shape
-     M6.1 partially mirrors).
-   - `backend/dealer_ai/services/photo_storage.py`
-     (M3.4 photo storage primitive M6.2 will extend).
-   - `backend/dealer_ai/models.py` — reread
-     `VendorCommunication` (M4.1 draft/approve/sent
-     shape M6's `VehicleListing` mirrors).
-   - `backend/dealer_ai/services/tenancy.py` — the
-     `_TENANT_CARRIER_MODEL_NAMES` tuple.
+   - `docs/roadmap/MILESTONE_7_PLANNING.md` — §1.1,
+     §1.7, §5.a–§5.e, §7 M7.1.
+   - `docs/handoffs/SESSION_087_m6_closeout.md`
+     (this session).
+   - `docs/roadmap/MILESTONE_6_RETROSPECTIVE.md` §6
+     lessons (M6 lessons carry into M7).
+   - `backend/dealer_kit/settings.py` — where the
+     Celery config lands.
+   - `backend/dealer_ai/apps.py` — test-only signal
+     pattern to mirror for
+     `_is_running_tests()`.
+   - `backend/dealer_ai/models.py` — VehicleStage
+     shape as template for `JobRunLog`.
 
 2. **Verify starting state.**
-   - `git status` clean.
-   - `python3 manage.py test dealer_ai` → **2,754
+   - `git status` clean (M6.1–M6.6 committed +
+     pushed at SESSION_087 close).
+   - `python3 manage.py test dealer_ai` → **2,948
      pass, 1 skipped, 0 fail.**
    - `python3 manage.py check` clean.
    - `python3 manage.py makemigrations --check
      --dry-run` → "No changes detected."
    - `npx tsc --noEmit` clean.
    - `npx vite build` clean.
+   - **New:** `redis-cli ping` returns `PONG` (or
+     start Redis via `brew services start redis` /
+     `docker run redis`).
 
-3. **Draft models + enum constants + admin.** Follow
-   M5.1 shape.
+3. **Install Celery + Redis deps.**
 
-4. **Extend tenancy resolver.** Add two entries to
-   `_TENANT_CARRIER_MODEL_NAMES` (17 → 19).
+4. **Wire Celery app + settings.**
 
-5. **Generate + apply migration `0018`.** Verify with
-   `sqlmigrate` before applying. Confirm
-   `makemigrations --check --dry-run` clean after.
+5. **Draft `@instrumented_task` decorator + JobRunLog
+   model + migration `0020`.**
 
-6. **Write ~35 focused persistence tests.**
+6. **Extend `_TENANT_CARRIER_MODEL_NAMES`** (if
+   JobRunLog is tenant-scoped per §5.e resolution).
 
-7. **Full-suite verification.** Target 2,754 → ~2,789
-   pass. Zero regressions.
+7. **Write ~30 focused tests.**
 
-8. **Ship handoff at
-   `docs/handoffs/SESSION_082_m6_inc1_core_models.md`**
-   mirroring `SESSION_075_m5_inc1_core_models.md`
-   shape.
+8. **Full-suite verification.** Target 2,948 → ~2,978.
+   Zero regressions.
 
-9. **Overwrite `00-START-NEXT-SESSION.md`** with M6.2
-   priority (photo storage integration).
+9. **Ship handoff at
+   `docs/handoffs/SESSION_088_m7_inc1_infra.md`.**
 
-## Explicit non-goals for SESSION_082
+10. **Overwrite `00-START-NEXT-SESSION.md`** with
+    M7.2 priority (floor-plan interest accrual).
 
-- ❌ Do NOT create service modules — M6.2 (photo
-  gallery) + M6.3 (listing).
-- ❌ Do NOT integrate the LLM — M6.3.
-- ❌ Do NOT add endpoints — M6.5.
-- ❌ Do NOT touch frontend — M6.5.
-- ❌ Do NOT fill in the M5.3 rule stubs — M6.4.
-- ❌ Do NOT refactor the customer-chat truthful
-  language — M6.5.
-- ❌ Do NOT modify any M1–M5 substrate.
-- ❌ Do NOT introduce any AI role.
+## Explicit non-goals for SESSION_088
+
+- ❌ Do NOT write scheduled job bodies — M7.2–M7.5.
+- ❌ Do NOT add Beat schedule entries — M7.2+.
+- ❌ Do NOT build a job-history UI — deferred.
+- ❌ Do NOT integrate Prometheus — deferred (§5.e
+  Option B).
+- ❌ Do NOT modify any M1–M6 substrate beyond
+  additive settings extension.
 
 ## NEXT TASK
 
-Start SESSION_082 with (a) confirming the three §9
+Start SESSION_088 with (a) confirming the five §9
 decisions with the user, (b) the read-first list, then
-(c) drafting the two models + migration `0018` +
-admin + enum constants + cross-tenant `clean()`
-guards + tenancy carrier extension. ~35 focused tests.
-Target baseline 2,754 → ~2,789. Ship the M6.1 handoff.
+(c) wiring Celery + Redis + `@instrumented_task` +
+`JobRunLog`. ~30 focused tests. Target baseline
+2,948 → ~2,978. Ship the M7.1 handoff.
 
-Backend baseline at SESSION_082 close: **~2,789 pass**.
+Backend baseline at SESSION_088 close: **~2,978 pass**.
 Frontend baseline: unchanged.
 
 ---
@@ -208,53 +217,61 @@ Frontend baseline: unchanged.
 
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 6
+3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 7
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_6_PLANNING.md`
-6. `docs/roadmap/MILESTONE_5_RETROSPECTIVE.md` (M5
-   lessons carry into M6)
-7. `docs/handoffs/SESSION_081_m5_closeout.md`
-8. `docs/roadmap/MILESTONE_5_PLANNING.md` (§5.h
-   rule stubs M6.4 fills)
-9. `docs/roadmap/MILESTONE_4_RETROSPECTIVE.md` §6
-10. `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 5
-11. `docs/research/INVENTORY_ACQUISITION_MAPPING.md`
-    pains #8 + #9
-12. `docs/CAPABILITY_MATRIX.md` §7d M3 photo storage +
-    §7e M4 vendor-comm drafting (M6 reuses both).
+5. `docs/roadmap/MILESTONE_7_PLANNING.md`
+6. `docs/roadmap/MILESTONE_6_RETROSPECTIVE.md`
+7. `docs/handoffs/SESSION_087_m6_closeout.md`
+8. `docs/roadmap/MILESTONE_6_PLANNING.md` (shipped)
+9. `docs/roadmap/MILESTONE_5_RETROSPECTIVE.md` §6
+10. `docs/research/VEHICLE_CENTRIC_PIVOT.md` Phase 6
+11. `docs/CAPABILITY_MATRIX.md` §7g M6 photo + listing
+    (M7.5 reaper reuses M6.2 primitives)
 
 Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_081 — Milestone 5 SHIPPED)
+## Operational state (post-SESSION_087 — Milestone 6 SHIPPED)
 
 - **Backend (local):** Django on `:8001`. Migrations
-  `0001`–`0017`. Test baseline: **2,754 pass**, 1
+  `0001`–`0019`. Test baseline: **2,948 pass**, 1
   skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`. `tsc --noEmit`
   + `vite build` clean.
 - **Frontend (prod):** NONE.
-- **Milestones shipped:** M1 → M5. Milestone 6
+- **Milestones shipped:** M1 → M6. Milestone 7
   planning drafted.
-- **DRF admin surface:** 21 endpoints.
-- **Frontend operator routes:** 5 (dealer overview,
-  ledger, condition report, recon, lifecycle).
-- **Service surface:** `recon.py`, `vendor_comm.py`,
-  `vehicle_lifecycle.py`, plus M2 ledger + M3
-  condition report substrates.
+- **DRF admin surface:** 34 endpoints (21 pre-M6 +
+  13 M6.5).
+- **Frontend operator routes:** 7 (5 pre-M6 + 2
+  M6.5).
+- **Public endpoints:** +1 M6.5 showroom.
+- **Service surface:** M6 added
+  `services/photo_gallery.py` + `services/vehicle_listing.py`
+  + extended `services/photo_storage.py` +
+  `services/llm_safety.py` +
+  `services/vehicle_lifecycle.py` +
+  `services/chat_engine.py`.
 - **Vehicle read-model:** 4 `@property` accessors
-  (M4.7: `open_work_orders`, `has_recon_decisions`;
-  M5.2: `current_stage`, `is_retail_eligible`).
-- **Tenancy carriers:** 17.
+  (unchanged).
+- **Tenancy carriers:** 19.
 - **`Vehicle.is_available`:** unchanged per §5.e
-  Option D. Non-retail consumers still filter on it
-  (deliberate per §5.e — they migrate on their own
-  schedule).
-- **Customer-facing filtering:** funnels through
-  `customer_visible_vehicles()` which filters on
-  `stage=frontline`.
-- **Milestone 6 next:** photo gallery + listing
-  generation. Fills the M5.3 rule stubs. Truthful
-  customer-language refactor lands in M6.5.
+  Option D.
+- **Customer-facing filtering (two-tier gate):**
+  batch-query `customer_visible_vehicles()`
+  (frontline-only); per-vehicle direct-access
+  `customer_lookup_visible_vehicle_by_id/stock`
+  (frontline + published listing).
+- **AI safety stack:** M4.5 recon-fact scrub fires
+  on 3 kinds (`vendor_comm`, `parts_order`,
+  `vehicle_listing`).
+- **Deterministic rules:** `suggest_transitions`
+  composition dispatches at 4 stages (inspection,
+  recon, photography, listing).
+- **Milestone 7 next:** async infrastructure —
+  Celery + Redis + `@instrumented_task` +
+  JobRunLog + 4 scheduled job bodies (floor-plan
+  interest accrual, aging snapshots, vendor SLA
+  warnings, photo tombstone reaper).

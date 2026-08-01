@@ -1972,3 +1972,192 @@ export function postLifecycleRuleTransition(
     body,
   );
 }
+
+// ----------------------------------------------------------------------------
+// Milestone 6 · Increment 5 (SESSION_086) — photo gallery + listing admin API.
+//
+// URL shape per SESSION_086 §1 Option A user-confirmed:
+//   - Vehicle-scoped operations nested under
+//     /admin/vehicles/<stock>/photos/ + /listing/.
+//   - Photo mutations by public_id under
+//     /admin/vehicle-photos/<public_id>/.
+//
+// Domain-error → HTTP mapping surfaces distinctly to the M6.5 UI:
+// 400 (validation) / 404 (not found or cross-tenant) / 409 (state
+// conflict — already-deleted, invalid transition, etc.) / 415
+// (unsupported content type) / 422 (AI safety refused) / 502
+// (storage backend fault).
+// ----------------------------------------------------------------------------
+
+export type VehiclePhotoContentType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/webp";
+
+export interface VehiclePhotoActor {
+  id: number;
+  username: string;
+}
+
+export interface VehiclePhotoDTO {
+  public_id: string;
+  vehicle_id: number;
+  storage_key: string;
+  content_type: VehiclePhotoContentType;
+  width_px: number;
+  height_px: number;
+  sort_order: number;
+  is_primary: boolean;
+  caption: string;
+  read_url: string;
+  uploaded_by: VehiclePhotoActor | null;
+  uploaded_at: string;
+  marked_deleted_at: string | null;
+  deleted_by: VehiclePhotoActor | null;
+  updated_at: string;
+}
+
+export interface VehiclePhotoListResponse {
+  stock_number: string;
+  photos: VehiclePhotoDTO[];
+}
+
+export interface VehiclePhotoUploadFields {
+  file: File;
+  width_px: number;
+  height_px: number;
+  caption?: string;
+  sort_order?: number;
+}
+
+export function fetchVehiclePhotos(stock: string) {
+  return authGetJSON<VehiclePhotoListResponse>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/photos/`,
+  );
+}
+
+export function uploadVehiclePhoto(
+  stock: string,
+  fields: VehiclePhotoUploadFields,
+) {
+  const form = new FormData();
+  form.append("file", fields.file);
+  form.append("width_px", String(fields.width_px));
+  form.append("height_px", String(fields.height_px));
+  if (fields.caption !== undefined) {
+    form.append("caption", fields.caption);
+  }
+  if (fields.sort_order !== undefined) {
+    form.append("sort_order", String(fields.sort_order));
+  }
+  return authPostForm<VehiclePhotoDTO>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/photos/upload/`,
+    form,
+  );
+}
+
+export function reorderVehiclePhotos(
+  stock: string,
+  orderedPublicIds: string[],
+) {
+  return authPostJSON<VehiclePhotoListResponse>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/photos/reorder/`,
+    { ordered_public_ids: orderedPublicIds },
+  );
+}
+
+export function setPrimaryVehiclePhoto(publicId: string) {
+  return authPostJSON<VehiclePhotoDTO>(
+    `${_adminBase()}/vehicle-photos/${encodeURIComponent(publicId)}/set-primary/`,
+    {},
+  );
+}
+
+export function markDeletedVehiclePhoto(publicId: string) {
+  // authDelete returns void — the M6.5 UI refetches the list after
+  // deletion to observe the marked-deleted state transition.
+  return authDelete(
+    `${_adminBase()}/vehicle-photos/${encodeURIComponent(publicId)}/`,
+  );
+}
+
+export function restoreVehiclePhoto(publicId: string) {
+  return authPostJSON<VehiclePhotoDTO>(
+    `${_adminBase()}/vehicle-photos/${encodeURIComponent(publicId)}/restore/`,
+    {},
+  );
+}
+
+// Listing types + helpers.
+
+export type VehicleListingStatus =
+  | "draft"
+  | "approved"
+  | "published"
+  | "unpublished";
+
+export interface VehicleListingDTO {
+  id: number;
+  vehicle_id: number;
+  status: VehicleListingStatus;
+  title: string;
+  body: string;
+  source_provenance: Record<string, unknown>;
+  drafted_by: VehiclePhotoActor | null;
+  drafted_at: string | null;
+  approved_by: VehiclePhotoActor | null;
+  approved_at: string | null;
+  published_by: VehiclePhotoActor | null;
+  published_at: string | null;
+  unpublished_by: VehiclePhotoActor | null;
+  unpublished_at: string | null;
+  unpublished_reason: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VehicleListingReadResponse {
+  stock_number: string;
+  listing: VehicleListingDTO | null;
+}
+
+export function fetchVehicleListing(stock: string) {
+  return authGetJSON<VehicleListingReadResponse>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/listing/`,
+  );
+}
+
+export function draftVehicleListing(stock: string) {
+  return authPostJSON<VehicleListingDTO>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/listing/draft/`,
+    {},
+  );
+}
+
+export function regenerateVehicleListing(stock: string) {
+  return authPostJSON<VehicleListingDTO>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/listing/regenerate/`,
+    {},
+  );
+}
+
+export function approveVehicleListing(stock: string) {
+  return authPostJSON<VehicleListingDTO>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/listing/approve/`,
+    {},
+  );
+}
+
+export function publishVehicleListing(stock: string) {
+  return authPostJSON<VehicleListingDTO>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/listing/publish/`,
+    {},
+  );
+}
+
+export function unpublishVehicleListing(stock: string, reason: string) {
+  return authPostJSON<VehicleListingDTO>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/listing/unpublish/`,
+    { reason },
+  );
+}

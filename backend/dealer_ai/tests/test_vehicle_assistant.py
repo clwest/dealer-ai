@@ -7,7 +7,14 @@ from decimal import Decimal
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from dealer_ai.models import ChatSession, Vehicle
+from django.utils import timezone
+
+from dealer_ai.models import (
+    ChatSession,
+    VEHICLE_LISTING_STATUS_PUBLISHED,
+    Vehicle,
+    VehicleListing,
+)
 from dealer_ai.services import vehicle_assistant
 
 from ._mocks import MockLLMProvider
@@ -23,6 +30,25 @@ def _make_vehicle(stock, price, *, body="truck", model="F-150", **extra):
         price=Decimal(price),
         **extra,
     )
+
+
+def _make_customer_visible(vehicle: Vehicle) -> Vehicle:
+    """M6.5 SESSION_086 §5.i tightening — customer-facing endpoints
+    (``vehicle_detail`` / ``vehicle_ask``) now require both
+    ``stage=frontline`` (M5.5 test-only auto-bootstrap seeds this) AND
+    a published :class:`VehicleListing`. Test fixtures that hit those
+    endpoints publish a listing via this helper."""
+    now = timezone.now()
+    VehicleListing.objects.create(
+        vehicle=vehicle,
+        dealership=vehicle.dealership,
+        status=VEHICLE_LISTING_STATUS_PUBLISHED,
+        body="Test-fixture published listing body.",
+        drafted_at=now,
+        approved_at=now,
+        published_at=now,
+    )
+    return vehicle
 
 
 class AnalyzeVehicleTests(TestCase):
@@ -138,7 +164,7 @@ class AnswerVehicleQuestionTests(TestCase):
 
 class VehicleDetailEndpointTests(TestCase):
     def test_returns_full_payload(self):
-        v = _make_vehicle("DET-1", "60000.00")
+        v = _make_customer_visible(_make_vehicle("DET-1", "60000.00"))
         _make_vehicle("DET-2", "55000.00", model="Ranger")  # similar
         url = reverse("dealer_ai:vehicle-detail", args=[v.id])
         res = self.client.get(url)
@@ -157,7 +183,7 @@ class VehicleDetailEndpointTests(TestCase):
         self.assertEqual(res.status_code, 404)
 
     def test_query_params_personalize_payments(self):
-        v = _make_vehicle("DET-1", "60000.00")
+        v = _make_customer_visible(_make_vehicle("DET-1", "60000.00"))
         url = reverse("dealer_ai:vehicle-detail", args=[v.id])
         res = self.client.get(url + "?down_payment=10000&target_monthly_payment=600")
         self.assertEqual(res.status_code, 200)
@@ -186,7 +212,9 @@ class VehicleAskEndpointTests(TestCase):
         va.get_llm_provider = self._orig
 
     def test_returns_answer_and_vehicle_payload(self):
-        v = _make_vehicle("ASK-1", "47000.00", model="Ranger")
+        v = _make_customer_visible(
+            _make_vehicle("ASK-1", "47000.00", model="Ranger")
+        )
         url = reverse("dealer_ai:vehicle-ask", args=[v.id])
         res = self.client.post(
             url,
@@ -200,7 +228,9 @@ class VehicleAskEndpointTests(TestCase):
         self.assertEqual(len(data["payment_estimates"]), 3)
 
     def test_logs_to_session_when_session_id_provided(self):
-        v = _make_vehicle("ASK-1", "47000.00", model="Ranger")
+        v = _make_customer_visible(
+            _make_vehicle("ASK-1", "47000.00", model="Ranger")
+        )
         session = ChatSession.objects.create()
         url = reverse("dealer_ai:vehicle-ask", args=[v.id])
         res = self.client.post(
@@ -227,7 +257,9 @@ class VehicleAskEndpointTests(TestCase):
         self.assertEqual(res.status_code, 404)
 
     def test_400_when_question_missing(self):
-        v = _make_vehicle("ASK-1", "47000.00", model="Ranger")
+        v = _make_customer_visible(
+            _make_vehicle("ASK-1", "47000.00", model="Ranger")
+        )
         url = reverse("dealer_ai:vehicle-ask", args=[v.id])
         res = self.client.post(url, data={}, content_type="application/json")
         self.assertEqual(res.status_code, 400)

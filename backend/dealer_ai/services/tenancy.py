@@ -288,6 +288,14 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # write path so the fallback stays a safety net.
     "VehicleStage",
     "VehicleStageEvent",
+    # Milestone 6 · Increment 1 (SESSION_082) — photo gallery + listing
+    # persistence layer. Extended per MILESTONE_6_PLANNING.md §2 row 4
+    # (17 → 19). Same safety-net posture as M4/M5: the M6.2 photo
+    # gallery service and M6.3 listing service will thread
+    # ``dealership=`` explicitly on every write path so the fallback
+    # stays a safety net.
+    "VehiclePhoto",
+    "VehicleListing",
 )
 
 

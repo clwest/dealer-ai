@@ -558,12 +558,13 @@ def resolve_hold_reserved_return_target(
 # rule bodies here are pure functions; they read M3 + M4 substrate but
 # never write.
 #
-# There is deliberately NO ``_rule_listing_to_frontline`` — that
-# transition is manual-only in M5 per §5.h. ``price > 0`` alone is
-# insufficient once listing publication matters; M6 later adds the
-# deterministic published-listing rule once ``VehicleListing.published``
-# exists. Do NOT ship a ``price > 0``-only rule — it would claim a
-# deterministic gate the system cannot evaluate.
+# M6.4 (SESSION_085) added ``_rule_listing_to_frontline`` — fires when
+# ``VehicleListing.status='published' AND Vehicle.price > 0``. The
+# published-listing predicate replaces the M5 "manual-only" gate per
+# §5.h SESSION_075 refined + M6.4 planning. No ``price > 0``-only
+# rule ships (which would claim a gate the system could not evaluate);
+# the ``published`` half of the predicate is now available via the
+# M6.3 ``services/vehicle_listing.py`` state machine.
 # ----------------------------------------------------------------------------
 
 # Severity levels that count as "actionable work required" for the
@@ -713,31 +714,127 @@ def _rule_recon_to_qc(
 def _rule_photography_to_listing(
     vehicle: Vehicle, *, dealership: Dealership
 ) -> SuggestedTransition:
-    """Return a **structured unmet prerequisite** for
-    ``photography → listing`` — never ``None``.
+    """Suggest ``photography → listing`` when the vehicle has ≥
+    :data:`photo_gallery.LISTING_READY_PHOTO_COUNT` listing-ready
+    photos.
 
-    Per §5.h SESSION_075 refined: M6 will provide the
-    ``VehiclePhoto.count ≥ N`` predicate. Until then, the rule
-    cannot be evaluated. Return a well-formed
-    :class:`SuggestedTransition` with ``unmet_prerequisites``
-    populated so the M5.4 endpoint / M5.6 UI can surface a
-    truthful "waiting on M6 photo predicate" hint instead of
-    either a fake suggestion or silence.
+    Per SESSION_082 §5.b Option C (user-confirmed): the count
+    threshold is fixed at 8 for v1; per-dealer configurability via
+    ``DealerOnboardingProfile`` is deferred to a future increment.
+    Per SESSION_083 §3 Option A (user-confirmed): the dimension
+    threshold (``width_px >= 1024 AND height_px >= 768``) is applied
+    inside :func:`photo_gallery.listing_ready_count`.
 
-    ``vehicle`` and ``dealership`` are accepted for signature
-    parity with the other rule evaluators (and for future
-    substrate reads once M6 lands); no substrate is read today.
+    **ALWAYS returns a SuggestedTransition** (never ``None`` — matches
+    the M5.3 stub contract for signature parity):
+
+    - Active suggestion when
+      ``listing_ready_count(vehicle) >= LISTING_READY_PHOTO_COUNT``.
+      ``unmet_prerequisites`` is an empty tuple; the M5.4 endpoint /
+      M5.6 UI renders as a one-click accept button.
+    - Structured unmet-prerequisite when count is below threshold.
+      ``unmet_prerequisites`` describes exactly how many more
+      listing-ready photos are needed so the operator can act.
+
+    Emits :class:`CrossTenantLifecycleError` for cross-tenant misuse.
     """
+    _assert_vehicle_tenant(vehicle, dealership)
+
+    from .photo_gallery import LISTING_READY_PHOTO_COUNT, listing_ready_count
+
+    count = listing_ready_count(vehicle, dealership=dealership)
+    threshold = LISTING_READY_PHOTO_COUNT
+
+    if count >= threshold:
+        return SuggestedTransition(
+            to_stage=VEHICLE_STAGE_LISTING,
+            rule_name="photography_to_listing",
+            evidence=(
+                f"Vehicle has {count} listing-ready photo(s) "
+                f"(threshold: {threshold})."
+            ),
+        )
     return SuggestedTransition(
         to_stage=VEHICLE_STAGE_LISTING,
         rule_name="photography_to_listing",
         evidence=(
-            "M6 photo predicate not yet available — cannot verify "
-            "the vehicle has enough listing-ready photos."
+            f"Vehicle has {count} listing-ready photo(s); "
+            f"threshold is {threshold}."
         ),
         unmet_prerequisites=(
-            "M6: VehiclePhoto.count ≥ N predicate not yet shipped.",
+            f"Need {threshold - count} more listing-ready photo(s) "
+            f"(current: {count} / {threshold}).",
         ),
+    )
+
+
+def _rule_listing_to_frontline(
+    vehicle: Vehicle, *, dealership: Dealership
+) -> SuggestedTransition:
+    """Suggest ``listing → frontline`` when BOTH:
+
+    a. A :class:`VehicleListing` exists for the vehicle AND
+       ``status == 'published'`` (per M6.3
+       :func:`services.vehicle_listing.publish_listing`).
+    b. ``Vehicle.price > 0`` (the vehicle has a listable price).
+
+    Per SESSION_083 M6.3 handoff + M6.4 §1.7 planning: this rule
+    replaces the M5 "manual-only" gate now that the ``published``
+    half of the predicate is deterministic. No ``price > 0``-only
+    rule (which would claim a gate the system could not evaluate)
+    — both halves are required.
+
+    **ALWAYS returns a SuggestedTransition** (never ``None``):
+
+    - Active suggestion when both preconditions met.
+      ``unmet_prerequisites`` is an empty tuple; the M5.4 endpoint /
+      M5.6 UI renders as a one-click accept button.
+    - Structured unmet-prerequisite otherwise. Each failing
+      condition (no listing, listing not published, price ≤ 0)
+      surfaces as its own entry so the operator can act on the
+      specific blocker.
+
+    Emits :class:`CrossTenantLifecycleError` for cross-tenant misuse.
+    """
+    _assert_vehicle_tenant(vehicle, dealership)
+
+    from ..models import VEHICLE_LISTING_STATUS_PUBLISHED, VehicleListing
+
+    listing = VehicleListing.objects.filter(vehicle=vehicle).first()
+    price = vehicle.price
+
+    unmet: list[str] = []
+    if listing is None:
+        unmet.append(
+            "No VehicleListing exists yet — draft + approve + publish "
+            "via services/vehicle_listing.py."
+        )
+    elif listing.status != VEHICLE_LISTING_STATUS_PUBLISHED:
+        unmet.append(
+            f"Listing status is {listing.status!r}; must be "
+            "'published' — advance via approve_listing + "
+            "publish_listing."
+        )
+    if price is None or price <= 0:
+        unmet.append(
+            f"Vehicle.price is {price!r}; must be > 0 for frontline "
+            "eligibility."
+        )
+
+    if not unmet:
+        return SuggestedTransition(
+            to_stage=VEHICLE_STAGE_FRONTLINE,
+            rule_name="listing_to_frontline",
+            evidence=(
+                f"Listing is published; Vehicle.price is ${price}. "
+                "Vehicle is ready for the frontline."
+            ),
+        )
+    return SuggestedTransition(
+        to_stage=VEHICLE_STAGE_FRONTLINE,
+        rule_name="listing_to_frontline",
+        evidence="Listing → frontline prerequisites not yet met.",
+        unmet_prerequisites=tuple(unmet),
     )
 
 
@@ -748,19 +845,21 @@ def suggest_transitions(
     applicable to this vehicle.
 
     Composes the applicable rule based on the vehicle's current
-    stage (per MILESTONE_5_PLANNING.md §5.h SESSION_075 refined):
+    stage (per MILESTONE_5_PLANNING.md §5.h SESSION_075 refined +
+    M6.4 SESSION_085 extension):
 
     - ``inspection`` → :func:`_rule_inspection_to_recon` (may
       return ``None``).
     - ``recon`` → :func:`_rule_recon_to_qc` (may return ``None``).
     - ``photography`` → :func:`_rule_photography_to_listing`
-      (always returns a structured unmet prerequisite in M5;
-      never ``None``).
+      (always returns a :class:`SuggestedTransition`; active when
+      photo count is at threshold, structured unmet-prereq when
+      below).
+    - ``listing`` → :func:`_rule_listing_to_frontline`
+      (always returns a :class:`SuggestedTransition`; active when
+      listing is published and price > 0, structured unmet-prereq
+      per failing condition otherwise).
     - All other stages → no rules; returns ``[]``.
-
-    **No ``listing → frontline`` rule in M5** — that transition
-    is manual-only per §5.h. M6 later adds the deterministic
-    published-listing rule.
 
     Returns ``[]`` when the vehicle has no stage row.
 
@@ -782,10 +881,15 @@ def suggest_transitions(
         if candidate is not None:
             suggestions.append(candidate)
     elif stage.current_stage == VEHICLE_STAGE_PHOTOGRAPHY:
-        # Always returns a structured prerequisite in M5;
-        # never None.
+        # Always returns a SuggestedTransition — active or unmet.
         suggestions.append(
             _rule_photography_to_listing(vehicle, dealership=dealership)
+        )
+    elif stage.current_stage == VEHICLE_STAGE_LISTING:
+        # M6.4 addition — always returns a SuggestedTransition
+        # (active or unmet).
+        suggestions.append(
+            _rule_listing_to_frontline(vehicle, dealership=dealership)
         )
     return suggestions
 

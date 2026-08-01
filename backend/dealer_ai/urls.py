@@ -1,6 +1,13 @@
 from django.urls import path
 
-from . import views, views_lifecycle, views_recon
+from . import (
+    views,
+    views_lifecycle,
+    views_listings,
+    views_photos,
+    views_recon,
+    views_showroom,
+)
 
 app_name = "dealer_ai"
 
@@ -294,5 +301,87 @@ urlpatterns = [
         "admin/vehicles/<str:stock_number>/lifecycle/transition/rule/",
         views_lifecycle.admin_lifecycle_rule_transition,
         name="admin-lifecycle-rule-transition",
+    ),
+    # ---- Milestone 6 · Increment 5 — photo + listing admin API ----------
+    #
+    # URL shape per SESSION_086 §1 Option A user-confirmed:
+    #   - Vehicle-scoped operations (upload / list / reorder) nested
+    #     under /admin/vehicles/<stock_number>/photos/.
+    #   - Photo mutations by public_id (M6.2 SESSION_083 §2 confirmed)
+    #     under /admin/vehicle-photos/<uuid:public_id>/.
+    #   - Listing endpoints (OneToOne with Vehicle) nested under
+    #     /admin/vehicles/<stock_number>/listing/.
+    #   - Public showroom endpoint (M6.5 §5.e publish semantics)
+    #     under /showroom/vehicles/<stock_number>/.
+    #
+    # Domain-error mapping per SESSION_086 handoff; distinct errors →
+    # distinct HTTP status codes.
+    # Photo endpoints.
+    path(
+        "admin/vehicles/<str:stock_number>/photos/",
+        views_photos.admin_photo_list,
+        name="admin-photo-list",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/photos/upload/",
+        views_photos.admin_photo_upload,
+        name="admin-photo-upload",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/photos/reorder/",
+        views_photos.admin_photo_reorder,
+        name="admin-photo-reorder",
+    ),
+    path(
+        "admin/vehicle-photos/<uuid:public_id>/set-primary/",
+        views_photos.admin_photo_set_primary,
+        name="admin-photo-set-primary",
+    ),
+    path(
+        "admin/vehicle-photos/<uuid:public_id>/",
+        views_photos.admin_photo_delete,
+        name="admin-photo-delete",
+    ),
+    path(
+        "admin/vehicle-photos/<uuid:public_id>/restore/",
+        views_photos.admin_photo_restore,
+        name="admin-photo-restore",
+    ),
+    # Listing endpoints.
+    path(
+        "admin/vehicles/<str:stock_number>/listing/",
+        views_listings.admin_listing_read,
+        name="admin-listing-read",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/listing/draft/",
+        views_listings.admin_listing_draft,
+        name="admin-listing-draft",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/listing/regenerate/",
+        views_listings.admin_listing_regenerate,
+        name="admin-listing-regenerate",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/listing/approve/",
+        views_listings.admin_listing_approve,
+        name="admin-listing-approve",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/listing/publish/",
+        views_listings.admin_listing_publish,
+        name="admin-listing-publish",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/listing/unpublish/",
+        views_listings.admin_listing_unpublish,
+        name="admin-listing-unpublish",
+    ),
+    # Public showroom endpoint (AllowAny — retail gate is the auth).
+    path(
+        "showroom/vehicles/<str:stock_number>/",
+        views_showroom.showroom_vehicle_detail,
+        name="showroom-vehicle-detail",
     ),
 ]

@@ -15,6 +15,8 @@ from .models import (
     Vehicle,
     VehicleAcquisition,
     VehicleCost,
+    VehicleListing,
+    VehiclePhoto,
     VehicleStage,
     VehicleStageEvent,
     Vendor,
@@ -592,6 +594,110 @@ class VehicleStageEventAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):  # noqa: ARG002
         # Append-only history — refusing delete keeps the timeline honest.
         return False
+
+
+# ----------------------------------------------------------------------------
+# Milestone 6 · Increment 1 (SESSION_082) — photo gallery + listing admins.
+#
+# Diagnostic surfaces only. Upload / mutate / publish workflow lives in
+# the M6.5 admin endpoints, not here. Both classes present as read-mostly
+# so admin does not inadvertently become the write path (which would
+# bypass the M6.2 photo gallery service and the M6.3 listing service and
+# lose the safer-direction deletion + status-transition invariants).
+#
+# Delete is permitted on both models via the standard admin surface for
+# genuine emergency corrections, but the service layer is the primary
+# write path.
+# ----------------------------------------------------------------------------
+
+
+@admin.register(VehiclePhoto)
+class VehiclePhotoAdmin(admin.ModelAdmin):
+    """Milestone 6 · Increment 1 — photo metadata admin.
+
+    Diagnostic; not the upload / reorder / delete authoring surface
+    (those live in the M6.5 admin API). Filters on ``content_type`` +
+    ``is_primary`` + ``dealership`` support the common "which photos
+    are the primary heroes?" and "which are marked for deletion?"
+    queries. ``public_id`` (added at M6.2 SESSION_083) is the durable
+    external identifier — surfaced here for quick lookup / support.
+    """
+
+    list_display = (
+        "public_id",
+        "vehicle",
+        "sort_order",
+        "is_primary",
+        "content_type",
+        "width_px",
+        "height_px",
+        "marked_deleted_at",
+        "uploaded_by",
+        "dealership",
+        "uploaded_at",
+    )
+    list_filter = (
+        "content_type",
+        "is_primary",
+        "dealership",
+    )
+    search_fields = (
+        "public_id",
+        "storage_key",
+        "caption",
+        "vehicle__stock_number",
+        "vehicle__vin",
+    )
+    autocomplete_fields = (
+        "vehicle",
+        "dealership",
+        "uploaded_by",
+        "deleted_by",
+    )
+    readonly_fields = ("public_id", "uploaded_at", "updated_at")
+
+
+@admin.register(VehicleListing)
+class VehicleListingAdmin(admin.ModelAdmin):
+    """Milestone 6 · Increment 1 — listing draft + publish admin.
+
+    Diagnostic; not the draft / approve / publish / unpublish authoring
+    surface (those live in the M6.5 admin API). Filters on ``status`` +
+    ``dealership`` support the common "which listings are still awaiting
+    approval?" and "which are published?" queries.
+    """
+
+    list_display = (
+        "vehicle",
+        "status",
+        "title",
+        "drafted_at",
+        "approved_at",
+        "published_at",
+        "unpublished_at",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = (
+        "status",
+        "dealership",
+    )
+    search_fields = (
+        "title",
+        "body",
+        "unpublished_reason",
+        "vehicle__stock_number",
+        "vehicle__vin",
+    )
+    autocomplete_fields = (
+        "vehicle",
+        "dealership",
+        "drafted_by",
+        "approved_by",
+        "published_by",
+        "unpublished_by",
+    )
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(UserDealershipRole)

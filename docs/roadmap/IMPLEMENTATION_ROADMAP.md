@@ -691,7 +691,20 @@ Phase 4.
 
 ---
 
-### Milestone 6 — Photography + listing generation
+### Milestone 6 — Photography + listing generation — SHIPPED at SESSION_087
+
+*Full delivery record: `docs/roadmap/MILESTONE_6_PLANNING.md`
+§7 (annotated SHIPPED per increment; zero §0.a change-log
+amendments required) and
+`docs/roadmap/MILESTONE_6_RETROSPECTIVE.md`. Shipped
+surface enumerated in `docs/CAPABILITY_MATRIX.md` §7g.
+Test baseline delta: 2,754 → 2,948 (+194 tests, zero
+regressions). Sessions 082 → 087. Frontend `tsc
+--noEmit` + `vite build` clean. Cross-platform
+syndication (Facebook / AutoTrader / Cars.com /
+CarGurus) explicitly out-of-scope per §5.e — publish =
+local `/showroom/vehicles/<stock_number>/` only.
+Milestone 11+ owns vendor integrations.*
 
 **Business objective.** Address the "photo management +
 cross-platform listing maintenance" pain by giving vehicles a

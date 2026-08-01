@@ -82,7 +82,20 @@ SafetyKind = str
 
 # Kinds that trigger the invented-recon-fact scrub. Kept module-level
 # so tests can import and lock the exact set.
-_RECON_COMM_KINDS: frozenset[str] = frozenset({"vendor_comm", "parts_order"})
+_RECON_COMM_KINDS: frozenset[str] = frozenset(
+    {
+        "vendor_comm",
+        "parts_order",
+        # Milestone 6 · Increment 3 (SESSION_084) — vehicle listing
+        # drafts join per §5.d Option A user-confirmed. Reuses the M4.5
+        # ``_scrub_invented_recon_fact`` scrub without adding new
+        # scrub logic; extending the dispatch is a semantic gate, not a
+        # new safety-stack surface. Listing copy that fabricates
+        # finding IDs / part numbers / dollar amounts / ISO dates gets
+        # caught by the same guard M4.5 uses.
+        "vehicle_listing",
+    }
+)
 
 
 # ---- Indie-only scrub: OEM / new-inventory / captive-finance leaks ----------

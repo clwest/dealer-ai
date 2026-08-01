@@ -132,7 +132,12 @@ from django.conf import settings
 from django.core.files.storage import storages
 from django.utils import timezone
 
-from ..models import CONDITION_PHOTO_CONTENT_TYPE_CHOICES, Dealership
+from ..models import (
+    CONDITION_PHOTO_CONTENT_TYPE_CHOICES,
+    Dealership,
+    VEHICLE_PHOTO_CONTENT_TYPE_CHOICES,
+    Vehicle,
+)
 
 # ---- Constants ------------------------------------------------------------
 
@@ -430,6 +435,32 @@ class _LocalAdapter:
                 f"Local storage delete failed for {storage_key!r}: {exc}"
             ) from exc
 
+    # ---- M6.2 server-side bytes-write (SESSION_083) -----------------
+    #
+    # Adapter-agnostic bytes-write path used by
+    # :func:`store_vehicle_photo`. LocalAdapter delegates to the
+    # existing :meth:`store_local_upload` helper (unchanged); S3Adapter
+    # implements a fresh :meth:`put_bytes` that calls boto3
+    # ``put_object`` directly. Not in the :class:`_PhotoStorageAdapter`
+    # Protocol (structural duck typing at the call site keeps the
+    # M3.4 Protocol surface stable).
+
+    def put_bytes(
+        self,
+        *,
+        storage_key: str,
+        content_type: str,
+        data: bytes,
+    ) -> ObjectMetadata:
+        """Adapter-agnostic bytes-write. Delegates to the local-specific
+        :meth:`store_local_upload` helper (which owns the sidecar-file
+        logic FileSystemStorage requires to round-trip content type)."""
+        return self.store_local_upload(
+            storage_key=storage_key,
+            content_type=content_type,
+            data=data,
+        )
+
     # ---- Local-only helpers (not part of _PhotoStorageAdapter) --------
 
     def store_local_upload(
@@ -617,6 +648,44 @@ class _S3Adapter:
         return ObjectMetadata(
             content_type=response.get("ContentType", ""),
             size_bytes=int(response.get("ContentLength", 0)),
+            exists=True,
+        )
+
+    def put_bytes(
+        self,
+        *,
+        storage_key: str,
+        content_type: str,
+        data: bytes,
+    ) -> ObjectMetadata:
+        """M6.2 server-side bytes-write. Uses boto3 ``put_object`` with
+        ``ContentType`` bound.
+
+        Distinct from :meth:`generate_upload_url` (which returns a
+        presigned URL for browser-direct PUT). This verb is for the
+        case where Django itself holds the bytes and writes them
+        server-side — the M6.2 :func:`store_vehicle_photo` upload
+        path.
+        """
+        client = self._boto3_client()
+        try:
+            client.put_object(
+                Bucket=self._bucket,
+                Key=storage_key,
+                Body=data,
+                ContentType=content_type,
+            )
+        except botocore.exceptions.ClientError as exc:
+            raise ObjectStorageError(
+                f"S3 put_object failed for {storage_key!r}: {exc}"
+            ) from exc
+        except botocore.exceptions.BotoCoreError as exc:
+            raise ObjectStorageError(
+                f"S3 put_object failed for {storage_key!r}: {exc}"
+            ) from exc
+        return ObjectMetadata(
+            content_type=content_type,
+            size_bytes=len(data),
             exists=True,
         )
 
@@ -996,6 +1065,238 @@ def store_local_upload(
     )
 
 
+# ---- Milestone 6 · Increment 2 (SESSION_083) — vehicle-photo verbs ------
+#
+# Additive extension per MILESTONE_6_PLANNING.md §5.c Option A
+# (user-confirmed at SESSION_082) — reuse the M3.4 primitive; do not
+# fork. The vehicle-photo path has a different canonical-key shape
+# (nested by ``vehicles/<stock>/photos/<uuid>``) and a narrower
+# content-type whitelist (3 values vs. condition-report's 4 —
+# HEIC excluded per M6.1 §1.1 planning). Everything else — adapter
+# selection, S3 / local behavior, path-traversal defense posture —
+# is shared with the M3.4 primitive.
+#
+# The upload flow is server-side-only in M6.2 v1: the M6.5 admin
+# endpoint POSTs bytes to Django; Django calls ``store_vehicle_photo``
+# which writes bytes via the adapter and returns the canonical key +
+# HEAD metadata. A future browser-direct-to-S3 flow (mirroring M3.5's
+# request→PUT→attach dance) can land as an additive verb pair without
+# disturbing this one.
+# ----------------------------------------------------------------------------
+
+
+# Content-type whitelist mirrors the M6.1 model-layer choices constant.
+# Narrower than :data:`_VALID_CONTENT_TYPES` (3 values instead of 4 —
+# HEIC excluded per M6.1 §1.1 planning: vehicle photos are customer-
+# facing showroom content, and HEIC has poor cross-browser support).
+_VALID_VEHICLE_PHOTO_CONTENT_TYPES = frozenset(
+    key for key, _ in VEHICLE_PHOTO_CONTENT_TYPE_CHOICES
+)
+
+# Stock-number segment pattern — Vehicle.stock_number is a CharField
+# (not a SlugField), so its shape isn't schema-constrained. Re-validate
+# here as defense-in-depth: accept the same alphanumeric + hyphens +
+# underscores shape as the slug segment. Any stock number containing
+# other characters (spaces, slashes, colons) would break canonical-key
+# parsing and is refused at key-build time.
+_STOCK_NUMBER_PATTERN = re.compile(r"^[-a-zA-Z0-9_]+$")
+
+# Vehicle-photo canonical key shape per SESSION_083 §1 Option A
+# (user-confirmed). Nesting by ``vehicles/<stock>`` groups a vehicle's
+# entire gallery under one S3 prefix for operator-side inspection.
+# Mirrors the M3.4 pattern's defense-in-depth posture — any storage
+# key entering the vehicle-photo verbs is re-validated against this
+# regex before touching the backend.
+_VEHICLE_PHOTO_KEY_PATTERN = re.compile(
+    r"^dealerships/[-a-zA-Z0-9_]+/vehicles/[-a-zA-Z0-9_]+/photos/"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    r"/original$"
+)
+
+# Group-captured version of :data:`_VEHICLE_PHOTO_KEY_PATTERN` for
+# :func:`parse_canonical_vehicle_photo_key`.
+_VEHICLE_PHOTO_KEY_PATTERN_GROUPED = re.compile(
+    r"^dealerships/(?P<slug>[-a-zA-Z0-9_]+)/"
+    r"vehicles/(?P<stock_number>[-a-zA-Z0-9_]+)/"
+    r"photos/(?P<photo_uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
+    r"[0-9a-f]{4}-[0-9a-f]{12})/original$"
+)
+
+# Byte ceiling for a single vehicle-photo upload. Real photos are
+# 1–10 MB; 25 MB is a soft ceiling that flags runaway inputs without
+# blocking legitimate photos. Mirrors ``_LOCAL_UPLOAD_MAX_BYTES``; not
+# configurable in v1 — bump deliberately if operator evidence surfaces
+# a case.
+_VEHICLE_PHOTO_MAX_BYTES = 25 * 1024 * 1024
+
+
+def _validate_vehicle_photo_content_type(content_type: str) -> None:
+    if content_type not in _VALID_VEHICLE_PHOTO_CONTENT_TYPES:
+        raise InvalidContentTypeError(
+            f"content_type {content_type!r} is not in the M6.1 "
+            f"vehicle-photo whitelist. Valid values live in "
+            f"``dealer_ai.models.VEHICLE_PHOTO_CONTENT_TYPE_CHOICES``."
+        )
+
+
+def _validate_vehicle_photo_bytes(data: bytes) -> None:
+    if not isinstance(data, (bytes, bytearray)):
+        raise InvalidStorageKeyError(
+            f"data must be bytes, got {type(data).__name__}."
+        )
+    size = len(data)
+    if size == 0:
+        raise InvalidStorageKeyError(
+            "Refusing to store zero-byte vehicle-photo upload."
+        )
+    if size > _VEHICLE_PHOTO_MAX_BYTES:
+        raise InvalidStorageKeyError(
+            f"Vehicle-photo upload size {size} exceeds the "
+            f"{_VEHICLE_PHOTO_MAX_BYTES}-byte ceiling."
+        )
+
+
+def build_canonical_vehicle_photo_key(
+    *,
+    dealership: Dealership,
+    vehicle: Vehicle,
+    photo_uuid: uuid.UUID,
+) -> str:
+    """Return the canonical storage key for a vehicle-photo object.
+
+    Shape (per SESSION_083 §1 Option A user-confirmed)::
+
+        dealerships/<slug>/vehicles/<stock_number>/photos/<uuid>/original
+
+    The only entry point that constructs a new vehicle-photo key. Every
+    other function either consumes a key it produced
+    (:func:`store_vehicle_photo`) or re-validates a caller-supplied key
+    against :data:`_VEHICLE_PHOTO_KEY_PATTERN` before touching the
+    backend.
+
+    Raises :class:`InvalidStorageKeyError` when the dealership slug
+    fails :data:`_SLUG_PATTERN`, when the vehicle stock number fails
+    :data:`_STOCK_NUMBER_PATTERN`, or when ``photo_uuid`` cannot be
+    parsed as a canonical UUID.
+    """
+    slug = getattr(dealership, "slug", None)
+    if slug is None or not _SLUG_PATTERN.match(slug):
+        raise InvalidStorageKeyError(
+            f"Dealership slug {slug!r} does not match canonical slug "
+            f"pattern {_SLUG_PATTERN.pattern!r}."
+        )
+    stock_number = getattr(vehicle, "stock_number", None)
+    if stock_number is None or not _STOCK_NUMBER_PATTERN.match(stock_number):
+        raise InvalidStorageKeyError(
+            f"Vehicle stock_number {stock_number!r} does not match "
+            f"canonical stock-number pattern {_STOCK_NUMBER_PATTERN.pattern!r}. "
+            "Stock numbers containing spaces, slashes, or other separator "
+            "characters would break canonical-key parsing and are refused."
+        )
+    try:
+        canonical_uuid = uuid.UUID(str(photo_uuid))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise InvalidStorageKeyError(
+            f"photo_uuid {photo_uuid!r} is not a valid UUID: {exc}"
+        ) from exc
+    return (
+        f"dealerships/{slug}/vehicles/{stock_number}/"
+        f"photos/{canonical_uuid}/original"
+    )
+
+
+def parse_canonical_vehicle_photo_key(
+    storage_key: str,
+) -> tuple[str, str, uuid.UUID]:
+    """Return ``(dealership_slug, stock_number, photo_uuid)`` for a
+    canonical vehicle-photo key.
+
+    Mirrors :func:`parse_canonical_key` (M3.5) — the only place service
+    code should touch the vehicle-photo key format. The M6.5 admin API
+    layer will use this to extract the embedded tenant for
+    cross-tenant defense-in-depth.
+
+    Raises :class:`InvalidStorageKeyError` on any mismatch.
+    """
+    if not isinstance(storage_key, str):
+        raise InvalidStorageKeyError(
+            f"storage_key must be a str, got {type(storage_key).__name__}."
+        )
+    match = _VEHICLE_PHOTO_KEY_PATTERN_GROUPED.match(storage_key)
+    if match is None:
+        raise InvalidStorageKeyError(
+            f"storage_key {storage_key!r} does not match the M6.2 "
+            f"vehicle-photo canonical pattern; cannot extract "
+            "dealership slug + stock number + photo UUID."
+        )
+    slug = match.group("slug")
+    stock_number = match.group("stock_number")
+    try:
+        parsed_uuid = uuid.UUID(match.group("photo_uuid"))
+    except (ValueError, TypeError) as exc:  # pragma: no cover — regex enforces UUID shape
+        raise InvalidStorageKeyError(
+            f"storage_key {storage_key!r} carries an unparseable UUID "
+            f"segment: {exc}."
+        ) from exc
+    return slug, stock_number, parsed_uuid
+
+
+def store_vehicle_photo(
+    *,
+    dealership: Dealership,
+    vehicle: Vehicle,
+    photo_uuid: uuid.UUID,
+    data: bytes,
+    content_type: str,
+) -> tuple[str, ObjectMetadata]:
+    """Write ``data`` bytes to the storage backend under the canonical
+    vehicle-photo key derived from
+    :func:`build_canonical_vehicle_photo_key`.
+
+    Server-side upload path (M6.2 v1). The M6.5 admin endpoint POSTs a
+    file to Django; Django calls this verb; the returned
+    ``(canonical_key, metadata)`` pair is what the M6.2
+    :func:`services.photo_gallery.upload_photo` persists on the
+    :class:`VehiclePhoto` metadata row.
+
+    Enforces:
+
+    - ``content_type`` in the M6.1 3-value whitelist
+      (:class:`InvalidContentTypeError`).
+    - ``data`` size > 0 and ≤ :data:`_VEHICLE_PHOTO_MAX_BYTES`
+      (:class:`InvalidStorageKeyError`).
+    - Canonical key shape (via :func:`build_canonical_vehicle_photo_key`).
+
+    Delegates the actual byte write to the active adapter's
+    ``put_bytes`` method — :class:`_LocalAdapter` writes to
+    ``storages["condition_photos"]`` FileSystemStorage; :class:`_S3Adapter`
+    calls ``boto3 client.put_object`` with ``ContentType`` bound.
+    ``storages["condition_photos"]`` is reused (not a separate
+    ``vehicle_photos`` storage alias) because the storage backend
+    contract is identical — a canonical key alone determines what
+    lives where, and the M6 photo directory nests cleanly under the
+    same bucket / MEDIA_ROOT.
+
+    Returns ``(canonical_key, ObjectMetadata)``. Caller
+    (:func:`services.photo_gallery.upload_photo`) persists both onto
+    the :class:`VehiclePhoto` metadata row.
+
+    Never embeds AWS credentials in the return value.
+    """
+    _validate_vehicle_photo_content_type(content_type)
+    _validate_vehicle_photo_bytes(data)
+    storage_key = build_canonical_vehicle_photo_key(
+        dealership=dealership, vehicle=vehicle, photo_uuid=photo_uuid
+    )
+    adapter = _get_default_adapter()
+    metadata = adapter.put_bytes(  # type: ignore[attr-defined]
+        storage_key=storage_key,
+        content_type=content_type,
+        data=bytes(data),
+    )
+    return storage_key, metadata
+
+
 # ---- Public re-exports ---------------------------------------------------
 
 
@@ -1010,11 +1311,14 @@ __all__ = [
     "ObjectStorageError",
     "UploadTarget",
     "build_canonical_key",
+    "build_canonical_vehicle_photo_key",
     "delete_object",
     "generate_read_url",
     "generate_upload_target",
     "get_object_metadata",
     "object_exists",
     "parse_canonical_key",
+    "parse_canonical_vehicle_photo_key",
     "store_local_upload",
+    "store_vehicle_photo",
 ]

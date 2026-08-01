@@ -3105,3 +3105,370 @@ class VehicleStageEvent(models.Model):
                     )
                 }
             )
+
+
+# ----------------------------------------------------------------------------
+# Milestone 6 · Increment 1 (SESSION_082) — VehiclePhoto content-type vocabulary.
+#
+# Three canonical MIME values for photo gallery uploads per
+# MILESTONE_6_PLANNING.md §1.1. Deliberately narrower than the M3.1
+# ``CONDITION_PHOTO_CONTENT_TYPE_CHOICES`` set (which includes HEIC):
+# vehicle photos are marketing / listing content that will be served to
+# customers via the M6.5 showroom endpoint, and HEIC has poor
+# cross-browser support. Operators upload JPEG / PNG / WebP.
+#
+# The M6.2 photo storage layer (extending ``services/photo_storage.py``
+# per §5.c Option A) re-validates against this whitelist at the
+# presigned-URL boundary, mirroring the M3.4 defense-in-depth posture.
+# ----------------------------------------------------------------------------
+
+VEHICLE_PHOTO_CONTENT_TYPE_JPEG = "image/jpeg"
+VEHICLE_PHOTO_CONTENT_TYPE_PNG = "image/png"
+VEHICLE_PHOTO_CONTENT_TYPE_WEBP = "image/webp"
+
+VEHICLE_PHOTO_CONTENT_TYPE_CHOICES = (
+    (VEHICLE_PHOTO_CONTENT_TYPE_JPEG, "JPEG"),
+    (VEHICLE_PHOTO_CONTENT_TYPE_PNG, "PNG"),
+    (VEHICLE_PHOTO_CONTENT_TYPE_WEBP, "WebP"),
+)
+
+
+# ----------------------------------------------------------------------------
+# Milestone 6 · Increment 1 (SESSION_082) — VehicleListing status vocabulary.
+#
+# Four canonical status values per MILESTONE_6_PLANNING.md §5.a Option A
+# (user-confirmed at SESSION_082 open):
+#
+# - ``draft`` — AI has drafted the listing body; awaiting operator approval.
+# - ``approved`` — Operator has approved the draft; awaiting publish gesture.
+# - ``published`` — Visible on the M6.5 ``/showroom`` endpoint. Drives the
+#   M6.4 ``_rule_listing_to_frontline`` predicate.
+# - ``unpublished`` — Withdrawn from customer view. Distinct from ``draft``
+#   because the listing existed as published copy at some point.
+#
+# The state machine (allowed status transitions, actor-role authority)
+# lives in the M6.3 ``services/vehicle_listing.py`` module. The
+# persistence layer enforces only enum-membership (via ``choices=``) and
+# cross-tenant contamination (via ``clean()``). Mirrors the M5.1
+# discipline: transitions belong to services, not to persistence.
+# ----------------------------------------------------------------------------
+
+VEHICLE_LISTING_STATUS_DRAFT = "draft"
+VEHICLE_LISTING_STATUS_APPROVED = "approved"
+VEHICLE_LISTING_STATUS_PUBLISHED = "published"
+VEHICLE_LISTING_STATUS_UNPUBLISHED = "unpublished"
+
+VEHICLE_LISTING_STATUS_CHOICES = (
+    (VEHICLE_LISTING_STATUS_DRAFT, "Draft"),
+    (VEHICLE_LISTING_STATUS_APPROVED, "Approved"),
+    (VEHICLE_LISTING_STATUS_PUBLISHED, "Published"),
+    (VEHICLE_LISTING_STATUS_UNPUBLISHED, "Unpublished"),
+)
+
+
+class VehiclePhoto(models.Model):
+    """Milestone 6 · Increment 1 — photo metadata for a vehicle gallery.
+
+    Many-per-Vehicle. Metadata only — the actual image bytes live in the
+    storage backend the M6.2 photo storage extension configures (per
+    ``MILESTONE_6_PLANNING.md`` §5.c Option A — extends the M3.4
+    ``services/photo_storage.py`` primitive with a
+    ``store_vehicle_photo(...)`` verb). This model owns only the fields
+    that describe *which* stored object belongs to *which* vehicle.
+
+    **Persistence layer is neutral about workflow.** The M6.2 photo
+    gallery service (``upload_photo``, ``set_primary``, ``reorder``,
+    ``mark_deleted``, ``restore_deleted``, ``listing_ready_count`` per
+    §1.4) owns every mutation invariant. The persistence layer enforces
+    only:
+
+    1. Cross-tenant contamination — ``dealership`` matches
+       ``vehicle.dealership``.
+    2. Enum-membership — ``content_type`` is one of
+       :data:`VEHICLE_PHOTO_CONTENT_TYPE_CHOICES` values.
+
+    **Safer-direction deletion (M6 §7 lesson 7).** The operator delete
+    gesture at the M6.2 service layer sets ``marked_deleted_at`` and
+    ``deleted_by`` rather than removing the row. A future physical-delete
+    reaper (deferred to M6.2+) processes the tombstoned rows. Consumers
+    that surface photos to customers filter ``marked_deleted_at=None``.
+
+    **``is_primary`` uniqueness is a service-layer invariant.** The M6.2
+    ``set_primary`` service atomically flips the previous primary to
+    False and the new primary to True inside a single transaction. Per
+    §1.1, no DB uniqueness constraint — a constraint would force the
+    operator's "swap primary" gesture into a two-step delete-then-insert
+    dance. Direct ORM writes bypassing the service can produce multiple
+    primary rows; the service is the enforcement layer.
+
+    **Listing-ready predicate.** The M6.4 rule
+    ``_rule_photography_to_listing`` computes readiness from
+    ``width_px`` + ``height_px`` at query time (planning §1.7). No
+    stored boolean — a boolean would risk drift from the actual
+    dimensions if a future re-processing step altered the underlying
+    object. Predicate lives in the M6.4 service.
+
+    Source of truth: ``docs/roadmap/MILESTONE_6_PLANNING.md`` §1.1 +
+    §5.a-§5.c (§5.a irrelevant to photo; §5.b + §5.c apply to M6.4 /
+    M6.2 respectively). ``public_id`` added at SESSION_083 M6.2 per
+    §2 Option A (user-confirmed) — durable external identifier
+    mirroring the M3.1 ``ConditionFindingPhoto.public_id`` pattern so
+    the M6.5 admin API has a tenant-safe reference that isn't an
+    enumerable integer PK.
+    """
+
+    # Durable public identity. External references bind here; never to
+    # ``storage_key`` (internal to the storage layer). Mirrors the M3.1
+    # ``ConditionFindingPhoto.public_id`` pattern. Added at SESSION_083
+    # M6.2 per §2 Option A. The M6.2 upload service seeds this from a
+    # fresh ``uuid.uuid4()`` that is also embedded in the canonical
+    # ``storage_key``, so the UUID and the storage key stay bound
+    # even if the storage layer is later rekeyed.
+    public_id = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+    )
+    vehicle = models.ForeignKey(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="photos",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vehicle_photos",
+    )
+    # Storage-backend key produced by the M6.2 extension of
+    # ``services/photo_storage.py``. Unique — every row corresponds to a
+    # distinct stored object. Never exposed as an external identifier;
+    # external code binds to ``public_id`` (UUID) instead.
+    storage_key = models.CharField(max_length=512, unique=True)
+    content_type = models.CharField(
+        max_length=32,
+        choices=VEHICLE_PHOTO_CONTENT_TYPE_CHOICES,
+    )
+    # Pixel dimensions captured at upload time. Positive by construction
+    # — a zero-dimension image is not a legitimate photo. Drives the
+    # M6.4 ``_rule_photography_to_listing`` listing-ready predicate
+    # (per planning §1.7).
+    width_px = models.PositiveIntegerField()
+    height_px = models.PositiveIntegerField()
+    # Operator-controlled ordering. Integer (not positive) so operators
+    # can push a photo "to the top" by assigning a negative sort_order
+    # without a bulk-renumber. Ties broken by ``uploaded_at`` in
+    # ``Meta.ordering``.
+    sort_order = models.IntegerField(default=0)
+    # One hero photo per vehicle at the service layer; violation is a
+    # M6.2 service-layer refusal, not a DB uniqueness constraint. See
+    # class docstring for the rationale.
+    is_primary = models.BooleanField(default=False)
+    caption = models.CharField(max_length=255, blank=True, default="")
+    # SET_NULL so historical rows survive user deletion (mirrors
+    # ``ConditionFindingPhoto.uploaded_by``).
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    # Safer-direction deletion — the M6.2 delete gesture stamps
+    # ``marked_deleted_at`` rather than removing the row. A future
+    # physical-delete reaper (M6.2+ or later) processes the tombstones.
+    marked_deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # sort_order first (operator-controlled gallery order); uploaded_at
+        # as deterministic tiebreaker within a sort_order band.
+        ordering = ("sort_order", "uploaded_at")
+        verbose_name = "Vehicle photo"
+        verbose_name_plural = "Vehicle photos"
+
+    def __str__(self) -> str:
+        primary_marker = " [primary]" if self.is_primary else ""
+        deleted_marker = " [deleted]" if self.marked_deleted_at else ""
+        return (
+            f"Photo #{self.pk} ({self.public_id}) on "
+            f"vehicle #{self.vehicle_id}{primary_marker}{deleted_marker}"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant guard.
+
+        The denormalized ``dealership`` FK must match the parent Vehicle's
+        tenant. Mirrors :meth:`VehicleStage.clean` and
+        :meth:`ConditionFindingPhoto.clean`.
+        """
+        super().clean()
+        if self.vehicle_id is None or self.dealership_id is None:
+            return
+        parent_dealership_id = getattr(self.vehicle, "dealership_id", None)
+        if parent_dealership_id is None:
+            return
+        if parent_dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "VehiclePhoto.dealership must match the parent "
+                        "Vehicle's dealership. Cross-tenant "
+                        "contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+
+
+class VehicleListing(models.Model):
+    """Milestone 6 · Increment 1 — AI-drafted listing copy for one Vehicle.
+
+    OneToOne with :class:`Vehicle`. Records the AI-drafted listing body,
+    the approve/publish/unpublish audit trail, and the source-provenance
+    map (mirroring the M4.5 ``VendorCommunication`` pattern).
+
+    **Persistence layer is neutral about state transitions.** The state
+    machine (allowed ``draft → approved → published → unpublished``
+    transitions, role authority, publish-side effects) lives in the M6.3
+    ``services/vehicle_listing.py`` module. The persistence layer
+    enforces only:
+
+    1. Cross-tenant contamination — ``dealership`` matches
+       ``vehicle.dealership``.
+    2. Enum-membership — ``status`` is one of
+       :data:`VEHICLE_LISTING_STATUS_CHOICES` values.
+
+    Unlike :class:`VendorCommunication`, the M6.1 persistence layer does
+    NOT enforce a status-invariant matrix (nonblank body when published,
+    etc.). Rationale: the M6.3 service is the single write path (per M6
+    §0 lesson 4 — service ownership), and a persistence-layer matrix
+    would duplicate the service invariants. If direct ORM writes ever
+    become a problem, the check lives in ``clean()``; but M6.1 follows
+    the M5.1 discipline of persistence-neutrality about workflow.
+
+    **``Vehicle.price`` stays on Vehicle** (planning §1.2). The listing
+    body reflects the current price at draft time; the price itself is
+    the vehicle's identity and does not migrate to this model.
+
+    **Publish semantics** (planning §5.e). ``status='published'`` means
+    "visible to customers on the local ``/showroom`` endpoint." M6 v1
+    does NOT push to Facebook Marketplace / AutoTrader / etc. — that's
+    Milestone 11+.
+
+    Source of truth: ``docs/roadmap/MILESTONE_6_PLANNING.md`` §1.2 +
+    §5.a + §5.e.
+    """
+
+    vehicle = models.OneToOneField(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="listing",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vehicle_listings",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=VEHICLE_LISTING_STATUS_CHOICES,
+        default=VEHICLE_LISTING_STATUS_DRAFT,
+    )
+    title = models.CharField(max_length=255, blank=True, default="")
+    # AI-drafted listing copy. Scrubbed via the M6.3 safety stack before
+    # persistence (per §5.d — either reuse M4.5 ``_scrub_invented_recon_fact``
+    # or add a new ``_scrub_invented_photo_claim``; decision deferred to
+    # M6.3 implementation).
+    body = models.TextField(blank=True, default="")
+    # JSONField mapping (typically sentence indices or claim keys) to
+    # source-bundle keys — mirrors :class:`VendorCommunication.source_provenance`.
+    # Populated by the M6.3 draft service; default empty dict.
+    source_provenance = models.JSONField(default=dict, blank=True)
+
+    # Actor + timestamp provenance. Nullable at persistence layer; the
+    # M6.3 service sets each pair atomically with the corresponding
+    # transition. Persistence layer does NOT enforce required pairings —
+    # that lives in the M6.3 service.
+    drafted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    drafted_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Drives the M6.4 ``_rule_listing_to_frontline`` predicate
+    # (``published_at is not None AND Vehicle.price > 0``).
+    published_at = models.DateTimeField(null=True, blank=True)
+    unpublished_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    unpublished_at = models.DateTimeField(null=True, blank=True)
+    unpublished_reason = models.CharField(
+        max_length=255, blank=True, default=""
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+        verbose_name = "Vehicle listing"
+        verbose_name_plural = "Vehicle listings"
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_status_display()} listing on "
+            f"vehicle #{self.vehicle_id}"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant guard.
+
+        The denormalized ``dealership`` FK must match the parent Vehicle's
+        tenant. Mirrors :meth:`VehicleStage.clean`.
+        """
+        super().clean()
+        if self.vehicle_id is None or self.dealership_id is None:
+            return
+        parent_dealership_id = getattr(self.vehicle, "dealership_id", None)
+        if parent_dealership_id is None:
+            return
+        if parent_dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "VehicleListing.dealership must match the parent "
+                        "Vehicle's dealership. Cross-tenant "
+                        "contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
