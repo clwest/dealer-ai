@@ -1,214 +1,206 @@
 ---
 state: active
 date: 2026-07-31
-last_session_shipped: SESSION_060
+last_session_shipped: SESSION_061
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: in-progress
-next_session: SESSION_061
+next_session: SESSION_062
 next_milestone: 3
 next_milestone_name: "Structured condition report"
-next_increment: 6
-next_increment_name: "M3.6 — Condition-report admin API + permission matrix"
+next_increment: "6B"
+next_increment_name: "M3.6B — Condition-report photo API + local-mode receiver"
 ---
 
-# Next session — SESSION_061 · Milestone 3 · Increment 6 (M3.6 — admin API + permission matrix)
+# Next session — SESSION_062 · Milestone 3 · Increment 6B (M3.6B — photo API + local receiver)
 
-> **Milestone 3 · Increment 5 (M3.5) shipped at SESSION_060.**
-> The photo attachment workflow (`request_photo_upload`,
-> `attach_photo` with five-verification path, `delete_photo`
-> with storage-first strategy) is live. Storage service extended
-> with `ObjectMetadata` / `get_object_metadata` /
-> `parse_canonical_key` / `delete_object` / `store_local_upload`.
-> 58 focused tests. See
-> `docs/handoffs/SESSION_060_m3_inc5_upload_flow.md`.
+> **Milestone 3 · Increment 6A (M3.6A) shipped at SESSION_061.**
+> The core condition-report admin API is live: 6 endpoints
+> (GET latest, POST create, POST complete, POST add-finding,
+> PATCH/DELETE finding via shared view) with full permission
+> matrix + domain-error mapping + no-storage_key-leakage +
+> spoofing protection on authored_by / status / completed_at /
+> dealership. 69 focused tests. See
+> `docs/handoffs/SESSION_061_m3_inc6a_admin_api.md`.
 >
-> **SESSION_061 opens M3.6 = the HTTP transport layer that binds
-> M3.1–M3.5 to authenticated admin endpoints.** Nine endpoints
-> under `/api/dealer-ai/admin/vehicles/<stock_number>/…`, plus
-> a local-mode upload receiver. Every endpoint composes
-> `[IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]`.
-> Domain errors from M3.2 / M3.4 / M3.5 map to specific HTTP
-> statuses. **No frontend — that's M3.7.**
+> **SESSION_062 opens M3.6B = the 4 photo endpoints.** Photo
+> request-upload, attach, delete, plus the local-mode
+> multipart receiver. Extends the M3.6A error-mapping table
+> with photo-specific errors. **Same governance / permission
+> composition / response projections as M3.6A** — this session
+> is largely mechanical wiring of the M3.5 photo service to
+> HTTP.
 
 ## Governance layers (all apply, in this order on conflict)
 
 1. `docs/PROJECT_RULES.md`.
 2. `docs/DOC_GOVERNANCE.md`.
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 3.
-4. `docs/roadmap/AUTHENTICATION_MODEL.md` — every endpoint
-   inherits the four-layer separation. M3.6 is the layer-1
-   (identity) + layer-2 (authorization) wiring for the
-   M3.1–M3.5 stack.
+4. `docs/roadmap/AUTHENTICATION_MODEL.md`.
 5. `docs/roadmap/MILESTONE_3_PLANNING.md` — §7 M3.1, M3.2,
-   M3.3, M3.4, M3.5 now annotated SHIPPED. §7 M3.6 is the
-   sub-scope for this session.
-6. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` §6 lessons —
-   lesson 3 (one authoritative write path per operation)
-   applies to endpoint construction.
-7. `docs/roadmap/MILESTONE_2_PLANNING.md` §7.b M2.6 (admin
-   ledger endpoints) — the shape M3.6 mirrors.
+   M3.3, M3.4, M3.5, M3.6A now annotated SHIPPED. §7 M3.6B
+   is the sub-scope for this session.
+6. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` §6 lessons.
 
-## What M3.6 delivers (per `MILESTONE_3_PLANNING.md` §7 M3.6)
+## What M3.6B delivers (per `MILESTONE_3_PLANNING.md` §7 M3.6B)
 
-Nine HTTP endpoints + one local-mode upload receiver + a
-full permission matrix locked by tests.
+Four HTTP endpoints continuing the M3.6A pattern.
 
-**In scope — endpoints (all under
-`/api/dealer-ai/admin/vehicles/<stock_number>/…`):**
+**In scope — endpoints:**
 
-- `GET .../condition-report/latest/` — return latest report
-  (any status) + all findings + all photos with signed read
-  URLs; 404 if none.
-- `POST .../condition-reports/` — create a draft report.
-- `POST .../condition-reports/<report_id>/complete/` —
-  draft → complete transition.
-- `POST .../condition-reports/<report_id>/findings/` — add
-  finding to draft.
-- `PATCH .../findings/<finding_id>/` — update finding on
-  draft.
-- `DELETE .../findings/<finding_id>/` — delete finding from
-  draft.
-- `POST .../findings/<finding_id>/photos/request-upload/` —
-  issue a presigned upload target.
-- `POST .../findings/<finding_id>/photos/` — attach a photo
-  after upload completes.
-- `DELETE .../photos/<public_id>/` — delete a photo. Path
-  uses `public_id`, NOT `storage_key` (per M3.1 refinement:
-  `public_id` is durable external identity).
+- `POST admin/vehicles/<stock_number>/findings/<finding_id>/photos/request-upload/`
+  — wraps `condition_report_service.request_photo_upload`.
+  Body: `{content_type}`. Returns
+  `{upload_target: {method, upload_url, storage_key,
+  required_headers, expires_at}}`. **Note:** `storage_key`
+  appears in this specific response as the narrow exception
+  — the client needs it to hand back to `attach_photo`.
+  Every OTHER response omits `storage_key`.
+- `POST admin/vehicles/<stock_number>/findings/<finding_id>/photos/`
+  — wraps `condition_report_service.attach_photo`. Body:
+  `{storage_key, content_type, size_bytes, caption?}`.
+  Returns `{photo: <projection>}` with 201.
+- `DELETE admin/vehicles/<stock_number>/photos/<uuid:public_id>/`
+  — wraps `condition_report_service.delete_photo`.
+  **Path uses `public_id`, NOT `storage_key`.** Lookup:
+  tenant-scoped + finding-report-vehicle-chain-scoped. 204
+  on success.
+- `POST admin/vehicles/<stock_number>/findings/<finding_id>/photos/local-upload/`
+  — local-mode multipart upload receiver. **Returns 404 in
+  S3 mode (do NOT advertise dev-only surface).** When local
+  adapter active, accepts multipart body, validates content
+  type + enforces 25 MB ceiling, calls
+  `photo_storage.store_local_upload`. **Does NOT create the
+  `ConditionFindingPhoto` row** — the normal attach endpoint
+  still performs metadata verification and persistence.
 
-**Plus:** a local-mode upload receiver
-`POST .../findings/<finding_id>/photos/local-upload/` that
-accepts multipart body + calls
-`photo_storage.store_local_upload`. Available only when the
-`condition_photos` adapter is `_LocalAdapter`; returns 404 or
-501 in S3 mode.
+**Domain-error mapping — extensions to the M3.6A table:**
 
-**Authorization contract per endpoint.** Every endpoint
-composes `[IsAuthenticated &
-IsSalesManagerOrOwnerAtActiveDealership]` (M1 · 4D pattern,
-reused verbatim). Every view calls `dealership =
-get_current_dealership(request)` once at the top and threads
-`dealership=dealership` into every service call. Cross-tenant
-`stock_number` / `report_id` / `finding_id` / `public_id`
-lookups fail closed with 404.
-
-**Domain-error → HTTP-status mapping (must be locked by
-tests):**
-
-- `CrossTenantConditionReportError` → 404 (never leak
-  whether the resource exists in another tenant).
-- `ConditionReportImmutableError` → 409 Conflict.
 - `PhotoNotYetUploadedError` → 409.
 - `PhotoMetadataMismatchError` → 409.
 - `PhotoAlreadyAttachedError` → 409.
 - `InvalidStorageKeyError` → 400.
 - `InvalidContentTypeError` → 400.
 - `InvalidTTLError` → 400.
-- `ObjectStorageError` → 502 Bad Gateway (upstream backend
-  fault).
-- `django.core.exceptions.ValidationError` → 400 with
-  `message_dict` serialized to JSON.
+- `ObjectStorageError` → 502.
+- `LocalUploadNotAvailableError` → 404 (dev-only surface
+  intentionally hidden in S3 mode).
 
 **Explicitly out of scope (deferred to later increments):**
 
 - ❌ Frontend — M3.7.
-- ❌ AI role.
-- ❌ Any modification to M3.1 models, migrations, admin.
-- ❌ Any modification to M3.2–M3.5 service signatures.
-- ❌ Modifications to `services/tenancy.py`,
-  `services/llm_safety.py`, `services/vehicle_ledger.py`.
-- ❌ New non-condition-report endpoints or middleware.
-- ❌ Repairing the three deferred M3.4-era 400-expected
-  tests in `test_salesperson_and_assignment.py` (unless
-  they block M3.6).
+- ❌ AI role — never in M3.
+- ❌ Modifications to M3.5 service signatures.
+- ❌ New serializers beyond photo-request-upload +
+  photo-attach input validators (upload-target response is
+  a dict-builder, matching M3.6A photo projection pattern).
+- ❌ Public photo routes.
+- ❌ Modifications to M3.6A endpoints (their projections
+  already handle the photo array — nothing to backfill).
+- ❌ Repair for 3 deferred M3.4-era 400-expected tests in
+  `test_salesperson_and_assignment.py`.
 
-## What SESSION_061 should do
+## What SESSION_062 should do
 
 ### Recommended step sequence
 
 1. **Read first (in this order — one pass, do not skim):**
-   - `docs/roadmap/MILESTONE_3_PLANNING.md` §7 M3.6 detail +
-     §1.6 (operator UI surface — even though UI is M3.7, the
-     API shape M3.6 ships supports what M3.7 will consume) +
-     §3 endpoint-layer invariants.
+   - `docs/roadmap/MILESTONE_3_PLANNING.md` §7 M3.6B entry
+     (added at SESSION_061).
+   - `docs/handoffs/SESSION_061_m3_inc6a_admin_api.md` — the
+     M3.6A shape M3.6B mirrors.
    - `docs/handoffs/SESSION_060_m3_inc5_upload_flow.md` —
-     M3.5 shipped-surface manifest + domain errors.
-   - `backend/dealer_ai/services/condition_report.py` — every
-     public function signature (10 total: 7 M3.2 + 3 M3.5).
+     the M3.5 photo service M3.6B wraps.
+   - `backend/dealer_ai/services/condition_report.py` —
+     `request_photo_upload`, `attach_photo`, `delete_photo`
+     signatures + their domain errors.
    - `backend/dealer_ai/services/photo_storage.py` —
-     `generate_read_url` (for signed read URLs in the
-     `GET latest/` response) + `store_local_upload` (for
-     the local-mode receiver).
-   - `backend/dealer_ai/permissions.py` — the
-     `IsSalesManagerOrOwnerAtActiveDealership` class M3.6
-     composes.
-   - `backend/dealer_ai/views.py::admin_vehicle_ledger` and
-     surrounding M2.6 endpoint examples — the shape M3.6
-     mirrors.
-   - `backend/dealer_ai/tests/test_admin_vehicle_ledger.py`
-     — the test-file shape M3.6 mirrors (permission matrix
-     across 5 role/tenant combinations).
+     `store_local_upload` + `LocalUploadNotAvailableError`
+     for the local-mode receiver.
+   - `backend/dealer_ai/views.py` — M3.6A view patterns
+     (lookup helpers, dealership resolution, error mapping).
+     M3.6B additions follow the same shape.
 
 2. **Verify starting state.**
-   - `git status` — clean (or pre-existing untracked).
-   - `python3 manage.py test dealer_ai` → **1,998 pass, 1
+   - `git status` — clean (or only pre-existing untracked).
+   - `python3 manage.py test dealer_ai` → **2,067 pass, 1
      skipped, 0 fail**.
-   - `python3 manage.py showmigrations dealer_ai` →
-     migrations current through `0015_condition_report`.
 
-3. **Wire endpoints in `views.py`.** Add 10 view functions
-   (9 endpoints + local-mode receiver) at the end of the
-   file. Each is a `@api_view + @permission_classes` +
-   thin body that resolves `dealership` and calls the M3.5
-   service, catching domain errors + mapping to HTTP status.
+3. **Add request serializers** in `serializers.py`:
+   - `PhotoRequestUploadSerializer` (content_type only).
+   - `PhotoAttachSerializer` (storage_key, content_type,
+     size_bytes, caption).
+   - No new serializer needed for local-upload receiver
+     (parses multipart directly).
 
-4. **Wire URLs in `urls.py`.** Add 10 URL patterns under the
-   existing admin URL prefix.
+4. **Add photo projection helper** in `views.py`. **Wait —
+   this already exists** (`_project_photo` shipped in
+   M3.6A). Reuse.
 
-5. **No migration.** M3.6 is pure Python.
+5. **Add 4 view functions in `views.py`:**
+   - `admin_condition_photo_request_upload` (POST).
+   - `admin_condition_photo_attach` (POST).
+   - `admin_condition_photo_delete` (DELETE).
+   - `admin_condition_photo_local_upload_receiver` (POST).
 
-6. **Write focused endpoint tests.** New file
-   `backend/dealer_ai/tests/test_admin_condition_report.py`.
-   Target ~80 tests: full permission matrix per endpoint (5
-   role/tenant cases minimum), happy-path business flows,
-   domain-error → HTTP-status mapping, cross-tenant
-   404-closed, signed-URL generation for reads.
+6. **Add lookup helper** in `views.py`:
+   - `_lookup_photo_or_404(dealership, vehicle, public_id)`
+     — traverses `finding__report__vehicle` to enforce the
+     vehicle scope on delete.
 
-7. **Full suite + baseline.** ~2,080 pass (1,998 + ~80),
-   1 skipped, 0 fail.
+7. **Wire 4 URL patterns** in `urls.py`.
 
-8. **Close SESSION_061 with:**
-   - Views + URLs + focused tests committed.
-   - Handoff at
-     `docs/handoffs/SESSION_061_m3_inc6_admin_api.md`.
-   - Overwrite this file with SESSION_062 = M3.7 (operator
-     UI) priority.
-   - Planning §7 M3.6 annotated `SHIPPED at SESSION_061`.
+8. **Import extensions in `views.py`:**
+   - From `condition_report`: `PhotoNotYetUploadedError`,
+     `PhotoMetadataMismatchError`,
+     `PhotoAlreadyAttachedError`.
+   - From `photo_storage`: `InvalidStorageKeyError`,
+     `InvalidContentTypeError`, `InvalidTTLError`,
+     `ObjectStorageError`, `LocalUploadNotAvailableError`,
+     `store_local_upload`.
 
-## Explicit non-goals for SESSION_061
+9. **No migration.** M3.6B is pure Python.
+
+10. **Write focused tests.** Extend
+    `test_admin_condition_report.py` OR add a companion
+    file (decide based on file size — the current file is
+    ~740 lines; adding ~40 more tests keeps it under 1200
+    which is acceptable).
+
+11. **Full suite + baseline.** ~2,107 pass (2,067 + ~40),
+    1 skipped, 0 fail.
+
+12. **Close SESSION_062 with:**
+    - 4 view functions + URLs + focused tests committed.
+    - Handoff at
+      `docs/handoffs/SESSION_062_m3_inc6b_photo_api.md`.
+    - Overwrite this file with SESSION_063 = M3.7 (UI)
+      priority.
+    - Planning §7 M3.6B annotated `SHIPPED at SESSION_062`.
+
+## Explicit non-goals for SESSION_062
 
 - ❌ Do NOT add any frontend file.
-- ❌ Do NOT modify any M3.1 model, migration, or admin
-  registration.
+- ❌ Do NOT modify M3.1 models, migrations, or admin.
 - ❌ Do NOT modify M3.2–M3.5 service signatures.
-- ❌ Do NOT touch `services/vehicle_ledger.py`,
-  `services/tenancy.py`, `services/llm_safety.py`, or any
-  pre / post-LLM guard.
-- ❌ Do NOT reopen M2 semantic contracts.
+- ❌ Do NOT modify M3.6A endpoints, projections, or lookup
+  helpers.
+- ❌ Do NOT introduce an `UploadIntent` model (deferred per
+  M3 spec).
+- ❌ Do NOT create a production-looking local-upload
+  endpoint that exists meaningfully in S3 mode (returns 404
+  in S3 per spec).
+- ❌ Do NOT let tests hit real S3.
 - ❌ Do NOT introduce any AI role.
-- ❌ Do NOT let tests hit real S3 — reuse M3.4 / M3.5 mock
-  patterns.
 - ❌ Do NOT commit any real `AWS_*` or `OPENAI_API_KEY`.
 
 ## NEXT TASK
 
-Start SESSION_061 with the read-first list above. Ship the
-9 admin endpoints + local-mode upload receiver + full
-permission matrix + domain-error → HTTP mapping + ~80
-focused endpoint tests. Do NOT ship the frontend.
+Start SESSION_062 with the read-first list above. Ship the 4
+photo endpoints + local-mode receiver + ~40 focused tests.
+Do NOT ship frontend.
 
-Test baseline at SESSION_061 close: 1,998 → ~2,080.
+Test baseline at SESSION_062 close: 2,067 → ~2,107.
 
 ---
 
@@ -218,30 +210,30 @@ Test baseline at SESSION_061 close: 1,998 → ~2,080.
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 3
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_3_PLANNING.md` — §7 M3.1–M3.5
-   SHIPPED; §7 M3.6 is the sub-scope this session ships.
+5. `docs/roadmap/MILESTONE_3_PLANNING.md` — §7 M3.1, M3.2,
+   M3.3, M3.4, M3.5, M3.6A SHIPPED; §7 M3.6B is the
+   sub-scope this session ships.
 6. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` §6 (lessons)
-7. `docs/roadmap/MILESTONE_2_PLANNING.md` §7.b M2.6 (admin
-   endpoint shape template)
-8. `docs/research/RECON_MAPPING.md` §2.5 + §12
-9. `docs/CAPABILITY_MATRIX.md`
-10. Most recent handoffs
-    (`SESSION_060_m3_inc5_upload_flow.md`,
-    `SESSION_059_m3_inc4_storage.md`,
-    `SESSION_058_m3_inc3_read_model.md`,
-    `SESSION_057_m3_inc2_service_layer.md`,
-    `SESSION_056_m3_inc1_core_models.md`,
-    `SESSION_055_milestone_3_planning.md`).
+7. `docs/research/RECON_MAPPING.md` §2.5 + §13.1
+8. `docs/CAPABILITY_MATRIX.md`
+9. Most recent handoffs
+   (`SESSION_061_m3_inc6a_admin_api.md`,
+   `SESSION_060_m3_inc5_upload_flow.md`,
+   `SESSION_059_m3_inc4_storage.md`,
+   `SESSION_058_m3_inc3_read_model.md`,
+   `SESSION_057_m3_inc2_service_layer.md`,
+   `SESSION_056_m3_inc1_core_models.md`,
+   `SESSION_055_milestone_3_planning.md`).
 
 Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_060 — M3.5 photo workflow shipped)
+## Operational state (post-SESSION_061 — M3.6A core admin API shipped)
 
 - **Backend (local):** Django on `:8001`. Migrations
   `0001`–`0015` applied. Default `Dealership` row exists.
-  Test baseline: **1,998 pass**, 1 skipped, 0 fail.
+  Test baseline: **2,067 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** `vehicle-match-api.onrender.com` — NOT
   active.
 - **Frontend (local):** Vite on `:5173`. Unchanged.
@@ -250,18 +242,19 @@ Narrative docs are claims. Rules + research + code are facts.
 - **DRF defaults + CSRF + endpoint-level permissions:** all
   unchanged.
 - **Migration-check DB alias:** `DATABASES["migration_check"]`.
-  No new migration in M3.5.
-- **Env-override surface:** dealer identity vars +
-  `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME`,
-  `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`,
-  `AWS_SECRET_ACCESS_KEY`, `AWS_S3_CUSTOM_DOMAIN`.
-  Unchanged this session.
+  No new migration in M3.6A.
+- **Env-override surface:** unchanged this session.
+- **New runtime primitives (M3.6A):** 6 admin endpoints
+  under `/api/dealer-ai/admin/vehicles/<stock_number>/…`;
+  3 request serializers; 3 dict-builder projection helpers;
+  3 tenant-scoped lookup helpers.
 - **Dev DB seeded users:** `smoke_owner` +
   `smoke_advisor`. Unchanged.
 - **Milestone 3 shipped surface (in-progress):** M3.0
   planning + M3.1 core models + M3.2 service layer + M3.3
   Vehicle read-model + M3.4 storage abstraction + M3.5
-  photo workflow (SESSION_060 — this session). Remaining
-  M3.6–M3.8 queued for SESSION_061 – SESSION_063.
+  photo workflow + M3.6A core admin API (SESSION_061 —
+  this session). M3.6B (photo endpoints) + M3.7 (UI) +
+  M3.8 (closeout) queued for SESSION_062 – SESSION_064.
 - **`docs/roadmap/DEFERRED_IDEAS.md`** — still does not
   exist.

@@ -21,6 +21,8 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import (
     ChatMessage,
     ChatSession,
+    ConditionFinding,
+    ConditionReport,
     CustomerLead,
     DealerOnboardingProfile,
     Salesperson,
@@ -36,6 +38,9 @@ from .serializers import (
     ChatMessageInputSerializer,
     ChatMessageSerializer,
     ChatSessionSerializer,
+    ConditionFindingCreateRequestSerializer,
+    ConditionFindingUpdateRequestSerializer,
+    ConditionReportCreateRequestSerializer,
     CostCreateRequestSerializer,
     CustomerLeadSerializer,
     DealerOnboardingProfileSerializer,
@@ -77,6 +82,15 @@ from .services.tenancy import get_current_dealership, get_default_dealership
 from .services.trends import trends_snapshot
 from .services.vehicle_assistant import analyze_vehicle, answer_vehicle_question
 from .services.vehicle_ledger import add_cost, record_acquisition
+from . import services  # noqa: F401 — anchor for service submodule imports below
+
+# Milestone 3 · Increment 6A — condition-report admin API.
+from .services import condition_report as condition_report_service
+from .services import photo_storage as photo_storage_service
+from .services.condition_report import (
+    ConditionReportImmutableError,
+    CrossTenantConditionReportError,
+)
 from decimal import ROUND_HALF_UP, Decimal as _Decimal
 
 # Milestone 2 · Increment 6 — money-projection helper. ORM ``Sum``
@@ -1441,3 +1455,497 @@ def admin_vehicle_cost_create(request, stock_number):
         {"cost": VehicleCostOutputSerializer(cost).data},
         status=status.HTTP_201_CREATED,
     )
+
+
+# =========================================================================
+# Milestone 3 · Increment 6A — condition-report admin API (core surface)
+# =========================================================================
+#
+# Six endpoints for reading + writing the condition-report business
+# state. Photo endpoints (request-upload, attach, delete, local-mode
+# receiver) are queued for Increment 6B — see planning §7 M3.6.
+#
+# Every endpoint composes:
+#     [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+# — same permission class M2.6 established. No recon-manager role in
+# M3 (roadmap deferred to M4).
+#
+# Every endpoint:
+#   - Resolves ``dealership = get_current_dealership(request)`` once
+#     at top.
+#   - Scopes ``Vehicle`` lookup to that dealership; ``get()``-based
+#     lookup that raises ``DoesNotExist`` → 404.
+#   - Scopes report / finding lookups explicitly to that dealership;
+#     cross-tenant IDs fail closed with 404 (never 403 — never leak
+#     whether the resource exists in another tenant).
+#   - Passes ``dealership=`` into every service call (never relies on
+#     the pre-save autofill signal).
+#   - Server-owns ``dealership``, ``authored_by``, ``status``,
+#     ``completed_at``; refuses client-supplied values for these
+#     fields (serializer whitelist enforces).
+#
+# Domain-error → HTTP mapping (locked by focused tests):
+#
+#   CrossTenantConditionReportError → 404
+#   ConditionReportImmutableError    → 409 Conflict
+#   ValueError (invalid category/severity from service) → 400
+#   ValidationError (model full_clean) → 400 with message_dict
+#
+# Photo-specific errors
+# (PhotoNotYetUploadedError, PhotoMetadataMismatchError,
+# PhotoAlreadyAttachedError, ObjectStorageError) are wired in M3.6B
+# alongside the photo endpoints.
+#
+# Response projections are inline dict builders (matches the M2.6
+# ``admin_vehicle_ledger`` pattern). Photo projections include
+# ``public_id`` + minimal metadata + signed read URL; ``storage_key``
+# is NEVER exposed.
+
+
+def _project_photo(photo) -> dict:
+    """Response projection for a :class:`ConditionFindingPhoto`.
+
+    ``storage_key`` is deliberately absent — external identity is
+    ``public_id`` (M3.1 refinement). Signed read URL comes from
+    :func:`photo_storage.generate_read_url`; the URL is short-TTL
+    (≤ 900 s per M3.4 cap) and expires_at is included so the UI can
+    schedule a refresh if needed.
+
+    In local dev mode the read URL is a
+    ``LOCAL_READ_URL_MARKER`` prefix (non-URL scheme) — the UI must
+    detect the prefix and resolve through an authenticated Django
+    download route (deferred to M3.7 or a later increment).
+    """
+    signed_url = photo_storage_service.generate_read_url(
+        storage_key=photo.storage_key
+    )
+    expires_at = timezone.now() + timedelta(seconds=900)
+    return {
+        "public_id": str(photo.public_id),
+        "content_type": photo.content_type,
+        "size_bytes": photo.size_bytes,
+        "caption": photo.caption,
+        "uploaded_by": (
+            photo.uploaded_by.username
+            if photo.uploaded_by_id is not None
+            else None
+        ),
+        "created_at": photo.created_at,
+        "signed_read_url": signed_url,
+        "read_url_expires_at": expires_at,
+    }
+
+
+def _project_finding(finding) -> dict:
+    """Response projection for a :class:`ConditionFinding`.
+
+    ``estimated_cost`` serializes as a two-decimal string (or
+    ``null``) so JavaScript's ``Number`` type cannot silently
+    truncate. Photos ordered by ``created_at`` (model Meta ordering).
+    """
+    if finding.estimated_cost is None:
+        cost_repr = None
+    else:
+        cost_repr = str(
+            finding.estimated_cost.quantize(
+                _LEDGER_CENTS, rounding=ROUND_HALF_UP
+            )
+        )
+    return {
+        "id": finding.id,
+        "category": finding.category,
+        "category_display": finding.get_category_display(),
+        "severity": finding.severity,
+        "severity_display": finding.get_severity_display(),
+        "description": finding.description,
+        "estimated_cost": cost_repr,
+        "notes": finding.notes,
+        "created_at": finding.created_at,
+        "updated_at": finding.updated_at,
+        "photos": [_project_photo(p) for p in finding.photos.all()],
+    }
+
+
+def _project_report(report) -> dict:
+    """Response projection for a :class:`ConditionReport`.
+
+    ``findings`` prefetched via ``select_related`` /
+    ``prefetch_related`` at query time; this projection does not
+    trigger additional queries as long as callers primed the
+    related-object cache correctly.
+    """
+    return {
+        "id": report.id,
+        "status": report.status,
+        "status_display": report.get_status_display(),
+        "inspector_name": report.inspector_name,
+        "inspected_at": report.inspected_at,
+        "mileage_at_inspection": report.mileage_at_inspection,
+        "completed_at": report.completed_at,
+        "notes": report.notes,
+        "authored_by": (
+            report.authored_by.username
+            if report.authored_by_id is not None
+            else None
+        ),
+        "created_at": report.created_at,
+        "updated_at": report.updated_at,
+        "findings": [
+            _project_finding(f)
+            for f in report.findings.all()
+        ],
+    }
+
+
+def _lookup_vehicle_or_404(dealership, stock_number):
+    """Tenant-scoped Vehicle lookup — 404 on both nonexistent and
+    cross-tenant. Never leak whether a stock_number exists in
+    another dealership."""
+    try:
+        return Vehicle.objects.filter(dealership=dealership).get(
+            stock_number=stock_number
+        )
+    except Vehicle.DoesNotExist:
+        return None
+
+
+def _lookup_report_or_404(dealership, vehicle, report_id):
+    """Tenant + vehicle scoped ConditionReport lookup. 404 on any
+    miss — cross-tenant, wrong-vehicle, or nonexistent."""
+    try:
+        return ConditionReport.objects.filter(
+            dealership=dealership, vehicle=vehicle
+        ).get(pk=report_id)
+    except ConditionReport.DoesNotExist:
+        return None
+
+
+def _lookup_finding_or_404(dealership, vehicle, finding_id):
+    """Tenant + vehicle scoped ConditionFinding lookup. Traverses
+    finding.report.vehicle to enforce the vehicle scope."""
+    try:
+        return ConditionFinding.objects.filter(
+            dealership=dealership, report__vehicle=vehicle
+        ).get(pk=finding_id)
+    except ConditionFinding.DoesNotExist:
+        return None
+
+
+# ---- 1. Read latest report --------------------------------------------
+
+
+@api_view(["GET"])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_report_latest(request, stock_number):
+    """Return the latest condition report for the vehicle, or
+    ``{report: null}`` when the vehicle has never been inspected.
+
+    Response shape::
+
+        {
+          "vehicle": {stock_number, vin, year, make, model, trim,
+                      price, display_name},
+          "report":  <report projection> | null,
+        }
+
+    Latest = most recent by ``(-inspected_at, -created_at)`` — the
+    service-layer ordering.  Any status (draft or complete);
+    ``latest_completed_condition_report`` isn't exposed here in v1
+    because the operator UI cares about "what's the current
+    inspection state" more than "when did we last sign off."
+
+    Query cost: 4 queries baseline (vehicle + report + findings +
+    photos), plus one ``generate_read_url`` per photo (zero DB /
+    network — presigned URL is client-side). Prefetch primes the
+    ``findings.all() → photos.all()`` chain so no N+1 per finding.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    header = VehicleLedgerHeaderSerializer(vehicle).data
+
+    # Fetch the latest report with findings + photos prefetched.
+    # Cannot use the service function directly here because it
+    # returns a bare instance without prefetch; requery with the
+    # same filter + order.
+    latest = (
+        ConditionReport.objects.filter(
+            vehicle=vehicle, dealership=dealership
+        )
+        .select_related("authored_by")
+        .prefetch_related(
+            "findings",
+            "findings__photos",
+            "findings__photos__uploaded_by",
+        )
+        .order_by("-inspected_at", "-created_at")
+        .first()
+    )
+
+    return Response(
+        {
+            "vehicle": header,
+            "report": _project_report(latest) if latest else None,
+        }
+    )
+
+
+# ---- 2. Create draft report -----------------------------------------
+
+
+@api_view(["POST"])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_report_create(request, stock_number):
+    """Create a new draft condition report for the vehicle.
+
+    Request body validated by
+    :class:`ConditionReportCreateRequestSerializer` — accepts
+    ``inspector_name``, ``inspected_at``, ``mileage_at_inspection``,
+    ``notes``. Server owns ``dealership`` (resolved from request),
+    ``authored_by`` (= ``request.user``), ``status`` (always
+    ``draft`` at create), and ``completed_at`` (NULL at create).
+
+    Returns ``{report: <projection>}`` with 201.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = ConditionReportCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    report = condition_report_service.create_report(
+        vehicle,
+        dealership=dealership,
+        authored_by=request.user,
+        **serializer.validated_data,
+    )
+    # Re-fetch with prefetch so findings/photos surfaces (empty on
+    # create) are hydrated for _project_report's projection.
+    report = (
+        ConditionReport.objects.filter(pk=report.pk)
+        .select_related("authored_by")
+        .prefetch_related(
+            "findings",
+            "findings__photos",
+            "findings__photos__uploaded_by",
+        )
+        .get()
+    )
+    return Response(
+        {"report": _project_report(report)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+# ---- 3. Complete report ---------------------------------------------
+
+
+@api_view(["POST"])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_report_complete(request, stock_number, report_id):
+    """Transition draft → complete.
+
+    Body is empty (or ignored). Server calls
+    :func:`condition_report.complete_report` which atomically sets
+    ``status = "complete"`` and ``completed_at = now()``.
+    Double-complete raises :class:`ConditionReportImmutableError` →
+    409.
+
+    Returns ``{report: <projection>}`` with 200.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    report = _lookup_report_or_404(dealership, vehicle, report_id)
+    if report is None:
+        return Response(
+            {"detail": "Condition report not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        condition_report_service.complete_report(
+            report, dealership=dealership
+        )
+    except ConditionReportImmutableError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    report = (
+        ConditionReport.objects.filter(pk=report.pk)
+        .select_related("authored_by")
+        .prefetch_related(
+            "findings",
+            "findings__photos",
+            "findings__photos__uploaded_by",
+        )
+        .get()
+    )
+    return Response({"report": _project_report(report)})
+
+
+# ---- 4. Add finding -------------------------------------------------
+
+
+@api_view(["POST"])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_finding_create(request, stock_number, report_id):
+    """Add one finding to a draft report.
+
+    Body validated by
+    :class:`ConditionFindingCreateRequestSerializer` — accepts
+    ``category``, ``severity``, ``description``, ``estimated_cost``
+    (nullable), ``notes``. ``report`` scoped by URL; ``dealership``
+    resolved server-side.
+
+    ``estimated_cost`` is documentation-only — never posts to
+    ``VehicleCost`` (locked by M3.1 model tests + M3.2 service
+    tests + a focused endpoint test).
+
+    Returns ``{finding: <projection>}`` with 201.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    report = _lookup_report_or_404(dealership, vehicle, report_id)
+    if report is None:
+        return Response(
+            {"detail": "Condition report not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = ConditionFindingCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        finding = condition_report_service.add_finding(
+            report,
+            dealership=dealership,
+            **serializer.validated_data,
+        )
+    except ConditionReportImmutableError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except ValueError as exc:
+        # Defensive: the serializer's ChoiceField rejects invalid
+        # category/severity, so ValueError from the service's
+        # revalidation shouldn't normally surface. If it does, map
+        # to 400 rather than 500.
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Refetch with photos prefetched (empty on create).
+    finding = (
+        ConditionFinding.objects.filter(pk=finding.pk)
+        .prefetch_related("photos", "photos__uploaded_by")
+        .get()
+    )
+    return Response(
+        {"finding": _project_finding(finding)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+# ---- 5+6. Update / delete finding (single view, dispatches on method) --
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes(
+    [IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership]
+)
+def admin_condition_finding_detail(request, stock_number, finding_id):
+    """PATCH or DELETE one finding on a draft report.
+
+    Combined into a single view because Django URL dispatch is
+    method-agnostic — two ``path()`` entries for the same URL would
+    collide.
+
+    - **PATCH** — every supplied field goes through
+      :func:`condition_report.update_finding` whose whitelist is
+      the source of truth. Attempting to include ``report``,
+      ``dealership``, ``id``, etc. surfaces as ``ValueError`` from
+      the service → 400. Returns ``{finding: <projection>}``
+      with 200.
+    - **DELETE** — 204 on success. 404 on cross-tenant /
+      nonexistent. 409 if the parent report is already complete.
+    """
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    finding = _lookup_finding_or_404(dealership, vehicle, finding_id)
+    if finding is None:
+        return Response(
+            {"detail": "Condition finding not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if request.method == "DELETE":
+        try:
+            condition_report_service.delete_finding(
+                finding, dealership=dealership
+            )
+        except ConditionReportImmutableError as exc:
+            return Response(
+                {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH
+    serializer = ConditionFindingUpdateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        updated = condition_report_service.update_finding(
+            finding,
+            dealership=dealership,
+            **serializer.validated_data,
+        )
+    except ConditionReportImmutableError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    updated = (
+        ConditionFinding.objects.filter(pk=updated.pk)
+        .prefetch_related("photos", "photos__uploaded_by")
+        .get()
+    )
+    return Response({"finding": _project_finding(updated)})

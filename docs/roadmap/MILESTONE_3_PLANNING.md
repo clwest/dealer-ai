@@ -1942,6 +1942,22 @@ permissions, safety stack, or M2 ledger substrate.
 
 ### Increment 6 (M3.6) — Condition-report admin API + permission matrix
 
+**Scope split at SESSION_061.** Per SESSION_061 spec "increment
+discipline takes precedence over session-number convenience,"
+this increment splits into two focused sub-increments:
+
+- **M3.6A — core report API (SHIPPED at SESSION_061).** 6
+  endpoints for the report + finding lifecycle. See
+  "Shipped surface (SESSION_061)" below.
+- **M3.6B — photo API (QUEUED for SESSION_062).** 4 endpoints
+  for the photo request-upload / attach / delete flow +
+  local-mode multipart receiver.
+
+Original scope text preserved below for continuity. The
+SHIPPED annotation reflects the M3.6A portion; M3.6B keeps
+the same governance + permission composition + error-mapping
+contracts.
+
 **Scope.** Eight endpoints under
 `/api/dealer-ai/admin/vehicles/<stock_number>/…`:
 - `GET .../condition-report/latest/` — returns latest report
@@ -1994,6 +2010,196 @@ verification (no condition-report keywords on `/vehicles/<id>/`,
 
 **Boundary.** Test baseline: ~1,913 → ~1,983 pass. No new
 migrations. No frontend.
+
+**Shipped surface — M3.6A (SESSION_061).**
+
+Six endpoints (of the eight listed above); photo endpoints
+queued for M3.6B:
+
+- `GET  admin/vehicles/<stock_number>/condition-report/latest/`
+  — `admin_condition_report_latest`. Returns
+  `{vehicle, report}` where `report` is null when the vehicle
+  has no reports. Report projection includes findings +
+  photos + signed read URLs. Query cost: 4 baseline (vehicle
+  + report + findings + photos via prefetch), plus one
+  `photo_storage.generate_read_url` per photo (client-side,
+  zero DB / network).
+- `POST admin/vehicles/<stock_number>/condition-reports/` —
+  `admin_condition_report_create`. Creates draft only.
+  `authored_by = request.user`. Client-supplied `status`,
+  `completed_at`, `dealership`, `authored_by` are silently
+  ignored by the serializer whitelist and cannot spoof server-
+  owned fields. Returns 201.
+- `POST admin/vehicles/<stock_number>/condition-reports/`
+  `<report_id>/complete/` — `admin_condition_report_complete`.
+  Draft → complete transition. Double-complete → 409.
+- `POST admin/vehicles/<stock_number>/condition-reports/`
+  `<report_id>/findings/` — `admin_condition_finding_create`.
+  Serializer `ChoiceField` rejects invalid category / severity
+  → 400. Completed report → 409.
+- `PATCH admin/vehicles/<stock_number>/findings/`
+  `<finding_id>/` — `admin_condition_finding_detail` (shared
+  with DELETE via method dispatch). Non-whitelisted fields
+  bounce back to serializer errors or service `ValueError`
+  → 400.
+- `DELETE admin/vehicles/<stock_number>/findings/`
+  `<finding_id>/` — same shared view. 204 on success. 409
+  on completed report.
+
+**Response projection contract (locked by tests).**
+
+- `estimated_cost` serializes as a two-decimal string (or
+  `null`) via M2.6 `_money_str` pattern — JS `Number`
+  precision-safe.
+- `storage_key` is NEVER exposed. Photo projection includes
+  `public_id` (UUID string), `content_type`, `size_bytes`,
+  `caption`, `uploaded_by` (username or null), `created_at`,
+  `signed_read_url`, `read_url_expires_at`. Read URL respects
+  the M3.4 900s TTL cap.
+- Photos ordered by `created_at` (model Meta).
+- Findings ordered by `(severity, category, created_at)`
+  (model Meta).
+
+**Domain-error → HTTP-status mapping (locked by tests).**
+
+- `CrossTenantConditionReportError` → 404 (never leak
+  cross-tenant existence).
+- `ConditionReportImmutableError` → 409 Conflict.
+- `ValueError` from service (invalid category, forbidden
+  field) → 400.
+- `ValidationError` from `full_clean` → 400.
+
+Photo-specific errors (`PhotoNotYetUploadedError`,
+`PhotoMetadataMismatchError`, `PhotoAlreadyAttachedError`,
+`ObjectStorageError`) are wired in M3.6B alongside the photo
+endpoints.
+
+**Upload-authorization binding limitation (documented
+honestly per SESSION_061 spec).** M3.6A ships no photo
+endpoints, so no upload-intent binding issue arises in this
+sub-increment. M3.6B will need to address the same
+limitation the SESSION_060 handoff documented: presigned
+upload URLs authorize an upload but persist no intent record.
+The mitigation (attach through the finding-specific route +
+verify key namespace + verify UUID not already attached) is
+sufficient for M3 v1; persistent upload-intent binding
+remains deferred unless implementation evidence proves it is
+required now. **No `UploadIntent` model shipped or planned
+in M3.**
+
+**Tests (SESSION_061).**
+`backend/dealer_ai/tests/test_admin_condition_report.py` —
+**69 tests** across 12 classes:
+
+- 6 permission-matrix classes (one per endpoint × 5 cases
+  each × 1 anonymous case): 30 tests.
+- `ReadLatestBusinessFlow` (6) — empty state, draft returned,
+  findings + photos in projection, latest ordering, 404 on
+  unknown vehicle, estimated_cost null serializes as null.
+- `CreateReportBusinessFlow` (6) — happy path, authored_by
+  not spoofable, status/completed_at not spoofable,
+  dealership not spoofable, required-field validation, 404
+  on unknown vehicle.
+- `CompleteReportBusinessFlow` (3) — transition returns
+  projection, double-complete → 409, cross-tenant report id
+  → 404.
+- `AddFindingBusinessFlow` (5) — happy path, invalid category
+  → 400, invalid severity → 400, completed report → 409, no
+  VehicleCost side effect.
+- `UpdateFindingBusinessFlow` (3) — happy path, no-op
+  permitted, completed report → 409.
+- `DeleteFindingBusinessFlow` (2) — 204 on success + row
+  removed, completed report → 409.
+- `CrossTenantDataScoping` (5) — every endpoint's cross-
+  tenant stock_number / report_id / finding_id lookup fails
+  closed with 404.
+- `NoStorageKeyLeakage` (2) — read + create responses
+  contain no `storage_key`, `bucket`, or AWS credentials.
+- `PublicSurfacesNeverExposeConditionReports` (1) —
+  `salespeople-list` response contains no condition-report
+  keywords.
+
+**Baseline delta.** 1,998 → 2,067 pass, 1 skipped, 0 fail
+(+69 tests, 0 regressions). No migrations. No frontend. No
+model / admin / service / permissions / requirements
+changes.
+
+**Files changed (SESSION_061 — M3.6A only).**
+
+- Modified: `backend/dealer_ai/serializers.py` — added
+  `ConditionReportCreateRequestSerializer`,
+  `ConditionFindingCreateRequestSerializer`,
+  `ConditionFindingUpdateRequestSerializer`. Imports M3.1
+  choice constants.
+- Modified: `backend/dealer_ai/views.py` — added 5 view
+  functions (`admin_condition_report_latest`,
+  `admin_condition_report_create`,
+  `admin_condition_report_complete`,
+  `admin_condition_finding_create`,
+  `admin_condition_finding_detail`), 3 projection helpers
+  (`_project_photo`, `_project_finding`, `_project_report`),
+  3 lookup helpers (`_lookup_vehicle_or_404`,
+  `_lookup_report_or_404`, `_lookup_finding_or_404`). Imports
+  `services.condition_report` + `services.photo_storage`.
+- Modified: `backend/dealer_ai/urls.py` — 5 new URL patterns
+  (PATCH + DELETE share a single URL via method dispatch).
+- New: `backend/dealer_ai/tests/test_admin_condition_report.py`
+  (~740 lines, 69 tests).
+- No modifications to any model, migration, admin, service
+  (beyond imports), permissions, or frontend file.
+
+### Increment 6B (M3.6B) — Condition-report photo API + local-upload receiver — QUEUED for SESSION_062
+
+**Split from M3.6 at SESSION_061.** Per scope-discipline
+pushback ("do not treat all ten proposed endpoints as
+automatically valid just because they fit in one session").
+
+**Scope.**
+
+- `POST .../findings/<finding_id>/photos/request-upload/` —
+  wraps `condition_report_service.request_photo_upload`.
+  Returns `{upload_target: {method, upload_url,
+  storage_key, required_headers, expires_at}}`. **Note:**
+  `storage_key` appears in the upload-target response only
+  because the client needs it to hand back to the attach
+  endpoint after the upload lands. It is NOT the durable
+  identity — see M3.1 refinement. The response separately
+  omits any DB-persisted photo row (there isn't one yet).
+- `POST .../findings/<finding_id>/photos/` — wraps
+  `condition_report_service.attach_photo`. Returns
+  `{photo: <projection>}` with 201.
+- `DELETE .../photos/<public_id>/` — wraps
+  `condition_report_service.delete_photo`. **Path uses
+  `public_id`, NOT `storage_key`.** Lookup: tenant-scoped +
+  finding-report-vehicle-chain-scoped. 204 on success.
+- `POST .../findings/<finding_id>/photos/local-upload/` —
+  local-mode multipart upload receiver. **Returns 404 (not
+  501) in S3 mode** per SESSION_061 spec ("avoid advertising
+  a dev-only transport surface"). When local adapter active,
+  accepts multipart body + validates content type +
+  enforces 25 MB ceiling + calls
+  `photo_storage.store_local_upload`. **Does NOT create the
+  `ConditionFindingPhoto` row** — the normal attach endpoint
+  still performs metadata verification and persistence.
+
+**Domain-error extensions to the M3.6A mapping table:**
+
+- `PhotoNotYetUploadedError` → 409 Conflict.
+- `PhotoMetadataMismatchError` → 409 Conflict.
+- `PhotoAlreadyAttachedError` → 409 Conflict.
+- `InvalidStorageKeyError` → 400.
+- `InvalidContentTypeError` → 400.
+- `InvalidTTLError` → 400.
+- `ObjectStorageError` → 502 Bad Gateway.
+- `LocalUploadNotAvailableError` → 404 (per above).
+
+**Tests target.** ~40 focused endpoint tests (10-15
+permission-matrix + happy paths + domain-error mapping +
+security: storage_key never in DELETE URL, public_id used
+throughout).
+
+**Boundary.** Test baseline: 2,067 → ~2,107. No migrations.
+No frontend.
 
 ### Increment 7 (M3.7) — Operator condition-report UI
 

@@ -113,4 +113,37 @@ urlpatterns = [
         views.admin_vehicle_cost_create,
         name="admin-vehicle-cost-create",
     ),
+    # Milestone 3 · Increment 6A — condition-report admin API (core).
+    # Photo endpoints ship in Increment 6B.
+    path(
+        "admin/vehicles/<str:stock_number>/condition-report/latest/",
+        views.admin_condition_report_latest,
+        name="admin-condition-report-latest",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/condition-reports/",
+        views.admin_condition_report_create,
+        name="admin-condition-report-create",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/condition-reports/"
+        "<int:report_id>/complete/",
+        views.admin_condition_report_complete,
+        name="admin-condition-report-complete",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/condition-reports/"
+        "<int:report_id>/findings/",
+        views.admin_condition_finding_create,
+        name="admin-condition-finding-create",
+    ),
+    # PATCH + DELETE share the same URL path — Django URL dispatch is
+    # method-agnostic, so a single view function handles both HTTP
+    # verbs. The URL name intentionally omits an "update"/"delete"
+    # suffix; test code refers to the shared name.
+    path(
+        "admin/vehicles/<str:stock_number>/findings/<int:finding_id>/",
+        views.admin_condition_finding_detail,
+        name="admin-condition-finding-detail",
+    ),
 ]

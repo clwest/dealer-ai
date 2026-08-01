@@ -2,6 +2,8 @@ from rest_framework import serializers
 
 from .models import (
     ACQUISITION_SOURCE_CHOICES,
+    CONDITION_CATEGORY_CHOICES,
+    CONDITION_SEVERITY_CHOICES,
     VEHICLE_COST_CATEGORY_CHOICES,
     ChatMessage,
     ChatSession,
@@ -630,3 +632,98 @@ class CostCreateRequestSerializer(serializers.Serializer):
     )
     notes = serializers.CharField(required=False, allow_blank=True, default="")
     is_estimate = serializers.BooleanField(required=False, default=False)
+
+
+# ---- Milestone 3 · Increment 6A — condition-report request serializers ----
+#
+# Request-body validation only. Responses use dict-builder projections
+# in ``views.py`` (matches the ``admin_vehicle_ledger`` totals pattern
+# where money formatting + signed-URL insertion live in the view).
+#
+# What is server-owned and NOT accepted from client bodies:
+#
+# - ``status`` — always ``draft`` on create; only ``complete_report``
+#   transitions it. Client cannot pre-set to ``complete`` or spoof.
+# - ``completed_at`` — set atomically by the service when
+#   ``complete_report`` runs.
+# - ``dealership`` — resolved from ``get_current_dealership(request)``;
+#   never accepted from body.
+# - ``authored_by`` — set from ``request.user``; client cannot forge
+#   authorship.
+#
+# On finding update, ``report`` and ``dealership`` are also NOT in
+# the whitelist (re-parenting / re-scoping is not an editing
+# operation — service raises ``ValueError`` if attempted).
+
+
+class ConditionReportCreateRequestSerializer(serializers.Serializer):
+    """Request body for POST ``.../condition-reports/``.
+
+    Every research-backed inspection field (RECON §2.4) is required
+    at create time. ``status`` / ``completed_at`` / ``dealership`` /
+    ``authored_by`` are server-owned and MUST NOT appear in the
+    request body.
+    """
+
+    inspector_name = serializers.CharField(max_length=255)
+    inspected_at = serializers.DateTimeField()
+    mileage_at_inspection = serializers.IntegerField(min_value=0)
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class ConditionFindingCreateRequestSerializer(serializers.Serializer):
+    """Request body for POST ``.../condition-reports/<report_id>/findings/``.
+
+    ``report`` is URL-scoped, not body-supplied. ``dealership`` is
+    resolved server-side.
+    """
+
+    category = serializers.ChoiceField(choices=CONDITION_CATEGORY_CHOICES)
+    severity = serializers.ChoiceField(choices=CONDITION_SEVERITY_CHOICES)
+    description = serializers.CharField()
+    estimated_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class ConditionFindingUpdateRequestSerializer(serializers.Serializer):
+    """Request body for PATCH ``.../findings/<finding_id>/``.
+
+    Every field is optional (PATCH semantics). Whatever the caller
+    supplies is passed to :func:`services.condition_report.update_finding`
+    via ``**kwargs``; the service's whitelist enforcement is the
+    source of truth on what fields are actually updatable — this
+    serializer just validates individual field shapes when supplied.
+
+    Attempting to include ``report``, ``dealership``, ``id`` etc.
+    surfaces as a ``ValueError`` from the service — this serializer
+    doesn't need to reject them defensively.
+    """
+
+    category = serializers.ChoiceField(
+        choices=CONDITION_CATEGORY_CHOICES, required=False
+    )
+    severity = serializers.ChoiceField(
+        choices=CONDITION_SEVERITY_CHOICES, required=False
+    )
+    description = serializers.CharField(required=False)
+    estimated_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+        required=False,
+        allow_null=True,
+    )
+    notes = serializers.CharField(
+        required=False, allow_blank=True
+    )
