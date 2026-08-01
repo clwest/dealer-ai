@@ -8,7 +8,7 @@ milestone: 3
 milestone_status: in-progress
 increment: 3
 increment_status: shipped
-commit: TBD
+commit: c736d03
 ---
 
 # SESSION_058 — Milestone 3 · Increment 3 (M3.3 — Vehicle read-model extension)
