@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: in-progress
 increment: 1
 increment_status: shipped
-commit: TBD
+commit: 7c1eb7e
 ---
 
 # SESSION_066 — Milestone 4 · Increment 1 (M4.1 — core recon persistence)

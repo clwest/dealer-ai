@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: in-progress
 increment: 2
 increment_status: shipped
-commit: TBD
+commit: 9d4404a
 ---
 
 # SESSION_067 — Milestone 4 · Increment 2 (M4.2 — recon service + state machine)
