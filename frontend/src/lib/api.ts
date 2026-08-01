@@ -1301,3 +1301,534 @@ export function deletePhoto(stock: string, publicId: string) {
     `${_conditionReportBasePath(stock)}/photos/${publicId}/`,
   );
 }
+
+// ----------------------------------------------------------------------------
+// Milestone 4 · Increment 6 — recon admin API contract.
+// ----------------------------------------------------------------------------
+//
+// Types + helpers for the 18 endpoints under /admin/vendors/,
+// /admin/vehicles/<stock>/recon/, /admin/vehicles/<stock>/work-orders/,
+// /admin/work-orders/<id>/*, /admin/parts/<id>/, and /admin/comms/*.
+// Every helper uses authFetch — session cookies + CSRF are handled
+// uniformly. Domain-error → HTTP status mapping (locked at the
+// backend's _map_service_error):
+//
+// - 404 → cross-tenant or missing (never leaks cross-tenant existence)
+// - 409 → immutable state (ReconImmutableError / VendorCommImmutableError
+//   / InvalidReconTransitionError / IncompleteConditionReportError)
+// - 422 → LLM output rejected by safety scrub (ReconFactScrubDroppedError)
+// - 502 → LLM upstream returned empty (EmptyDraftError)
+// - 400 → validation / invalid vocabulary
+//
+// Callers should surface these distinctly (see VehicleReconPage
+// error-humanizer helpers).
+
+// ---- Enum vocabularies (mirrored from backend) ----
+
+export const RECON_DECISION_TIER_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "must_do", label: "Must do" },
+  { value: "should_do", label: "Should do" },
+  { value: "wont_do", label: "Won't do" },
+];
+
+export const WORK_ORDER_STATUS_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "draft", label: "Draft" },
+  { value: "approved", label: "Approved" },
+  { value: "in_progress", label: "In progress" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+export const WORK_ORDER_VENUE_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "in_house", label: "In-house" },
+  { value: "outsourced", label: "Outsourced" },
+];
+
+export const WORK_ORDER_PART_STATUS_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "needed", label: "Needed" },
+  { value: "ordered", label: "Ordered" },
+  { value: "backordered", label: "Backordered" },
+  { value: "received", label: "Received" },
+  { value: "installed", label: "Installed" },
+  { value: "returned", label: "Returned" },
+];
+
+export const WORK_ORDER_PART_SOURCE_TYPE_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "oem_dealer", label: "OEM dealer counter" },
+  { value: "local_parts", label: "Local parts store" },
+  { value: "online", label: "Online" },
+  { value: "salvage", label: "Salvage / recycled" },
+  { value: "in_stock", label: "In-house stock" },
+  { value: "customer_supplied", label: "Customer supplied" },
+  { value: "other", label: "Other" },
+];
+
+export const VENDOR_COMMUNICATION_KIND_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "vendor_comm", label: "Vendor communication" },
+  { value: "parts_order", label: "Parts order" },
+  { value: "narrative", label: "Narrative note" },
+];
+
+export const VENDOR_COMMUNICATION_CHANNEL_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "email", label: "Email" },
+  { value: "sms", label: "SMS" },
+  { value: "phone", label: "Phone" },
+  { value: "in_person", label: "In person" },
+  { value: "internal_note", label: "Internal note" },
+];
+
+export const VENDOR_COMMUNICATION_DIRECTION_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "outbound", label: "Outbound" },
+  { value: "inbound", label: "Inbound" },
+];
+
+export const VENDOR_COMMUNICATION_STATUS_CHOICES: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "draft", label: "Draft" },
+  { value: "approved", label: "Approved" },
+  { value: "sent", label: "Sent" },
+  { value: "logged", label: "Logged" },
+];
+
+// ---- Response types ----
+
+export interface Vendor {
+  id: number;
+  slug: string;
+  name: string;
+  categories: string[];
+  phone: string;
+  email: string;
+  notes: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkOrderFindingLink {
+  finding_id: number;
+  category: string;
+  severity: string;
+  description: string;
+}
+
+export interface WorkOrderPart {
+  id: number;
+  work_order_id: number;
+  name: string;
+  description: string;
+  part_number: string;
+  quantity: number;
+  unit_cost: string | null;
+  status: string;
+  source_type: string;
+  source_name: string;
+  ordered_at: string | null;
+  received_at: string | null;
+  installed_at: string | null;
+  returned_at: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkOrder {
+  id: number;
+  vehicle_stock_number: string;
+  category: string;
+  venue: string;
+  vendor: { id: number; slug: string; name: string } | null;
+  assignee_username: string | null;
+  status: string;
+  estimated_cost: string | null;
+  authorized_cost: string | null;
+  actual_cost: string | null;
+  estimated_completion_date: string | null;
+  actual_completion_date: string | null;
+  notes: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  started_by: string | null;
+  started_at: string | null;
+  completed_by: string | null;
+  completed_at: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string;
+  created_at: string;
+  updated_at: string;
+  findings: WorkOrderFindingLink[];
+  parts: WorkOrderPart[];
+}
+
+export interface ReconDecision {
+  id: number;
+  finding_id: number;
+  tier: string;
+  notes: string;
+  decided_by: string | null;
+  decided_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VendorCommunicationSourceBundle {
+  vehicle?: Record<string, unknown>;
+  vendor?: Record<string, unknown>;
+  findings?: Array<Record<string, unknown>>;
+  parts_needed?: Array<Record<string, unknown>>;
+  authorized_cost?: string | null;
+  estimated_completion_date?: string | null;
+  operator_notes?: string;
+  [k: string]: unknown;
+}
+
+export interface VendorCommunicationProvenance {
+  source_bundle?: VendorCommunicationSourceBundle;
+  scrubs_fired?: string[];
+  llm_provider?: string;
+  logged_off_system?: boolean;
+  note?: string;
+  [k: string]: unknown;
+}
+
+export interface VendorCommunication {
+  id: number;
+  kind: string;
+  channel: string;
+  direction: string;
+  status: string;
+  vendor: { id: number; slug: string; name: string } | null;
+  work_order_id: number | null;
+  draft_content: string;
+  sent_content: string;
+  source_provenance: VendorCommunicationProvenance;
+  notes: string;
+  drafted_by: string | null;
+  drafted_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  sent_by: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReconDashboardFinding {
+  id: number;
+  category: string;
+  severity: string;
+  description: string;
+  estimated_cost: string | null;
+  decision: ReconDecision | null;
+}
+
+export interface ReconDashboardReport {
+  id: number;
+  inspected_at: string;
+  inspector_name: string;
+  mileage_at_inspection: number;
+  completed_at: string;
+  findings: ReconDashboardFinding[];
+}
+
+export interface ReconDashboardResponse {
+  vehicle: {
+    stock_number: string;
+    year: number;
+    model: string;
+  };
+  latest_condition_report: ReconDashboardReport | null;
+  work_orders: WorkOrder[];
+  communications: VendorCommunication[];
+}
+
+// ---- Request payload types ----
+
+export interface VendorCreatePayload {
+  name: string;
+  slug: string;
+  categories?: string[];
+  phone?: string;
+  email?: string;
+  notes?: string;
+  is_active?: boolean;
+}
+
+export interface VendorUpdatePayload {
+  name?: string;
+  categories?: string[];
+  phone?: string;
+  email?: string;
+  notes?: string;
+  is_active?: boolean;
+}
+
+export interface WorkOrderCreatePayload {
+  category: string;
+  venue: string;
+  vendor_slug?: string | null;
+  assignee_id?: number | null;
+  estimated_cost?: string | null;
+  estimated_completion_date?: string | null;
+  notes?: string;
+}
+
+export interface WorkOrderApprovePayload {
+  authorized_cost?: string | null;
+}
+
+export interface WorkOrderCompletePayload {
+  actual_cost: string;
+  actual_completion_date?: string | null;
+}
+
+export interface WorkOrderCancelPayload {
+  cancellation_reason?: string;
+}
+
+export interface WorkOrderPatchPayload {
+  new_estimated_cost?: string | null;
+}
+
+export interface WorkOrderPartCreatePayload {
+  name: string;
+  description?: string;
+  part_number?: string;
+  quantity?: number;
+  unit_cost?: string | null;
+  source_type?: string;
+  source_name?: string;
+  notes?: string;
+}
+
+export interface WorkOrderPartPatchPayload {
+  name?: string;
+  description?: string;
+  part_number?: string;
+  quantity?: number;
+  unit_cost?: string | null;
+  source_type?: string;
+  source_name?: string;
+  notes?: string;
+  new_status?: string;
+}
+
+export interface ReconDecisionPayload {
+  tier: string;
+  notes?: string;
+}
+
+export interface VendorCommDraftPayload {
+  kind: string;
+  channel: string;
+  direction?: string;
+  extra_notes?: string;
+}
+
+export interface VendorCommMarkSentPayload {
+  sent_content?: string | null;
+}
+
+export interface VendorCommLogPayload {
+  work_order_id?: number | null;
+  kind: string;
+  channel: string;
+  direction: string;
+  body: string;
+}
+
+// ---- Helpers ----
+
+function _adminBase(): string {
+  return `/admin`;
+}
+
+// Vendor CRUD.
+export function fetchVendors() {
+  return authGetJSON<{ vendors: Vendor[] }>(`${_adminBase()}/vendors/`);
+}
+
+export function createVendor(body: VendorCreatePayload) {
+  return authPostJSON<{ vendor: Vendor }>(`${_adminBase()}/vendors/`, body);
+}
+
+export function fetchVendor(slug: string) {
+  return authGetJSON<{ vendor: Vendor }>(
+    `${_adminBase()}/vendors/${encodeURIComponent(slug)}/`,
+  );
+}
+
+export function updateVendor(slug: string, body: VendorUpdatePayload) {
+  return authPatchJSON<{ vendor: Vendor }>(
+    `${_adminBase()}/vendors/${encodeURIComponent(slug)}/`,
+    body,
+  );
+}
+
+// Recon dashboard.
+export function fetchReconDashboard(stock: string) {
+  return authGetJSON<ReconDashboardResponse>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/recon/`,
+  );
+}
+
+// Recon decision.
+export function recordReconDecision(
+  stock: string,
+  findingId: number,
+  body: ReconDecisionPayload,
+) {
+  return authPostJSON<{ decision: ReconDecision }>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/findings/${findingId}/recon-decision/`,
+    body,
+  );
+}
+
+// WorkOrder.
+export function createWorkOrder(stock: string, body: WorkOrderCreatePayload) {
+  return authPostJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(stock)}/work-orders/`,
+    body,
+  );
+}
+
+export function approveWorkOrder(
+  woId: number,
+  body: WorkOrderApprovePayload = {},
+) {
+  return authPostJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/work-orders/${woId}/approve/`,
+    body,
+  );
+}
+
+export function startWorkOrder(woId: number) {
+  return authPostJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/work-orders/${woId}/start/`,
+    {},
+  );
+}
+
+export function completeWorkOrder(
+  woId: number,
+  body: WorkOrderCompletePayload,
+) {
+  return authPostJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/work-orders/${woId}/complete/`,
+    body,
+  );
+}
+
+export function cancelWorkOrder(
+  woId: number,
+  body: WorkOrderCancelPayload = {},
+) {
+  return authPostJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/work-orders/${woId}/cancel/`,
+    body,
+  );
+}
+
+export function reviseEstimate(woId: number, body: WorkOrderPatchPayload) {
+  return authPatchJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/work-orders/${woId}/`,
+    body,
+  );
+}
+
+export function attachFindings(woId: number, findingIds: number[]) {
+  return authPostJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/work-orders/${woId}/findings/`,
+    { finding_ids: findingIds },
+  );
+}
+
+export function detachFinding(woId: number, findingId: number) {
+  return authDelete(
+    `${_adminBase()}/work-orders/${woId}/findings/${findingId}/`,
+  );
+}
+
+// Parts.
+export function addWorkOrderPart(
+  woId: number,
+  body: WorkOrderPartCreatePayload,
+) {
+  return authPostJSON<{ part: WorkOrderPart }>(
+    `${_adminBase()}/work-orders/${woId}/parts/`,
+    body,
+  );
+}
+
+export function updateWorkOrderPart(
+  partId: number,
+  body: WorkOrderPartPatchPayload,
+) {
+  return authPatchJSON<{ part: WorkOrderPart }>(
+    `${_adminBase()}/parts/${partId}/`,
+    body,
+  );
+}
+
+export function deleteWorkOrderPart(partId: number) {
+  return authDelete(`${_adminBase()}/parts/${partId}/`);
+}
+
+// Vendor communications.
+export function draftVendorComm(woId: number, body: VendorCommDraftPayload) {
+  return authPostJSON<{ communication: VendorCommunication }>(
+    `${_adminBase()}/work-orders/${woId}/comms/draft/`,
+    body,
+  );
+}
+
+export function approveVendorComm(commId: number) {
+  return authPostJSON<{ communication: VendorCommunication }>(
+    `${_adminBase()}/comms/${commId}/approve/`,
+    {},
+  );
+}
+
+export function markVendorCommSent(
+  commId: number,
+  body: VendorCommMarkSentPayload = {},
+) {
+  return authPostJSON<{ communication: VendorCommunication }>(
+    `${_adminBase()}/comms/${commId}/mark-sent/`,
+    body,
+  );
+}
+
+export function logVendorComm(body: VendorCommLogPayload) {
+  return authPostJSON<{ communication: VendorCommunication }>(
+    `${_adminBase()}/comms/log/`,
+    body,
+  );
+}

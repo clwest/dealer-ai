@@ -1,231 +1,190 @@
 ---
 state: active
 date: 2026-08-01
-last_session_shipped: SESSION_071
+last_session_shipped: SESSION_072
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
-milestone_4_status: in-progress
-next_session: SESSION_072
+milestone_4_status: closeout-pending
+next_session: SESSION_073
 next_milestone: 4
 next_milestone_name: "Recon automation"
-next_increment: 7
-next_increment_name: "M4.7 — Operator UI (VehicleReconPage + components)"
+next_increment: 9
+next_increment_name: "M4.9 — Verification + closeout (docs-only)"
 ---
 
-# Next session — SESSION_072 · Milestone 4 · Increment 7 (M4.7 — operator UI)
+# Next session — SESSION_073 · Milestone 4 · Increment 9 (M4.9 — closeout)
 
-> **Milestone 4 · Increment 6 shipped at SESSION_071.**
-> Eighteen admin API endpoints under
-> `/api/dealer-ai/admin/`, new permission class
-> `IsReconManagerSalesManagerOrOwnerAtActiveDealership`,
-> new view module `views_recon.py` (~750 lines), 89
-> focused endpoint tests. Backend baseline **2,429 →
-> 2,518 pass**, 1 skipped, 0 fail. Zero frontend changes.
-> Zero migrations. Endpoints delegate entirely to
-> `services/recon.py` + `services/vendor_comm.py`.
+> **Milestone 4 · Increment 7 shipped at SESSION_072.**
+> Frontend recon operator UI: new route
+> `/dealer-ai-inventory/:stock/recon` + `VehicleReconPage.tsx`
+> + 6 extracted components in `components/recon/` + typed
+> API helpers for all 18 M4.6 endpoints appended to
+> `lib/api.ts` + "Recon" button on the operator inventory
+> card. Backend frozen at **2,518 pass**; `tsc --noEmit`
+> clean; `vite build` clean.
 >
-> **SESSION_072 opens M4.7 — the frontend operator UI.**
-> New route `/dealer-ai-inventory/:stock/recon` +
-> `VehicleReconPage.tsx` + 7 extracted components +
-> typed API helpers for every M4.6 endpoint. Backend
-> stays frozen — this session is frontend-only.
+> **M4.8 (deferred send) is NOT landing** — planning §5.i
+> + §5.j lock the "no live send in M4 v1" posture; without
+> a real pilot-store engagement, M4.8 stays deferred. M4
+> closes at M4.9.
+>
+> **SESSION_073 opens M4.9 — the closeout.** Documentation-
+> only session mirroring M2.8 / M3.8 shape: §3 compatibility
+> sweep, `MILESTONE_4_RETROSPECTIVE.md`, capability matrix
+> §7e, roadmap flip, planning-doc frontmatter flip to
+> `shipped`, start-here overwrite for M5.0 planning.
 
 ## Governance layers (all apply, in this order on conflict)
 
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 4
-4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_4_PLANNING.md`:
-   - §1.7 (Vehicle read-model extension —
-     `open_work_orders` + `has_recon_decisions`).
-   - §5.g provenance rendering + human-approval visual
-     distinction.
-   - §7 M4.7 (frontend deliverable list + shape).
-6. `docs/handoffs/SESSION_071_m4_inc6_admin_api.md` — this
+4. `docs/roadmap/MILESTONE_4_PLANNING.md`:
+   - §3 compatibility checklist (every row gets an evidence
+     citation at M4.9).
+   - §5.i (send deferred) + §5.j (prod deployment
+     deferred) locking M4.8 as NOT landing in this
+     milestone.
+   - §7 M4.9 (docs-only deliverable list).
+5. `docs/handoffs/SESSION_072_m4_inc7_operator_ui.md` — this
    session's authoritative closeout + "Recommended exact
-   scope for SESSION_072".
-7. Prior M4 handoffs (066–070).
-8. `docs/handoffs/SESSION_063_m3_inc7_operator_ui.md` —
-   M3.7 operator UI, the closest analog M4.7 mirrors.
-9. `frontend/src/pages/VehicleConditionReportPage.tsx` —
-   M3.7's operator page + component extraction pattern.
-10. `CLAUDE.md` frontend stack notes — Tailwind v3 +
-    shadcn on the radix-nova bridged preset.
+   scope for SESSION_073".
+6. Prior M4 handoffs (066, 067, 068, 069, 070, 071).
+7. `docs/roadmap/MILESTONE_3_RETROSPECTIVE.md` — the
+   retrospective shape M4.9 mirrors.
+8. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md` — same
+   template.
+9. `docs/CAPABILITY_MATRIX.md` §7c + §7d — the M2 / M3
+   surface-entry shape M4.9 mirrors for §7e.
 
-## What M4.7 delivers
+## What M4.9 delivers
 
-**Frontend only.** No backend changes. No migrations. No
-new endpoints. No AI. No SMTP/SMS. Every screen surface
-consumes M4.6 admin API via `authFetch` per
-AUTHENTICATION_MODEL.md.
+**Documentation only.** No code changes. No migrations.
+No frontend changes. Backend baseline **2,518 pass**
+unchanged.
 
-### New route
+### Concrete deliverables
 
-`/dealer-ai-inventory/:stock/recon` — inside `<RequireAuth>`
-in `frontend/src/main.tsx`. Sits alongside M2.7 ledger +
-M3.7 condition-report routes.
+1. **§3 compatibility sweep in `MILESTONE_4_PLANNING.md`.**
+   Every row in the M1 + M2 + M3 invariants list and the
+   new M4 invariants list gets a bulleted evidence
+   citation (test class, code location, or runtime probe
+   that locks it). Mirrors M2.8 / M3.8 discipline.
 
-### Page + extracted components
+2. **`docs/roadmap/MILESTONE_4_RETROSPECTIVE.md`** — new
+   document mirroring `MILESTONE_3_RETROSPECTIVE.md`
+   shape:
 
-- `frontend/src/pages/VehicleReconPage.tsx` (~500 line
-  target — extract per M3.7 discipline).
-- Extracted components in `frontend/src/components/recon/`:
-  - `ReconDashboard` — the top-of-page recon summary
-    (report + decisions + WO list).
-  - `DecisionRow` — one recon decision line with
-    must/should/won't visual affordances.
-  - `WorkOrderCard` — one WorkOrder tile with all
-    metadata + action buttons per current status.
-  - `WorkOrderStatusBadge` — reusable status pill
-    (draft / approved / in_progress / completed /
-    cancelled).
-  - `PartRow` — one WorkOrderPart line with
-    transition-status dropdown.
-  - `VendorCommDraftPanel` — vendor comm draft display +
-    approve/edit/mark-sent affordances; renders
-    `source_provenance` alongside the draft body so
-    operators can see the AI-vs-human boundary.
-  - `VendorPickerModal` — modal for selecting a vendor
-    when creating an outsourced WO.
+   - Shipped increments (M4.1 – M4.7 with commit hashes +
+     one-line summaries + baseline deltas).
+   - Load-bearing decisions in review (§5.a through
+     §5.j — did each play out as expected? Any
+     revisions warranted?).
+   - Deferred:
+     - M4.8 send (planning §5.i + §5.j — deferred to
+       post-M4 prod-readiness pass).
+     - QcVerification (§1.0.QC-GAP — Path A vs Path B
+       decision deferred).
+     - Vendor CRUD admin page in the UI (M4.7
+       explicit non-goal).
+     - Per-sentence source_provenance UI attribution.
+   - Lessons learned (with cross-refs to M2 §6 + M3 §6
+     lessons carried forward).
+   - M5 bootstrap notes — what M5 needs to know about the
+     M4 substrate (open_work_orders + has_recon_decisions
+     Vehicle properties; ledger family in the M2
+     substrate; the recon-fact scrub kind values).
 
-### Typed API helpers
+3. **`docs/CAPABILITY_MATRIX.md` §7e** — new section
+   "Recon automation (Milestone 4, shipped)". Every M4.1
+   – M4.7 surface gets an entry mirroring §7c / §7d shape.
 
-Extend `frontend/src/lib/api.ts` with typed helpers for
-every M4.6 endpoint. Each helper uses `authFetch` and
-maps the domain-error → HTTP status codes M4.6 documented
-(404 / 409 / 422 / 502 / 400) into distinct UI states.
+4. **`docs/roadmap/IMPLEMENTATION_ROADMAP.md` §M4 marked
+   SHIPPED; §M5 promoted** to the next in-scope
+   milestone.
 
-### Role gating
+5. **`MILESTONE_4_PLANNING.md` frontmatter flip** to
+   `status: shipped`.
 
-Show write affordances only for `recon_manager` /
-`sales_manager` / `dealer_owner` (mirrors the M4.6 permission
-class). Read-only for other roles that somehow land on the
-page. Uses `useAuth()` to gate.
+6. **Overwrite `00-START-NEXT-SESSION.md`** with M5.0
+   priority (M5 planning pass, mirroring the SESSION_055
+   → M3 or SESSION_065 → M4 planning-pass shape).
 
-### Provenance rendering
-
-`source_provenance` on vendor comm rows contains
-`source_bundle` (the human-authored facts the AI drew
-from), `scrubs_fired` (which safety scrubs modified the
-output), and `llm_provider`. The UI renders the source
-bundle in a collapsible side panel so the operator can
-compare the AI draft against the ground truth.
-
-### Distinct HTTP-status UX
-
-- 401 → redirect to `/login?next=<current>`.
-- 403 → "You don't have permission to modify this."
-- 404 → "Resource not found." (never leak cross-tenant
-  existence).
-- 409 → "This action conflicts with the current state.
-  Refresh and try again." (per-transition text may
-  provide more context.)
-- 422 → "The AI draft was rejected by the safety scrub.
-  Please review your inputs and retry." (specific to
-  vendor comm draft.)
-- 502 → "The AI service returned no draft. Please retry
-  in a moment."
-
-### Draft-vs-approved-vs-sent visual states
-
-Vendor comm rows visually distinct across all four states
-(draft, approved, sent, logged). Not merely disabled
-buttons — per planning §3 checklist for M4 frontend:
-"Draft-vs-approved-vs-sent UI states are visually
-distinct (not merely disabled) — same discipline as
-M3.7's CompletionBanner."
-
-## What SESSION_072 should do
+## What SESSION_073 should do
 
 ### Recommended step sequence
 
 1. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_4_PLANNING.md` §1.7 +
-     §5.g + §7 M4.7.
-   - `docs/handoffs/SESSION_071_m4_inc6_admin_api.md` —
-     scope block above.
-   - `docs/handoffs/SESSION_063_m3_inc7_operator_ui.md` —
-     M3.7 operator UI closest analog.
-   - `frontend/src/pages/VehicleConditionReportPage.tsx` —
-     the M3.7 page pattern.
-   - `frontend/src/components/condition-report/` — extracted
-     components pattern.
-   - `frontend/src/lib/api.ts` — existing helper shape.
-   - `frontend/src/main.tsx` — where to register the new
-     route.
-   - `CLAUDE.md` frontend stack notes — Tailwind v3 +
-     shadcn bridge details.
+   - `docs/roadmap/MILESTONE_4_PLANNING.md` §3 checklist +
+     §5.i + §5.j + §7 M4.9.
+   - `docs/handoffs/SESSION_072_m4_inc7_operator_ui.md` —
+     scope block.
+   - All prior M4 handoffs (066–072) to gather commit
+     hashes + baseline deltas for the retrospective.
+   - `docs/roadmap/MILESTONE_3_RETROSPECTIVE.md` — the
+     shape M4.9 mirrors.
+   - `docs/CAPABILITY_MATRIX.md` §7c + §7d — the
+     surface-entry shape §7e mirrors.
+   - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §M4 + §M5.
 
 2. **Verify starting state.**
    - `git status` clean (or only pre-existing untracked).
    - `python3 manage.py test dealer_ai` → **2,518 pass, 1
-     skipped, 0 fail** (backend frozen for this session).
+     skipped, 0 fail**.
+   - `python3 manage.py check` clean.
+   - `python3 manage.py makemigrations --check --dry-run`
+     → "No changes detected."
    - `npx tsc --noEmit` clean.
    - `npx vite build` clean.
 
-3. **Add typed API helpers** for every M4.6 endpoint to
-   `lib/api.ts`.
+3. **Do the §3 sweep** by walking every checklist row in
+   `MILESTONE_4_PLANNING.md` §3 and adding an evidence
+   citation. This is a hand-crafted pass — a mechanical
+   grep is not sufficient because some invariants live
+   across multiple test files.
 
-4. **Create component files** in
-   `frontend/src/components/recon/`. Start with
-   `WorkOrderStatusBadge` (simplest; reusable across
-   other components). Then `DecisionRow`, `PartRow`,
-   `WorkOrderCard`, `VendorCommDraftPanel`,
-   `VendorPickerModal`, `ReconDashboard`.
+4. **Draft `MILESTONE_4_RETROSPECTIVE.md`** with the six
+   sections above.
 
-5. **Create `VehicleReconPage.tsx`** that composes the
-   components and wires them to the API helpers via
-   `useQuery` / `useMutation` (or the existing fetch
-   pattern in this codebase — check `VehicleConditionReportPage`
-   for the choice).
+5. **Add `CAPABILITY_MATRIX.md` §7e** with entries for
+   every M4 surface.
 
-6. **Register the route** in `main.tsx` inside
-   `<RequireAuth>`.
+6. **Flip `IMPLEMENTATION_ROADMAP.md`** — §M4 → SHIPPED,
+   §M5 → next.
 
-7. **Add the "Recon" button** to the operator inventory
-   card wherever the M2.7 "Ledger" + M3.7 "Condition
-   Report" buttons live. Match style.
+7. **Flip `MILESTONE_4_PLANNING.md` frontmatter** to
+   `status: shipped`.
 
-8. **Verify frontend build.**
-   - `npx tsc --noEmit` clean.
-   - `npx vite build` clean.
-   - Manual browser walkthrough NOT required for M4.7 —
-     per M3.7 honesty precedent, deferred to operator
-     first-live-use.
+8. **Ship handoff at
+   `docs/handoffs/SESSION_073_m4_closeout.md`** mirroring
+   the M3.8 closeout handoff shape.
 
-9. **Ship handoff at
-   `docs/handoffs/SESSION_072_m4_inc7_operator_ui.md`**
-   mirroring the previous shape.
+9. **Overwrite `00-START-NEXT-SESSION.md`** with the M5.0
+   planning-pass priority (mirroring SESSION_055 → M3 or
+   SESSION_065 → M4 planning-pass invocations).
 
-10. **Overwrite `00-START-NEXT-SESSION.md`** with M4.8
-    priority (deferred send subset, or M4.9 closeout if
-    M4.8 is not landing per §5.i).
+## Explicit non-goals for SESSION_073
 
-## Explicit non-goals for SESSION_072
-
-- ❌ Do NOT touch backend files.
-- ❌ Do NOT add real SMTP/SMS send UI. Planning §5.i
-  defers.
-- ❌ Do NOT surface QC verification UI — §1.0.QC-GAP
-  annotation deferred to future increment.
-- ❌ Do NOT add any new endpoint — M4.6 is closed.
-- ❌ Do NOT modify any service module.
-- ❌ Do NOT introduce any migration.
-- ❌ Do NOT add real LLM API calls anywhere.
+- ❌ Any code change (M4.9 is docs-only per §7 M4.9).
+- ❌ Marking M4.8 shipped (it is deferred, not shipped).
+- ❌ Any migration.
+- ❌ Any frontend change.
+- ❌ Adding `docs/roadmap/DEFERRED_IDEAS.md` — the
+  deferred items already have homes in the planning /
+  retrospective / handoff docs; a separate file is only
+  worth adding when the volume genuinely exceeds what
+  those homes can hold.
 
 ## NEXT TASK
 
-Start SESSION_072 with the read-first list above. Extend
-`lib/api.ts` with typed helpers for all 18 M4.6
-endpoints. Build the seven recon components + one
-`VehicleReconPage.tsx`. Register the route + add the
-inventory-card button. Verify `tsc --noEmit` + `vite
-build` clean. Ship the M4.7 handoff.
-
-Backend baseline at SESSION_072 close: **2,518 pass** (unchanged
-— frontend-only session).
+Start SESSION_073 with the read-first list above. Do the
+§3 evidence sweep, draft
+`MILESTONE_4_RETROSPECTIVE.md`, add
+`CAPABILITY_MATRIX.md` §7e, flip the roadmap +
+planning-doc frontmatter, ship the M4 closeout handoff,
+overwrite start-here for M5.0 planning. Backend baseline
+unchanged. Frontend baseline unchanged.
 
 ---
 
@@ -234,18 +193,18 @@ Backend baseline at SESSION_072 close: **2,518 pass** (unchanged
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 4
-4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_4_PLANNING.md` (SESSION_066 +
-   SESSION_067 + SESSION_068 amendments; §7 M4.7 anchors)
-6. `docs/handoffs/SESSION_071_m4_inc6_admin_api.md`
-7. Prior M4 handoffs (066, 067, 068, 069, 070)
-8. `docs/handoffs/SESSION_063_m3_inc7_operator_ui.md`
-9. `docs/handoffs/SESSION_065_m4_planning.md`
-10. `frontend/src/pages/VehicleConditionReportPage.tsx`
-11. `CLAUDE.md` frontend stack notes
-12. `docs/CAPABILITY_MATRIX.md` §7c + §7d
-13. Most recent handoffs
-    (`SESSION_071_m4_inc6_admin_api.md`,
+4. `docs/roadmap/MILESTONE_4_PLANNING.md` (SESSION_066 +
+   SESSION_067 + SESSION_068 amendments)
+5. `docs/handoffs/SESSION_072_m4_inc7_operator_ui.md`
+6. Prior M4 handoffs (066, 067, 068, 069, 070, 071)
+7. `docs/handoffs/SESSION_065_m4_planning.md`
+8. `docs/roadmap/MILESTONE_3_RETROSPECTIVE.md` (shape M4.9
+   mirrors)
+9. `docs/roadmap/MILESTONE_2_RETROSPECTIVE.md`
+10. `docs/CAPABILITY_MATRIX.md` §7c + §7d
+11. Most recent handoffs
+    (`SESSION_072_m4_inc7_operator_ui.md`,
+    `SESSION_071_m4_inc6_admin_api.md`,
     `SESSION_070_m4_inc5_vendor_comm.md`,
     `SESSION_069_m4_inc4_parts.md`,
     `SESSION_068_m4_inc3_ledger.md`,
@@ -266,38 +225,51 @@ Narrative docs are claims. Rules + research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_071 — M4.6 admin API shipped)
+## Operational state (post-SESSION_072 — M4.7 operator UI shipped)
 
 - **Backend (local):** Django on `:8001`. Migrations
   `0001`–`0016` (unchanged since SESSION_066). Test
-  baseline: **2,518 pass**, 1 skipped, 0 fail (up from
-  2,429; +89 M4.6 endpoint tests).
+  baseline: **2,518 pass**, 1 skipped, 0 fail (unchanged
+  since SESSION_071).
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`. `tsc --noEmit`
-  clean. `vite build` clean. Unchanged.
+  clean. `vite build` clean. New route + page + 6
+  components landed.
 - **Frontend (prod):** NONE.
-- **DRF admin surface:** 18 new M4.6 endpoints under
-  `/api/dealer-ai/admin/` for vendors, recon dashboard,
-  work orders, parts, and vendor comms. All gated by
-  `IsReconManagerSalesManagerOrOwnerAtActiveDealership`.
-- **Milestone 4 status:** M4.1 + M4.2 + M4.3 + M4.4 +
-  M4.5 + M4.6 shipped; frontend operator UI (M4.7) is
-  the next in-scope increment.
-- **Dev DB seeded users:** `smoke_owner` +
-  `smoke_advisor`. Neither has `recon_manager` role yet;
-  M4.7 verification should create a `smoke_recon` user
-  with `recon_manager` role for smoke testing (or
-  extend `smoke_owner` with an additional membership).
+- **DRF admin surface:** 18 M4.6 recon endpoints under
+  `/api/dealer-ai/admin/` (unchanged since SESSION_071).
+- **Frontend surface:**
+  - Route `/dealer-ai-inventory/:stock/recon` inside
+    `<RequireAuth>`.
+  - `VehicleReconPage.tsx` (~640 lines).
+  - `components/recon/` — 6 extracted components:
+    WorkOrderStatusBadge, DecisionRow, PartRow,
+    VendorPickerModal, VendorCommDraftPanel,
+    WorkOrderCard.
+  - 18 typed API helpers in `lib/api.ts` covering every
+    M4.6 endpoint + full type surface (response +
+    request payload types + enum vocabularies).
+  - "Recon" button on operator inventory card
+    (`InventoryPreviewPage.tsx`).
+- **Milestone 4 status:** M4.1 – M4.7 shipped; M4.8
+  deferred per §5.i / §5.j; **M4.9 closeout is the next
+  in-scope work**. Planning artifact `status: draft`
+  (flips at M4.9).
+- **Dev DB seeded users:** `smoke_owner` + `smoke_advisor`.
+  Neither has `recon_manager` role yet — M4 verification
+  should extend `smoke_owner` with an additional
+  `recon_manager` membership (or create a `smoke_recon`
+  user) for smoke testing.
 - **Service surface:**
-  - `services/recon.py`: 11 recon + 1 revise_estimate + 4
+  - `services/recon.py`: 11 recon + revise_estimate + 4
     parts + 2 Vehicle read helpers + 4 domain errors + 5
     ledger helpers.
   - `services/vendor_comm.py`: 4 functions + 4 domain
     errors.
-- **View surface:** `views.py` (M1 – M3 endpoints, ~2,400
-  lines) + `views_recon.py` (M4.6 endpoints, ~750 lines).
+- **View surface:** `views.py` (M1 – M3, ~2,400 lines) +
+  `views_recon.py` (M4.6, ~750 lines).
 - **Permission classes:**
   `IsAdvisorForSlug`, `IsDealerOwnerForAdvisorSlug`,
   `IsSalesManagerOrOwnerAtActiveDealership`,
-  `IsReconManagerSalesManagerOrOwnerAtActiveDealership`
-  (M4.6), `IsDealerOwnerAtActiveDealership`, `ReadOnly`.
+  `IsReconManagerSalesManagerOrOwnerAtActiveDealership`,
+  `IsDealerOwnerAtActiveDealership`, `ReadOnly`.

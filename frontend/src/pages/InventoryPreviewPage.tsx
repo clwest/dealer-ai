@@ -10,7 +10,7 @@
 // When CRM/DMS feed integration lands, replace the data import with
 // the live source and delete the sample module.
 
-import { BookOpen, ClipboardCheck, ExternalLink, Gauge, Sparkles, Tag, Zap } from "lucide-react";
+import { BookOpen, ClipboardCheck, ExternalLink, Gauge, Sparkles, Tag, Wrench, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -213,6 +213,23 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             >
               <ClipboardCheck className="h-3.5 w-3.5" />
               Condition Report
+            </Link>
+          </Button>
+          {/* Milestone 4 · Increment 7 — Recon operator link.
+              Same operator-only surface pattern; explicitly NOT on
+              /showroom. Gated server-side by
+              IsReconManagerSalesManagerOrOwnerAtActiveDealership. */}
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Link
+              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/recon`}
+            >
+              <Wrench className="h-3.5 w-3.5" />
+              Recon
             </Link>
           </Button>
         </div>
