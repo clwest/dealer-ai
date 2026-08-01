@@ -126,9 +126,63 @@ Questions 1-2 belong to the **recon decision** subsystem
 (§1.1). Questions 3-5, 7-9 belong to the **work order**
 subsystem (§1.2 + §1.3). Question 6 belongs to the **parts
 tracking** subsystem (§1.4). Question 10 is the M2 ledger
-seam (§1.5). Questions 11-13 belong to the work-order state
-machine + QC lifecycle (§1.6). Questions 14-15 belong to the
-**vendor communication** subsystem (§1.7).
+seam (§1.5). Questions 11-12 belong to the work-order state
+machine (§1.6). Question 13 — see §1.0.QC-GAP annotation
+immediately below. Questions 14-15 belong to the **vendor
+communication** subsystem (§1.7).
+
+#### 1.0.QC-GAP — Q13 renegotiated (SESSION_067)
+
+> **M4 does not answer Q13 "Was the work verified after
+> completion?" as originally phrased.** The persistence
+> layer stores only `WorkOrder.completed_at` +
+> `WorkOrder.completed_by`, which prove *when the work was
+> marked complete and by whom*, not *whether it was
+> verified*. There is no `qc_verified_at`, no
+> `qc_verified_by`, no `qc_notes`, no `test_drive_result`
+> field on `WorkOrder`; and the M4 planning scope did not
+> introduce a `QcVerification` model. Claiming Q13 is
+> answered by completion timestamps would be dishonest
+> per M2/M3 retro §6 lesson 6 ("honest verification
+> reporting").
+
+**Two paths for Q13.**
+
+- **Path A (recommended, deferred).** Add a `QcVerification`
+  model in a future increment (M4.5+ or a scope-refinement
+  session before M5). Fields: `work_order` (FK),
+  `verified_at`, `verified_by`, `notes`, `test_drive_result`
+  (nullable Boolean or three-state), timestamps. Add a
+  service function `verify_work_order(work_order, *,
+  dealership, verified_by, test_drive_result, notes)` that
+  refuses unless `work_order.status == "completed"`. The
+  M4 scope stays "recon automation" — QC is a lightweight
+  extension, not a redesign.
+- **Path B (narrower).** Add `qc_verified_at` +
+  `qc_verified_by` + `qc_notes` fields directly to
+  `WorkOrder`. Simpler schema, but does not model repeat
+  verifications (a re-test after a rework) and conflates
+  the recon-execution actor with the QC actor.
+
+**Scope of Path A / B is NOT within M4.2, M4.3, or M4.4.**
+Documented here so it does not silently disappear. The
+question "which increment adds QC verification?" belongs
+in the M4.9 retrospective or the M5 planning pass.
+
+**Narrowed answer M4 does provide for Q13:** M4 records
+*when a WorkOrder was marked complete and by whom*, which
+is a *precondition* for QC but is not QC itself. Anyone
+reading `WorkOrder.completed_at` who assumes it means
+"verified" is drawing an unsupported inference from the
+data. The M4.2 service layer therefore does not accept a
+`qc_verified=True` parameter to `complete_work_order`;
+the M4.6 API does not surface a "verified" boolean; the
+M4.7 operator UI shows "Marked complete on YYYY-MM-DD by
+NAME" without a green-check "verified" icon.
+
+**M4 does answer Q3, Q4, Q7, Q8, Q9, Q11, Q12** at the
+work-order subsystem. Q13 is renegotiated per this
+annotation.
 
 **Questions Milestone 4 does NOT answer** (deliberate, per
 `IMPLEMENTATION_ROADMAP.md` §Milestone 4 scope boundary and
@@ -233,7 +287,11 @@ machine + QC lifecycle (§1.6). Questions 14-15 belong to the
 ### 1.3 Work order — `WorkOrder` (many-per-Vehicle)
 
 - **Business question answered.** Q3 + Q4 + Q7 + Q8 + Q9 +
-  Q11 + Q12 + Q13.
+  Q11 + Q12. Q13 is renegotiated — see §1.0.QC-GAP above.
+  Completion timestamps prove *when work was marked
+  complete*, not *whether it was verified*; QC verification
+  is not in M4 scope and would require a future
+  `QcVerification` model or field addition.
 - **Citation.** `RECON_MAPPING.md` §4.2 R.O. flow ("The
   R.O. is the work order — the document that authorizes and
   tracks a specific job on a specific vehicle"). §5 vendor
@@ -395,6 +453,118 @@ machine + QC lifecycle (§1.6). Questions 14-15 belong to the
 - **Extend.** New relations on `WorkOrder.communications`
   and `Vendor.communications`.
 - **Leave untouched.** Nothing.
+
+#### 1.6.SHIPPED — enum reconciliation (SESSION_067)
+
+Three enum vocabularies shipped in M4.1 diverged from the
+draft §1.6 field-shape list above. The divergences are
+intentional and are recorded here as an M4.1 **reviewed
+refinement** rather than silent drift. Each divergence is
+justified below.
+
+**Kind — shipped `(vendor_comm, parts_order, narrative)`.**
+Draft §1.6 proposed `(assignment, status_check,
+invoice_question, general_note)`. The shipped set is a
+smaller, durable *classification of communication role*
+rather than a per-message *intent taxonomy*:
+
+- `vendor_comm` — any outbound-drafted communication with a
+  vendor about a work order (the AI-drafted path — email /
+  SMS / phone talking-points). Covers the intent originally
+  named by `assignment`, `status_check`, and
+  `invoice_question`: those are all *purposes* the operator
+  states in `notes` or the AI derives from source-bundle
+  fields, not a schema-level partition. Trying to force
+  intent into an enum would require the operator to disambiguate
+  three near-adjacent categories on every draft (does
+  "hey Bob, are these parts here yet?" get logged as
+  `status_check` or `invoice_question` if the reply might
+  include a bill?). A one-way `vendor_comm` classification
+  keeps the schema honest and pushes intent into the
+  content, where language actually captures it.
+- `parts_order` — communication whose *content* is a parts
+  order (an explicit purchase request). Distinct from
+  `vendor_comm` because §5.h vs §5.g routes the M4.5 scrub
+  slightly differently (parts orders reference
+  `WorkOrderPart` rows; recon comms reference findings +
+  authorized cost).
+- `narrative` — operator-authored internal note or off-system
+  communication record (phone call notes, in-person
+  conversation summaries, inbound-email transcriptions).
+  This is the durable home for the `general_note` intent
+  from the draft.
+
+**Where the draft `assignment / status_check /
+invoice_question / general_note` intents live in the shipped
+schema.** They are not lost; they are represented by other
+existing fields:
+
+- Content itself (`draft_content` / `sent_content`) —
+  human-language intent lives in the words. "Hey Bob, can
+  you take a look at the F-150" is an assignment;
+  "just checking in on the ETA" is a status check.
+- `direction` (`outbound` / `inbound`) — status-check
+  responses and invoice-question responses often come back
+  as `direction='inbound'`.
+- `channel` (see below) — phone / in-person /
+  internal_note distinguish off-system status conversations
+  from in-system drafts.
+- Optional future addition — if operational data reveals
+  that recon-manager dashboards genuinely need to slice
+  by intent (e.g., "how many status-check comms did we
+  send this week?"), the enum can be extended additively
+  in M8 (operational intelligence) without breaking
+  existing rows.
+
+**Channel — shipped adds `internal_note` (5 values instead
+of 4).** Draft §1.6 listed `(email, sms, phone, in_person)`.
+`internal_note` is a genuine channel — a note the operator
+records against a work order that is NOT a communication to
+the vendor at all ("Bob mentioned in passing they're
+short-staffed this week; may impact ETA"). Recording it as
+`channel='internal_note'` with `direction='outbound'`
+(operator-authored, staying internal) preserves the
+distinction between "sent to vendor" and "recorded for
+future recon-manager reference" without inventing a
+separate model. **`internal_note` is a channel, not a
+kind**, because it applies to any of the three kinds:
+narrative internal notes are the common case; but an
+operator may also record an internal note that is *about* a
+vendor_comm or parts_order that already went out via a
+different channel.
+
+**Status — shipped 4 values `(draft, approved, sent, logged)`;
+draft included `failed`.** `failed` was removed because M4
+v1 has no live send path — every outbound goes out via
+operator copy-paste from the draft UI (per §5.i deployment
+decision). A `failed` status without a live send code path
+is a false affordance. When outbound delivery is introduced
+in the post-M4 prod-readiness pass (per §5.j), the future
+locations for provider-send failure are:
+
+- **Option A (recommended).** Add `failed` back as a fifth
+  enum value at the time send is wired. The transition
+  matrix acquires `approved → failed` and possibly
+  `failed → approved` (retry) or `failed → cancelled`.
+- **Option B.** Introduce a sibling model
+  `VendorCommunicationSendAttempt` that records each attempt
+  with its own status enum, preserving the fact that a
+  single communication may have multiple send attempts with
+  different providers.
+
+The choice between A and B belongs to whoever picks up the
+prod-send scope. It is explicitly out of M4.1 – M4.6.
+
+**No research-cited operational question loses answerability
+under the shipped enums.** Q14 ("what was communicated to
+the vendor?") and Q15 ("which claims came from human data
+vs. AI wording?") remain answerable via `draft_content` +
+`sent_content` + `source_provenance`. The Q11 question
+"what is blocking the work right now?" (waiting parts /
+waiting vendor / waiting decision) is answered by
+`WorkOrderPart.status` aggregates + `WorkOrder.status`, not
+by comm kind. Enum reconciliation preserves the shipped
+schema; no persistence-contract correction is required.
 
 ### 1.7 Vehicle read-model extension
 

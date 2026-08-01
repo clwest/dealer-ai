@@ -411,6 +411,56 @@ class Vehicle(models.Model):
             self, dealership=self.dealership
         )
 
+    # Milestone 4 · Increment 2 (SESSION_067) — recon read model
+    # extension. Two `@property` accessors delegating to the recon
+    # service, mirroring the M3.3 pattern above (function-local
+    # imports; one-line delegation; no caching; no business logic
+    # on the Vehicle side). Design memo in
+    # ``docs/roadmap/MILESTONE_4_PLANNING.md`` §1.7.
+
+    @property
+    def open_work_orders(self):
+        """Queryset of open :class:`WorkOrder` rows on this vehicle.
+
+        "Open" means ``status`` is one of ``draft``, ``approved``,
+        or ``in_progress`` — terminal statuses (``completed`` /
+        ``cancelled``) are excluded. Deterministic ordering by
+        ``-created_at`` matches the M4.1 model default so the
+        M4.7 operator UI renders in a stable order.
+
+        Tenant scoping resolved via ``self.dealership`` — mirrors
+        the M3.3 read-model pattern (:attr:`latest_condition_report`).
+        No caching; each attribute read runs a fresh query so
+        callers see the current DB state after a transition.
+        """
+        # Local import — the recon service imports models from this
+        # module, so a top-of-module import here would create a
+        # cycle at import time. Same guard as
+        # :attr:`latest_condition_report` (M3.3 pattern).
+        from .services.recon import open_work_orders_for_vehicle
+
+        return open_work_orders_for_vehicle(self, dealership=self.dealership)
+
+    @property
+    def has_recon_decisions(self):
+        """``True`` iff this vehicle's latest completed condition
+        report has at least one :class:`ReconDecision` attached.
+
+        Cheap: the backing service function uses ``.exists()`` and
+        does not load any Finding or ReconDecision instance into
+        memory. Returns ``False`` when the vehicle has never been
+        inspected, when its latest report is still ``draft``, or
+        when no decisions have been recorded yet.
+
+        Tenant scoping and no-caching contract mirror
+        :attr:`open_work_orders` and :attr:`latest_condition_report`.
+        """
+        from .services.recon import has_recon_decisions_for_vehicle
+
+        return has_recon_decisions_for_vehicle(
+            self, dealership=self.dealership
+        )
+
 
 class ChatSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
