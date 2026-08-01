@@ -374,3 +374,160 @@ class WritePathFallback(TestCase):
         )
         self.assertIsNotNone(photo.dealership_id)
         self.assertEqual(photo.dealership.slug, "default")
+
+    # Milestone 4 · Increment 1 (SESSION_066) — six new carriers
+    # registered with the pre_save autofill signal per
+    # ``services/tenancy.py::_TENANT_CARRIER_MODEL_NAMES`` extension
+    # (9 → 15). Each recon model without an explicit dealership picks
+    # up the default. See ``MILESTONE_4_PLANNING.md`` §2 row 4.
+
+    def test_vendor_autofill_from_default(self):
+        from dealer_ai.models import Vendor
+
+        v = Vendor.objects.create(name="Autofill Vendor", slug="autofill-vendor")
+        self.assertIsNotNone(v.dealership_id)
+        self.assertEqual(v.dealership.slug, "default")
+
+    def test_recon_decision_autofill_from_default(self):
+        from django.utils import timezone
+
+        from dealer_ai.models import (
+            CONDITION_CATEGORY_MECHANICAL,
+            CONDITION_SEVERITY_REQUIRED,
+            ConditionFinding,
+            ConditionReport,
+            RECON_DECISION_TIER_MUST_DO,
+            ReconDecision,
+        )
+
+        v = Vehicle.objects.create(
+            stock_number="M41-AUTOFILL-RD",
+            year=2024,
+            model="Bronco",
+            price=Decimal("42000.00"),
+        )
+        report = ConditionReport.objects.create(
+            vehicle=v,
+            dealership=v.dealership,
+            inspector_name="M. Ruiz",
+            inspected_at=timezone.now(),
+            mileage_at_inspection=42_000,
+        )
+        finding = ConditionFinding.objects.create(
+            report=report,
+            dealership=v.dealership,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            severity=CONDITION_SEVERITY_REQUIRED,
+            description="Autofill smoke.",
+        )
+        decision = ReconDecision.objects.create(
+            finding=finding,
+            tier=RECON_DECISION_TIER_MUST_DO,
+            decided_at=timezone.now(),
+        )
+        self.assertIsNotNone(decision.dealership_id)
+        self.assertEqual(decision.dealership.slug, "default")
+
+    def test_work_order_autofill_from_default(self):
+        from dealer_ai.models import (
+            CONDITION_CATEGORY_MECHANICAL,
+            WORK_ORDER_VENUE_IN_HOUSE,
+            WorkOrder,
+        )
+
+        v = Vehicle.objects.create(
+            stock_number="M41-AUTOFILL-WO",
+            year=2024,
+            model="Bronco",
+            price=Decimal("42000.00"),
+        )
+        wo = WorkOrder.objects.create(
+            vehicle=v,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            venue=WORK_ORDER_VENUE_IN_HOUSE,
+        )
+        self.assertIsNotNone(wo.dealership_id)
+        self.assertEqual(wo.dealership.slug, "default")
+
+    def test_work_order_finding_autofill_from_default(self):
+        from django.utils import timezone
+
+        from dealer_ai.models import (
+            CONDITION_CATEGORY_MECHANICAL,
+            CONDITION_SEVERITY_REQUIRED,
+            ConditionFinding,
+            ConditionReport,
+            WORK_ORDER_VENUE_IN_HOUSE,
+            WorkOrder,
+            WorkOrderFinding,
+        )
+
+        v = Vehicle.objects.create(
+            stock_number="M41-AUTOFILL-WOF",
+            year=2024,
+            model="Bronco",
+            price=Decimal("42000.00"),
+        )
+        report = ConditionReport.objects.create(
+            vehicle=v,
+            dealership=v.dealership,
+            inspector_name="M. Ruiz",
+            inspected_at=timezone.now(),
+            mileage_at_inspection=42_000,
+        )
+        finding = ConditionFinding.objects.create(
+            report=report,
+            dealership=v.dealership,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            severity=CONDITION_SEVERITY_REQUIRED,
+            description="Autofill smoke.",
+        )
+        wo = WorkOrder.objects.create(
+            vehicle=v,
+            dealership=v.dealership,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            venue=WORK_ORDER_VENUE_IN_HOUSE,
+        )
+        link = WorkOrderFinding.objects.create(work_order=wo, finding=finding)
+        self.assertIsNotNone(link.dealership_id)
+        self.assertEqual(link.dealership.slug, "default")
+
+    def test_work_order_part_autofill_from_default(self):
+        from dealer_ai.models import (
+            CONDITION_CATEGORY_MECHANICAL,
+            WORK_ORDER_VENUE_IN_HOUSE,
+            WorkOrder,
+            WorkOrderPart,
+        )
+
+        v = Vehicle.objects.create(
+            stock_number="M41-AUTOFILL-WOP",
+            year=2024,
+            model="Bronco",
+            price=Decimal("42000.00"),
+        )
+        wo = WorkOrder.objects.create(
+            vehicle=v,
+            dealership=v.dealership,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            venue=WORK_ORDER_VENUE_IN_HOUSE,
+        )
+        part = WorkOrderPart.objects.create(work_order=wo, name="Auto part")
+        self.assertIsNotNone(part.dealership_id)
+        self.assertEqual(part.dealership.slug, "default")
+
+    def test_vendor_communication_autofill_from_default(self):
+        from dealer_ai.models import (
+            VENDOR_COMMUNICATION_CHANNEL_INTERNAL_NOTE,
+            VENDOR_COMMUNICATION_DIRECTION_OUTBOUND,
+            VENDOR_COMMUNICATION_KIND_NARRATIVE,
+            VendorCommunication,
+        )
+
+        comm = VendorCommunication.objects.create(
+            kind=VENDOR_COMMUNICATION_KIND_NARRATIVE,
+            channel=VENDOR_COMMUNICATION_CHANNEL_INTERNAL_NOTE,
+            direction=VENDOR_COMMUNICATION_DIRECTION_OUTBOUND,
+        )
+        self.assertIsNotNone(comm.dealership_id)
+        self.assertEqual(comm.dealership.slug, "default")

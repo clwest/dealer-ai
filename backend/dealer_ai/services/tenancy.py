@@ -269,6 +269,18 @@ _TENANT_CARRIER_MODEL_NAMES = (
     "ConditionReport",
     "ConditionFinding",
     "ConditionFindingPhoto",
+    # Milestone 4 · Increment 1 (SESSION_066) — recon persistence
+    # layer. Extended per MILESTONE_4_PLANNING.md §2 row 4 (9 → 15).
+    # Every new carrier gets the same pre_save autofill safety net as
+    # its M1/M2/M3 siblings; the M4.2 service layer will thread
+    # ``dealership=`` explicitly on every write path so the fallback
+    # is truly a safety net rather than the primary code path.
+    "Vendor",
+    "ReconDecision",
+    "WorkOrder",
+    "WorkOrderFinding",
+    "WorkOrderPart",
+    "VendorCommunication",
 )
 
 

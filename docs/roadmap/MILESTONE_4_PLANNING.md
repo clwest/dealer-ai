@@ -209,15 +209,26 @@ machine + QC lifecycle (§1.6). Questions 14-15 belong to the
   - `email` (EmailField blank).
   - `notes` (TextField blank — operator's own vendor notes:
     "prefers text over email"; "invoices net 15").
-  - `is_active` (Boolean default True — soft-delete /
-    inactive-flag pattern; NEVER hard-delete a vendor
-    referenced by historical `WorkOrder` or `VehicleCost`
-    rows).
+  - `is_active` (Boolean default True — the **normal
+    removal path**. Operators mark a vendor inactive when
+    they stop doing business with them; historical rows keep
+    the FK intact). Hard-delete is **prevented at the schema
+    layer** by `on_delete=PROTECT` on every FK that points
+    at `Vendor` (`WorkOrder.vendor`, `VendorCommunication.vendor`).
+    An unreferenced Vendor may be deleted through Django or
+    admin only when project conventions permit; a referenced
+    Vendor cannot be deleted without first migrating the
+    references. Renaming a vendor is allowed and never
+    rewrites the `VehicleCost.vendor` snapshot on historical
+    rows (see §5.b). — planning refinement adopted
+    SESSION_066 before M4.1 implementation.
   - Timestamps.
 - **Extend.** No existing primitive to extend — new entity.
 - **Leave untouched.** `VehicleCost.vendor` free-text field
   from M2 stays exactly as-is (see §5.b load-bearing vendor
-  migration decision below).
+  migration decision below). The name captured at posting
+  time is the immutable snapshot; a subsequent vendor rename
+  does not rewrite it.
 
 ### 1.3 Work order — `WorkOrder` (many-per-Vehicle)
 
@@ -239,8 +250,13 @@ machine + QC lifecycle (§1.6). Questions 14-15 belong to the
     `WorkOrderFinding` records the actual finding→WO
     mapping).
   - `venue` (CharField choices: `in_house`, `outsourced`).
-  - `vendor` (FK to `Vendor` nullable SET_NULL — required
-    when `venue="outsourced"`; NULL for in-house).
+  - `vendor` (FK to `Vendor` nullable
+    `on_delete=PROTECT` — required when
+    `venue="outsourced"`; NULL for in-house. PROTECT
+    prevents hard-deleting a `Vendor` still referenced by a
+    historical `WorkOrder`; the normal removal path is
+    `Vendor.is_active=False`. Planning refinement adopted
+    SESSION_066).
   - `assignee` (FK to `AUTH_USER_MODEL` nullable SET_NULL
     — the in-house tech; NULL for outsourced or unassigned).
   - `status` (CharField choices — see §5.c state machine
@@ -341,8 +357,13 @@ machine + QC lifecycle (§1.6). Questions 14-15 belong to the
   drafting.
 - **Fields.**
   - `dealership` (FK NOT NULL).
-  - `vendor` (FK on_delete=SET_NULL nullable — inactive
-    vendor should not delete historical comms).
+  - `vendor` (FK on_delete=**PROTECT** nullable — a
+    referenced `Vendor` cannot be hard-deleted; the normal
+    removal path is `Vendor.is_active=False`. NULL is
+    permitted only when the row was authored before a
+    `Vendor` was chosen (e.g. an inbound phone message
+    logged against a work-order before the vendor is
+    identified). Planning refinement adopted SESSION_066).
   - `work_order` (FK on_delete=SET_NULL nullable — comms
     can precede assignment).
   - `channel` (CharField choices: `email`, `sms`, `phone`,
@@ -570,6 +591,30 @@ Model-layer:
   via `choices=` (five values).
 - [ ] `VendorCommunication.status="sent"` implies
   `sent_content IS NOT NULL` (model `clean()` guard).
+- [ ] `WorkOrder.vendor` uses `on_delete=PROTECT`; hard
+  deletion of a referenced `Vendor` raises `ProtectedError`
+  at the DB layer (planning refinement SESSION_066).
+- [ ] `VendorCommunication.vendor` uses `on_delete=PROTECT`;
+  same semantics as above.
+- [ ] `VendorCommunication` `sent`-state structural
+  requirements: `approved_by`, `sent_by`, `sent_at`, and
+  nonblank `sent_content` all required.
+- [ ] `VendorCommunication` `approved`-state structural
+  requirements: `approved_by` and `approved_at` required
+  (no `sent_by` / `sent_content` required at this state).
+- [ ] `VendorCommunication` `logged`-state structural
+  requirements: human actor (`sent_by`) and timestamp
+  (`sent_at`) plus nonblank `sent_content` (the recorded
+  body) required; `approved_by` / `approved_at` NOT
+  required (planning refinement SESSION_066 — separates
+  operator-recorded phone / inbound / in-person comms
+  from the AI-drafted `draft → approved → sent` workflow).
+- [ ] AI-drafted `VendorCommunication` rows (any row
+  populated via `services/vendor_comm.py::draft_communication`)
+  may never transition directly to `logged`; the invariant
+  is enforced at the M4.5 service layer, not at model
+  layer (a persistence-only guard cannot distinguish
+  AI-drafted from operator-recorded rows).
 
 Business-layer:
 - [ ] `services/recon.py::record_decision(finding, *,
@@ -638,17 +683,35 @@ AI + safety-layer:
 
 Ledger integration:
 - [ ] Reference tag on auto-minted VehicleCost rows follows
-  the format `WORKORDER:<id>:estimate` or
-  `WORKORDER:<id>:actual` or
-  `WORKORDER:<id>:reversal`.
+  one of the five families locked in §5.e:
+  `WORKORDER:<id>:estimate:<seq>`,
+  `WORKORDER:<id>:estimate_reversal:<seq>`,
+  `WORKORDER:<id>:completion_estimate_reversal`,
+  `WORKORDER:<id>:estimate_reversal:cancel`,
+  `WORKORDER:<id>:actual`.
 - [ ] `add_cost` idempotency check: before posting, the M4
   service verifies no existing row with the target
   reference tag exists (skip if it does — logged as
   duplicate-suppressed).
+- [ ] `WorkOrder` completion posts an actual **and** a
+  matching estimate reversal atomically (single DB
+  transaction) using the
+  `completion_estimate_reversal` one-shot reference
+  (planning refinement SESSION_066).
 - [ ] `WorkOrder` cancellation posts a reversing entry
-  (negative amount, reference `WORKORDER:<id>:reversal`);
-  never edits or deletes the original row (M2 immutable-
-  cost invariant preserved).
+  (negative amount, reference
+  `WORKORDER:<id>:estimate_reversal:cancel`); never edits
+  or deletes the original row (M2 immutable-cost invariant
+  preserved).
+- [ ] After a WO reaches a terminal state, the net
+  estimate contribution for that WO in the ledger is
+  `Decimal("0.00")` — original estimate(s) + revisions +
+  reversals sum to zero (locked by M4.3 test).
+- [ ] After WO completion, `projected_total_investment`
+  does not double-count the completed WO — locked by
+  M4.3 test that computes projected before + after
+  completion and asserts the delta equals actual − last
+  outstanding estimate.
 - [ ] The M3 finding.estimated_cost invariant remains:
   three tests still pass unchanged (model layer, service
   layer, condition-report endpoint layer). M4 posts happen
@@ -875,10 +938,19 @@ existing historical rows or the M2 semantic contract?
   `Vendor(id=7).name` from "Bob's Body Shop" to "Bob's
   Auto Body" does not rewrite the `VehicleCost.vendor`
   free-text on posts made under the old name.
-- Vendor deletion is soft-only (`is_active=False`) — hard
-  delete forbidden if any `WorkOrder` or `VendorCommunication`
-  references the vendor. Historical `VehicleCost.vendor`
-  strings still readable regardless.
+- Vendor removal is soft-only in normal operation
+  (`is_active=False`). Hard delete is **prevented at the
+  schema layer** by `on_delete=PROTECT` on
+  `WorkOrder.vendor` and `VendorCommunication.vendor`.
+  Postgres / SQLite raise `ProtectedError` when a delete
+  is attempted against a referenced row; the M4 admin
+  surfaces mirror that by not offering delete affordances
+  for referenced vendors. Historical `VehicleCost.vendor`
+  strings remain readable regardless because they are
+  free-text snapshots (see §5.b Option C rationale above).
+  Planning refinement adopted SESSION_066 — resolves the
+  earlier "soft-delete only" note vs. planned SET_NULL FKs
+  contradiction.
 - Zero migration risk on M2 data. No backfill script needed.
 
 **Do not** silently promote historical rows to FKs. The M2
@@ -979,44 +1051,87 @@ addressing it. Full bidirectional traceability preserved.
 row get created? How are updates + cancellations + completion
 handled?
 
-**Chosen contract.**
+**Chosen contract** *(refined SESSION_066 — completion must
+reverse the outstanding estimate; without this, a completed
+WorkOrder is double-counted in `projected_total_investment`)*.
+
+The load-bearing invariant driving the refinement:
+
+> **After a WorkOrder reaches a terminal state
+> (`completed` or `cancelled`), the net estimate
+> contribution for that WorkOrder in the ledger must be
+> zero.** Estimate rows and their matching reversal rows
+> both remain visible as immutable history, but their
+> signed sum for a terminal WO is `Decimal("0.00")`.
+
+Bullet-by-bullet:
 
 1. **Estimate post — on `WorkOrder` approval.** When
    `approve_work_order` runs and the WO has a non-null
    `estimated_cost`, the service calls `add_cost` with
    `is_estimate=True`, `amount=estimated_cost`, `category=`
    (mapped from `WorkOrder.category` — same 12-value enum),
-   `incurred_at=now`, `reference=f"WORKORDER:{wo.id}:estimate"`.
-2. **Estimate update — post reversing + new.** If the
-   estimated_cost changes after approval, the service
-   posts a reversing entry (`amount=-original_estimate`,
+   `incurred_at=now`,
+   `reference=f"WORKORDER:{wo.id}:estimate:{seq}"` where
+   `seq` starts at 1 for the first estimate post.
+2. **Estimate revision — post reversal + new.** If the
+   `estimated_cost` changes while the WO is still non-terminal,
+   the service posts a reversing entry
+   (`amount=-outstanding_estimate`,
    `reference=f"WORKORDER:{wo.id}:estimate_reversal:{seq}"`)
-   and a new estimate entry
-   (`reference=f"WORKORDER:{wo.id}:estimate:{seq}"` with a
-   monotonically-increasing sequence number). Never edits
-   the original row — preserves M2 immutability. `seq`
-   starts at 1 for the second estimate revision (the first
-   revision produces `estimate_reversal:1` + `estimate:1`).
-3. **Actual post — on `WorkOrder` completion.** When
-   `complete_work_order` runs, the service captures
-   `actual_cost` (operator-entered or vendor-invoice-parsed)
-   and calls `add_cost` with `is_estimate=False`,
-   `amount=actual_cost`, `reference=f"WORKORDER:{wo.id}:actual"`.
-   Any prior `WORKORDER:<id>:estimate*` rows remain on the
-   ledger — the M2 `total_investment` = actual only, so the
-   estimates auto-drop out of that number when the actual
-   posts. Estimates + actuals both appear in
-   `projected_total_investment` per M2.2 semantic contract.
-4. **Cancellation.** `cancel_work_order` posts a reversing
-   entry for the outstanding estimate (`reference=f"WORKORDER:{wo.id}:estimate_reversal:cancel"`),
-   canceling any `is_estimate=True` row associated with
-   the WO. If the WO was `in_progress` with a partial actual
-   post already made, actual rows remain on the ledger
-   (they represent work truly performed).
+   followed by a new estimate entry
+   (`reference=f"WORKORDER:{wo.id}:estimate:{seq+1}"`).
+   Never edits the original row — preserves M2 immutability.
+   Sequence increments monotonically for the WorkOrder's
+   lifetime.
+3. **Completion — reverse outstanding estimate atomically
+   with actual post.** When `complete_work_order` runs,
+   the service (a) captures `actual_cost`
+   (operator-entered or vendor-invoice-parsed), (b) posts
+   a reversing entry for the currently-outstanding estimate
+   with the dedicated one-shot reference
+   `WORKORDER:{wo.id}:completion_estimate_reversal`, and
+   (c) posts the actual cost with
+   `reference=f"WORKORDER:{wo.id}:actual"`. All three
+   ledger operations happen inside a single DB transaction
+   so a mid-completion crash leaves the ledger with either
+   no change or the full set — never a half-reversed
+   estimate. The dedicated one-shot reference lets the
+   idempotency check distinguish "we already reversed on
+   completion" from "we reversed during a mid-life estimate
+   revision." **After this transaction: estimate rows and
+   the completion reversal net to zero, and
+   `total_investment` picks up only the actual.**
+4. **Cancellation — reverse outstanding estimate.**
+   `cancel_work_order` posts a reversing entry for the
+   currently-outstanding estimate with
+   `reference=f"WORKORDER:{wo.id}:estimate_reversal:cancel"`.
+   If the WO was `in_progress` with a partial actual post
+   already made, actual rows remain on the ledger (they
+   represent work truly performed); the estimate is still
+   reversed because the WO will never complete against it.
 5. **Idempotency.** Before every `add_cost` call, the M4
-   service checks `VehicleCost.objects.filter(reference=<tag>).exists()`
+   service checks
+   `VehicleCost.objects.filter(reference=<tag>).exists()`
    and skips if true. Prevents double-posting on race /
-   retry.
+   retry. The four distinct reference key families —
+   `estimate:<seq>`, `estimate_reversal:<seq>`,
+   `completion_estimate_reversal`, `estimate_reversal:cancel`,
+   `actual` — make idempotency deterministic without
+   ambiguity between mid-life reversals and terminal-state
+   reversals.
+
+**Reference key vocabulary — single source of truth.** The
+`services/recon.py` module in M4.3 exposes these as
+module-level constants (mirrors M2/M3 enum-constant house
+style) so tests and future callers reference the string
+literals identically:
+
+- `WORKORDER_LEDGER_REF_ESTIMATE = "WORKORDER:{wo_id}:estimate:{seq}"`
+- `WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL = "WORKORDER:{wo_id}:estimate_reversal:{seq}"`
+- `WORKORDER_LEDGER_REF_COMPLETION_ESTIMATE_REVERSAL = "WORKORDER:{wo_id}:completion_estimate_reversal"`
+- `WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL_CANCEL = "WORKORDER:{wo_id}:estimate_reversal:cancel"`
+- `WORKORDER_LEDGER_REF_ACTUAL = "WORKORDER:{wo_id}:actual"`
 
 **M3 invariant preserved.** `ConditionFinding.estimated_cost`
 NEVER posts to `VehicleCost`. Only work-order approval
@@ -1026,6 +1141,14 @@ to pass.
 
 **M2 immutability preserved.** No `VehicleCost` row is ever
 edited or deleted. Every change is a reversing entry.
+
+**Semantic corollary on `projected_total_investment`.** With
+completion-time reversal in place, `projected_total_investment`
+(estimate rows + actuals) no longer double-counts completed
+WorkOrders: after completion, the estimate rows and their
+completion reversal cancel out, leaving only the actual
+contributing to both `total_investment` and
+`projected_total_investment`. Locked by M4.3 tests.
 
 ### 5.f Load-bearing decision — Role permission matrix
 
@@ -1449,38 +1572,63 @@ comes in M4.3).
 ### Increment 3 (M4.3) — Estimate-to-ledger contract + idempotency
 
 **Scope.** `services/recon.py` gains the ledger-posting hook
-functions:
+functions. Reference-key vocabulary imported from
+`services/recon.py` module-level constants per §5.e locked
+list.
 
-- `_post_estimate(work_order) -> Optional[VehicleCost]` — called
-  from `approve_work_order`; posts
-  `add_cost(is_estimate=True, reference=f"WORKORDER:{wo.id}:estimate:{seq}")`;
-  computes `seq` from prior `WORKORDER:{wo.id}:estimate*`
-  count; idempotent (skip if a matching non-reversed row
-  already exists).
-- `_post_estimate_reversal(work_order, original_amount,
-  seq) -> VehicleCost` — negative-amount reversing entry.
+- `_post_estimate(work_order, *, seq) -> VehicleCost` —
+  called from `approve_work_order` (and from the estimate
+  revision path); posts
+  `add_cost(is_estimate=True, reference=WORKORDER_LEDGER_REF_ESTIMATE.format(wo_id=..., seq=seq))`;
+  computes `seq` from prior `WORKORDER:{wo.id}:estimate:*`
+  count + 1; idempotent (skip if the target reference already
+  exists).
+- `_post_estimate_reversal(work_order, *, outstanding_amount,
+  seq) -> VehicleCost` — negative-amount reversing entry
+  under `WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL`.
+- `_post_completion_reversal(work_order, *, outstanding_amount)
+  -> VehicleCost` — negative-amount reversing entry under
+  the one-shot `WORKORDER_LEDGER_REF_COMPLETION_ESTIMATE_REVERSAL`
+  reference; called only from the completion flow (planning
+  refinement SESSION_066).
+- `_post_cancel_reversal(work_order, *, outstanding_amount)
+  -> VehicleCost` — negative-amount reversing entry under
+  `WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL_CANCEL`; called
+  only from the cancellation flow.
 - `_post_actual(work_order) -> VehicleCost` — called from
   `complete_work_order`; posts
-  `add_cost(is_estimate=False, reference=f"WORKORDER:{wo.id}:actual")`;
-  refuses if a `:actual` row already exists (idempotent).
+  `add_cost(is_estimate=False, reference=WORKORDER_LEDGER_REF_ACTUAL...)`;
+  refuses (via idempotency check) if an `:actual` row
+  already exists.
 - Handles the vendor snapshot: passes
   `vendor=work_order.vendor.name if work_order.vendor else ""`
   to `add_cost` so `VehicleCost.vendor` free-text captures
   the vendor name at posting time.
 
 Wires the hooks into M4.2's `approve_work_order` /
-`complete_work_order` / `cancel_work_order`. Handles estimate
-update flow (WO patch with new estimated_cost while
-status=approved posts reversal + new estimate).
+`complete_work_order` / `cancel_work_order`.
+`complete_work_order` runs `_post_completion_reversal` and
+`_post_actual` inside a single `transaction.atomic()` block
+so a mid-completion failure leaves the ledger with either
+no change or the full set — never a half-reversed estimate.
+The estimate-revision path (WO patch with new
+`estimated_cost` while `status=approved`) posts
+`_post_estimate_reversal` + `_post_estimate(seq=seq+1)`.
 
 **Tests.** ~35 focused tests: estimate posts on approval;
-actual posts on completion; reversing entry on cancel;
-double-approve idempotent; double-complete raises (per state
-machine); ConditionFinding.estimated_cost never triggers a
-post (regression coverage — M3.5 invariant preserved);
-VehicleCost.vendor free-text captures work_order.vendor.name;
-inactive vendor still readable in historical rows; sequential
-estimate updates produce correct reversing pattern.
+actual posts on completion; **completion-time estimate
+reversal posts atomically with actual** (planning refinement
+SESSION_066 — new test); **net estimate contribution equals
+`Decimal("0.00")` for a completed WO**; **projected_total_investment
+does not double-count completed WOs**; reversing entry on
+cancel; double-approve idempotent; double-complete raises
+(per state machine); ConditionFinding.estimated_cost never
+triggers a post (regression coverage — M3.5 invariant
+preserved); VehicleCost.vendor free-text captures
+work_order.vendor.name; inactive vendor still readable in
+historical rows; sequential estimate updates produce correct
+reversing pattern; mid-completion crash leaves ledger
+untouched (transaction atomicity test).
 
 **Boundary.** Test baseline: ~2,244 → ~2,279. No migrations.
 

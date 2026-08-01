@@ -9,11 +9,17 @@ from .models import (
     CustomerLead,
     DealerOnboardingProfile,
     Dealership,
+    ReconDecision,
     Salesperson,
     UserDealershipRole,
     Vehicle,
     VehicleAcquisition,
     VehicleCost,
+    Vendor,
+    VendorCommunication,
+    WorkOrder,
+    WorkOrderFinding,
+    WorkOrderPart,
 )
 
 
@@ -280,6 +286,214 @@ class ConditionFindingPhotoAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("finding", "dealership", "uploaded_by")
     readonly_fields = ("public_id", "created_at")
+
+
+# ----------------------------------------------------------------------------
+# Milestone 4 · Increment 1 (SESSION_066) — recon admin surfaces.
+#
+# Six read-mostly diagnostic admins mirroring the M2/M3 house pattern
+# (list_display / list_filter / search_fields / autocomplete_fields /
+# readonly_fields). The primary operator surface lives in M4.7's
+# VehicleReconPage; these admins exist for debugging + emergency
+# corrections only. No workflow buttons, no transition actions, no
+# AI generation, no ledger posting. See ``MILESTONE_4_PLANNING.md``
+# §2 row 10.
+#
+# Delete affordances on Vendor and VendorCommunication are NOT
+# offered — the PROTECT contract from planning §5.b (refined
+# SESSION_066) makes hard-deleting a referenced Vendor raise
+# ``ProtectedError``. The admin defaults would surface a delete
+# button that would fail confusingly at DB layer; we drop
+# ``has_delete_permission`` on Vendor to align the UI with the
+# schema contract.
+# ----------------------------------------------------------------------------
+
+
+@admin.register(Vendor)
+class VendorAdmin(admin.ModelAdmin):
+    """Milestone 4 · Increment 1 — vendor directory admin.
+
+    Delete disabled at the admin surface to match the PROTECT
+    schema contract: normal removal is ``is_active=False``. A
+    superuser who genuinely needs to hard-delete an unreferenced
+    vendor can do so via the Django shell.
+    """
+
+    list_display = (
+        "name",
+        "slug",
+        "is_active",
+        "phone",
+        "email",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("is_active", "dealership")
+    search_fields = ("name", "slug", "email", "phone", "notes")
+    prepopulated_fields = {"slug": ("name",)}
+    autocomplete_fields = ("dealership",)
+    readonly_fields = ("created_at", "updated_at")
+
+    def has_delete_permission(self, request, obj=None):  # noqa: ARG002
+        return False
+
+
+@admin.register(ReconDecision)
+class ReconDecisionAdmin(admin.ModelAdmin):
+    """Milestone 4 · Increment 1 — recon decision (three-tier) admin.
+
+    Filters on ``tier`` support the common "what did we agree to
+    skip?" query, which is the warranty-defense entry point per
+    RECON §13.1."""
+
+    list_display = (
+        "finding",
+        "tier",
+        "decided_by",
+        "decided_at",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("tier", "dealership", "decided_at")
+    search_fields = (
+        "finding__report__vehicle__stock_number",
+        "finding__report__vehicle__vin",
+        "notes",
+    )
+    autocomplete_fields = ("finding", "dealership", "decided_by")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(WorkOrder)
+class WorkOrderAdmin(admin.ModelAdmin):
+    """Milestone 4 · Increment 1 — work order admin.
+
+    Filters on ``status`` + ``venue`` + ``category`` support the
+    common "what's in progress at which vendor?" / "what's still in
+    draft?" queries."""
+
+    list_display = (
+        "vehicle",
+        "category",
+        "venue",
+        "vendor",
+        "status",
+        "estimated_cost",
+        "actual_cost",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("status", "venue", "category", "dealership")
+    search_fields = (
+        "vehicle__stock_number",
+        "vehicle__vin",
+        "vendor__name",
+        "notes",
+        "cancellation_reason",
+    )
+    autocomplete_fields = (
+        "vehicle",
+        "dealership",
+        "vendor",
+        "assignee",
+        "approved_by",
+        "started_by",
+        "completed_by",
+        "cancelled_by",
+    )
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(WorkOrderFinding)
+class WorkOrderFindingAdmin(admin.ModelAdmin):
+    """Milestone 4 · Increment 1 — through-table admin. Minimal
+    diagnostic surface for debugging finding→WO wiring."""
+
+    list_display = ("work_order", "finding", "dealership", "created_at")
+    list_filter = ("dealership",)
+    search_fields = (
+        "work_order__vehicle__stock_number",
+        "finding__description",
+    )
+    autocomplete_fields = ("work_order", "finding", "dealership")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(WorkOrderPart)
+class WorkOrderPartAdmin(admin.ModelAdmin):
+    """Milestone 4 · Increment 1 — work order parts admin.
+
+    Filters on ``status`` + ``source_type`` support the common
+    "what's still on backorder?" / "which customer-supplied parts
+    are we tracking?" queries."""
+
+    list_display = (
+        "name",
+        "work_order",
+        "quantity",
+        "status",
+        "source_type",
+        "source_name",
+        "unit_cost",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = ("status", "source_type", "dealership")
+    search_fields = (
+        "name",
+        "part_number",
+        "source_name",
+        "notes",
+        "work_order__vehicle__stock_number",
+    )
+    autocomplete_fields = ("work_order", "dealership")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(VendorCommunication)
+class VendorCommunicationAdmin(admin.ModelAdmin):
+    """Milestone 4 · Increment 1 — vendor communication log admin.
+
+    Filters on ``status`` + ``kind`` + ``channel`` + ``direction``
+    support the common "which sent emails are still awaiting reply?"
+    and "which inbound comms did we log?" queries. Delete is
+    permitted for genuinely orphan drafts, but the M4.5 service will
+    typically soft-close by transitioning to a terminal status."""
+
+    list_display = (
+        "vendor",
+        "work_order",
+        "kind",
+        "channel",
+        "direction",
+        "status",
+        "sent_at",
+        "dealership",
+        "updated_at",
+    )
+    list_filter = (
+        "status",
+        "kind",
+        "channel",
+        "direction",
+        "dealership",
+    )
+    search_fields = (
+        "vendor__name",
+        "work_order__vehicle__stock_number",
+        "draft_content",
+        "sent_content",
+        "notes",
+    )
+    autocomplete_fields = (
+        "dealership",
+        "vendor",
+        "work_order",
+        "drafted_by",
+        "approved_by",
+        "sent_by",
+    )
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(UserDealershipRole)

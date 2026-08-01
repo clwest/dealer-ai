@@ -5,6 +5,7 @@ from typing import Optional
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -1603,3 +1604,1093 @@ class ConditionFindingPhoto(models.Model):
                     )
                 }
             )
+
+
+# ============================================================================
+# Milestone 4 · Increment 1 (SESSION_066) — Recon persistence layer.
+# ============================================================================
+#
+# Six new models: Vendor, ReconDecision, WorkOrder, WorkOrderFinding,
+# WorkOrderPart, VendorCommunication. Persistence layer only — services,
+# state transitions, ledger integration, safety scrubs, endpoints, and
+# frontend all land in M4.2 → M4.7 per ``MILESTONE_4_PLANNING.md`` §7.
+#
+# Source of truth: ``MILESTONE_4_PLANNING.md`` §1.1 – §1.6 (field shapes),
+# §3 (model-layer invariants), §5.b (Vendor deletion contract), §5.c
+# (state enum), §5.d (part source enum), §5.e (ledger reference-key
+# vocabulary, consumed in M4.3), and ``docs/research/RECON_MAPPING.md``
+# §§3–7 + §14.
+#
+# Three planning refinements adopted at SESSION_066 before this code
+# landed and shape the model contracts below:
+#
+#   1. Vendor PROTECT contract — WorkOrder.vendor and
+#      VendorCommunication.vendor use ``on_delete=PROTECT``. Normal
+#      removal path is ``Vendor.is_active=False``. See §1.2 / §1.3 /
+#      §1.6 / §3 / §5.b.
+#   2. Estimate retirement on completion — completion posts an atomic
+#      reversal for the outstanding estimate plus the actual, so
+#      ``projected_total_investment`` no longer double-counts completed
+#      work. Persistence layer captures the field surface;
+#      implementation lands in M4.3 per §5.e + §7 M4.3 sequencing.
+#   3. VendorCommunication ``logged`` semantics distinct from
+#      ``sent`` — ``logged`` needs a human actor + timestamp +
+#      recorded body, but does not require a prior approval step.
+#      ``sent`` still requires draft → approved → sent with
+#      approved_by + sent_by + sent_at + nonblank sent_content.
+
+# ----------------------------------------------------------------------------
+# ReconDecision tier vocabulary — three values per RECON §3.1.
+# ----------------------------------------------------------------------------
+
+RECON_DECISION_TIER_MUST_DO = "must_do"
+RECON_DECISION_TIER_SHOULD_DO = "should_do"
+RECON_DECISION_TIER_WONT_DO = "wont_do"
+
+RECON_DECISION_TIER_CHOICES = (
+    (RECON_DECISION_TIER_MUST_DO, "Must do"),
+    (RECON_DECISION_TIER_SHOULD_DO, "Should do"),
+    (RECON_DECISION_TIER_WONT_DO, "Won't do"),
+)
+
+# ----------------------------------------------------------------------------
+# WorkOrder status + venue vocabularies — five + two values per §5.c.
+# ``waiting_parts`` and ``scheduled`` are deliberately NOT statuses — the
+# planning §5.c "rejected additions" note explains why.
+# ----------------------------------------------------------------------------
+
+WORK_ORDER_STATUS_DRAFT = "draft"
+WORK_ORDER_STATUS_APPROVED = "approved"
+WORK_ORDER_STATUS_IN_PROGRESS = "in_progress"
+WORK_ORDER_STATUS_COMPLETED = "completed"
+WORK_ORDER_STATUS_CANCELLED = "cancelled"
+
+WORK_ORDER_STATUS_CHOICES = (
+    (WORK_ORDER_STATUS_DRAFT, "Draft"),
+    (WORK_ORDER_STATUS_APPROVED, "Approved"),
+    (WORK_ORDER_STATUS_IN_PROGRESS, "In progress"),
+    (WORK_ORDER_STATUS_COMPLETED, "Completed"),
+    (WORK_ORDER_STATUS_CANCELLED, "Cancelled"),
+)
+
+WORK_ORDER_VENUE_IN_HOUSE = "in_house"
+WORK_ORDER_VENUE_OUTSOURCED = "outsourced"
+
+WORK_ORDER_VENUE_CHOICES = (
+    (WORK_ORDER_VENUE_IN_HOUSE, "In-house"),
+    (WORK_ORDER_VENUE_OUTSOURCED, "Outsourced"),
+)
+
+# ----------------------------------------------------------------------------
+# WorkOrderPart status + source-type vocabularies — six + seven values.
+#
+# Source-type finalized SESSION_066 with ``customer_supplied`` per real
+# dealer operations (RECON §6.1–§6.4). ``customer_supplied`` is
+# meaningfully distinct from ``in_stock`` — customer-supplied parts have
+# warranty and liability implications the store did not create.
+# ----------------------------------------------------------------------------
+
+WORK_ORDER_PART_STATUS_NEEDED = "needed"
+WORK_ORDER_PART_STATUS_ORDERED = "ordered"
+WORK_ORDER_PART_STATUS_BACKORDERED = "backordered"
+WORK_ORDER_PART_STATUS_RECEIVED = "received"
+WORK_ORDER_PART_STATUS_INSTALLED = "installed"
+WORK_ORDER_PART_STATUS_RETURNED = "returned"
+
+WORK_ORDER_PART_STATUS_CHOICES = (
+    (WORK_ORDER_PART_STATUS_NEEDED, "Needed"),
+    (WORK_ORDER_PART_STATUS_ORDERED, "Ordered"),
+    (WORK_ORDER_PART_STATUS_BACKORDERED, "Backordered"),
+    (WORK_ORDER_PART_STATUS_RECEIVED, "Received"),
+    (WORK_ORDER_PART_STATUS_INSTALLED, "Installed"),
+    (WORK_ORDER_PART_STATUS_RETURNED, "Returned"),
+)
+
+WORK_ORDER_PART_SOURCE_OEM_DEALER = "oem_dealer"
+WORK_ORDER_PART_SOURCE_LOCAL_PARTS = "local_parts"
+WORK_ORDER_PART_SOURCE_ONLINE = "online"
+WORK_ORDER_PART_SOURCE_SALVAGE = "salvage"
+WORK_ORDER_PART_SOURCE_IN_STOCK = "in_stock"
+WORK_ORDER_PART_SOURCE_CUSTOMER_SUPPLIED = "customer_supplied"
+WORK_ORDER_PART_SOURCE_OTHER = "other"
+
+WORK_ORDER_PART_SOURCE_TYPE_CHOICES = (
+    (WORK_ORDER_PART_SOURCE_OEM_DEALER, "OEM dealer counter"),
+    (WORK_ORDER_PART_SOURCE_LOCAL_PARTS, "Local parts store"),
+    (WORK_ORDER_PART_SOURCE_ONLINE, "Online"),
+    (WORK_ORDER_PART_SOURCE_SALVAGE, "Salvage / recycled"),
+    (WORK_ORDER_PART_SOURCE_IN_STOCK, "In-house stock"),
+    (WORK_ORDER_PART_SOURCE_CUSTOMER_SUPPLIED, "Customer supplied"),
+    (WORK_ORDER_PART_SOURCE_OTHER, "Other"),
+)
+
+# ----------------------------------------------------------------------------
+# VendorCommunication vocabularies — kind, channel, direction, status.
+#
+# ``status`` vocabulary is four values (draft / approved / sent / logged).
+# The planning artifact's earlier ``failed`` value is not shipped in M4.1
+# — retry / bounce handling is deferred to the prod-readiness pass per
+# §5.i / §5.j. If M4.5 or the prod pass introduces send failures, the
+# enum can be extended additively without breaking existing rows.
+# ----------------------------------------------------------------------------
+
+VENDOR_COMMUNICATION_KIND_VENDOR_COMM = "vendor_comm"
+VENDOR_COMMUNICATION_KIND_PARTS_ORDER = "parts_order"
+VENDOR_COMMUNICATION_KIND_NARRATIVE = "narrative"
+
+VENDOR_COMMUNICATION_KIND_CHOICES = (
+    (VENDOR_COMMUNICATION_KIND_VENDOR_COMM, "Vendor communication"),
+    (VENDOR_COMMUNICATION_KIND_PARTS_ORDER, "Parts order"),
+    (VENDOR_COMMUNICATION_KIND_NARRATIVE, "Narrative note"),
+)
+
+VENDOR_COMMUNICATION_CHANNEL_EMAIL = "email"
+VENDOR_COMMUNICATION_CHANNEL_SMS = "sms"
+VENDOR_COMMUNICATION_CHANNEL_PHONE = "phone"
+VENDOR_COMMUNICATION_CHANNEL_IN_PERSON = "in_person"
+VENDOR_COMMUNICATION_CHANNEL_INTERNAL_NOTE = "internal_note"
+
+VENDOR_COMMUNICATION_CHANNEL_CHOICES = (
+    (VENDOR_COMMUNICATION_CHANNEL_EMAIL, "Email"),
+    (VENDOR_COMMUNICATION_CHANNEL_SMS, "SMS"),
+    (VENDOR_COMMUNICATION_CHANNEL_PHONE, "Phone"),
+    (VENDOR_COMMUNICATION_CHANNEL_IN_PERSON, "In person"),
+    (VENDOR_COMMUNICATION_CHANNEL_INTERNAL_NOTE, "Internal note"),
+)
+
+VENDOR_COMMUNICATION_DIRECTION_OUTBOUND = "outbound"
+VENDOR_COMMUNICATION_DIRECTION_INBOUND = "inbound"
+
+VENDOR_COMMUNICATION_DIRECTION_CHOICES = (
+    (VENDOR_COMMUNICATION_DIRECTION_OUTBOUND, "Outbound"),
+    (VENDOR_COMMUNICATION_DIRECTION_INBOUND, "Inbound"),
+)
+
+VENDOR_COMMUNICATION_STATUS_DRAFT = "draft"
+VENDOR_COMMUNICATION_STATUS_APPROVED = "approved"
+VENDOR_COMMUNICATION_STATUS_SENT = "sent"
+VENDOR_COMMUNICATION_STATUS_LOGGED = "logged"
+
+VENDOR_COMMUNICATION_STATUS_CHOICES = (
+    (VENDOR_COMMUNICATION_STATUS_DRAFT, "Draft"),
+    (VENDOR_COMMUNICATION_STATUS_APPROVED, "Approved"),
+    (VENDOR_COMMUNICATION_STATUS_SENT, "Sent"),
+    (VENDOR_COMMUNICATION_STATUS_LOGGED, "Logged"),
+)
+
+
+class Vendor(models.Model):
+    """Milestone 4 · Increment 1 — outsourced-work vendor.
+
+    Many-per-Dealership. Represents a paint shop, body shop, mechanic,
+    glass tech, detailer, upholstery vendor, etc. — anyone the
+    dealership pays to perform recon work off-site. In-house work
+    does not need a Vendor row (``WorkOrder.venue = 'in_house'``
+    permits ``vendor=NULL``).
+
+    Deletion contract (planning refinement adopted SESSION_066):
+
+    - Normal removal path: ``Vendor.is_active = False``. Historical
+      references remain intact.
+    - Hard delete is **prevented at the schema layer** by
+      ``on_delete=PROTECT`` on every FK that points at Vendor
+      (``WorkOrder.vendor``, ``VendorCommunication.vendor``). Postgres
+      / SQLite raise ``ProtectedError`` when a delete is attempted
+      against a referenced Vendor row.
+    - Rename is permitted and does not rewrite the free-text vendor
+      snapshot on historical ``VehicleCost`` rows (M2 immutability
+      preserved; see planning §5.b Option C).
+    - An unreferenced Vendor may be deleted through Django or admin
+      when project conventions permit; the M4.1 admin surface does not
+      offer a delete button, matching the read-mostly discipline of
+      the M2/M3 admins.
+
+    ``categories`` is a JSONField list of category slugs matching the
+    twelve-value ``CONDITION_CATEGORY_CHOICES`` vocabulary (e.g.
+    ``["mechanical", "electrical"]`` for a full-service mechanic,
+    ``["body", "cosmetic", "paint"]`` for a body shop). Persistence
+    layer does not validate the list contents against
+    ``CONDITION_CATEGORY_CHOICES`` — that validation belongs at the
+    service / admin layer in M4.2 / M4.6, where the vocabulary can be
+    surfaced as a multi-select in the UI. Storing free-form category
+    slugs at the persistence layer avoids requiring a data migration
+    every time the twelve-category vocabulary evolves.
+
+    Source of truth: ``docs/roadmap/MILESTONE_4_PLANNING.md`` §1.2 and
+    ``docs/research/RECON_MAPPING.md`` §5.1 / §5.2 / §5.6.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vendors",
+    )
+    name = models.CharField(max_length=255)
+    # URL-friendly identifier scoped per-dealership. Not globally
+    # unique — two independent dealerships may both work with a
+    # generically-named vendor. Unique-per-dealership enforced by
+    # ``Meta.constraints`` below.
+    slug = models.SlugField(max_length=64)
+    # List of canonical category slugs. See class docstring for why
+    # persistence layer does not validate list contents.
+    categories = models.JSONField(default=list, blank=True)
+    phone = models.CharField(max_length=64, blank=True, default="")
+    email = models.EmailField(blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Vendor"
+        verbose_name_plural = "Vendors"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("dealership", "slug"),
+                name="uniq_vendor_slug_per_dealership",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class ReconDecision(models.Model):
+    """Milestone 4 · Increment 1 — one recon decision per finding.
+
+    OneToOne with :class:`ConditionFinding`. Encodes the three-tier
+    planning decision (must-do / should-do / won't-do) the recon
+    manager applies to each finding after inspection completes. See
+    RECON §3.1 for the framework rationale and §13.1 for the warranty
+    exposure that motivates recording who decided a "won't do" and
+    when.
+
+    **Persistence layer does not enforce "report must be complete."**
+    Per the SESSION_066 brief, that gating belongs at the M4.2
+    service layer (``services/recon.py::record_decision``) — the
+    model layer would need to eagerly walk
+    ``finding.report.status`` on every save and would double-charge
+    the guard the service already owns. The tenant-chain
+    cross-tenant guard below is model-layer because the model can
+    detect it via a single FK lookup without policy coupling.
+
+    ``decided_by`` is nullable + SET_NULL so historical decisions
+    survive user deletion. ``decided_at`` is not auto-set — the M4.2
+    service layer stamps it when the decision is recorded. Direct
+    ORM writes must supply the value.
+
+    Source of truth: ``MILESTONE_4_PLANNING.md`` §1.1 and RECON
+    §3.1 + §13.1.
+    """
+
+    finding = models.OneToOneField(
+        "ConditionFinding",
+        on_delete=models.CASCADE,
+        related_name="recon_decision",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="recon_decisions",
+    )
+    tier = models.CharField(
+        max_length=16,
+        choices=RECON_DECISION_TIER_CHOICES,
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    decided_at = models.DateTimeField()
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-decided_at", "-created_at")
+        verbose_name = "Recon decision"
+        verbose_name_plural = "Recon decisions"
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_tier_display()} decision on finding "
+            f"#{self.finding_id}"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant guard.
+
+        The denormalized ``dealership`` FK must match the parent
+        Vehicle's tenant, reached via ``finding.report.vehicle``.
+        Mirrors :meth:`ConditionFinding.clean`.
+        """
+        super().clean()
+        if self.finding_id is None or self.dealership_id is None:
+            return
+        report = getattr(self.finding, "report", None)
+        if report is None:
+            return
+        vehicle = getattr(report, "vehicle", None)
+        if vehicle is None:
+            return
+        parent_dealership_id = getattr(vehicle, "dealership_id", None)
+        if parent_dealership_id is None:
+            return
+        if parent_dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "ReconDecision.dealership must match the parent "
+                        "Vehicle's dealership (reached via "
+                        "finding.report.vehicle). Cross-tenant "
+                        "contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+
+
+class WorkOrder(models.Model):
+    """Milestone 4 · Increment 1 — one recon job on one vehicle.
+
+    Many-per-Vehicle. Represents a single unit of work (paint the
+    rear quarter panel, mount tires, diagnose the transmission
+    codes). May address one finding or many (see
+    :class:`WorkOrderFinding` through table). May be performed
+    in-house or outsourced to a :class:`Vendor`.
+
+    ``category`` reuses ``CONDITION_CATEGORY_CHOICES`` (the twelve
+    values shipped in M3.1) as the single source of truth. Per the
+    SESSION_066 brief, the category vocabulary must NOT be duplicated
+    into a second independently-maintained tuple — a work order
+    addresses findings, and finding categories are the shared
+    vocabulary.
+
+    Persistence-layer invariants (locked at :meth:`clean`):
+
+    - ``dealership`` matches the parent Vehicle's tenant
+      (cross-tenant guard).
+    - ``venue == "outsourced"`` implies ``vendor IS NOT NULL``. The
+      converse is not enforced — in-house may set a vendor if the
+      operator wants to record a supply relationship, though the
+      M4.6 UI will typically leave it blank.
+    - ``vendor.dealership`` matches ``self.dealership`` when a
+      vendor is set.
+
+    State transitions live in the M4.2 service layer
+    (:mod:`services.recon`). The persistence layer accepts any
+    ``status`` in ``WORK_ORDER_STATUS_CHOICES`` — service-layer
+    validation refuses illegal transitions. Provenance fields
+    (``approved_at`` / ``approved_by`` / ``started_at`` /
+    ``started_by`` / ``completed_at`` / ``completed_by`` /
+    ``cancelled_at`` / ``cancelled_by``) remain nullable at the
+    persistence stage and are populated by the service on the
+    corresponding transition.
+
+    Vendor FK uses ``on_delete=PROTECT`` (planning refinement
+    SESSION_066) — hard-deleting a referenced Vendor raises
+    ``ProtectedError``. Normal removal path is
+    ``Vendor.is_active=False``.
+
+    Source of truth: ``MILESTONE_4_PLANNING.md`` §1.3 + §5.b + §5.c
+    and RECON §4.2 + §4.6 + §5.1.
+    """
+
+    vehicle = models.ForeignKey(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="work_orders",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="work_orders",
+    )
+    # Reuses CONDITION_CATEGORY_CHOICES per SESSION_066 brief — do not
+    # duplicate the twelve-value vocabulary. When a work order spans
+    # multiple categories, operator picks the dominant one; the
+    # through-model records the actual finding→WO mapping.
+    category = models.CharField(
+        max_length=32,
+        choices=CONDITION_CATEGORY_CHOICES,
+    )
+    venue = models.CharField(
+        max_length=16,
+        choices=WORK_ORDER_VENUE_CHOICES,
+    )
+    # PROTECT — a referenced vendor cannot be hard-deleted. See class
+    # docstring. Nullable because ``venue='in_house'`` does not
+    # require a vendor.
+    vendor = models.ForeignKey(
+        "Vendor",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="work_orders",
+    )
+    # In-house technician (for venue=in_house). SET_NULL so historical
+    # rows survive user deletion; unassigned is legitimate on newly
+    # created work orders.
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=WORK_ORDER_STATUS_CHOICES,
+        default=WORK_ORDER_STATUS_DRAFT,
+    )
+    estimated_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    authorized_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    actual_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    estimated_completion_date = models.DateField(null=True, blank=True)
+    actual_completion_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+
+    # Provenance for state transitions. Populated by the M4.2 service
+    # layer atomically with the status transition. All nullable at
+    # the persistence stage — a freshly created draft has none of
+    # these set.
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    started_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    cancellation_reason = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Work order"
+        verbose_name_plural = "Work orders"
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_category_display()} WO on "
+            f"#{self.vehicle.stock_number} ({self.get_status_display()})"
+        )
+
+    def clean(self) -> None:
+        """Structural persistence-layer invariants.
+
+        Four guards, all model-appropriate (no policy coupling):
+
+        1. Cross-tenant contamination — ``dealership`` matches
+           ``vehicle.dealership``. Same shape as M2/M3 models.
+        2. Outsourced venue requires a Vendor — ``venue='outsourced'``
+           without ``vendor`` is nonsensical: outsourced work has to
+           go somewhere. Failure to satisfy this at model layer is a
+           bug in the M4.2 service; the guard prevents corruption
+           from a direct ORM misuse.
+        3. Vendor tenancy — when ``vendor`` is set, its dealership
+           must match ``self.dealership``. Prevents a mis-scoped
+           write from binding a work order to a vendor at another
+           dealership.
+        4. In-house venue MUST NOT silently require a vendor —
+           explicit design invariant from the SESSION_066 brief.
+           The guard is captured by leaving ``vendor`` optional; no
+           positive check needed here (this note documents the
+           deliberate absence of an ``in_house implies vendor IS
+           NULL`` guard so a future edit does not add one).
+
+        State-transition validation is NOT enforced here — that is
+        the M4.2 service layer's job.
+        """
+        super().clean()
+        if self.vehicle_id is not None and self.dealership_id is not None:
+            if self.vehicle.dealership_id != self.dealership_id:
+                raise ValidationError(
+                    {
+                        "dealership": (
+                            "WorkOrder.dealership must match the parent "
+                            "Vehicle's dealership. Cross-tenant "
+                            "contamination guard (see "
+                            "AUTHENTICATION_MODEL.md §1 layer 4)."
+                        )
+                    }
+                )
+        if self.venue == WORK_ORDER_VENUE_OUTSOURCED and self.vendor_id is None:
+            raise ValidationError(
+                {
+                    "vendor": (
+                        "WorkOrder with venue='outsourced' must set a "
+                        "Vendor. Outsourced work has to go somewhere "
+                        "— see MILESTONE_4_PLANNING.md §1.3."
+                    )
+                }
+            )
+        if self.vendor_id is not None and self.dealership_id is not None:
+            vendor_dealership_id = getattr(self.vendor, "dealership_id", None)
+            if (
+                vendor_dealership_id is not None
+                and vendor_dealership_id != self.dealership_id
+            ):
+                raise ValidationError(
+                    {
+                        "vendor": (
+                            "WorkOrder.vendor must belong to the same "
+                            "dealership as the work order itself. "
+                            "Cross-tenant contamination guard."
+                        )
+                    }
+                )
+
+
+class WorkOrderFinding(models.Model):
+    """Milestone 4 · Increment 1 — through model linking WOs to findings.
+
+    Many-to-many between :class:`WorkOrder` and
+    :class:`ConditionFinding`. Same finding may be addressed by
+    multiple work orders (parts-order WO + install WO), and one work
+    order may address multiple findings (a paint job that covers
+    three separate cosmetic findings on the same trip to the body
+    shop — RECON §3.7).
+
+    Persistence layer invariants (locked at :meth:`clean`):
+
+    - ``dealership`` matches ``work_order.dealership``.
+    - ``dealership`` matches ``finding.report.vehicle.dealership``.
+    - ``work_order.vehicle_id == finding.report.vehicle_id`` — a
+      work order on Vehicle A cannot address a finding from a
+      report on Vehicle B, even within the same dealership.
+    - Unique together on (``work_order``, ``finding``) — a finding
+      cannot be linked to the same work order twice.
+
+    ``draft-only attach/detach`` — the "you can only edit the link
+    set while the WO is a draft" workflow rule belongs at the M4.2
+    service layer, not here. The through model is a pure structural
+    link.
+
+    Source of truth: ``MILESTONE_4_PLANNING.md`` §1.4 + §5.d.
+    """
+
+    work_order = models.ForeignKey(
+        "WorkOrder",
+        on_delete=models.CASCADE,
+        related_name="finding_links",
+    )
+    finding = models.ForeignKey(
+        "ConditionFinding",
+        on_delete=models.CASCADE,
+        related_name="work_order_links",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="work_order_findings",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Work order → finding link"
+        verbose_name_plural = "Work order → finding links"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("work_order", "finding"),
+                name="uniq_workorder_finding_pair",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"WO #{self.work_order_id} → finding #{self.finding_id}"
+
+    def clean(self) -> None:
+        """Structural persistence-layer invariants.
+
+        Three guards:
+
+        1. ``dealership`` matches ``work_order.dealership``.
+        2. ``dealership`` matches
+           ``finding.report.vehicle.dealership`` — the tenant chain
+           reached through the finding side.
+        3. ``work_order.vehicle_id == finding.report.vehicle_id`` —
+           the two sides of the link must refer to the same
+           physical vehicle. Cross-vehicle links would corrupt
+           traceability even within a single dealership.
+        """
+        super().clean()
+        if self.work_order_id is not None and self.dealership_id is not None:
+            wo_dealership_id = getattr(self.work_order, "dealership_id", None)
+            if (
+                wo_dealership_id is not None
+                and wo_dealership_id != self.dealership_id
+            ):
+                raise ValidationError(
+                    {
+                        "dealership": (
+                            "WorkOrderFinding.dealership must match "
+                            "the parent WorkOrder's dealership. "
+                            "Cross-tenant contamination guard."
+                        )
+                    }
+                )
+        if self.finding_id is not None and self.dealership_id is not None:
+            report = getattr(self.finding, "report", None)
+            vehicle = getattr(report, "vehicle", None) if report else None
+            finding_dealership_id = (
+                getattr(vehicle, "dealership_id", None) if vehicle else None
+            )
+            if (
+                finding_dealership_id is not None
+                and finding_dealership_id != self.dealership_id
+            ):
+                raise ValidationError(
+                    {
+                        "dealership": (
+                            "WorkOrderFinding.dealership must match "
+                            "the finding's Vehicle dealership "
+                            "(reached via finding.report.vehicle). "
+                            "Cross-tenant contamination guard."
+                        )
+                    }
+                )
+        if self.work_order_id is not None and self.finding_id is not None:
+            wo_vehicle_id = getattr(self.work_order, "vehicle_id", None)
+            report = getattr(self.finding, "report", None)
+            finding_vehicle_id = getattr(report, "vehicle_id", None) if report else None
+            if (
+                wo_vehicle_id is not None
+                and finding_vehicle_id is not None
+                and wo_vehicle_id != finding_vehicle_id
+            ):
+                raise ValidationError(
+                    {
+                        "finding": (
+                            "WorkOrderFinding requires the linked "
+                            "WorkOrder and Finding to refer to the "
+                            "same Vehicle. Cross-vehicle links are "
+                            "not permitted (see "
+                            "MILESTONE_4_PLANNING.md §1.4)."
+                        )
+                    }
+                )
+
+
+class WorkOrderPart(models.Model):
+    """Milestone 4 · Increment 1 — one physical part needed for a WO.
+
+    Many-per-WorkOrder. Captures the operational parts-tracking
+    surface RECON §6.1–§6.6 describes: what part, from where, how
+    many, at what unit cost, at what point in the ordering
+    lifecycle. **Operational tracking data only** — the M4.4
+    service layer owns transitions; marketplaces, auto-order, and
+    payment are out of scope for the entire Milestone 4
+    (planning §5.h).
+
+    Persistence-layer invariants:
+
+    - ``dealership`` matches ``work_order.dealership`` (which
+      in turn must match ``work_order.vehicle.dealership`` per
+      :meth:`WorkOrder.clean`).
+    - ``quantity >= 1`` (enforced via ``MinValueValidator(1)``
+      surfaced by ``full_clean``).
+    - Canonical ``status`` and ``source_type`` choices.
+    - ``unit_cost`` is Decimal with the M2/M3 house
+      ``max_digits=10, decimal_places=2`` shape.
+
+    Status-transition validation and timestamp population belong at
+    the M4.4 service layer. The per-state timestamps
+    (``ordered_at``, ``received_at``, ``installed_at``,
+    ``returned_at``) remain nullable at persistence and are set by
+    the corresponding service function.
+
+    Source of truth: ``MILESTONE_4_PLANNING.md`` §1.5 + §5.h and
+    RECON §3.5 + §6.1–§6.6.
+    """
+
+    work_order = models.ForeignKey(
+        "WorkOrder",
+        on_delete=models.CASCADE,
+        related_name="parts",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="work_order_parts",
+    )
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    part_number = models.CharField(max_length=128, blank=True, default="")
+    quantity = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+    )
+    unit_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=WORK_ORDER_PART_STATUS_CHOICES,
+        default=WORK_ORDER_PART_STATUS_NEEDED,
+    )
+    source_type = models.CharField(
+        max_length=32,
+        choices=WORK_ORDER_PART_SOURCE_TYPE_CHOICES,
+        default=WORK_ORDER_PART_SOURCE_IN_STOCK,
+    )
+    # Free-text vendor / store name at the parts side. No FK to
+    # :class:`Vendor` because parts suppliers are a different
+    # population from recon vendors (planning §1.5).
+    source_name = models.CharField(max_length=255, blank=True, default="")
+    ordered_at = models.DateField(null=True, blank=True)
+    received_at = models.DateField(null=True, blank=True)
+    installed_at = models.DateField(null=True, blank=True)
+    returned_at = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Work order part"
+        verbose_name_plural = "Work order parts"
+
+    def __str__(self) -> str:
+        return f"{self.name} (x{self.quantity}) on WO #{self.work_order_id}"
+
+    def clean(self) -> None:
+        """Cross-tenant guard.
+
+        ``dealership`` must match the parent WorkOrder's tenant.
+        Because WorkOrder itself validates
+        ``dealership == vehicle.dealership``, this indirectly locks
+        the tenant chain WorkOrderPart → WorkOrder → Vehicle.
+        """
+        super().clean()
+        if self.work_order_id is not None and self.dealership_id is not None:
+            wo_dealership_id = getattr(self.work_order, "dealership_id", None)
+            if (
+                wo_dealership_id is not None
+                and wo_dealership_id != self.dealership_id
+            ):
+                raise ValidationError(
+                    {
+                        "dealership": (
+                            "WorkOrderPart.dealership must match the "
+                            "parent WorkOrder's dealership. Cross-tenant "
+                            "contamination guard."
+                        )
+                    }
+                )
+
+
+class VendorCommunication(models.Model):
+    """Milestone 4 · Increment 1 — one record of communication with a vendor.
+
+    Many-per-WorkOrder and many-per-Vendor (nullable both). Captures
+    every communication event the store makes or receives about a
+    recon job: AI-drafted vendor emails, parts-order requests,
+    operator-recorded phone calls, inbound status updates from a
+    vendor, in-person conversations at the shop.
+
+    **Content field convention (SESSION_066 planning refinement).**
+    Two distinct workflows share this model:
+
+    - **AI-drafted outbound (kind=vendor_comm / parts_order).**
+      ``draft_content`` holds the AI-drafted body. ``draft →
+      approved → sent`` is the state ladder. On ``sent``,
+      ``sent_content`` captures the final sent body (which may
+      differ from the draft if the operator edited before sending).
+      All three status transitions require the corresponding
+      actor + timestamp fields.
+    - **Operator-recorded (channel=phone / in_person / inbound
+      emails logged after receipt; often kind=narrative).** The
+      operator creates a row directly at ``status='logged'``.
+      ``draft_content`` holds the recorded body (what was said,
+      what was heard). ``sent_by`` + ``sent_at`` capture the human
+      actor and timestamp of the recording. **No approval step is
+      required** — this is not an AI-drafted claim, it is a human
+      recording an off-system communication.
+
+    Status-invariant matrix (enforced at :meth:`clean`):
+
+    | status     | required                                                  |
+    |------------|-----------------------------------------------------------|
+    | draft      | (no additional structural requirement)                    |
+    | approved   | approved_by + approved_at                                 |
+    | sent       | approved_by + approved_at + sent_by + sent_at + nonblank  |
+    |            | sent_content                                              |
+    | logged     | sent_by + sent_at + nonblank draft_content                |
+
+    **AI-generated content may never jump directly to logged** —
+    enforced at the M4.5 service layer, not at model layer (a
+    persistence-only guard cannot distinguish AI-drafted from
+    operator-recorded rows).
+
+    Vendor FK uses ``on_delete=PROTECT`` (planning refinement
+    SESSION_066) — hard-deleting a referenced Vendor raises
+    ``ProtectedError``. Nullable because a comm row may be authored
+    before the operator identifies which vendor it belongs to (e.g.
+    an inbound call logged against a work order pending vendor
+    assignment).
+
+    Source of truth: ``MILESTONE_4_PLANNING.md`` §1.6 + §5.b + §5.g
+    and RECON §5.6 + §14.7 + §14.8 + §16.5.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vendor_communications",
+    )
+    # PROTECT — cannot hard-delete a referenced Vendor. See class
+    # docstring. Nullable because a comm may precede vendor
+    # identification.
+    vendor = models.ForeignKey(
+        "Vendor",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="communications",
+    )
+    # SET_NULL — comms can precede WO assignment; historical comms
+    # about a deleted WO are retained without their WO parent.
+    work_order = models.ForeignKey(
+        "WorkOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="communications",
+    )
+    kind = models.CharField(
+        max_length=16,
+        choices=VENDOR_COMMUNICATION_KIND_CHOICES,
+    )
+    channel = models.CharField(
+        max_length=16,
+        choices=VENDOR_COMMUNICATION_CHANNEL_CHOICES,
+    )
+    direction = models.CharField(
+        max_length=16,
+        choices=VENDOR_COMMUNICATION_DIRECTION_CHOICES,
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=VENDOR_COMMUNICATION_STATUS_CHOICES,
+        default=VENDOR_COMMUNICATION_STATUS_DRAFT,
+    )
+    # Body content. For AI-drafted rows: the initial AI draft. For
+    # operator-recorded (logged) rows: the recorded body of what
+    # was said / heard. See class docstring for the two-workflow
+    # rationale.
+    draft_content = models.TextField(blank=True, default="")
+    # Final sent body — only meaningful when status='sent'. May
+    # differ from draft_content if the operator edited before
+    # sending.
+    sent_content = models.TextField(blank=True, default="")
+    # JSONField mapping sentence indices to source-bundle keys.
+    # Populated by the M4.5 service; default empty dict.
+    source_provenance = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True, default="")
+
+    # Actor + timestamp provenance. Nullable at persistence; the
+    # M4.5 service layer sets each pair atomically with the
+    # corresponding transition. ``clean()`` enforces the
+    # per-status requirement matrix.
+    drafted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    drafted_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Vendor communication"
+        verbose_name_plural = "Vendor communications"
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_kind_display()} via "
+            f"{self.get_channel_display()} "
+            f"({self.get_status_display()})"
+        )
+
+    def clean(self) -> None:
+        """Structural persistence-layer invariants.
+
+        Cross-tenant guards:
+
+        - When ``vendor`` is set, ``vendor.dealership`` must match
+          ``self.dealership``.
+        - When ``work_order`` is set, ``work_order.dealership`` must
+          match ``self.dealership``.
+        - When both ``vendor`` and ``work_order`` are set, they must
+          belong to the same dealership.
+
+        Status-invariant matrix (SESSION_066 refinement — separates
+        ``sent`` from ``logged``):
+
+        - ``status='sent'`` requires nonblank ``sent_content`` +
+          ``approved_by`` + ``approved_at`` + ``sent_by`` + ``sent_at``.
+        - ``status='approved'`` requires ``approved_by`` +
+          ``approved_at``.
+        - ``status='logged'`` requires nonblank ``draft_content`` +
+          ``sent_by`` + ``sent_at``. No approval step required.
+        """
+        super().clean()
+
+        if self.vendor_id is not None and self.dealership_id is not None:
+            vendor_dealership_id = getattr(self.vendor, "dealership_id", None)
+            if (
+                vendor_dealership_id is not None
+                and vendor_dealership_id != self.dealership_id
+            ):
+                raise ValidationError(
+                    {
+                        "vendor": (
+                            "VendorCommunication.vendor must belong to "
+                            "the same dealership as the communication "
+                            "itself. Cross-tenant contamination guard."
+                        )
+                    }
+                )
+        if self.work_order_id is not None and self.dealership_id is not None:
+            wo_dealership_id = getattr(self.work_order, "dealership_id", None)
+            if (
+                wo_dealership_id is not None
+                and wo_dealership_id != self.dealership_id
+            ):
+                raise ValidationError(
+                    {
+                        "work_order": (
+                            "VendorCommunication.work_order must belong "
+                            "to the same dealership as the communication "
+                            "itself. Cross-tenant contamination guard."
+                        )
+                    }
+                )
+        if self.vendor_id is not None and self.work_order_id is not None:
+            vendor_dealership_id = getattr(self.vendor, "dealership_id", None)
+            wo_dealership_id = getattr(self.work_order, "dealership_id", None)
+            if (
+                vendor_dealership_id is not None
+                and wo_dealership_id is not None
+                and vendor_dealership_id != wo_dealership_id
+            ):
+                raise ValidationError(
+                    {
+                        "work_order": (
+                            "VendorCommunication vendor and work_order "
+                            "must belong to the same dealership when "
+                            "both are set. Cross-tenant contamination "
+                            "guard."
+                        )
+                    }
+                )
+
+        if self.status == VENDOR_COMMUNICATION_STATUS_APPROVED:
+            if self.approved_by_id is None or self.approved_at is None:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "VendorCommunication status='approved' "
+                            "requires approved_by and approved_at."
+                        )
+                    }
+                )
+        elif self.status == VENDOR_COMMUNICATION_STATUS_SENT:
+            missing = []
+            if not (self.sent_content or "").strip():
+                missing.append("sent_content")
+            if self.approved_by_id is None:
+                missing.append("approved_by")
+            if self.approved_at is None:
+                missing.append("approved_at")
+            if self.sent_by_id is None:
+                missing.append("sent_by")
+            if self.sent_at is None:
+                missing.append("sent_at")
+            if missing:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "VendorCommunication status='sent' requires "
+                            f"{', '.join(missing)}."
+                        )
+                    }
+                )
+        elif self.status == VENDOR_COMMUNICATION_STATUS_LOGGED:
+            missing = []
+            if not (self.draft_content or "").strip():
+                missing.append("draft_content (recorded body)")
+            if self.sent_by_id is None:
+                missing.append("sent_by (human actor)")
+            if self.sent_at is None:
+                missing.append("sent_at (recorded timestamp)")
+            if missing:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "VendorCommunication status='logged' "
+                            f"requires {', '.join(missing)}. "
+                            "'logged' rows do not require prior "
+                            "approval — see MILESTONE_4_PLANNING.md "
+                            "§1.6 (SESSION_066 refinement)."
+                        )
+                    }
+                )
