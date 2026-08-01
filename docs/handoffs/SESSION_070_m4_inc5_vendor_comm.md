@@ -8,7 +8,7 @@ milestone: 4
 milestone_status: in-progress
 increment: 5
 increment_status: shipped
-commit: TBD
+commit: ad3e7ad
 ---
 
 # SESSION_070 — Milestone 4 · Increment 5 (M4.5 — vendor comm drafting + `_scrub_invented_recon_fact`)
