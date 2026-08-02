@@ -672,6 +672,12 @@ urlpatterns = [
         views_test_drives.admin_test_drive_create,
         name="admin-test-drive-create",
     ),
+    # M11.6 addendum — read-only list surface for the operator UI.
+    path(
+        "admin/test-drives/list/",
+        views_test_drives.admin_test_drive_list,
+        name="admin-test-drive-list",
+    ),
     # ---- Milestone 11 · Increment 3 — DealWriteup admin API ------------
     # Three endpoints per MILESTONE_11_PLANNING.md §1.3 + §5.e Option A
     # + §7 M11.3. Gated on ``IsSalesManagerOrOwnerAtActiveDealership``
@@ -761,6 +767,12 @@ urlpatterns = [
         "admin/be-backs/",
         views_be_backs.admin_be_back_create,
         name="admin-be-back-create",
+    ),
+    # M11.6 addendum — read-only list surface for the operator UI.
+    path(
+        "admin/be-backs/list/",
+        views_be_backs.admin_be_back_list,
+        name="admin-be-back-list",
     ),
     path(
         "admin/be-backs/<int:pk>/mark-returned/",

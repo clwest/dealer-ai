@@ -96,6 +96,56 @@ def _project_test_drive(drive: TestDrive) -> dict:
     }
 
 
+@api_view(["GET"])
+@permission_classes(_M112_PERMS)
+def admin_test_drive_list(request):
+    """GET: list test drives for the caller's tenant.
+
+    Added at M11.6 (SESSION_119) per §0.a M11.6 addendum — the M11.6
+    operator UI needs a list surface. Thin QuerySet wrapper with three
+    optional filters:
+
+    - ``lead_id`` — narrow to a specific lead.
+    - ``vehicle_id`` — narrow to a specific vehicle.
+    - ``driven_since`` — ISO datetime; ``driven_at__gte=<value>``.
+
+    Cap at 100 rows (matches M10.7 admin list convention). Ordering
+    matches Meta (``-driven_at``).
+    """
+    dealership = get_current_dealership(request)
+    qs = TestDrive.objects.filter(dealership=dealership)
+
+    raw_lead = request.query_params.get("lead_id")
+    if raw_lead:
+        try:
+            qs = qs.filter(lead_id=int(raw_lead))
+        except (TypeError, ValueError):
+            pass
+
+    raw_vehicle = request.query_params.get("vehicle_id")
+    if raw_vehicle:
+        try:
+            qs = qs.filter(vehicle_id=int(raw_vehicle))
+        except (TypeError, ValueError):
+            pass
+
+    raw_since = request.query_params.get("driven_since")
+    if raw_since:
+        try:
+            parsed = serializers.DateTimeField().to_internal_value(raw_since)
+            qs = qs.filter(driven_at__gte=parsed)
+        except serializers.ValidationError:
+            pass
+
+    rows = list(qs[:100])
+    return Response(
+        {
+            "count": len(rows),
+            "results": [_project_test_drive(td) for td in rows],
+        }
+    )
+
+
 @api_view(["POST"])
 @permission_classes(_M112_PERMS)
 def admin_test_drive_create(request):

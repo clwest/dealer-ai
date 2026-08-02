@@ -322,6 +322,106 @@ Streak stands at 35
 as-recommended (planning-time
 decisions only).
 
+### SESSION_119 · M11.6 open — Operator UI scoping decisions recorded
+
+§5.f Option C (MVP substrate at
+M11.1; extended UI at M11.6) was
+confirmed at SESSION_114 open —
+M11.6 is that follow-on. Three
+implementation-time scoping
+decisions surfaced at M11.6 open,
+resolved with the recommended
+options and recorded here per the
+M11.3-M11.5 precedent.
+
+1. **§5.f.1 — Route family:
+   Option B.** New
+   `/dealer-ai-sales/` route
+   family with per-substrate
+   child pages. Five new backend
+   surfaces (channel intake,
+   test-drive log, deal writeup,
+   follow-up queue, be-back
+   queue) warrant a distinct
+   route family rather than tab-
+   cramming the existing
+   `/dealer-ai-leads/` page.
+2. **§5.f.2 — MVP surface scope.**
+   Four pages ship in M11.6:
+   channel-filtered leads list,
+   test-drive log, follow-up
+   task work-queue (default
+   filter "due today, pending"),
+   be-back list with state
+   filter. **DealWriteup + F&I
+   handoff UI is deferred** to a
+   follow-on because the handoff
+   flow touches F&I integration
+   and needs a distinct UX pass
+   (workflow spans two personas
+   — sales manager approves,
+   F&I manager receives).
+3. **§5.f.3 — Test target:** ~15
+   Vitest tests per §7 M11.6.
+   Backend delta 0 at M11.6
+   (frontend-only). Mirrors M10.7
+   Vitest coverage pattern
+   (`DealerFandIDeals.test.tsx`
+   as the reference).
+
+None close a future option — the
+deferred DealWriteup UI can land
+in a subsequent M12+ increment
+without reshaping M11.6's pages.
+Streak stands at 35 as-
+recommended (planning-time
+decisions only).
+
+**§5.f.4 addendum — read-only
+list endpoints needed for
+operator UI.** At M11.6
+implementation time the scope
+originally framed as "frontend-
+only" hit a substrate reality:
+M11.2 (TestDrive) and M11.5
+(BeBack) shipped write endpoints
+only, and the existing
+`/admin/leads/` GET list has no
+channel filter. A meaningful
+operator UI needs list surfaces.
+Three minimal read-only backend
+additions land in the M11.6
+commit alongside the frontend:
+
+- **`GET /admin/leads/`** —
+  extended to accept a
+  `?channel=` filter (single or
+  comma-separated), preserving
+  the existing handed_off /
+  urgency / since / ordering
+  filters unchanged.
+- **`GET /admin/test-drives/`**
+  (new) — list with `?lead_id=`
+  + `?vehicle_id=` +
+  `?driven_since=` filters.
+- **`GET /admin/be-backs/`**
+  (new) — list with `?state=`
+  + `?promised_since=` filters.
+
+All three gated on
+`IsSalesManagerOrOwnerAtActiveDealership`
+(matches the M11.6 write
+posture). No service-layer
+changes; the endpoints are thin
+QuerySet wrappers with the same
+100-row default cap M10.7 uses.
+Backend delta at M11.6: ~+8
+tests. This is the smallest
+substrate change that makes the
+M11.6 UI operator-useful; it
+doesn't reshape any M11.1-M11.5
+write verb.
+
 ---
 
 ## 1. Design memo

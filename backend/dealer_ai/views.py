@@ -256,6 +256,14 @@ _LEAD_SINCE_WINDOWS = {
 
 _LEAD_VALID_URGENCIES = {"immediate", "this_week", "this_month", "researching"}
 
+# Milestone 11 · Increment 6 (SESSION_119) — channel filter vocab. Imported
+# here rather than at module top to avoid a circular-import surface on the
+# M11.1 CustomerLead vocab constants (models.py loads views.py transitively
+# via app config, so the local import is fine and the set is a snapshot at
+# request time).
+from .models import LEAD_CHANNEL_CHOICES  # noqa: E402
+_LEAD_VALID_CHANNELS = {key for key, _ in LEAD_CHANNEL_CHOICES}
+
 # Severity ranking for ordering=urgency. Higher number = more urgent;
 # unset urgency falls to 0. Tie-break on -created_at handled in caller.
 _URGENCY_RANK = {
@@ -300,6 +308,20 @@ def _apply_lead_filters(qs, request):
     if raw_since in _LEAD_SINCE_WINDOWS:
         cutoff = timezone.now() - _LEAD_SINCE_WINDOWS[raw_since]
         qs = qs.filter(created_at__gte=cutoff)
+
+    # Milestone 11 · Increment 6 (SESSION_119) — channel filter per
+    # SESSION_119 §0.a M11.6 addendum. Same "silently ignore garbage
+    # values" posture as the M1 handed_off / urgency filters above.
+    raw_channel = request.query_params.get("channel")
+    if raw_channel:
+        wanted = {
+            tok.strip().lower()
+            for tok in raw_channel.split(",")
+            if tok.strip()
+        }
+        wanted = wanted & _LEAD_VALID_CHANNELS
+        if wanted:
+            qs = qs.filter(channel__in=list(wanted))
 
     return qs
 

@@ -108,6 +108,48 @@ def _project_be_back(be_back: BeBack) -> dict:
     }
 
 
+_VALID_BE_BACK_STATES = {"promised", "returned", "no_show"}
+
+
+@api_view(["GET"])
+@permission_classes(_M115_PERMS)
+def admin_be_back_list(request):
+    """GET: list be-backs for the caller's tenant.
+
+    Added at M11.6 (SESSION_119) per §0.a M11.6 addendum — the M11.6
+    operator UI needs a list surface. Thin QuerySet wrapper with two
+    optional filters:
+
+    - ``state`` — one of ``promised`` / ``returned`` / ``no_show``.
+    - ``promised_since`` — ISO datetime; ``promised_at__gte=<value>``.
+
+    Cap at 100 rows (matches M10.7 admin list convention). Ordering
+    matches Meta (``-promised_at``).
+    """
+    dealership = get_current_dealership(request)
+    qs = BeBack.objects.filter(dealership=dealership)
+
+    raw_state = (request.query_params.get("state") or "").strip()
+    if raw_state in _VALID_BE_BACK_STATES:
+        qs = qs.filter(state=raw_state)
+
+    raw_since = request.query_params.get("promised_since")
+    if raw_since:
+        try:
+            parsed = serializers.DateTimeField().to_internal_value(raw_since)
+            qs = qs.filter(promised_at__gte=parsed)
+        except serializers.ValidationError:
+            pass
+
+    rows = list(qs[:100])
+    return Response(
+        {
+            "count": len(rows),
+            "results": [_project_be_back(bb) for bb in rows],
+        }
+    )
+
+
 @api_view(["POST"])
 @permission_classes(_M115_PERMS)
 def admin_be_back_create(request):

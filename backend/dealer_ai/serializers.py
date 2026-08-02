@@ -304,6 +304,12 @@ class AdminLeadListSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_at",
             "created_at",
+            # Milestone 11 · Increment 6 (SESSION_119) — expose the M11.1
+            # channel field so the sales operator UI can render the
+            # channel column + filter by it. Additive-only serializer
+            # change; existing consumers ignore unknown fields.
+            "channel",
+            "referrer",
         ]
 
 

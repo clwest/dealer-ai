@@ -8,6 +8,10 @@ import AdvisorWorkspacePage from "@/pages/AdvisorWorkspacePage";
 import DealerAnalyticsPage from "@/pages/DealerAnalyticsPage";
 import DealerAIDemo from "@/pages/DealerAIDemo";
 import DealerAdmin from "@/pages/DealerAdmin";
+import DealerAiSalesBeBacks from "@/pages/DealerAiSalesBeBacks";
+import DealerAiSalesFollowUps from "@/pages/DealerAiSalesFollowUps";
+import DealerAiSalesLeads from "@/pages/DealerAiSalesLeads";
+import DealerAiSalesTestDrives from "@/pages/DealerAiSalesTestDrives";
 import DealerFandICompliance from "@/pages/DealerFandICompliance";
 import DealerFandIDeals from "@/pages/DealerFandIDeals";
 import DealershipHomePage from "@/pages/DealershipHomePage";
@@ -130,6 +134,27 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route
                 path="dealer-ai-f-and-i/:contract_id/compliance"
                 element={<DealerFandICompliance />}
+              />
+              {/* Milestone 11 · Increment 6 — sales operator UI
+                  (four MVP pages per §5.f Option B / Option C: leads
+                  channel filter, test-drive log, follow-up work-
+                  queue, be-back list). DealWriteup UI deferred to
+                  a follow-on. */}
+              <Route
+                path="dealer-ai-sales/leads"
+                element={<DealerAiSalesLeads />}
+              />
+              <Route
+                path="dealer-ai-sales/test-drives"
+                element={<DealerAiSalesTestDrives />}
+              />
+              <Route
+                path="dealer-ai-sales/follow-ups"
+                element={<DealerAiSalesFollowUps />}
+              />
+              <Route
+                path="dealer-ai-sales/be-backs"
+                element={<DealerAiSalesBeBacks />}
               />
             </Route>
           </Route>

@@ -189,6 +189,10 @@ export interface AdminLead {
   assigned_to: SalespersonAssignment | null;
   assigned_at: string | null;
   created_at: string;
+  // Milestone 11 · Increment 6 (SESSION_119) — M11.1 channel + referrer
+  // exposed via the extended AdminLeadListSerializer.
+  channel?: string;
+  referrer?: number | null;
 }
 
 export interface AdminChatSessionRow {
@@ -256,6 +260,9 @@ export interface AdminLeadsQuery {
   urgency?: string[]; // immediate / this_week / this_month / researching
   since?: "24h" | "7d" | "30d";
   ordering?: "urgency" | "created_at";
+  // Milestone 11 · Increment 6 (SESSION_119) — channel filter per
+  // SESSION_119 §0.a M11.6 addendum. Comma-joined server-side.
+  channel?: string[];
 }
 
 export function fetchAdminLeads(opts: AdminLeadsQuery | number = {}) {
@@ -270,6 +277,8 @@ export function fetchAdminLeads(opts: AdminLeadsQuery | number = {}) {
     params.set("urgency", o.urgency.join(","));
   if (o.since) params.set("since", o.since);
   if (o.ordering) params.set("ordering", o.ordering);
+  if (o.channel && o.channel.length > 0)
+    params.set("channel", o.channel.join(","));
   const qs = params.toString();
   return authGetJSON<ListResponse<AdminLead>>(
     `/admin/leads/${qs ? `?${qs}` : ""}`,
