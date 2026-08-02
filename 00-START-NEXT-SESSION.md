@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_147
+last_session_shipped: SESSION_148
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -20,70 +20,75 @@ milestone_15_status: shipped
 milestone_16_status: shipped
 milestone_17_status: shipped
 milestone_18_status: in-progress
-next_session: SESSION_148
+next_session: SESSION_149
 next_milestone: 18
 next_milestone_name: "Demo Store Simulation + Pilot Validation Readiness"
-next_increment: 2
-next_increment_name: "M18.2 — Retail/subprime archetype pack"
+next_increment: 3
+next_increment_name: "M18.3 — Floor-planned archetype pack"
 ---
 
-# Next session — SESSION_148 · Milestone 18 · Increment 2 (M18.2 — Retail/subprime archetype pack)
+# Next session — SESSION_149 · Milestone 18 · Increment 3 (M18.3 — Floor-planned archetype pack)
 
-> **SESSION_147 shipped M18.1 —** backend
-> substrate. Migration `0047`
-> (`Dealership.is_demo` +
-> `demo_archetype` + `TesterFeedback`).
-> New `services/demo_store/` package
-> (nine modules) with belt-and-suspenders
-> guards + synthetic-data helpers +
-> outbound-send-boundary toolkit +
-> archetype dispatcher + stubs. New
-> `demo_store` management command. Test
-> helper `make_demo_dealership`. 53
-> focused tests including the outbound-
-> egress scanner test. **§0.a M18.1
-> decision 1 recorded** — outbound-send-
-> boundary enumeration revealed the
-> preliminary list was aspirational; only
-> the two LLM providers currently egress
-> and are on a documented allowlist.
-> Demo-aware LLM router deferred.
+> **SESSION_148 shipped M18.2 —** the
+> retail/subprime archetype pack.
+> `RetailSubprimeArchetypeBuilder.build()`
+> now atomically constructs a coherent
+> operational story across 20 vehicles, 4
+> salespeople, 15 leads, 5 sales (1 BHPH
+> firing M15 sync-sibling GL post), 3
+> recon-in-progress vehicles with full
+> ConditionReport + WorkOrder + Vendor +
+> VehicleCost + stage progression, 2 sub-
+> prime CreditApplications, and 1 follow-
+> up cadence (auto-creating 3 tasks).
 >
-> **Backend baseline: 4,363 → 4,416
-> pass** (+53 tests, 0 regressions).
-> **Frontend Vitest baseline: 140 pass**
-> (unchanged — no frontend at M18.1).
-> Migrations `0043`–`0047` (+1 at M18.1).
-> Tenancy carriers 49 → **50**
-> (TesterFeedback). DRF admin surface
-> 107 (unchanged — feedback POST lands
-> at M18.5). Frontend operator routes
-> 20 (unchanged — M18 introduces zero
-> new operator routes per §5.f + Q7).
+> **Three §0.a M18.2 decisions recorded:**
+> (1) Chargeback deferred to M18.5 (~5
+> more entities needed; better home in a
+> dedicated F&I scenario brief). (2)
+> Registry now seeds M13.1 default COA on
+> both create + reset (M15 sale-booking
+> requires it). (3) `_delete_demo_store_children`
+> iterates carriers in reverse order
+> (child-before-parent for PROTECT FKs)
+> and deletes demo-owned Users so the
+> next build doesn't collide on
+> username unique constraint.
+>
+> **Backend baseline: 4,416 → 4,449
+> pass** (+33 tests, 0 regressions).
+> Frontend Vitest 140 (unchanged).
+> Migrations 0043-0047 (unchanged).
+> Tenancy carriers 50 (unchanged). DRF
+> admin surface 107 (unchanged). Frontend
+> operator routes 20 (unchanged).
 > Permission classes 7 — **zero-drift
-> streak now ten consecutive
-> milestones** (M10 → M18.1). Celery-
-> beat task families 10 (unchanged —
-> no beat entry at M18).
+> streak eleven consecutive
+> milestones** (M10 → M18.2). Celery-
+> beat task families 10 (unchanged).
 >
-> **SESSION_148 opens M18.2 — retail/
-> subprime archetype pack.** Replace the
-> M18.1 stub in
-> `services/demo_store/archetypes/retail_subprime.py`
-> with an atomic `build()` verb that
-> constructs a coherent operational story
-> across the shipped M1-M17 surface.
+> **SESSION_149 opens M18.3 — floor-
+> planned archetype pack.** Replace the
+> stub in
+> `services/demo_store/archetypes/floor_planned.py`
+> with an atomic `build()` verb
+> constructing a mid-size independent
+> dealer story with auction floor-plan
+> lender + outside-recon vendor
+> relationships + a **documented
+> recon-overrun scenario** for the recon-
+> lead role.
 
-## First thing SESSION_148 must do
+## First thing SESSION_149 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean (M18.1 commit
-  `fe9a19a` landed at SESSION_147 close).
+- `git status` — clean (M18.2 commit
+  `a7eb65e` landed at SESSION_148 close).
 - `git log --oneline -3` — top should be
-  `fe9a19a` (M18.1 substrate).
+  `a7eb65e` (M18.2 retail_subprime).
 - `python3 manage.py test dealer_ai`
-  → **4,416 pass, 1 skipped, 0 fail**.
+  → **4,449 pass, 1 skipped, 0 fail**.
 - `cd frontend && npm test` → **140
   pass**.
 - `python3 manage.py check` clean.
@@ -97,137 +102,120 @@ next_increment_name: "M18.2 — Retail/subprime archetype pack"
 ### 2. Read first (in order)
 
 - `docs/roadmap/MILESTONE_18_PLANNING.md`
-  §7 M18.2 (retail/subprime scope) +
-  §Store-story coherence (the
-  operational-story contract).
-- `docs/handoffs/SESSION_147_m18_inc1_backend_substrate.md`
-  (substrate freshly shipped).
-- `docs/research/INDEPENDENT_DEALER_PIVOT.md`
-  (retail/subprime persona shape).
-- `docs/research/SALES_DEPARTMENT_MAPPING.md`
-  §retail + subprime motion.
-- `backend/dealer_ai/services/demo_store/`
-  (substrate the archetype builds on).
+  §7 M18.3.
+- `docs/handoffs/SESSION_148_m18_inc2_retail_subprime_archetype.md`.
 - `backend/dealer_ai/services/demo_store/archetypes/retail_subprime.py`
-  (the stub file to replace).
+  (pattern template — floor_planned
+  follows the same shape with different
+  specs).
+- `backend/dealer_ai/tests/test_m182_retail_subprime_archetype.py`
+  (test template).
+- `docs/research/INVENTORY_ACQUISITION_MAPPING.md`
+  §floor-planned patterns.
+- `docs/research/RECON_MAPPING.md`
+  §outside-recon workflows + overrun
+  scenarios.
 
-## What M18.2 delivers
+## What M18.3 delivers
 
-Per `MILESTONE_18_PLANNING.md` §7 M18.2:
+Per `MILESTONE_18_PLANNING.md` §7 M18.3:
 
-### Retail/subprime archetype builder
+### Floor-planned archetype builder
 
-Replace the stub in
-`services/demo_store/archetypes/retail_subprime.py`
-with a `RetailSubprimeArchetypeBuilder`
-whose `build(dealership)` verb atomically
-constructs a coherent operational story:
+Replace stub in
+`services/demo_store/archetypes/floor_planned.py`
+with `FloorPlannedArchetypeBuilder`
+whose `build()` verb atomically
+constructs:
 
-- **~20 vehicles** (used only; $8k-$18k
-  price band; 2013-2019 model years;
-  mixed makes appropriate to a small
-  used-car lot). Use `synthetic_vin(archetype,
-  index)` for VINs.
-- **4 salespeople** (sales manager +
-  3 advisors) with `synthetic_email` +
-  `synthetic_phone` per §5.g.
-- **Sales pipeline**: ~15 active leads
-  across pipeline stages; ~5 recent
-  Sales (cash + retail-finance mix); 1
-  BHPH Sale that exercises the M15
-  sync-sibling GL post (verifies the
-  demo store's accounting activity
-  reads correctly).
-- **Recon activity**: 3 in-recon
-  vehicles with:
-  - VehicleCost history (parts + labor
-    + sub-vendor invoices);
-  - ConditionReport + ConditionFinding
-    rows tied to pre-recon inspection;
-  - WorkOrder + WorkOrderPart +
-    WorkOrderFinding rows tying
-    findings to remediation.
-- **F&I**: 2 recent CreditApplication
-  rows with sub-prime lender routing;
-  1 Chargeback for M18 audit
-  visibility.
-- **Follow-up cadences**: 4 scheduled
-  FollowUpTask rows. These are
-  surfaced-only per M11.4 posture —
-  no outbound send infrastructure to
-  guard against yet.
+- **~40 vehicles** ($12k-$35k; 2016-2022;
+  Ford / Chevy / RAM / Toyota heavy;
+  used + a few CPO simulations).
+  Synthetic `DEMOFP`-prefixed VINs.
+- **6 salespeople** (owner + sales
+  manager + 4 advisors).
+- **Sales pipeline**: ~25 active leads;
+  ~10 recent Sales (mostly retail-
+  finance; 1-2 cash).
+- **Recon activity**: 5 in-recon
+  vehicles including **1 with a
+  documented $600+ recon overrun** —
+  cost basis vs current recon spend
+  should tell the operational story
+  the recon-lead scenario brief will
+  reference at M18.5 (WorkOrder
+  authorized_cost vs actual_cost
+  divergence).
+- **Vendor relationships**: 4 active
+  Vendors covering distinct
+  categories (mechanical, body, glass,
+  detail). Recent VendorCommunication
+  rows on the vendor with the overrun
+  scenario.
+- **Follow-up cadences**: 3-4
+  cadences with BeBack rows attached
+  to some.
 
 ### Coherence contract enforcement
 
-Per `MILESTONE_18_PLANNING.md` §1 Q6 +
-§Store-story coherence: the seeded
-records must tell connected operational
-stories. Every seeded Sale's
-`total_investment` must reconcile with
-its VehicleCost sums; every recon-in-
-progress vehicle's Stage progression
-must be self-consistent with its
-WorkOrder timeline; every
-CreditApplication must reference the
-Sale it belongs to. **Random Faker-
-style row population is prohibited.**
+Same as M18.2: cross-domain integrity
+across VehicleCost sums, stage
+progression, credit-app references,
+etc. **No random Faker-style
+population.**
 
 ### `ScenarioSummary` return
 
-Populate the returned `ScenarioSummary`
-with the seeded stock numbers + user
-usernames + scenario brief slugs (for
-M18.5 briefs to reference).
+Populate with the seeded stock numbers
++ user usernames + scenario brief
+slugs (owner_capacity_check /
+sales_manager_pipeline_review /
+recon_lead_overrun_intervention /
+office_accounting_close /
+floor_plan_curtailment_review /
+etc.).
 
 ### UI-correction discipline per §5.f
 
 Fix UI defects only when they block a
-scenario brief from completing end-to-
-end via normal product routes OR
-display materially incorrect information.
-Everything else records via
-`TesterFeedback` for a later dedicated
-UX-polish milestone. Every landed UI
-correction commits with the specific
-scenario brief it unblocks in the
-commit message.
+scenario brief OR display materially
+incorrect information. Every landed UI
+correction commits with the scenario it
+unblocks in the message.
 
 ### Focused tests (~15-20 target)
 
-`tests/test_m182_retail_subprime_archetype.py`:
+`tests/test_m183_floor_planned_archetype.py`
+following the M18.2 test template:
 
-- Builder produces the documented row
-  counts (~20 vehicles, 4 salespeople,
-  ~15 leads, ~5 sales, 3 recon-in-
-  progress, 2 credit apps, 1 chargeback,
-  4 follow-ups).
-- Cross-domain integrity: VehicleCost
-  sums reconcile with Sale
-  `total_investment`; VehicleStageEvent
-  progression is self-consistent;
-  CreditApplication references a Sale.
-- GL entries: seeded Sale rows fire
-  M15 sync-sibling; frozen trial-
-  balance reflects the archetype's
-  aggregate activity.
-- Reset via `reset_demo_store()`
-  restores the canonical starting
-  state (row counts + specific stock
-  numbers stable).
-- `ScenarioSummary` contract: fields
-  populated per §5.d Option A shape.
-- Synthetic-data-only: no seeded row
-  has a real-format VIN /
-  real-routable phone / real-domain
-  email.
+- Row-count contract per specs.
+- Cross-domain integrity (VehicleCost
+  sums + stage progression +
+  CreditApp references + Vendor reuse
+  across work orders).
+- **Recon overrun scenario visibility**:
+  the target WorkOrder's `authorized_cost`
+  vs `actual_cost` should show the
+  $600+ divergence; the target
+  vehicle's VehicleCost total should
+  exceed its acquisition cost basis
+  by the overrun amount.
+- M15 sync-sibling GL posting fires
+  for each Sale.
+- Reset restores canonical starting
+  state.
+- `ScenarioSummary` shape.
+- Synthetic-only data (VIN prefix,
+  phone, email, name roster).
 
-### Non-goals for M18.2
+### Non-goals for M18.3
 
-- ❌ No floor-planned archetype (M18.3).
 - ❌ No BHPH archetype (M18.4).
 - ❌ No daily briefs (M18.5).
 - ❌ No TesterFeedback POST endpoint
   (M18.5).
+- ❌ No Chargeback substrate (deferred
+  per §0.a M18.2 decision 1).
 - ❌ No frontend changes.
 - ❌ No new Celery-beat entries.
 - ❌ No new permission classes.
@@ -235,13 +223,13 @@ commit message.
 
 ### Backend baseline target
 
-**4,416 → ~4,431-4,436 pass** (+15-20
+**4,449 → ~4,464-4,484 pass** (+15-20
 tests, 0 regressions). Frontend Vitest:
 140 (unchanged).
 
-## Explicit non-goals for SESSION_148
+## Explicit non-goals for SESSION_149
 
-- ❌ Do NOT ship M18.3+ archetype packs
+- ❌ Do NOT ship M18.4+ archetype packs
   in the same session.
 - ❌ Do NOT modify M1-M17 business
   logic (except UI-correction discipline
@@ -251,12 +239,13 @@ tests, 0 regressions). Frontend Vitest:
 
 ## NEXT TASK
 
-Start SESSION_148 with (a) starting-
+Start SESSION_149 with (a) starting-
 state verification, (b) reading M18
-planning §7 M18.2 + M18.1 substrate
-handoff + persona research, (c) building
-the retail/subprime archetype builder +
-tests. Ship the M18.2 handoff.
+planning §7 M18.3 + M18.2 handoff +
+retail_subprime.py as pattern
+template, (c) building the floor-
+planned archetype builder + tests.
+Ship the M18.3 handoff.
 
 ---
 
@@ -267,29 +256,26 @@ tests. Ship the M18.2 handoff.
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_18_PLANNING.md`
-   (active memo)
-6. `docs/handoffs/SESSION_147_m18_inc1_backend_substrate.md`
-   (substrate freshly shipped)
-7. `docs/handoffs/SESSION_146_m18_inc0_planning.md`
-   (M18.0 planning close)
+6. `docs/handoffs/SESSION_148_m18_inc2_retail_subprime_archetype.md`
+   (pattern template freshly shipped)
+7. `docs/handoffs/SESSION_147_m18_inc1_backend_substrate.md`
 8. `docs/CAPABILITY_MATRIX.md` §7r
-9. `backend/dealer_ai/services/demo_store/`
-   (the substrate the archetype consumes)
-10. `docs/research/INDEPENDENT_DEALER_PIVOT.md`
-    +
-    `docs/research/SALES_DEPARTMENT_MAPPING.md`
-    (persona shape)
+9. `backend/dealer_ai/services/demo_store/archetypes/retail_subprime.py`
+   (M18.3 mirrors this shape with
+   different specs)
+10. `backend/dealer_ai/tests/test_m182_retail_subprime_archetype.py`
+    (test template)
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_147 — M18.1 SHIPPED)
+## Operational state (post-SESSION_148 — M18.2 SHIPPED)
 
 - **Backend (local):** Django on `:8001`.
   Migrations `0001`–`0047`. Test baseline:
-  **4,416 pass**, 1 skipped, 0 fail.
+  **4,449 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`.
   `tsc --noEmit` + `vite build` clean.
@@ -298,43 +284,43 @@ research + code are facts.
 - **Async runtime:** Celery 5.5.3 + Redis
   6.4.0 + `django-celery-beat` 2.8.1
   DatabaseScheduler. **10 scheduled task
-  families registered**. Next open slot for
-  a future detector is 12:00.
-- **Milestones shipped:** M1 → M17. M18 in
-  progress: M18.0 planning + M18.1 backend
-  substrate shipped at SESSION_146 +
-  SESSION_147. M18.2 retail/subprime
-  archetype next (SESSION_148).
-- **DRF admin surface:** **107** endpoints.
-  Grows to 108 at M18.5 (feedback POST).
-- **Frontend operator routes:** **20** —
-  remains unchanged through M18 per §5.f +
-  Q7.
+  families**.
+- **Milestones shipped:** M1 → M17. M18
+  in progress: M18.0 planning + M18.1
+  backend substrate + M18.2 retail/
+  subprime archetype pack shipped. M18.3
+  floor-planned archetype next
+  (SESSION_149).
+- **DRF admin surface:** **107**
+  endpoints. Grows to 108 at M18.5
+  (feedback POST).
+- **Frontend operator routes:** **20**
+  (unchanged through M18).
 - **Public endpoints:** +1 M6.5 showroom
   (unchanged).
 - **Service surface:** complete
   `services/f_and_i/` (M10) + five M11
   packages + seven M12 packages +
-  `services/accounting/` (seven modules) +
-  **`services/demo_store/` (nine modules)**
-  new at M18.1.
+  `services/accounting/` (seven modules)
+  + `services/demo_store/` (nine
+  modules) with **RetailSubprimeArchetypeBuilder
+  now fully implemented; two archetype
+  stubs remain** (floor_planned +
+  bhph).
 - **Frontend accounting surface:**
-  `frontend/src/lib/accountingApi.ts` with
-  8 fetchers + 2 mutators + four page
-  components + `TrialBalanceDatePicker`
-  component.
-- **Tenancy carriers:** **50** (49 → 50
-  at M18.1: TesterFeedback).
-- **Permission classes:** **7 actual** —
-  **zero-drift streak ten consecutive
-  milestones** (M10 → M18.1).
+  unchanged from M17.
+- **Tenancy carriers:** **50**.
+- **Permission classes:** **7 actual**
+  — **zero-drift streak eleven
+  consecutive milestones** (M10 → M18.2).
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages
   (unchanged — M18 has no LLM path).
 - **Deterministic rules:** unchanged.
-- **Milestone 18 status:** M18.0 planning
-  + M18.1 substrate SHIPPED. **M18.2
-  retail/subprime archetype next**
-  (SESSION_148). M18.3 floor-planned,
-  M18.4 BHPH, M18.5 briefs + feedback
-  endpoint, M18.6 close-out to follow.
+- **Milestone 18 status:** M18.0
+  planning + M18.1 substrate + M18.2
+  retail/subprime archetype SHIPPED.
+  **M18.3 floor-planned archetype next**
+  (SESSION_149). M18.4 BHPH, M18.5
+  briefs + feedback endpoint, M18.6
+  close-out to follow.
