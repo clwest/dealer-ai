@@ -58,9 +58,16 @@ from .journal import (
     reverse_journal_entry,
 )
 from .snapshot import (
-    TrialBalanceRow,
-    TrialBalanceSnapshot,
+    TrialBalanceComputation,
+    TrialBalanceComputationRow,
     compute_trial_balance,
+)
+from .trial_balance_close import (
+    DuplicateTrialBalanceSnapshotError,
+    TrialBalanceSnapshotListPage,
+    freeze_trial_balance,
+    get_trial_balance_snapshot,
+    list_trial_balance_snapshots,
 )
 from .sale_booking import (
     BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE,
@@ -91,6 +98,7 @@ __all__ = [
     "DEFAULT_COA",
     "CrossTenantGLAccountError",
     "CrossTenantJournalEntryError",
+    "DuplicateTrialBalanceSnapshotError",
     "EmptyJournalEntryError",
     "ImmutableJournalEntryError",
     "InvalidJournalLineError",
@@ -98,8 +106,9 @@ __all__ = [
     "JournalLineInput",
     "MissingDefaultAccountError",
     "RECON_WIP_ACCOUNT_CODE",
-    "TrialBalanceRow",
-    "TrialBalanceSnapshot",
+    "TrialBalanceComputation",
+    "TrialBalanceComputationRow",
+    "TrialBalanceSnapshotListPage",
     "UnbalancedJournalEntryError",
     "UnexpectedBhphPaymentFeesError",
     "UnmappedFinanceTypeError",
@@ -108,8 +117,11 @@ __all__ = [
     "detect_cost_posting_failures",
     "detect_unposted_bhph_payments",
     "detect_unposted_costs",
+    "freeze_trial_balance",
     "get_journal_entry",
+    "get_trial_balance_snapshot",
     "list_journal_entries",
+    "list_trial_balance_snapshots",
     "post_all_unposted_bhph_payments_for_dealership",
     "post_all_unposted_costs_for_dealership",
     "post_bhph_payment_journal",

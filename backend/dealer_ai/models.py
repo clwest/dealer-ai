@@ -7304,3 +7304,137 @@ class JournalEntryLine(models.Model):
             )
         if errors:
             raise ValidationError(errors)
+
+
+class TrialBalanceSnapshot(models.Model):
+    """Milestone 17 · Increment 1 — a durable, materialized trial-balance close.
+
+    Per MILESTONE_17_PLANNING.md §5.b Option B (user-confirmed at
+    SESSION_145 open, recorded in §0.a). A frozen record of the
+    tenant's trial-balance state at a specific ``as_of`` moment.
+    Rows live on :class:`TrialBalanceSnapshotRow` per §5.b Option B
+    (header + child materialization) — recomputing at read would
+    let backdated JournalEntry rows silently change the historical
+    close, defeating the value proposition.
+
+    **Immutability posture** (§5.f Option A). Snapshot rows are
+    immutable. Backdated JournalEntry rows with ``posted_at <=
+    as_of`` continue to affect the live
+    :func:`services.accounting.compute_trial_balance` result but do
+    NOT touch frozen rows. Discrepancy visibility (a "your frozen
+    close no longer matches live" comparison view) is deferred to a
+    later period-close audit milestone (§3 item 1).
+
+    **Uniqueness** (§5.d Option A). ``(dealership, as_of)`` is
+    unique — two snapshots at the same instant are architecturally
+    impossible.
+    :class:`services.accounting.DuplicateTrialBalanceSnapshotError`
+    surfaces at 409 when the constraint is violated.
+
+    **Creation path.** Only
+    :func:`services.accounting.freeze_trial_balance` writes to
+    this table (and its child); the model has no admin write path.
+    Reads via
+    :func:`services.accounting.list_trial_balance_snapshots` +
+    :func:`services.accounting.get_trial_balance_snapshot`.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="trial_balance_snapshots",
+    )
+    # Business-effective close moment. Distinct from ``created_at``
+    # (row insertion). The operator's picker sends this value
+    # (end-of-day 23:59:59 in tenant TZ per §5.e Option B).
+    as_of = models.DateTimeField()
+    total_debits = models.DecimalField(max_digits=14, decimal_places=2)
+    total_credits = models.DecimalField(max_digits=14, decimal_places=2)
+    is_balanced = models.BooleanField()
+    # Operator who triggered the freeze. Nullable so seed / import /
+    # migration paths can create snapshots without a User FK; the
+    # POST endpoint always attaches the authenticated user.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-as_of", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["dealership", "as_of"],
+                name="uniq_trial_balance_snapshot_per_dealer_as_of",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"TrialBalanceSnapshot #{self.pk} — {self.as_of.isoformat()} "
+            f"({'balanced' if self.is_balanced else 'UNBALANCED'})"
+        )
+
+
+class TrialBalanceSnapshotRow(models.Model):
+    """Milestone 17 · Increment 1 — one frozen account row on a snapshot.
+
+    Per MILESTONE_17_PLANNING.md §5.b Option B. Values captured at
+    freeze time so a later COA rename (§3 item 12) or backdated
+    JournalEntry does not change what this row reports.
+
+    **Frozen name + type.** ``account_code`` + ``account_name`` +
+    ``account_type`` are copied from the live
+    :class:`GLAccount` at freeze time. The frozen name is what the
+    snapshot renders in perpetuity — historical closes stay
+    referable even if the underlying COA row is renamed.
+
+    **No FK to GLAccount.** Deliberate — a COA row could be hidden
+    (``is_active=False``) after being included in a historical
+    close; the snapshot must survive that. ``account_code`` is
+    the durable identifier (per M13.1 dealer-scoped code
+    uniqueness).
+
+    **Uniqueness.** ``(snapshot, account_code)`` is unique — the
+    aggregator groups per-account before materialization, so each
+    account appears at most once per snapshot.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="trial_balance_snapshot_rows",
+    )
+    snapshot = models.ForeignKey(
+        "TrialBalanceSnapshot",
+        on_delete=models.CASCADE,
+        related_name="rows",
+    )
+    # Frozen at freeze time — see class docstring.
+    account_code = models.CharField(max_length=16)
+    account_name = models.CharField(max_length=255)
+    account_type = models.CharField(
+        max_length=16, choices=GL_ACCOUNT_TYPE_CHOICES
+    )
+    debit_total = models.DecimalField(max_digits=14, decimal_places=2)
+    credit_total = models.DecimalField(max_digits=14, decimal_places=2)
+    natural_balance = models.DecimalField(max_digits=14, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["account_code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["snapshot", "account_code"],
+                name="uniq_trial_balance_snapshot_row_per_account",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"TrialBalanceSnapshotRow #{self.pk} — "
+            f"{self.account_code} on snapshot #{self.snapshot_id}"
+        )

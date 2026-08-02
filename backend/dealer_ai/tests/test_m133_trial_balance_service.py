@@ -19,7 +19,7 @@ from dealer_ai.models import (
 )
 from dealer_ai.services.accounting import (
     JournalLineInput,
-    TrialBalanceSnapshot,
+    TrialBalanceComputation,
     compute_trial_balance,
     post_journal_entry,
     seed_default_coa,
@@ -47,7 +47,7 @@ class ComputeTrialBalanceTests(TestCase):
         fresh = Dealership.objects.create(slug="tb-fresh", name="Fresh")
         seed_default_coa(fresh)
         snap = compute_trial_balance(dealership=fresh)
-        self.assertIsInstance(snap, TrialBalanceSnapshot)
+        self.assertIsInstance(snap, TrialBalanceComputation)
         self.assertEqual(snap.rows, ())
         self.assertEqual(snap.total_debits, Decimal("0.00"))
         self.assertEqual(snap.total_credits, Decimal("0.00"))

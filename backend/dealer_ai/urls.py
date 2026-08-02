@@ -990,4 +990,26 @@ urlpatterns = [
         views_accounting.admin_cost_posting_failures,
         name="admin-cost-posting-failures",
     ),
+    # Milestone 17 · Increment 1 (SESSION_145) — trial-balance snapshots.
+    # Per MILESTONE_17_PLANNING.md §7 M17.1 + §5.a-§5.f. Three endpoints
+    # covering freeze (POST), list (GET), and detail (GET). All reuse
+    # ``IsSalesManagerOrOwnerAtActiveDealership`` — zero-drift streak
+    # extends to nine consecutive milestones. Detail endpoint uses
+    # ``<int:pk>`` per §0.a M17.1 decision 3 (pk is canonical
+    # identifier; as_of is a queryable attribute).
+    path(
+        "admin/accounting/trial-balance/snapshots/",
+        views_accounting.admin_trial_balance_snapshot_create,
+        name="admin-trial-balance-snapshot-create",
+    ),
+    path(
+        "admin/accounting/trial-balance/snapshots/list/",
+        views_accounting.admin_trial_balance_snapshot_list,
+        name="admin-trial-balance-snapshot-list",
+    ),
+    path(
+        "admin/accounting/trial-balance/snapshots/<int:pk>/",
+        views_accounting.admin_trial_balance_snapshot_retrieve,
+        name="admin-trial-balance-snapshot-retrieve",
+    ),
 ]

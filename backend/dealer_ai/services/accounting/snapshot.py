@@ -1,4 +1,4 @@
-"""Milestone 13 · Increment 3 (SESSION_131) — trial-balance snapshot.
+"""Milestone 13 · Increment 3 (SESSION_131) — trial-balance recompute.
 
 Pure. Tenant-scoped. Read-only. No writes.
 
@@ -9,11 +9,11 @@ Per MILESTONE_13_PLANNING.md §5 M13.3 + §0.a M13.3 decisions 1-5
   for one tenant into per-account totals + grand totals + a
   balanced-flag. Optional ``as_of`` (default ``timezone.now()``)
   limits inclusion to JournalEntry rows whose ``posted_at <= as_of``.
-- :class:`TrialBalanceRow` — one account's row.
-- :class:`TrialBalanceSnapshot` — the aggregate return shape.
+- :class:`TrialBalanceComputationRow` — one account's row.
+- :class:`TrialBalanceComputation` — the aggregate return shape.
 
 **Zero-portfolio semantics** (§0.a M13.3 decision 5): a dealership
-with no journal entries yet returns an empty balanced snapshot
+with no journal entries yet returns an empty balanced computation
 (``rows=[]``, ``total_debits=0``, ``total_credits=0``,
 ``is_balanced=True``) — not a 404. A fresh dealership post-M13.1
 seed is a valid trial-balance state.
@@ -22,12 +22,13 @@ seed is a valid trial-balance state.
 callers project into serialized shape. Matches the M12.7
 ``BhphAnalyticsSummary`` posture.
 
-**Pure recompute, no materialization** (§0.a M13.3 decision 2):
-every call re-aggregates from JournalEntryLine. A
-``TrialBalanceSnapshot`` entity would let operators freeze a
-period-end view for later comparison, but that's only useful once
-the close-workflow lands at M14+. Recompute is fast enough at
-M13-scale portfolio sizes and avoids stale-snapshot bugs.
+**Pure recompute, live-only** (§0.a M13.3 decision 2 + §0.a M17.1
+naming resolution): every call re-aggregates from JournalEntryLine.
+Durable materialization for period-close semantics lives in
+``services/accounting/trial_balance_close.py`` (M17.1) via the
+``TrialBalanceSnapshot`` Django model — the durable persisted
+entity earns the "snapshot" name; this transient computation is
+labeled ``TrialBalanceComputation`` to distinguish the two.
 """
 
 from __future__ import annotations
@@ -52,8 +53,8 @@ _ZERO = Decimal("0.00")
 
 
 @dataclass(frozen=True)
-class TrialBalanceRow:
-    """One account's row on the trial balance.
+class TrialBalanceComputationRow:
+    """One account's row in a live trial-balance computation.
 
     Fields:
 
@@ -82,8 +83,15 @@ class TrialBalanceRow:
 
 
 @dataclass(frozen=True)
-class TrialBalanceSnapshot:
+class TrialBalanceComputation:
     """Aggregate trial-balance state for one tenant at one moment.
+
+    Transient — the return type of :func:`compute_trial_balance`.
+    Distinct from :class:`dealer_ai.models.TrialBalanceSnapshot`,
+    which is the durable materialized entity used for period-close
+    workflows (M17.1). Naming discipline per §0.a M17.1 decision 1:
+    the persisted entity earns "snapshot"; the transient view is a
+    "computation".
 
     ``rows`` includes only accounts with at least one line posted at
     ``posted_at <= as_of``. Empty ``rows`` is a valid state (fresh
@@ -101,7 +109,7 @@ class TrialBalanceSnapshot:
     dealership_id: int
     dealership_slug: str
     as_of: dt.datetime
-    rows: tuple[TrialBalanceRow, ...]
+    rows: tuple[TrialBalanceComputationRow, ...]
     total_debits: Decimal
     total_credits: Decimal
     is_balanced: bool
@@ -111,7 +119,7 @@ def compute_trial_balance(
     *,
     dealership: Dealership,
     as_of: Optional[dt.datetime] = None,
-) -> TrialBalanceSnapshot:
+) -> TrialBalanceComputation:
     """Aggregate the tenant's JournalEntryLine rows into a trial balance.
 
     Pure. No writes. Iterates every line whose parent JournalEntry
@@ -119,7 +127,7 @@ def compute_trial_balance(
     given tenant, groups by account, computes per-account totals
     and grand totals.
 
-    Returns a :class:`TrialBalanceSnapshot`. Rows are ordered by
+    Returns a :class:`TrialBalanceComputation`. Rows are ordered by
     account ``code`` ascending. Empty rows on a dealership with no
     postings yet — not an error state per §0.a M13.3 decision 5.
 
@@ -148,7 +156,7 @@ def compute_trial_balance(
         .order_by("account__code")
     )
 
-    rows: list[TrialBalanceRow] = []
+    rows: list[TrialBalanceComputationRow] = []
     total_debits = _ZERO
     total_credits = _ZERO
     for agg in aggregates:
@@ -160,7 +168,7 @@ def compute_trial_balance(
         else:
             natural_balance = credit_total - debit_total
         rows.append(
-            TrialBalanceRow(
+            TrialBalanceComputationRow(
                 account_code=agg["account__code"],
                 account_name=agg["account__name"],
                 account_type=account_type,
@@ -172,7 +180,7 @@ def compute_trial_balance(
         total_debits += debit_total
         total_credits += credit_total
 
-    return TrialBalanceSnapshot(
+    return TrialBalanceComputation(
         dealership_id=dealership.pk,
         dealership_slug=dealership.slug,
         as_of=effective,

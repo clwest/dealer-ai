@@ -35,21 +35,30 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import GLAccount, JournalEntry
+from .models import (
+    GLAccount,
+    JournalEntry,
+    TrialBalanceSnapshot,
+    TrialBalanceSnapshotRow,
+)
 from .permissions import IsSalesManagerOrOwnerAtActiveDealership
 from .services.accounting import (
     CrossTenantGLAccountError,
     CrossTenantJournalEntryError,
+    DuplicateTrialBalanceSnapshotError,
     EmptyJournalEntryError,
     ImmutableJournalEntryError,
     InvalidJournalLineError,
     JournalLineInput,
-    TrialBalanceSnapshot,
+    TrialBalanceComputation,
     UnbalancedJournalEntryError,
     compute_trial_balance,
     detect_cost_posting_failures,
+    freeze_trial_balance,
     get_journal_entry,
+    get_trial_balance_snapshot,
     list_journal_entries,
+    list_trial_balance_snapshots,
     post_journal_entry,
     reverse_journal_entry,
 )
@@ -256,7 +265,7 @@ class TrialBalanceQuerySerializer(serializers.Serializer):
     as_of = serializers.DateTimeField(required=False, allow_null=True)
 
 
-def _project_trial_balance(snapshot: TrialBalanceSnapshot) -> dict:
+def _project_trial_balance(snapshot: TrialBalanceComputation) -> dict:
     return {
         "dealership_id": snapshot.dealership_id,
         "dealership_slug": snapshot.dealership_slug,
@@ -458,5 +467,182 @@ def admin_cost_posting_failures(request):
                 "as_of": now.isoformat(),
             }
         },
+        status=status.HTTP_200_OK,
+    )
+
+
+# --- Milestone 17 · Increment 1 (SESSION_145) — trial-balance snapshots ------
+#
+# Per MILESTONE_17_PLANNING.md §7 M17.1 + §5.a-§5.f. Three endpoints
+# (POST freeze, GET list, GET detail) all reusing
+# ``IsSalesManagerOrOwnerAtActiveDealership`` (permission-class count
+# stays at 8 — zero-drift streak extends to nine consecutive
+# milestones). Money-on-the-wire is Decimal-as-string per M9-M16
+# convention.
+
+
+class TrialBalanceSnapshotCreateRequestSerializer(serializers.Serializer):
+    """Body validator for POST /admin/accounting/trial-balance/snapshots/.
+
+    ``as_of`` is required — the operator picker sends the moment they
+    want to freeze. No default (unlike the GET trial-balance endpoint,
+    which defaults to ``timezone.now()``) — freezing "right now"
+    should be an explicit operator choice per §5.c Option A.
+    """
+
+    as_of = serializers.DateTimeField(required=True)
+
+
+class TrialBalanceSnapshotListQuerySerializer(serializers.Serializer):
+    """Query-param validator for the snapshot list endpoint.
+
+    Same pagination shape as M14.1 journal-entry list.
+    """
+
+    page = serializers.IntegerField(
+        min_value=1, required=False, default=1
+    )
+    page_size = serializers.IntegerField(
+        min_value=1, max_value=100, required=False, default=25
+    )
+
+
+def _project_snapshot_summary(snapshot: TrialBalanceSnapshot) -> dict:
+    """Compact projection for the list view.
+
+    Omits per-row detail (loaded by the detail retrieve endpoint) but
+    includes the balance totals + is_balanced chip so the M17.2 UI
+    can render the list without per-row queries.
+    """
+    return {
+        "id": snapshot.pk,
+        "as_of": snapshot.as_of.isoformat(),
+        "total_debits": str(snapshot.total_debits),
+        "total_credits": str(snapshot.total_credits),
+        "is_balanced": snapshot.is_balanced,
+        "created_at": snapshot.created_at.isoformat(),
+        "created_by_user_id": snapshot.created_by_id,
+        "created_by_username": (
+            snapshot.created_by.username
+            if snapshot.created_by_id
+            else None
+        ),
+    }
+
+
+def _project_snapshot_row(row: TrialBalanceSnapshotRow) -> dict:
+    return {
+        "account_code": row.account_code,
+        "account_name": row.account_name,
+        "account_type": row.account_type,
+        "debit_total": str(row.debit_total),
+        "credit_total": str(row.credit_total),
+        "natural_balance": str(row.natural_balance),
+    }
+
+
+def _project_snapshot_detail(snapshot: TrialBalanceSnapshot) -> dict:
+    """Full projection for the detail retrieve endpoint.
+
+    Includes frozen per-account rows via the ``rows`` reverse-FK
+    manager (ordered by ``account_code`` per
+    :class:`TrialBalanceSnapshotRow.Meta.ordering`).
+    """
+    summary = _project_snapshot_summary(snapshot)
+    summary["rows"] = [
+        _project_snapshot_row(r) for r in snapshot.rows.all()
+    ]
+    return summary
+
+
+@api_view(["POST"])
+@permission_classes(_M131_PERMS)
+def admin_trial_balance_snapshot_create(request):
+    """POST /admin/accounting/trial-balance/snapshots/
+
+    Freeze a durable trial-balance snapshot for the operator's tenant
+    at the requested ``as_of``. Sync-sibling verb per §5.c Option A.
+
+    Body: ``{"as_of": "<ISO8601>"}``.
+
+    - 201 with full snapshot projection (header + frozen rows).
+    - 400 on missing / invalid ``as_of``.
+    - 409 on duplicate ``(dealership, as_of)`` per §5.d Option A.
+    - 403 on non-permitted role.
+    """
+    dealership = get_current_dealership(request)
+    body = TrialBalanceSnapshotCreateRequestSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    try:
+        snapshot = freeze_trial_balance(
+            dealership=dealership,
+            as_of=body.validated_data["as_of"],
+            actor=request.user if request.user.is_authenticated else None,
+        )
+    except DuplicateTrialBalanceSnapshotError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_409_CONFLICT,
+        )
+    return Response(
+        {"trial_balance_snapshot": _project_snapshot_detail(snapshot)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET"])
+@permission_classes(_M131_PERMS)
+def admin_trial_balance_snapshot_list(request):
+    """GET /admin/accounting/trial-balance/snapshots/[?page=&page_size=]
+
+    Paginated, recent-first (``-as_of, -created_at``). Empty-list
+    response for zero-portfolio tenants (not 404) per M13.3 lesson
+    8 zero-portfolio semantics.
+    """
+    dealership = get_current_dealership(request)
+    query = TrialBalanceSnapshotListQuerySerializer(
+        data=request.query_params
+    )
+    query.is_valid(raise_exception=True)
+    page = list_trial_balance_snapshots(
+        dealership=dealership,
+        page=query.validated_data["page"],
+        page_size=query.validated_data["page_size"],
+    )
+    return Response(
+        {
+            "trial_balance_snapshots": {
+                "snapshots": [
+                    _project_snapshot_summary(s) for s in page.snapshots
+                ],
+                "total_count": page.total_count,
+                "page": page.page,
+                "page_size": page.page_size,
+            }
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["GET"])
+@permission_classes(_M131_PERMS)
+def admin_trial_balance_snapshot_retrieve(request, pk: int):
+    """GET /admin/accounting/trial-balance/snapshots/<int:pk>/
+
+    Detail retrieve. Returns the full frozen row set for one
+    snapshot. Cross-tenant or missing pk returns 404 per fail-closed
+    posture.
+    """
+    dealership = get_current_dealership(request)
+    snapshot = get_trial_balance_snapshot(
+        dealership=dealership, snapshot_id=pk
+    )
+    if snapshot is None:
+        return Response(
+            {"detail": f"TrialBalanceSnapshot #{pk} not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(
+        {"trial_balance_snapshot": _project_snapshot_detail(snapshot)},
         status=status.HTTP_200_OK,
     )

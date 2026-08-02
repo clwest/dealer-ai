@@ -540,6 +540,16 @@ _TENANT_CARRIER_MODEL_NAMES = (
     "GLAccount",
     "JournalEntry",
     "JournalEntryLine",
+    # Milestone 17 · Increment 1 (SESSION_145) — trial-balance
+    # materialization entities per MILESTONE_17_PLANNING.md §5.b
+    # Option B (user-confirmed at SESSION_145 open, recorded in §0.a)
+    # (47 → 49). TrialBalanceSnapshot: header row (dealership + as_of
+    # unique). TrialBalanceSnapshotRow: frozen per-account row. The
+    # M17.1 :func:`services.accounting.freeze_trial_balance` verb
+    # writes ``dealership`` explicitly on every row. Autofill signal
+    # is the safety net for callers that bypass the service.
+    "TrialBalanceSnapshot",
+    "TrialBalanceSnapshotRow",
 )
 
 
