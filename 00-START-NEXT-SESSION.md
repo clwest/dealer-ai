@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_145
+last_session_shipped: SESSION_146
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -19,180 +19,120 @@ milestone_14_status: shipped
 milestone_15_status: shipped
 milestone_16_status: shipped
 milestone_17_status: shipped
-milestone_18_status: planning
-next_session: SESSION_146
+milestone_18_status: in-progress
+next_session: SESSION_147
 next_milestone: 18
-next_milestone_name: "TBD — user names target at SESSION_146 open"
-next_increment: 0
-next_increment_name: "M18.0 — Planning refinement + target selection"
+next_milestone_name: "Demo Store Simulation + Pilot Validation Readiness"
+next_increment: 1
+next_increment_name: "M18.1 — Substrate: schema + service package + guards + TesterFeedback + send-boundary enumeration"
 ---
 
-# Next session — SESSION_146 · Milestone 18 · Increment 0 (M18.0 — Planning refinement + target selection)
+# Next session — SESSION_147 · Milestone 18 · Increment 1 (M18.1 — Substrate)
 
-> **SESSION_145 shipped all four M17
-> increments —** M17.0 planning + M17.1
-> backend + M17.2 frontend + **M17.3
-> close-out**. Six close-out docs
-> (retrospective + capability matrix §7r
-> + roadmap flip + planning frontmatter
-> flip + M18 skeleton + session-start
-> refresh) + coordinated commit landing
-> all M17.3 docs. **Milestone 17 — Trial-
-> balance materialization + `as_of`
-> picker (monthly-close v1) — SHIPPED.**
+> **SESSION_146 shipped M18.0 —**
+> planning refinement + all seven §5
+> load-bearing decisions resolved at
+> open. **§5.a Option O confirmed** —
+> non-accounting target. Milestone
+> name: **"Demo Store Simulation +
+> Pilot Validation Readiness."** First
+> non-accounting milestone since M12;
+> validation infrastructure for
+> founder-led pilot testing.
 >
-> **M17 close totals:** two new tenant-
-> carrier models (`TrialBalanceSnapshot`
-> header + `TrialBalanceSnapshotRow`
-> child; count 47 → 49). One additive
-> migration (`0046` — two `CreateModel` +
-> two `AddConstraint`). One new module
-> in `services/accounting/`
-> (`trial_balance_close.py`) with three
-> verbs + `DuplicateTrialBalanceSnapshotError`.
-> Three new endpoints (POST freeze +
-> GET list + GET detail; DRF admin
-> surface 104 → 107). Frontend: new
-> `TrialBalanceDatePicker` component +
-> extended `AccountingTrialBalancePage`
-> in place (Query controls card + Prior
-> closes card + inline detail card).
-> 37 focused backend tests + 18
-> frontend tests. Zero frontend-route
-> additions (page extended in place per
-> §4 test binding). Zero Celery-beat
-> additions (no beat entry per §5.c
-> Option A sync-sibling shape). **Six
-> §5 decisions confirmed as-recommended
-> at M17.0 open** — streak extends to
-> **70 planning-time as-recommended
-> M5.1 → M17.0 across eight
-> consecutive milestones** now (M10 +
+> **§5.b–§5.g all confirmed as-
+> recommended.** Streak extends to
+> **77 planning-time as-recommended
+> M5.1 → M18.0** across **nine
+> consecutive milestones now** (M10 +
 > M11 + M12 + M13 + M14 + M15 + M16 +
-> M17). Four §0.a implementation-time
-> micro-decisions across M17.1 + M17.2
-> (dataclass rename, detail URL shape,
-> picker default deferral, native
-> `<input type="date">` over shadcn
-> `Calendar`) do not count against the
-> streak per M10 §9. **Permission-
-> class count corrected** at M17.1 —
-> 7 actual (6 `Is*` + `ReadOnly`), not
-> the "8" the M16 retrospective doc
-> stated. Zero-drift streak now nine
-> consecutive milestones (M10 → M17).
+> M17 + M18). Historical §5 counts
+> have been 6; M18 at seven reflects
+> the mixed architecture / ownership /
+> representation / safety scope.
 >
-> **Backend baseline: 4,326 → 4,363
-> pass**, 1 skipped, 0 fail (+37 tests
-> at M17.1, zero regressions).
-> **Frontend Vitest baseline: 122 →
-> 140 pass** (+18 tests at M17.2).
-> Migrations `0043`–`0046` (+1 at
-> M17.1). Tenancy carriers 47 → **49**.
-> DRF admin surface 104 → **107**.
-> Frontend operator routes **20**
+> **Backend baseline: 4,363 pass**, 1
+> skipped, 0 fail (unchanged —
+> planning-only). **Frontend Vitest
+> baseline: 140 pass** (unchanged).
+> Migrations `0043`–`0046`
+> (unchanged). Tenancy carriers 49
+> (unchanged — `TesterFeedback` lands
+> at M18.1). DRF admin surface 107
+> (unchanged — feedback POST endpoint
+> lands at M18.5). Frontend operator
+> routes 20 (unchanged — M18 adds
+> **zero new operator routes** per
+> §5.f + Q7). Permission classes 7
 > (unchanged). Celery-beat task
-> families **10** (unchanged).
+> families 10 (unchanged).
 >
-> **SESSION_146 opens M18.0 — planning
-> refinement + target selection.** Per
-> `MILESTONE_18_PLANNING.md` (draft
-> planning skeleton written at M17.3
-> close per standing user directive).
-> **§5.a is the load-bearing decision**
-> — user names the M18 target at
-> session open, drawing from the M17
-> retrospective §8 unblocked-work list
-> + the still-partly-valid M16 §8
-> items + the standing question from
-> M17 §9 (UI-polish milestone?).
+> **SESSION_147 opens M18.1 —
+> substrate.** Schema (two additive
+> migrations) + service package
+> (`services/demo_store/`) + belt-
+> and-suspenders guards + `TesterFeedback`
+> model + outbound-send-boundary
+> enumeration + guards. Single
+> backend increment. No frontend.
 
-## First thing SESSION_146 must do
+## First thing SESSION_147 must do
 
-### 1. Name the M18 target milestone
+### 1. Enumerate the outbound-send-boundary verbs
 
-`IMPLEMENTATION_ROADMAP.md` §Milestone
-sequence ends at Milestone 17. **M18
-target is not predetermined** — user
-names it at session open based on
-operational evidence + business
-priority.
+Per `MILESTONE_18_PLANNING.md` §5.g
+Option A + §7 M18.1, the first
+substantive M18.1 task is producing
+the **complete** list of existing
+verbs that send outbound (email,
+SMS, API call to lender / bureau /
+integrator / accounting-provider).
+Preliminary set from planning:
 
-Candidate targets drawn from
-`MILESTONE_17_RETROSPECTIVE.md` §8 +
-`MILESTONE_16_RETROSPECTIVE.md` §8 —
-surfaced without recommendation
-because target selection is a
-business-priority call, not a
-technical recommendation:
+- **M11.4 follow-up cadence
+  dispatch** (email + SMS).
+- **M12.5 BHPH collection contact
+  dispatch** (email + SMS).
+- **M10 F&I lender-portal adapters**
+  — credit-application dispatch.
+- **M10 compliance / bureau pulls**
+  — credit-bureau pull adapters.
+- **M6 / M11 chat outbound routing**
+  — assistant messages to email /
+  SMS when operator inbox offline.
+- **M9 test-drive delivery
+  reminders**.
 
-- **Option A** — M10 F&I chargeback GL
-  reversal.
-- **Option B** — BhphFee entity +
-  late-fee GL posting.
-- **Option C** — Deposit / bank
-  reconciliation workflow.
-- **Option D** — NSF / payment-
-  reversal workflow.
-- **Option E** — Period-close
-  comparison view / audit. Directly
-  unblocked by M17 materialization.
-- **Option F** — Financial-reports
-  substrate (P&L, balance sheet).
-  Layers on trial-balance
-  materialization.
-- **Option G** — CSV / PDF export of
-  frozen snapshots.
-- **Option H** — Auto-freeze on
-  schedule.
-- **Option I** — Reopen / unfreeze
-  workflow.
-- **Option J** — Category-group-aware
-  GL mapping for M13.2 detector.
-- **Option K** — M14 UX polish (JE
-  filters + sidebar nav; `as_of`
-  picker portion shipped at M17.2).
-- **Option L** — Cost-of-sale
-  variance handling.
-- **Option M** — Sale-reversal
-  workflow.
-- **Option N** — BHPH interest accrual
-  detector (accrual-basis).
-- **Option O** — Non-accounting
-  target user names at open based on
-  operational evidence not visible in
-  M15 / M16 / M17 retrospectives.
+Verify the list is complete by
+grepping for `send_mail`,
+`send_sms`, `requests.post`,
+`urllib.request` in
+`services/` + `management/commands/`.
+Add any additional verbs to the
+guard set.
 
-**Standing question from M17 §9:**
-should M18 be an intentional UI-polish
-milestone (M14 shape)? M17's
-recommendation was to carry the
-question forward but not preemptively
-lock M18. If operator evidence +
-backlog density name UI polish as the
-highest-value slot, M18 becomes the UX
-polish milestone (Option K); otherwise
-the remaining polish (JE filters +
-sidebar nav) can layer as a sub-
-increment on a backend milestone that
-touches the M14.3 page.
+Each guard is an early check at the
+top of the verb:
 
-Once the target is confirmed, expand
-`MILESTONE_18_PLANNING.md` §1
-(business questions) + §5 (load-
-bearing decisions) + §7 (sequencing)
-into a full memo.
+```python
+if dealership.is_demo:
+    logger.info(
+        "demo-store outbound suppressed",
+        extra={"verb": <name>,
+               "dealership_slug": dealership.slug},
+    )
+    return  # or return a no-op sentinel matching the verb's contract
+```
 
 ### 2. Verify starting state
 
 - `git status` — clean.
-- `git log --oneline -10` — top
-  should be the M17.3 close-out
-  commit.
+- `git log --oneline -5` — top should
+  be the M18.0 planning commit.
 - `python3 manage.py test dealer_ai`
   → **4,363 pass, 1 skipped, 0 fail**.
-- `cd frontend && npm test` →
-  **140 pass**.
+- `cd frontend && npm test` → **140
+  pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
@@ -201,96 +141,262 @@ into a full memo.
   clean.
 - `redis-cli ping` → `PONG`.
 
-## What M18.0 delivers
+## What M18.1 delivers
 
-Per `MILESTONE_18_PLANNING.md` §5
-M18.0:
+Per `MILESTONE_18_PLANNING.md` §7
+M18.1:
 
-- Full expansion of the planning
-  skeleton written at M17.3.
-- User names the M18 target milestone
-  (§5.a).
-- Additional §5 decisions surface once
-  target is confirmed (§5.b-§5.f
-  expected — historical §5 counts have
-  been 6 for M10 / M11 / M12 / M13 /
-  M14 / M15 / M16 / M17).
-- §7 sequencing lands after §5
-  decisions are locked.
-- §0.a change log records the target
-  selection + all §5 confirmations.
+### Schema
 
-**No code at M18.0.** Planning-only
-session. Backend baseline stays at
-4,363 pass. Frontend Vitest stays at
-140.
+- **Migration
+  `0047_m181_dealership_demo_flags.py`**
+  adding:
+  - `Dealership.is_demo`
+    `BooleanField(default=False)`.
+  - `Dealership.demo_archetype`
+    `CharField(choices=DEMO_ARCHETYPE_CHOICES,
+    blank=True, max_length=32)`.
+  - Per §5.b Option A. Additive-only,
+    zero data migration.
+- **Vocab constants in `models.py`**:
+  `DEMO_ARCHETYPE_RETAIL_SUBPRIME` +
+  `DEMO_ARCHETYPE_FLOOR_PLANNED` +
+  `DEMO_ARCHETYPE_BHPH` +
+  `DEMO_ARCHETYPE_CHOICES` tuple.
+- **Migration
+  `0048_m181_tester_feedback.py`**
+  adding `TesterFeedback` model per
+  §5.e Option A:
+  - `dealership` FK CASCADE.
+  - `tester_name` CharField(64).
+  - `scenario_slug` CharField(64).
+  - `category` CharField(32,
+    choices=TESTER_FEEDBACK_CATEGORY_CHOICES).
+  - `note` TextField.
+  - `referenced_route`
+    CharField(255, blank=True).
+  - `created_at` auto_now_add.
+- **`TESTER_FEEDBACK_CATEGORY_CHOICES`**
+  vocab: `confusion` / `bug` /
+  `feature_request` /
+  `value_statement` /
+  `willingness_to_pay`.
+- **Register `TesterFeedback`** in
+  `_TENANT_CARRIER_MODEL_NAMES` in
+  `services/tenancy.py`. Count 49 →
+  **50**.
 
-## What SESSION_146 should do
+### Service package
 
-### Recommended step sequence
+- **New `services/demo_store/`
+  package** per §5.c Option A:
+  - `__init__.py` with `__all__`
+    exports.
+  - `errors.py` —
+    `NonDemoResetError(RuntimeError)`.
+  - `synthetic_names.py` — fixed
+    pseudonym roster (~40
+    pseudonyms). Fixed vocab;
+    exact-set assertion at test
+    time.
+  - `synthetic_data.py` — helpers:
+    - `synthetic_vin(archetype:
+      str, index: int) -> str` —
+      17-char string prefixed
+      `DEMO<archetype-code>` +
+      11 hex chars.
+    - `synthetic_phone(index: int)
+      -> str` — `555-01xx` NANP.
+    - `synthetic_email(name: str)
+      -> str` —
+      `<name>@demo.dealer-ai.example`.
+  - `scenario_summary.py` —
+    `ScenarioSummary` frozen
+    dataclass (fields:
+    `archetype`, `dealership_id`,
+    `dealership_slug`,
+    `seeded_stock_numbers`,
+    `seeded_user_usernames`,
+    `seeded_scenario_slugs`,
+    `notes`).
+  - `registry.py`:
+    - `create_demo_store(*, slug,
+      archetype, name=None,
+      actor=None) -> Dealership`
+      — atomic; delegates to
+      archetype builder.
+    - `reset_demo_store(*,
+      dealership, actor=None) ->
+      Dealership` — atomic;
+      raises `NonDemoResetError`
+      if `is_demo=False`;
+      `assert dealership.is_demo`
+      at write-path top.
+    - `list_demo_stores() ->
+      list[Dealership]` — returns
+      only `is_demo=True` rows.
+  - `archetypes/__init__.py`
+    dispatcher mapping archetype
+    string → builder module.
+  - `archetypes/base.py`
+    `ArchetypeBuilder` ABC with
+    `build(dealership) ->
+    ScenarioSummary` abstract
+    method.
+  - **Stubs only at M18.1**:
+    `archetypes/retail_subprime.py`,
+    `archetypes/floor_planned.py`,
+    `archetypes/bhph.py`. Each
+    raises `NotImplementedError`
+    until M18.2-M18.4 fill them
+    in.
 
-1. **Confirm the M18 target with the
-   user** (§1 above).
+### Management command
 
-2. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_18_PLANNING.md`
-     (this session's expansion
-     target).
-   - `docs/roadmap/MILESTONE_17_RETROSPECTIVE.md`
-     §6 (six lessons carry into M18)
-     + §8 (unblocked work) + §9
-     (standing question).
-   - `docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`
-     §8 (partly still valid).
-   - `docs/handoffs/SESSION_145_m17_inc3_close.md`
-     (previous session's close).
-   - `docs/CAPABILITY_MATRIX.md` §7r
-     (M17 shipped surface).
-   - Target-specific research doc
-     (per the confirmed §5.a option).
+- **`dealer_ai/management/commands/demo_store.py`**
+  with subcommands:
+  - `demo_store create --slug
+    <name> --archetype <name>
+    [--display-name <name>]` —
+    creates a fresh demo
+    dealership + runs the
+    archetype builder.
+  - `demo_store reset --slug
+    <name>` — resets to
+    canonical starting state.
+  - `demo_store list` — lists
+    all demo dealerships.
+  - `demo_store export_feedback
+    --dealership <slug> [--since
+    <date>] [--out <path>]` —
+    CSV export.
 
-3. **Verify starting state** (§2
-   above).
+### Outbound-send-boundary guards
 
-4. **Draft §1 (business questions) +
-   §5 (load-bearing decisions) + §7
-   (sequencing)** in
-   `MILESTONE_18_PLANNING.md`.
+- Enumerate at open (§1 above).
+- Wrap each with early
+  `if dealership.is_demo:
+  log_and_noop()` check.
+- New logger name:
+  `dealer_ai.demo_store.outbound`
+  for suppressed-outbound log
+  lines.
 
-5. **Ship handoff at
-   `docs/handoffs/SESSION_146_m18_inc0_planning.md`.**
+### Test helper
 
-6. **Overwrite
-   `00-START-NEXT-SESSION.md`** with
-   M18.1 priority (first implementation
-   increment for the confirmed target).
+- Extend `tests/_auth_helpers.py`
+  with
+  `make_demo_dealership(archetype:
+  str, slug: str, name: str |
+  None = None) -> Dealership` —
+  wraps `make_dealership` + sets
+  `is_demo=True` +
+  `demo_archetype=<value>`.
 
-## Explicit non-goals for SESSION_146
+### Tests
 
-- ❌ Do NOT ship M18.1+ code.
-- ❌ Do NOT modify M1-M17 business
-  logic.
-- ❌ Do NOT force-push or amend any
-  earlier commits.
+**~30-40 focused tests** in new
+`tests/test_m181_demo_store_
+substrate.py`:
+
+- `Dealership.is_demo` +
+  `demo_archetype` defaults on
+  existing rows (both fields
+  default per new migration).
+- `DEMO_ARCHETYPE_CHOICES`
+  exact-set equality (fixed-
+  vocab lesson).
+- `TESTER_FEEDBACK_CATEGORY_CHOICES`
+  exact-set equality.
+- `TesterFeedback` model
+  contract + tenancy autofill.
+- `create_demo_store` happy
+  path.
+- `create_demo_store` slug
+  collision handling.
+- `reset_demo_store` happy
+  path (with a stub archetype
+  builder or an inline one for
+  test isolation).
+- `reset_demo_store` raises
+  `NonDemoResetError` when
+  `Dealership.is_demo=False`.
+- `assert dealership.is_demo`
+  fires when write-path guard
+  bypassed via mock
+  (`RuntimeError` shape).
+- `list_demo_stores` returns
+  only `is_demo=True` rows.
+- `synthetic_vin` produces
+  17-char string prefixed
+  `DEMO<archetype-code>`.
+- `synthetic_vin` deterministic
+  for (archetype, index) pair.
+- `synthetic_phone` produces
+  `555-01xx` NANP format.
+- `synthetic_email` produces
+  `@demo.dealer-ai.example`
+  suffix.
+- `synthetic_names` roster is
+  fixed vocab (exact-set
+  assertion).
+- **Per-verb outbound-send-
+  boundary guards** — one test
+  per enumerated verb asserting
+  demo dealerships suppress and
+  non-demo dealerships proceed.
+- Tenancy carrier count 49 →
+  **50** (`>=` assertion per
+  lesson).
+- Permission-class set equality
+  unchanged (zero-drift streak
+  ten consecutive milestones).
+- Endpoint count 107 (unchanged
+  at M18.1 — the `TesterFeedback`
+  POST endpoint lands at M18.5).
+
+### Non-goals for M18.1
+
+- ❌ No archetype scenario
+  construction (M18.2-M18.4).
+- ❌ No `TesterFeedback` POST
+  endpoint (M18.5).
+- ❌ No CSV export
+  implementation body (M18.5).
+- ❌ No frontend changes.
+- ❌ No new Celery-beat
+  entries.
+- ❌ No new post-LLM scrub
+  stages.
+
+## Backend baseline target
+
+**4,363 → ~4,393-4,403 pass**
+(+30-40 tests, 0 regressions).
+Frontend Vitest: 140 (unchanged
+— M18.5 delta only if a feedback
+capture form component lands per
+§5.f evidence).
+
+## Explicit non-goals for SESSION_147
+
+- ❌ Do NOT ship M18.2 retail /
+  subprime archetype pack.
+- ❌ Do NOT modify M1-M17
+  business logic.
+- ❌ Do NOT force-push or amend
+  any earlier commits.
 
 ## NEXT TASK
 
-Start SESSION_146 with (a) naming the
-M18 target with the user (candidates
-in §1 above; user picks based on
-operational evidence + business
-priority + the M17 §9 UI-polish
-standing question), (b) the read-
-first list, (c) starting-state
-verification, then (d) expanding
-`MILESTONE_18_PLANNING.md` §1 + §5 +
-§7 into a full memo. Ship the M18.0
-handoff.
-
-Backend baseline at SESSION_146
-close: **4,363 pass** (unchanged —
-planning-only). Frontend baseline:
-**140 pass** (unchanged).
+Start SESSION_147 with (a)
+enumerating the outbound-send-
+boundary verbs (§1 above), (b)
+starting-state verification, (c)
+building schema + service package
++ guards + `TesterFeedback` +
+outbound-send guards + tests per
+§7 M18.1. Ship the M18.1 handoff.
 
 ---
 
@@ -301,20 +407,18 @@ planning-only). Frontend baseline:
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_18_PLANNING.md`
+   (active memo)
 6. `docs/roadmap/MILESTONE_17_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_145_m17_inc3_close.md`
-   (this session's close)
+7. `docs/handoffs/SESSION_146_m18_inc0_planning.md`
+   (this session's handoff)
 8. `docs/CAPABILITY_MATRIX.md` §7r
-9. Target-specific research (per
-   §5.a confirmed at SESSION_146
-   open).
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_145 — M17 SHIPPED)
+## Operational state (post-SESSION_146 — M18.0 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations `0001`–`0046`.
@@ -330,62 +434,55 @@ research + code are facts.
   Redis 6.4.0 + `django-celery-beat`
   2.8.1 DatabaseScheduler. **10
   scheduled task families
-  registered** (unchanged at M17 —
-  no beat entry per §5.c Option A).
-  Next open slot for a future
-  detector is 12:00.
-- **Milestones shipped:** M1 →
-  **M17** (SESSION_145 close). M18
-  planning drafted.
+  registered**. Next open slot for
+  a future detector is 12:00.
+- **Milestones shipped:** M1 → M17.
+  M18 in progress: M18.0 planning
+  shipped at SESSION_146. M18.1
+  substrate next (SESSION_147).
 - **DRF admin surface:** **107**
-  endpoints.
+  endpoints. Grows to 108 at M18.5
+  (feedback POST).
 - **Frontend operator routes:**
-  **20**.
+  **20** — remains unchanged
+  through M18 per §5.f + Q7.
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** complete
   `services/f_and_i/` (M10) + five
-  M11 packages + seven M12 packages
-  + **`services/accounting/` (seven
-  modules: `default_coa.py` +
-  `journal.py` + `snapshot.py` +
-  `vehicle_cost.py` + `sale_booking.py`
-  + `bhph_payment.py` +
-  `trial_balance_close.py`)**.
+  M11 packages + seven M12
+  packages + `services/accounting/`
+  (seven modules). **New at
+  M18.1**: `services/demo_store/`
+  package.
 - **Frontend accounting surface:**
   `frontend/src/lib/accountingApi.ts`
-  with 8 fetchers + 2 mutators (M13
-  + M14 + M17 combined) + four page
-  components + `TrialBalanceDatePicker`
+  with 8 fetchers + 2 mutators +
+  four page components +
+  `TrialBalanceDatePicker`
   component.
-- **Tenancy carriers:** **49**
-  (unchanged since M17.1).
+- **Tenancy carriers:** **49**.
+  Grows to 50 at M18.1
+  (`TesterFeedback`).
 - **Permission classes:** **7
-  actual** (`IsAdvisorForSlug`,
-  `IsDealerOwnerForAdvisorSlug`,
-  `IsSalesManagerOrOwnerAtActiveDealership`,
-  `IsReconManagerSalesManagerOrOwnerAtActiveDealership`,
-  `IsDealerOwnerAtActiveDealership`,
-  `IsFinanceManagerOrOwnerAtActiveDealership`,
-  `ReadOnly`). **Zero-drift streak:
-  nine consecutive milestones**
-  (M10 → M17). Prior narrative doc
-  "8" was a miscount — corrected at
-  M17.1 handoff + M17
-  retrospective §4.
+  actual** — zero-drift streak
+  nine consecutive milestones
+  (M10 → M17). Extends to ten
+  after M18.1 as no new class
+  ships.
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17 scrub
-  stages (unchanged — M17 has no
+  stages (unchanged — M18 has no
   LLM path).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 18 next:** M18.0
-  planning refinement + target
-  selection. User names target at
-  session open from the M17 §8 +
-  M16 §8 unblocked-work lists +
-  the M17 §9 UI-polish standing
-  question. M18.1 implementation
-  deferred to post-planning
-  session.
+- **Milestone 18 status:** M18.0
+  planning SHIPPED (SESSION_146).
+  M18.1 substrate next
+  (SESSION_147). M18.2-M18.4
+  archetype packs
+  (SESSION_148-150). M18.5 briefs
+  + feedback endpoint
+  (SESSION_151). M18.6 close-out
+  (SESSION_152).
