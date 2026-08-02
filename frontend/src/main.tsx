@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import App from "@/App";
 import RequireAuth from "@/components/RequireAuth";
+import AccountingTrialBalancePage from "@/pages/AccountingTrialBalancePage";
 import AdvisorWorkspacePage from "@/pages/AdvisorWorkspacePage";
 import DealerAnalyticsPage from "@/pages/DealerAnalyticsPage";
 import DealerAIDemo from "@/pages/DealerAIDemo";
@@ -170,6 +171,16 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route
                 path="dealer-ai-bhph/notes/:pk"
                 element={<DealerAiBhphNoteDetail />}
+              />
+              {/* Milestone 14 · Increment 2 (SESSION_135) — accounting
+                  operator UI. First route of the new
+                  ``dealer-ai-accounting/*`` group per §5.d Option A.
+                  Consumes the M13.3 trial-balance endpoint. Journal-
+                  entry browser + detail land at M14.3; reversal
+                  dialog + cost-posting failure card at M14.4. */}
+              <Route
+                path="dealer-ai-accounting/trial-balance"
+                element={<AccountingTrialBalancePage />}
               />
             </Route>
           </Route>
