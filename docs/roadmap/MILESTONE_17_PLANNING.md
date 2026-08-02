@@ -37,6 +37,31 @@ sources:
 > (SESSION_145) open. This document exists
 > so SESSION_145 opens with a concrete
 > starting point rather than a blank page.
+>
+> **M16.2-close refinements (2026-08-02):**
+> - **Option E bundled** to include the
+>   `as_of` picker on M14.2 trial-balance
+>   (previously listed as a sub-item of
+>   Option G UX polish). The picker is the
+>   operator UI for a materialized snapshot;
+>   they ship together as monthly-close v1.
+> - **Option G reduced** accordingly to
+>   journal-entry list filters + sidebar
+>   nav entry (the two remaining UX-polish
+>   sub-items).
+> - **Standing question for M17 close:**
+>   review at the end of M17 whether M18
+>   or M19 should be an intentional UI-
+>   polish milestone (M14 shape) to
+>   batch-consume Option G + any UX gaps
+>   surfaced from operator use of M15 +
+>   M16 + M17-shipped surfaces. Backend-
+>   only milestones consistently generate
+>   more UI/workflow deferrals than they
+>   consume; an occasional UI-focused
+>   milestone drains the backlog en
+>   masse (per M14's shape as validated
+>   against the M13 UI backlog).
 
 ## 0. Engineering practices to preserve from M2-M16
 
@@ -172,9 +197,9 @@ unaddressed after M16):*
 | B | **BhphFee entity + late-fee GL posting** — M16.1's `UnexpectedBhphPaymentFeesError` makes the contract explicit. When the BhphFee entity ships, extend `post_bhph_payment_journal` with a CR fee-income line (440000 BHPH Late Fee Income — new account) and remove the guard. Blocked on operator evidence naming the late-fee tracking priority. | M16 §8 + M16 §3 item 2 |
 | C | **Deposit / bank reconciliation workflow** — M16's phantom 100000 Cash on Hand balance (payments accumulate without ever being reclassified to 110000 Bank Operating) will surface operator questions about cash vs bank position reporting. Method-aware fund-flow routing (M16 §3 item 1) is the substrate half; the reclassification workflow is the operational half. | M16 §8 + M16 §3 item 1 + M16 §3 item 6 |
 | D | **NSF / payment-reversal workflow** — ACH failures + returned payments need both operational contract (what happens to the BhphPayment row?) and GL wiring (via `reverse_journal_entry`). Same shape as sale-reversal but with a real operator-driven trigger (bank returns the draft). | M16 §8 + M16 §3 item 3 |
-| E | **Trial-balance materialization + monthly close workflow** — `TrialBalanceSnapshot` entity + freeze verb over the M13.3 pure recompute aggregator. M16's BHPH activity now makes period-over-period reports meaningful (interest income + Notes Receivable amortization). The M14.2 trial-balance page could grow an `as_of` picker as part of this. | M15 §8 + M16 §8 |
+| E | **Trial-balance materialization + `as_of` picker (monthly-close v1)** — bundled at M16.2 close per user directive. `TrialBalanceSnapshot` entity + freeze verb over the M13.3 pure recompute aggregator (backend), plus the `as_of` picker on the M14.2 trial-balance page (frontend). Bundled because the picker IS the operator UI for a materialized snapshot — without the picker, the entity has no consumer; without the entity, the picker has nothing to query. Together they form the smallest complete operator-usable slice of monthly-close workflow. M16's BHPH activity now makes period-over-period reports meaningful (interest income + Notes Receivable amortization). | M15 §8 + M16 §8 |
 | F | **Category-group-aware GL mapping** for the M13.2 detector — remains unblocked. M14.4's failure card + M15 sale activity + M16 payment activity all accumulate miscoding evidence. | M14 §8 + M15 §8 + M16 §8 |
-| G | **M14 UX polish** (journal-entry list filters + `as_of` picker on trial-balance + sidebar nav entry for accounting) — layers atop the shipped surface. Operator evidence on M15 + M16-shipped surfaces now starts to accumulate faster (two active daily-posting streams). | M14 §8 + M15 §8 + M16 §8 |
+| G | **M14 UX polish** (journal-entry list filters + sidebar nav entry for accounting) — layers atop the shipped surface. Operator evidence on M15 + M16-shipped surfaces now starts to accumulate faster (two active daily-posting streams). **`as_of` picker moved to Option E per M16.2-close bundling directive.** | M14 §8 + M15 §8 + M16 §8 |
 | H | **Cost-of-sale variance handling** — M15 §3 item 11 deferral. Post-sale VehicleCost phantom balances more visible now that BHPH activity also flows into trial balance. | M15 §3 item 11 + M16 §8 |
 | I | **Sale-reversal workflow** — M15 §3 item 8 deferral. GL side ready; operational contract needed. | M15 §3 item 8 + M16 §8 |
 | J | **BHPH interest accrual detector (accrual-basis)** — M16 is cash-basis. Period-end accrual (DR 132000 Accrued Interest Receivable — new account / CR 430000 BHPH Interest Income) is a natural follow-on for month-end close discipline. | M16 §8 + M16 §3 item 5 |
@@ -280,9 +305,11 @@ Options (from §1 above):
 - **Option B** — BhphFee entity + late-fee GL posting.
 - **Option C** — Deposit / bank reconciliation workflow.
 - **Option D** — NSF / payment-reversal workflow.
-- **Option E** — Trial-balance materialization + monthly close.
+- **Option E** — Trial-balance materialization + `as_of`
+  picker (monthly-close v1) — bundled at M16.2 close.
 - **Option F** — Category-group-aware GL mapping.
-- **Option G** — M14 UX polish.
+- **Option G** — M14 UX polish (JE filters + sidebar nav;
+  `as_of` picker moved to E).
 - **Option H** — Cost-of-sale variance handling.
 - **Option I** — Sale-reversal workflow.
 - **Option J** — BHPH interest accrual detector.
@@ -339,7 +366,15 @@ only scope. M14 shipped four code +
 closeout (six total). M12 shipped
 eight. Complexity-appropriate scope
 discipline holds — small complete
-increments per Project Rule 4.*
+increments per Project Rule 4.
+**Option E (bundled) would likely
+be 4-5 increments** (planning +
+backend entity/verb + backend
+detector or freeze verb + frontend
+picker + close-out) given its
+mixed backend+frontend scope.
+Other options remain 3-increment
+backend-only.*
 
 ### Increment N (M17.N) — Close-out
 

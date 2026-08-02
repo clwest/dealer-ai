@@ -135,18 +135,26 @@ technical recommendation:
   operational contract + GL wiring
   via `reverse_journal_entry`.
 - **Option E** — Trial-balance
-  materialization + monthly close
-  workflow. M16's BHPH activity
-  now makes period-over-period
-  reports meaningful.
+  materialization + `as_of`
+  picker (monthly-close v1).
+  **Bundled at M16.2 close** —
+  entity + picker ship together
+  as the smallest complete
+  operator-usable slice of
+  monthly close. M16's BHPH
+  activity now makes period-
+  over-period reports meaningful.
+  Likely 4-5 increments given
+  mixed backend+frontend scope.
 - **Option F** — Category-group-
   aware GL mapping for the M13.2
   detector. Miscoding evidence
   now accumulates across three
   daily-posting streams.
 - **Option G** — M14 UX polish
-  (JE filters + `as_of` picker
-  + sidebar nav). Operator
+  (JE filters + sidebar nav;
+  `as_of` picker moved to E per
+  M16.2-close bundling). Operator
   evidence accumulates faster
   post-M16.
 - **Option H** — Cost-of-sale
