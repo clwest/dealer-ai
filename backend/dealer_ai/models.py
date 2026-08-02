@@ -6532,3 +6532,113 @@ class BhphNote(models.Model):
                 )
         if errors:
             raise ValidationError(errors)
+
+
+# ---------------------------------------------------------------------------
+# Milestone 12 · Increment 2 (SESSION_122) — BhphPayment intake + application.
+# ---------------------------------------------------------------------------
+
+
+# Method vocab per MILESTONE_12_PLANNING.md §1.2. Fixed 4+1 pattern
+# matching M11 vocab-set convention (four channels + `other` for the
+# long tail). Extensions defer to operator evidence.
+BHPH_PAYMENT_METHOD_CASH = "cash"
+BHPH_PAYMENT_METHOD_CHECK = "check"
+BHPH_PAYMENT_METHOD_DEBIT = "debit"
+BHPH_PAYMENT_METHOD_ACH = "ach"
+BHPH_PAYMENT_METHOD_OTHER = "other"
+
+BHPH_PAYMENT_METHOD_CHOICES = (
+    (BHPH_PAYMENT_METHOD_CASH, "Cash"),
+    (BHPH_PAYMENT_METHOD_CHECK, "Check"),
+    (BHPH_PAYMENT_METHOD_DEBIT, "Debit card"),
+    (BHPH_PAYMENT_METHOD_ACH, "ACH"),
+    (BHPH_PAYMENT_METHOD_OTHER, "Other"),
+)
+
+
+class BhphPayment(models.Model):
+    """Milestone 12 · Increment 2 — a payment intake against a BhphNote.
+
+    Per MILESTONE_12_PLANNING.md §1.2 + §5.b Option A (user-confirmed
+    at SESSION_121 open — platform-wide constant application order
+    fees → interest → principal).
+
+    **Attach shape.** Mandatory FK to :class:`BhphNote` (CASCADE).
+    Multiple payments per note over the life of the loan; ``paid_at``
+    is the operator-supplied receipt timestamp.
+
+    **Denormalized allocation columns.** ``applied_to_fees`` /
+    ``applied_to_interest`` / ``applied_to_principal`` populated at
+    write time by :func:`services.bhph_payments.record_payment` via
+    the pure :func:`services.bhph_payments.allocate_payment` verb.
+    Storing the split (not computing on read) means downstream aging
+    + payoff queries don't re-run allocation per row. The math is
+    pure so stored values can be re-derived from the note + prior
+    payments at any time.
+
+    **Cross-tenant guard.** ``clean()`` enforces
+    ``note.dealership == dealership``. Belt (model) + suspenders
+    (:class:`services.bhph_payments.CrossTenantBhphPaymentError`).
+
+    **Application order (§5.b Option A).** Fees first, then interest,
+    then principal. Fees are always zero at M12.2 (no fee-charging
+    entity exists yet); the column is preserved so a future M12.5+
+    late-fee / NSF-fee entity can allocate without a schema change.
+    Overpayment refused with
+    :class:`services.bhph_payments.OverpaymentError` — refund /
+    reversal is a M12+ scope decision, not silent absorption.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="bhph_payments",
+    )
+    note = models.ForeignKey(
+        "BhphNote",
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    paid_at = models.DateTimeField(
+        help_text="Operator-supplied receipt timestamp for the payment."
+    )
+    amount = models.DecimalField(max_digits=8, decimal_places=2)
+    method = models.CharField(
+        max_length=16, choices=BHPH_PAYMENT_METHOD_CHOICES
+    )
+    # Denormalized allocation — see class docstring.
+    applied_to_fees = models.DecimalField(max_digits=8, decimal_places=2)
+    applied_to_interest = models.DecimalField(max_digits=8, decimal_places=2)
+    applied_to_principal = models.DecimalField(max_digits=8, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-paid_at", "-created_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"BhphPayment #{self.pk} — note #{self.note_id} "
+            f"${self.amount} ({self.method}) at "
+            f"{self.paid_at.isoformat()}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.note_id is not None
+            and self.note.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "note": (
+                        "BhphPayment.note must belong to the same "
+                        "dealership as the BhphPayment. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )

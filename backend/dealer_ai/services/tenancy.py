@@ -483,6 +483,17 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # explicitly on every row. Autofill signal is the safety net for
     # callers that bypass the service.
     "BhphNote",
+    # Milestone 12 · Increment 2 (SESSION_122) — BhphPayment entity
+    # per MILESTONE_12_PLANNING.md §1.2 + §5.b Option A (locked at
+    # SESSION_121 open) (40 → 41). Mandatory FK to BhphNote
+    # (CASCADE). Denormalized allocation columns populated at write
+    # time by :func:`services.bhph_payments.record_payment` via the
+    # pure :func:`services.bhph_payments.allocate_payment` verb.
+    # Application order platform-wide constant fees → interest →
+    # principal per §5.b Option A. The M12.2 verbs write
+    # ``dealership`` explicitly on every row. Autofill signal is the
+    # safety net for callers that bypass the service.
+    "BhphPayment",
 )
 
 

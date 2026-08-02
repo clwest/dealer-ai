@@ -5,6 +5,7 @@ from . import (
     views_analytics,
     views_be_backs,
     views_bhph_notes,
+    views_bhph_payments,
     views_deal_writeups,
     views_delivery,
     views_f_and_i,
@@ -805,5 +806,24 @@ urlpatterns = [
         "admin/bhph-notes/<int:pk>/",
         views_bhph_notes.admin_bhph_note_retrieve,
         name="admin-bhph-note-retrieve",
+    ),
+    # Milestone 12 · Increment 2 (SESSION_122) — BhphPayment intake.
+    # Nested under the note per RESTful convention (a payment always
+    # belongs to a note; there is no top-level payment surface).
+    # Domain-error mapping in ``views_bhph_payments.py``:
+    #   CrossTenantBhphPaymentError → 404;
+    #   UnknownPaymentMethodError → 400;
+    #   OverpaymentError → 400 (refund/reversal deferred beyond M12);
+    #   missing lookups in-tenant → 404;
+    #   serializer error → 400.
+    path(
+        "admin/bhph-notes/<int:pk>/payments/",
+        views_bhph_payments.admin_bhph_payment_create,
+        name="admin-bhph-payment-create",
+    ),
+    path(
+        "admin/bhph-notes/<int:pk>/payments/list/",
+        views_bhph_payments.admin_bhph_payment_list,
+        name="admin-bhph-payment-list",
     ),
 ]
