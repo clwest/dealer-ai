@@ -6686,3 +6686,116 @@ class BhphPayment(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 12 · Increment 4 (SESSION_124) — BhphPromiseToPay tracking.
+# ---------------------------------------------------------------------------
+
+
+# Promised-reason vocab per §0.a M12.4 decision 1 (as-recommended).
+# Fixed 3+1 vocab tailored to BHPH collections practice — the three
+# most common income triggers customers cite for a delayed payment,
+# plus `other` for the long tail.
+BHPH_PROMISE_REASON_PAYCHECK = "paycheck"
+BHPH_PROMISE_REASON_TAX_REFUND = "tax_refund"
+BHPH_PROMISE_REASON_FAMILY_HELP = "family_help"
+BHPH_PROMISE_REASON_OTHER = "other"
+
+BHPH_PROMISE_REASON_CHOICES = (
+    (BHPH_PROMISE_REASON_PAYCHECK, "Paycheck"),
+    (BHPH_PROMISE_REASON_TAX_REFUND, "Tax refund"),
+    (BHPH_PROMISE_REASON_FAMILY_HELP, "Family help"),
+    (BHPH_PROMISE_REASON_OTHER, "Other"),
+)
+
+# State vocab. Mirrors M11.5 BeBack promised → returned / no_show
+# shape (§0.a decision 2 as-recommended). Two terminal states
+# (kept / broken) + the initial state (promised). Terminal is final —
+# see :class:`services.bhph_promises.PromiseAlreadyTerminalError`.
+BHPH_PROMISE_STATE_PROMISED = "promised"
+BHPH_PROMISE_STATE_KEPT = "kept"
+BHPH_PROMISE_STATE_BROKEN = "broken"
+
+BHPH_PROMISE_STATE_CHOICES = (
+    (BHPH_PROMISE_STATE_PROMISED, "Promised"),
+    (BHPH_PROMISE_STATE_KEPT, "Kept"),
+    (BHPH_PROMISE_STATE_BROKEN, "Broken"),
+)
+
+
+class BhphPromiseToPay(models.Model):
+    """Milestone 12 · Increment 4 — a customer PTP against a BhphNote.
+
+    Per MILESTONE_12_PLANNING.md §1.4 + §5.d Option A (locked at
+    SESSION_121 open — operator-triggered reconciliation).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="bhph_promises",
+    )
+    note = models.ForeignKey(
+        "BhphNote",
+        on_delete=models.CASCADE,
+        related_name="promises",
+    )
+    promised_at = models.DateTimeField(
+        help_text="When the customer said they would pay."
+    )
+    promised_amount = models.DecimalField(max_digits=8, decimal_places=2)
+    promised_reason = models.CharField(
+        max_length=32, choices=BHPH_PROMISE_REASON_CHOICES
+    )
+    actual_payment = models.ForeignKey(
+        "BhphPayment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reconciled_promises",
+    )
+    state = models.CharField(
+        max_length=16,
+        choices=BHPH_PROMISE_STATE_CHOICES,
+        default=BHPH_PROMISE_STATE_PROMISED,
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-promised_at", "-created_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"BhphPromiseToPay #{self.pk} — note #{self.note_id} "
+            f"${self.promised_amount} ({self.state}, promised "
+            f"{self.promised_at.isoformat()})"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        errors: dict[str, str] = {}
+        if (
+            self.note_id is not None
+            and self.note.dealership_id != self.dealership_id
+        ):
+            errors["note"] = (
+                "BhphPromiseToPay.note must belong to the same "
+                "dealership as the BhphPromiseToPay. Cross-tenant "
+                "contamination guard (see AUTHENTICATION_MODEL.md "
+                "§1 layer 4)."
+            )
+        if (
+            self.actual_payment_id is not None
+            and self.actual_payment.dealership_id != self.dealership_id
+        ):
+            errors["actual_payment"] = (
+                "BhphPromiseToPay.actual_payment must belong to the "
+                "same dealership as the BhphPromiseToPay."
+            )
+        if errors:
+            raise ValidationError(errors)

@@ -494,6 +494,18 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # ``dealership`` explicitly on every row. Autofill signal is the
     # safety net for callers that bypass the service.
     "BhphPayment",
+    # Milestone 12 · Increment 4 (SESSION_124) — BhphPromiseToPay
+    # entity per MILESTONE_12_PLANNING.md §1.4 + §5.d Option A
+    # (locked at SESSION_121 open) (41 → 42). Mandatory FK to
+    # BhphNote (CASCADE). State machine mirrors M11.5 BeBack
+    # (promised / kept / broken). The M12.4
+    # :mod:`services.bhph_promises` verbs write ``dealership``
+    # explicitly on every row + the M12.4 Celery detector
+    # (:mod:`services.bhph_promises.tasks`) also passes
+    # ``dealership_id`` kwarg per the M11.4 / M11.5 / M12.3 pattern.
+    # Autofill signal is the safety net for callers that bypass the
+    # service.
+    "BhphPromiseToPay",
 )
 
 

@@ -465,7 +465,32 @@ CELERY_BEAT_SCHEDULE: dict = {
         # No positional args; the orchestrator takes no kwargs.
         "kwargs": {},
     },
+    "bhph-broken-ptp-detector-daily-09-00": {
+        "task": (
+            "dealer_ai.services.bhph_promises.tasks"
+            ".detect_broken_promises_for_all_tenants"
+        ),
+        # 09:00 project-time daily — one hour after the M12.3
+        # delinquency detector. Continues the non-overlapping window
+        # pattern (M7.2 02:00, M7.3 03:00, M7.4 04:00, M7.5 05:00,
+        # M11.4 06:00, M11.5 07:00, M12.3 08:00, M12.4 09:00).
+        # Mirrors the M11.5 no-show detector shape (promised →
+        # broken auto-transition on grace expiry). Grace period
+        # configurable via ``BHPH_PTP_BROKEN_GRACE_HOURS``.
+        "schedule": crontab(hour=9, minute=0),
+        # No positional args; the orchestrator takes no kwargs.
+        "kwargs": {},
+    },
 }
+
+# ---- Milestone 12 · Increment 4 (SESSION_124) — broken-PTP grace period.
+# Configurable via env or settings override. Default 24 hours per §0.a
+# M12.4 decision 3 — a day after the promised date is a reasonable
+# minimum before flagging broken. Zero → transition on the moment
+# ``promised_at`` passes; higher values give operators more room.
+BHPH_PTP_BROKEN_GRACE_HOURS = int(
+    os.getenv("BHPH_PTP_BROKEN_GRACE_HOURS", "24")
+)
 
 # ---- Milestone 11 · Increment 5 (SESSION_118) — BeBack no-show grace.
 # Configurable via env or settings override. Zero → transition on the

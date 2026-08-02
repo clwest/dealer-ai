@@ -6,6 +6,7 @@ from . import (
     views_be_backs,
     views_bhph_notes,
     views_bhph_payments,
+    views_bhph_promises,
     views_deal_writeups,
     views_delivery,
     views_f_and_i,
@@ -825,5 +826,38 @@ urlpatterns = [
         "admin/bhph-notes/<int:pk>/payments/list/",
         views_bhph_payments.admin_bhph_payment_list,
         name="admin-bhph-payment-list",
+    ),
+    # Milestone 12 · Increment 4 (SESSION_124) — BhphPromiseToPay
+    # tracking. Two nested-under-note routes for creation + listing;
+    # two top-level promise routes for state transitions (mark-kept
+    # requires a payment reference per §5.d Option A operator-
+    # triggered reconciliation).
+    #
+    # Domain-error mapping in ``views_bhph_promises.py``:
+    #   CrossTenantBhphPromiseError → 404;
+    #   UnknownReasonError → 400;
+    #   CrossPromisePaymentError → 400;
+    #   PromiseAlreadyTerminalError → 409 (state machine);
+    #   missing lookups in-tenant → 404;
+    #   serializer error → 400.
+    path(
+        "admin/bhph-notes/<int:pk>/promises/",
+        views_bhph_promises.admin_bhph_promise_create,
+        name="admin-bhph-promise-create",
+    ),
+    path(
+        "admin/bhph-notes/<int:pk>/promises/list/",
+        views_bhph_promises.admin_bhph_promise_list,
+        name="admin-bhph-promise-list",
+    ),
+    path(
+        "admin/bhph-promises/<int:pk>/mark-kept/",
+        views_bhph_promises.admin_bhph_promise_mark_kept,
+        name="admin-bhph-promise-mark-kept",
+    ),
+    path(
+        "admin/bhph-promises/<int:pk>/mark-broken/",
+        views_bhph_promises.admin_bhph_promise_mark_broken,
+        name="admin-bhph-promise-mark-broken",
     ),
 ]
