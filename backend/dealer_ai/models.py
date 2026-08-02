@@ -5938,3 +5938,145 @@ class TestDrive(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 11 · Increment 3 (SESSION_116) — DealWriteup.
+# ---------------------------------------------------------------------------
+
+
+class DealWriteup(models.Model):
+    """Milestone 11 · Increment 3 — the four-square deal write-up.
+
+    Captures the sales-side deal write-up (four-square worksheet) per
+    ``SALES_DEPARTMENT_MAPPING.md`` §workflow step 10. Links to the M10
+    F&I workflow via the handoff action per §5.e Option A — the auto-
+    creation of a matching :class:`CreditApplication` happens at the
+    service layer (:func:`services.deal_writeups.hand_off_to_fandi`),
+    keeping model layers thin.
+
+    **Attach shape — mandatory FKs to both `CustomerLead` and `Vehicle`.**
+    A deal write-up is always written for a specific customer on a
+    specific vehicle; the "generic worksheet" case does not exist in
+    the documented workflow. Same rationale as M11.2 TestDrive
+    (§5.c Option A precedent).
+
+    **Approval state.** ``sales_manager_approved_at`` /
+    ``sales_manager_approved_by_user`` populated when the sales manager
+    approves the four-square terms (sales-manager approval is the
+    gate on the F&I hand-off in the real workflow). Nullable both —
+    unapproved writeups are legitimate drafts.
+
+    **Handoff link.** ``handed_off_to_fandi_at`` populated when the
+    handoff verb fires. Not FK to CreditApplication — the CA row
+    outlives the writeup for retention reasons (M10.1 §5.e locked
+    retention clock; deleting the writeup must not cascade to the CA).
+    The CA carries the reverse link via its own ``lead`` FK, which
+    matches the writeup's lead.
+
+    **Cross-tenant guard.** ``clean()`` enforces same-tenant lead +
+    vehicle FKs. Belt (model) + suspenders (service).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="deal_writeups",
+    )
+    lead = models.ForeignKey(
+        "CustomerLead",
+        on_delete=models.CASCADE,
+        related_name="deal_writeups",
+    )
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name="deal_writeups",
+    )
+    # Four-square terms. All nullable — a writeup in progress may not
+    # have every cell filled yet; the F&I handoff verb enforces that
+    # the sales manager approved before the CA is auto-created, but
+    # does not enforce which cells are populated (that's an operator
+    # choice, not a system invariant).
+    vehicle_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    trade_allowance = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    down_payment = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    monthly_payment_target = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True
+    )
+    term_months_target = models.PositiveIntegerField(null=True, blank=True)
+    # APR as a percentage (e.g. 7.49). Distinct from the M2 payment-
+    # engine APR representation to keep the four-square captured
+    # value separate from the deterministic math result.
+    apr_target = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    write_up_at = models.DateTimeField()
+    written_up_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deal_writeups_written",
+    )
+    sales_manager_approved_at = models.DateTimeField(null=True, blank=True)
+    sales_manager_approved_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deal_writeups_approved",
+    )
+    handed_off_to_fandi_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-write_up_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"DealWriteup #{self.pk} — lead #{self.lead_id} × "
+            f"vehicle #{self.vehicle_id}"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guard at the model layer."""
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.lead_id is not None
+            and self.lead.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "lead": (
+                        "DealWriteup.lead must belong to the same "
+                        "dealership as the DealWriteup. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )
+        if (
+            self.vehicle_id is not None
+            and self.vehicle.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "vehicle": (
+                        "DealWriteup.vehicle must belong to the same "
+                        "dealership as the DealWriteup. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )

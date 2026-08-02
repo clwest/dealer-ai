@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_115
+last_session_shipped: SESSION_116
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -13,72 +13,114 @@ milestone_8_status: shipped
 milestone_9_status: shipped
 milestone_10_status: shipped
 milestone_11_status: in_progress
-next_session: SESSION_116
+next_session: SESSION_117
 next_milestone: 11
 next_milestone_name: "Sales-side non-chat channels + customer-journey completeness"
-next_increment: 3
-next_increment_name: "M11.3 — DealWriteup entity + F&I handoff action"
+next_increment: 4
+next_increment_name: "M11.4 — FollowUpCadence + FollowUpTask + Celery-beat scheduling"
 ---
 
-# Next session — SESSION_116 · Milestone 11 · Increment 3 (M11.3 — DealWriteup entity + F&I handoff action)
+# Next session — SESSION_117 · Milestone 11 · Increment 4 (M11.4 — FollowUpCadence + FollowUpTask + Celery-beat scheduling)
 
-> **SESSION_115 shipped M11.2 —**
-> new `TestDrive` entity + tenancy
-> carrier extension (34 → 35) +
-> `services/test_drives/` package
-> with `record_test_drive` verb +
-> `POST /admin/test-drives/`
-> endpoint + 23 focused tests
-> (target ~20). §5.c Option A was
-> already confirmed at SESSION_114
-> open — no new decisions surfaced
-> at M11.2 implementation time.
-> Streak stands at **35 as-
-> recommended M5.1 → M11.1**.
+> **SESSION_116 shipped M11.3 —**
+> new `DealWriteup` entity + tenancy
+> carrier (35 → 36) +
+> `services/deal_writeups/` package
+> with three verbs (`record` /
+> `approve` / `hand_off_to_fandi`) +
+> three DRF endpoints under
+> `admin/deal-writeups/` + 33
+> focused tests (target ~25). The
+> handoff verb server-side auto-
+> creates a matching M10.1
+> CreditApplication per §5.e
+> Option A; two implementation-time
+> micro-decisions recorded in
+> `MILESTONE_11_PLANNING.md` §0.a
+> (default `source_format`
+> `tablet`; four-square terms
+> summarized into CA `notes`).
 >
-> **Backend baseline: 3,758 → 3,781
-> (+23, zero regressions).**
+> **Backend baseline: 3,781 → 3,814
+> (+33, zero regressions).**
 > Frontend baseline: **51**
-> (unchanged; M11.2 is backend-
-> only). Migrations `0001`–`0033`.
-> DRF admin surface **68 → 69**.
-> Tenancy carriers **34 → 35**.
+> (unchanged; M11.3 backend-only).
+> Migrations `0001`–`0034`. DRF
+> admin surface **69 → 72**.
+> Tenancy carriers **35 → 36**.
 > Permission classes **8**
 > (unchanged — reused M4
 > `IsSalesManagerOrOwnerAtActiveDealership`).
+> Streak still **35 as-recommended
+> M5.1 → M11.1** (planning-time
+> decisions only; implementation-
+> time micro-decisions don't
+> count against it per M10 §9).
 
-## First thing SESSION_116 must do
+## First thing SESSION_117 must do
 
-### 1. Confirm §5.e for M11.3 was already recorded
+### 1. Confirm §5.d Option A still fits
 
 Per `MILESTONE_11_PLANNING.md`
-§0.a (M11.1 amendment), **§5.e
-Option A** (DealWriteup → F&I
-handoff auto-creates the M10.1
-CreditApplication server-side)
-was confirmed at SESSION_114
-open. No new decisions block
-M11.3.
+§0.a (M11.1 amendment), **§5.d
+Option A** (two-entity model —
+`FollowUpCadence` header +
+`FollowUpTask` rows, queryable
+individually) was confirmed at
+SESSION_114 open. No new
+planning decisions block M11.4.
 
-If a new `[NEEDS-DECISION]`
-surfaces at implementation time
-(e.g. which DealWriteup fields
-auto-copy into the
-CreditApplication, or whether
-the handoff also creates the
-M10.2 DealStructure), amend
-§0.a narrowly per M5-M10
-precedent before writing code.
+M11.4 is the first M11 increment
+that touches the Celery-beat
+substrate (M7). At implementation
+time three micro-decisions are
+likely to surface — record any
+of them in §0.a per the M11.3
+precedent:
+
+- **Cadence templates.** The plan
+  names six named schedules
+  (`24hr`, `1wk`, `30day`,
+  `90day`, `6mo`, `1yr`). Are
+  these fixed constants
+  (LEAD_CADENCE_TEMPLATES) or
+  operator-configurable rows?
+  Default: fixed constants
+  matching the M11.1 vocab-set
+  pattern (planning-decision-
+  worthy; expand later if
+  needed).
+- **Celery-beat schedule
+  ownership.** Beat schedules
+  can be Python-code
+  (`CELERY_BEAT_SCHEDULE`) or
+  DB-backed
+  (`DatabaseScheduler`, already
+  configured per M7).
+  Recommendation: use the
+  existing DatabaseScheduler +
+  per-lead schedule rows so
+  runtime schedule mutations
+  don't require a redeploy.
+- **Task state transitions.**
+  `pending` → `completed` /
+  `skipped` — is `skipped`
+  operator-triggered only, or
+  auto-triggered after N days
+  past `due_at`? Default:
+  operator-triggered only at
+  M11.4; auto-skip is a
+  separate follow-on decision.
 
 ### 2. Verify starting state
 
-- `git status` — clean (M11.2
-  commit landed at SESSION_115
+- `git status` clean (M11.3
+  commit landed at SESSION_116
   close).
 - `git log --oneline -3` — top
-  should be the M11.2 commit.
+  should be the M11.3 commit.
 - `python3 manage.py test dealer_ai`
-  → **3,781 pass, 1 skipped, 0
+  → **3,814 pass, 1 skipped, 0
   fail**.
 - `python3 manage.py check`
   clean.
@@ -87,195 +129,201 @@ precedent before writing code.
   changes detected."
 - `redis-cli ping` → `PONG`.
 
-## What M11.3 delivers
+## What M11.4 delivers
 
 Per `MILESTONE_11_PLANNING.md`
-§1.3 + §1.7 + §5.e Option A +
-§7 M11.3:
+§1.4 + §5.d + §7 M11.4:
 
-- **New `DealWriteup` model**
-  (four-square-style summary
-  tied to F&I handoff memo).
+- **New `FollowUpCadence` model.**
   - `dealership` FK CASCADE
     (tenancy carrier; extend
-    35 → 36).
+    36 → 37).
   - `lead` FK to `CustomerLead`
     CASCADE.
-  - `vehicle` FK to `Vehicle`
-    CASCADE.
-  - `vehicle_price` (proposed),
-    `trade_allowance`,
-    `down_payment` (proposed),
-    `monthly_payment_target`,
-    `term_months_target`,
-    `apr_target` DecimalFields.
-  - `write_up_at` datetime.
-  - `written_up_by_user` FK
+  - `template` CharField with
+    fixed vocab (`24hr` / `1wk`
+    / `30day` / `90day` / `6mo`
+    / `1yr` — see decision
+    surface above).
+  - `started_at` datetime.
+  - `is_active` boolean (paused
+    when lead closes / opts
+    out).
+- **New `FollowUpTask` model.**
+  - `dealership` FK CASCADE
+    (tenancy carrier; extend
+    37 → 38).
+  - `cadence` FK to
+    `FollowUpCadence` CASCADE.
+  - `due_at` DateTimeField
+    indexed.
+  - `state` CharField vocab
+    `pending` / `completed` /
+    `skipped`.
+  - `completed_by_user` FK to
     User SET_NULL.
-  - `sales_manager_approved_at`
-    nullable +
-    `sales_manager_approved_by_user`
-    FK User SET_NULL.
-  - `handed_off_to_fandi_at`
-    nullable (link into M10.1
-    CreditApplication).
-  - `notes` TextField (blank OK).
-  - Cross-tenant `clean()`
-    guard on `lead` + `vehicle`.
-- **New `services/deal_writeups/`
-  package** (mirrors M11.1
-  `services/leads/` + M11.2
-  `services/test_drives/`
-  layout).
-- **Verbs (three):**
-  - `record_deal_writeup(...)`
-    — create.
-  - `approve_deal_writeup(...)`
-    — sets
-    `sales_manager_approved_*`
-    timestamps.
-  - `hand_off_to_fandi(...)` —
-    per §5.e Option A, server-
-    side auto-creates a
-    matching M10.1
-    `CreditApplication` (copies
-    applicant name from lead;
-    other CA fields TBD at
-    implementation time — mark
-    any surfacing decision in
-    §0.a).
-- **Endpoints (three or four):**
-  - `POST /admin/deal-writeups/`
-  - `POST /admin/deal-writeups/<pk>/approve/`
-  - `POST /admin/deal-writeups/<pk>/hand-off/`
-  - (optional) `PATCH
-    /admin/deal-writeups/<pk>/`
-    for edits pre-approval.
-- **~25 focused tests** across
+  - `notes` TextField.
+- **Celery-beat scheduling.**
+  On `FollowUpCadence` create,
+  the M7 substrate seeds
+  `FollowUpTask` rows at the
+  template's offsets. A M7
+  Celery-beat entry runs
+  daily to surface tasks with
+  `due_at <= now()` +
+  `state=pending` to the
+  operator queue (or fire the
+  M3.3 `services/follow_up.py`
+  drafting pattern, if the
+  planning decision is auto-
+  drafting).
+- **New `services/follow_ups/`
+  package** (mirrors M11.1 /
+  M11.2 / M11.3 layout).
+- **Verbs (three or four):**
+  - `start_cadence(lead,
+    template)` — creates the
+    cadence + seeds tasks.
+  - `complete_task(task,
+    completed_by_user)` — sets
+    state=completed.
+  - `skip_task(task,
+    completed_by_user)` — sets
+    state=skipped.
+  - `pause_cadence(cadence)` —
+    sets is_active=False (halts
+    future beat surfacing).
+- **Endpoints (four):**
+  - `POST /admin/follow-up-cadences/`
+  - `POST /admin/follow-up-tasks/<pk>/complete/`
+  - `POST /admin/follow-up-tasks/<pk>/skip/`
+  - `POST /admin/follow-up-cadences/<pk>/pause/`
+  - (optional GET) `GET /admin/follow-up-tasks/`
+    with `?due_before=` filter
+    for operator queue.
+- **~30 focused tests** across
   model / service / endpoint /
-  handoff-integration files.
-- **Baseline target 3,781 →
-  ~3,806.**
+  Celery-beat integration
+  files (per §5.g "larger —
+  includes Celery-beat schedule
+  locking").
+- **Baseline target 3,814 →
+  ~3,844.**
 
-### Non-goals for M11.3
+### Non-goals for M11.4
 
-- ❌ No cadence orchestration
-  (M11.4).
 - ❌ No be-back (M11.5).
-- ❌ No frontend at M11.3
+- ❌ No frontend at M11.4
   (M11.6).
-- ❌ No modification of M1-M11.2
+- ❌ No modification of M1-M11.3
   business logic.
-- ❌ No modification of M10.1
-  CreditApplication semantics —
-  the handoff creates via the
-  existing service verb,
-  doesn't extend the model.
-- ❌ No DealStructure auto-
-  creation at handoff (deferred
-  — CreditApplication only).
+- ❌ No auto-skip of stale tasks
+  (deferred decision — M11.4
+  is operator-triggered only).
+- ❌ No SMS / email delivery
+  (drafting via M3.3
+  `services/follow_up.py`
+  suffices at M11.4; delivery
+  is a follow-on integration).
 
-## What SESSION_116 should do
+## What SESSION_117 should do
 
 ### Recommended step sequence
 
-1. **Confirm §5.e Option A**
-   still fits at implementation
-   time. If field-copy specifics
-   need a decision (e.g. does
-   the handoff copy the deal's
-   monthly-payment target into
-   the CA notes?), record in
-   §0.a.
+1. **Confirm §5.d + record any
+   implementation-time micro-
+   decisions in §0.a**
+   (candidates above).
 
 2. **Read first (in order):**
    - `docs/roadmap/MILESTONE_11_PLANNING.md`
-     §1.3 + §1.7 + §5.e + §7
-     M11.3.
-   - `docs/handoffs/SESSION_115_m11_inc2_test_drive.md`
+     §1.4 + §5.d + §7 M11.4.
+   - `docs/handoffs/SESSION_116_m11_inc3_deal_writeup.md`
      (previous session).
    - `docs/research/SALES_DEPARTMENT_MAPPING.md`
-     §workflow step 10 (deal
-     write-up) + §workflow step
-     11 (F&I handoff).
-   - `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
-     §1.1 (CreditApplication
-     intake — the F&I side of
-     the handoff).
-   - `backend/dealer_ai/models.py::CreditApplication`
-     (M10.1 model — target of
-     the handoff).
-   - `backend/dealer_ai/services/f_and_i/credit_application.py`
-     (`record_credit_application`
-     — the verb the handoff
-     calls).
-   - `backend/dealer_ai/services/test_drives/`
-     (M11.2 pattern to mirror).
+     §workflow steps 12-15
+     (follow-up) + §pains 1, 2,
+     15, 16.
+   - `backend/dealer_ai/services/follow_up.py`
+     (M3.3 drafting pattern —
+     M11.4 adds scheduling on
+     top).
+   - `backend/dealer_ai/services/deal_writeups/`
+     (M11.3 verb pattern to
+     mirror).
+   - `backend/dealer_freedom/celery.py`
+     + `backend/dealer_ai/services/jobs/`
+     (M7 Celery substrate).
+   - Existing Celery-beat
+     schedule config (four
+     scheduled task families
+     since M7).
 
 3. **Verify starting state**
    (§2 above).
 
 4. **Draft (in order):**
-   - `DealWriteup` model +
-     tenancy carrier (35 → 36).
-   - Migration `0034`.
-   - `services/deal_writeups/`
-     package + three verbs.
-   - `views_deal_writeups.py`
-     + serializers + endpoints.
+   - `FollowUpCadence` +
+     `FollowUpTask` models +
+     tenancy carrier extension
+     (36 → 38).
+   - Migration `0035`.
+   - `services/follow_ups/`
+     package with four verbs.
+   - Celery-beat entry for
+     daily task surfacing.
+   - `views_follow_ups.py` +
+     endpoints.
    - URL routes.
-   - ~25 focused tests
-     (including handoff round-
-     trip integration test:
-     writeup → handoff →
-     CreditApplication exists +
-     properly attached to the
-     same lead).
+   - ~30 focused tests
+     (including Celery-beat
+     schedule-locking test).
 
 5. **Full-suite verification.**
-   Target 3,781 → ~3,806.
+   Target 3,814 → ~3,844.
 
 6. **Ship handoff at
-   `docs/handoffs/SESSION_116_m11_inc3_deal_writeup.md`.**
+   `docs/handoffs/SESSION_117_m11_inc4_follow_up_cadence.md`.**
 
 7. **Overwrite
    `00-START-NEXT-SESSION.md`**
-   with M11.4 priority
-   (FollowUpCadence + FollowUpTask
-   + Celery-beat scheduling).
+   with M11.5 priority
+   (BeBack tracking).
 
-## Explicit non-goals for SESSION_116
+## Explicit non-goals for SESSION_117
 
-- ❌ Do NOT ship M11.4-M11.7
+- ❌ Do NOT ship M11.5-M11.7
   scope.
-- ❌ Do NOT modify M1-M11.2
+- ❌ Do NOT modify M1-M11.3
   business logic.
-- ❌ Do NOT modify the M10.1
-  CreditApplication model shape.
 - ❌ Do NOT force-push or amend
-  the M11.1 / M11.2 commits.
+  the M11.1 / M11.2 / M11.3
+  commits.
 
 ## NEXT TASK
 
-Start SESSION_116 with (a)
-verifying §5.e Option A still
-fits (M11.1 recorded it in
-§0.a), (b) the read-first list,
-(c) starting-state verification,
-then (d) `DealWriteup` model +
-tenancy carrier extension (35 →
-36) + migration + service
-package with three verbs
-(record / approve / hand-off) +
-endpoints + ~25 tests including
-the handoff → CA round-trip.
-Target baseline 3,781 → ~3,806.
-Ship the M11.3 handoff.
+Start SESSION_117 with (a)
+verifying §5.d Option A still
+fits + recording any
+implementation-time micro-
+decisions in §0.a, (b) the
+read-first list, (c) starting-
+state verification, then (d)
+`FollowUpCadence` +
+`FollowUpTask` models +
+tenancy carrier extension (36 →
+38) + migration + service
+package with four verbs +
+Celery-beat entry + endpoints +
+~30 tests including Celery-beat
+schedule-locking coverage.
+Target baseline 3,814 → ~3,844.
+Ship the M11.4 handoff.
 
-Backend baseline at SESSION_116
-close: **~3,806 pass**.
+Backend baseline at SESSION_117
+close: **~3,844 pass**.
 Frontend baseline: unchanged
-(no frontend at M11.3).
+(no frontend at M11.4).
 
 ---
 
@@ -286,27 +334,27 @@ Frontend baseline: unchanged
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 11
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_11_PLANNING.md`
-   (§0.a M11.1 amendment carrying
-   §5.e Option A)
+   (§0.a M11.1 + M11.3
+   amendments)
 6. `docs/roadmap/MILESTONE_10_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_115_m11_inc2_test_drive.md`
+7. `docs/handoffs/SESSION_116_m11_inc3_deal_writeup.md`
    (this session's close)
-8. `docs/handoffs/SESSION_114_m11_inc1_channel_intake.md`
-9. `docs/CAPABILITY_MATRIX.md` §7k
-10. `docs/research/SALES_DEPARTMENT_MAPPING.md`
-11. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
+8. `docs/handoffs/SESSION_115_m11_inc2_test_drive.md`
+9. `docs/handoffs/SESSION_114_m11_inc1_channel_intake.md`
+10. `docs/CAPABILITY_MATRIX.md` §7k
+11. `docs/research/SALES_DEPARTMENT_MAPPING.md`
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_115 — M11.2 SHIPPED)
+## Operational state (post-SESSION_116 — M11.3 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
-  `0001`–`0033`. Test baseline:
-  **3,781 pass**, 1 skipped, 0
+  `0001`–`0034`. Test baseline:
+  **3,814 pass**, 1 skipped, 0
   fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
@@ -319,25 +367,27 @@ research + code are facts.
   `django-celery-beat` 2.8.1
   DatabaseScheduler. 4 scheduled
   task families registered
-  (unchanged since M7).
+  (M11.4 will add a fifth).
 - **Milestones shipped:** M1 →
   **M10**. M11 in progress
-  (M11.1 + M11.2 shipped).
-- **DRF admin surface:** **69**
-  (68 + M11.2's TestDrive
-  endpoint).
+  (M11.1 + M11.2 + M11.3
+  shipped).
+- **DRF admin surface:** **72**
+  (69 + M11.3's three
+  DealWriteup endpoints).
 - **Frontend operator routes:**
-  **11** (unchanged; M11.2
+  **11** (unchanged; M11.3
   backend-only).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** complete
-  `services/f_and_i/` package
-  (M10 close) + `services/leads/`
-  (M11.1) + `services/test_drives/`
-  (M11.2).
-- **Tenancy carriers:** **35**
-  (34 → 35 for TestDrive).
+  `services/f_and_i/` package +
+  `services/leads/` (M11.1) +
+  `services/test_drives/`
+  (M11.2) + `services/deal_writeups/`
+  (M11.3).
+- **Tenancy carriers:** **36**
+  (35 → 36 for DealWriteup).
 - **Permission classes:** **8**
   (unchanged).
 - **`Vehicle.is_available`:**
@@ -359,10 +409,18 @@ research + code are facts.
   mandatory both `CustomerLead`
   + `Vehicle` (M11.2 §5.c
   Option A).
-- **Milestone 11 next:** M11.3
-  `DealWriteup` entity + three-
-  verb service (record / approve
-  / hand-off) with server-side
-  auto-CA-creation on handoff
-  per §5.e Option A. ~25 tests.
-  Baseline 3,781 → ~3,806.
+- **`DealWriteup` handoff flow:**
+  approve → hand_off_to_fandi
+  auto-creates M10.1
+  CreditApplication (M11.3
+  §5.e Option A). Idempotent
+  per writeup (refuses re-
+  handoff via
+  `WriteupAlreadyHandedOffError`).
+- **Milestone 11 next:** M11.4
+  `FollowUpCadence` +
+  `FollowUpTask` + Celery-beat
+  scheduling. Two new tenancy
+  carriers (36 → 38). ~30
+  tests. Baseline 3,814 →
+  ~3,844.

@@ -440,6 +440,18 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # is the safety net for callers that bypass the service (Django
     # admin, ad-hoc management command).
     "TestDrive",
+    # Milestone 11 · Increment 3 (SESSION_116) — DealWriteup entity
+    # per MILESTONE_11_PLANNING.md §1.3 + §5.e Option A (user-
+    # confirmed at SESSION_114 open, recorded in §0.a) (35 → 36).
+    # Mandatory FKs to CustomerLead + Vehicle (both CASCADE). The
+    # M11.3 :mod:`services.deal_writeups` verbs write ``dealership``
+    # explicitly on every row and auto-transition the sales-manager
+    # approval + F&I handoff timestamps at their respective verb
+    # calls. The autofill signal is the safety net for callers that
+    # bypass the service. Handoff verb auto-creates a matching
+    # M10.1 CreditApplication via the existing
+    # :func:`services.f_and_i.record_credit_application` verb.
+    "DealWriteup",
 )
 
 

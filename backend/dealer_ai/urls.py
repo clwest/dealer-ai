@@ -3,6 +3,7 @@ from django.urls import path
 from . import (
     views,
     views_analytics,
+    views_deal_writeups,
     views_delivery,
     views_f_and_i,
     views_leads,
@@ -668,5 +669,34 @@ urlpatterns = [
         "admin/test-drives/",
         views_test_drives.admin_test_drive_create,
         name="admin-test-drive-create",
+    ),
+    # ---- Milestone 11 · Increment 3 — DealWriteup admin API ------------
+    # Three endpoints per MILESTONE_11_PLANNING.md §1.3 + §5.e Option A
+    # + §7 M11.3. Gated on ``IsSalesManagerOrOwnerAtActiveDealership``
+    # (same posture as M11.1 / M11.2 per §1.9).
+    # Domain-error mapping in ``views_deal_writeups.py``:
+    #   CrossTenantDealWriteupError → 404 (fail-closed);
+    #   WriteupNotApprovedError → 409 (state machine);
+    #   WriteupAlreadyHandedOffError → 409 (idempotency);
+    #   missing writeup / lead / vehicle in tenant → 404;
+    #   serializer error → 400.
+    # Handoff endpoint server-side auto-creates a matching M10.1
+    # CreditApplication via the existing
+    # ``services.f_and_i.record_credit_application`` verb per
+    # §5.e Option A + SESSION_116 §0.a M11.3 amendment.
+    path(
+        "admin/deal-writeups/",
+        views_deal_writeups.admin_deal_writeup_create,
+        name="admin-deal-writeup-create",
+    ),
+    path(
+        "admin/deal-writeups/<int:pk>/approve/",
+        views_deal_writeups.admin_deal_writeup_approve,
+        name="admin-deal-writeup-approve",
+    ),
+    path(
+        "admin/deal-writeups/<int:pk>/hand-off/",
+        views_deal_writeups.admin_deal_writeup_hand_off,
+        name="admin-deal-writeup-hand-off",
     ),
 ]

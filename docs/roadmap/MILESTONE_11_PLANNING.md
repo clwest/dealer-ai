@@ -152,6 +152,56 @@ No amendments to §1–§8. Implementation may
 proceed against the planning skeleton as
 written.
 
+### SESSION_116 · M11.3 open — handoff micro-decisions recorded
+
+At M11.3 implementation time two field-
+copy specifics surfaced beyond the §5.e
+Option A shape decision. Both are narrow
+implementation-time choices (not new load-
+bearing planning decisions), resolved by
+proceeding with defensible defaults and
+recording here per the M5-M10 §0.a
+convention:
+
+1. **Auto-created CreditApplication
+   `source_format` on handoff.**
+   Default: `CREDIT_APP_FORMAT_TABLET`.
+   Reason: the writeup + handoff both
+   happen on the sales-manager's tablet
+   in-store, so tablet is the accurate
+   provenance. Overridable via kwarg on
+   :func:`services.deal_writeups.hand_off_to_fandi`
+   for edge cases (paper hand-off from
+   the manager's desk).
+2. **Field-copy shape from DealWriteup
+   → CreditApplication.**
+   - `applicant_full_name` ← `lead.name`
+     (required by the M10.1 CA verb).
+   - `notes` ← structured summary of
+     the writeup terms
+     (`vehicle_price`,
+     `monthly_payment_target`,
+     `term_months_target`,
+     `apr_target`) so the F&I manager
+     sees the deal parameters without
+     opening the writeup separately.
+   - No `applicant_ssn_last4` (not
+     captured on the writeup; F&I fills
+     in from the customer's credit-app
+     paperwork).
+
+Neither micro-decision closes any future
+option — a subsequent planning pass can
+change either the default source_format
+or the field-copy shape without a
+migration.
+
+The M10 recommend-and-approve streak
+remains 35 as-recommended (§5.a-§5.f);
+these implementation-time defaults are
+not counted against the streak per M10
+§9 (planning-time decisions only).
+
 ---
 
 ## 1. Design memo
