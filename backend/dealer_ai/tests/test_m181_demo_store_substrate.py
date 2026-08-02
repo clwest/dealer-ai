@@ -400,19 +400,23 @@ class OutboundEgressScannerTests(TestCase):
 
 
 class CreateDemoStoreTests(TestCase):
-    def test_create_fails_at_m181_because_archetype_stub_raises(self) -> None:
-        # At M18.1 every archetype builder is a stub. The atomic
-        # ``create_demo_store`` wraps the Dealership.create + the
-        # builder.build in one transaction, so a stub raising
-        # NotImplementedError rolls back the whole thing — the
-        # Dealership is NOT persisted.
+    def test_create_fails_when_archetype_still_a_stub(self) -> None:
+        # At M18.1 all three archetypes were stubs; M18.2 shipped
+        # retail_subprime; M18.3 + M18.4 ship floor_planned + bhph.
+        # Until then, those two archetypes still raise
+        # NotImplementedError. The atomic ``create_demo_store``
+        # wraps the Dealership.create + the builder.build in one
+        # transaction, so a stub raising NotImplementedError rolls
+        # back the whole thing — the Dealership is NOT persisted.
         with self.assertRaises(NotImplementedError):
             create_demo_store(
-                slug="m181-create-attempt",
-                archetype=DEMO_ARCHETYPE_RETAIL_SUBPRIME,
+                slug="m181-create-stub-attempt",
+                archetype=DEMO_ARCHETYPE_FLOOR_PLANNED,
             )
         self.assertFalse(
-            Dealership.objects.filter(slug="m181-create-attempt").exists()
+            Dealership.objects.filter(
+                slug="m181-create-stub-attempt"
+            ).exists()
         )
 
 
@@ -544,14 +548,15 @@ class DemoStoreCommandTests(TestCase):
         self.assertIn("m181-cmd-list-store", out.getvalue())
 
     def test_create_subcommand_surfaces_stub_error(self) -> None:
-        # M18.1 stubs raise NotImplementedError; the command surfaces
-        # via CommandError.
+        # Archetype stubs raise NotImplementedError; the command
+        # surfaces via CommandError. Uses floor_planned (still a
+        # stub at M18.2; ships at M18.3).
         with self.assertRaises(CommandError):
             call_command(
                 "demo_store",
                 "create",
-                "--slug=m181-cmd-create",
-                "--archetype=retail_subprime",
+                "--slug=m181-cmd-create-stub",
+                "--archetype=floor_planned",
                 stdout=StringIO(),
             )
 

@@ -31,6 +31,7 @@ from typing import Optional
 from django.db import transaction
 
 from ...models import Dealership
+from ..accounting import seed_default_coa
 from .archetypes import get_archetype_builder
 from .errors import NonDemoResetError
 from .scenario_summary import ScenarioSummary
@@ -71,6 +72,10 @@ def create_demo_store(
         is_demo=True,
         demo_archetype=archetype,
     )
+    # Seed the M13.1 default COA — every Dealership must have the
+    # default chart of accounts for M15+ sale-booking GL post to
+    # succeed. Matches the ``make_dealership`` test helper posture.
+    seed_default_coa(dealership)
     _LOGGER.info(
         "demo store created",
         extra={
@@ -149,6 +154,10 @@ def reset_demo_store(
 
     # Refetch to guarantee the builder sees the fully-cleared state.
     dealership.refresh_from_db()
+    # Re-seed the default COA — the child-delete cleared GLAccount
+    # rows, and the M15+ sale-booking flow the archetype builders
+    # exercise requires them present.
+    seed_default_coa(dealership)
     builder = get_archetype_builder(archetype)
     summary = builder.build(dealership)
     return summary
@@ -158,24 +167,59 @@ def _delete_demo_store_children(dealership: Dealership) -> None:
     """Delete every tenanted row keyed to ``dealership`` except the
     Dealership row itself.
 
-    Iterates every tenancy carrier from :data:`_TENANT_CARRIER_MODEL_NAMES`
-    and calls ``.filter(dealership=dealership).delete()``. Runs inside
-    the caller's atomic block so a partial delete rolls back.
+    Iterates :data:`_TENANT_CARRIER_MODEL_NAMES` in **reverse**
+    order so child-first deletion satisfies PROTECT FKs. Example:
+    ``JournalEntryLine.account`` PROTECTs ``GLAccount``; ``GLAccount``
+    is registered before ``JournalEntry`` + ``JournalEntryLine`` in
+    the carrier tuple, so reversed iteration deletes lines and
+    entries first, freeing the GLAccount rows to be deleted next.
+    The carrier tuple is grown by append per the growth-only-list
+    lesson — later additions naturally sit at the tail (children of
+    earlier entries), so reversed iteration keeps the delete order
+    child-before-parent as the platform evolves.
 
-    Order matters for PROTECT FKs (e.g. ``JournalEntryLine.account``
-    PROTECT vs ``GLAccount``), but Django's ORM handles cascade
-    ordering via the collector. If a scenario builder ever
-    introduces a row shape that PROTECT-blocks deletion, the reset
-    path will raise a ``ProtectedError`` at the offending model —
-    caught in the atomic block, rolled back, surfaced to the caller.
+    Also deletes every ``User`` row linked to this dealership via
+    ``UserDealershipRole`` — seeded archetype users would otherwise
+    survive reset (Django's ``User`` is not a tenancy carrier), and
+    the next build would collide on the ``username`` unique
+    constraint. Users with memberships at other dealerships are
+    preserved; only single-tenant demo users are removed.
+
+    Runs inside the caller's atomic block so a partial delete rolls
+    back. If a builder introduces a genuine circular-PROTECT cycle,
+    the ``ProtectedError`` fires loud and the reset rolls back.
     """
     from django.apps import apps as django_apps
+    from django.contrib.auth import get_user_model
 
+    from ...models import UserDealershipRole
     from ..tenancy import _TENANT_CARRIER_MODEL_NAMES
 
-    for model_name in _TENANT_CARRIER_MODEL_NAMES:
+    User = get_user_model()
+
+    # Find seeded users first (before the cascade delete removes the
+    # memberships that identify them). A user is "demo-owned" iff its
+    # only memberships are at this dealership; users with memberships
+    # elsewhere are external and preserved.
+    membership_user_ids = set(
+        UserDealershipRole.objects.filter(
+            dealership=dealership
+        ).values_list("user_id", flat=True)
+    )
+    demo_owned_user_ids: list[int] = []
+    for user_id in membership_user_ids:
+        other_memberships = UserDealershipRole.objects.filter(
+            user_id=user_id
+        ).exclude(dealership=dealership).exists()
+        if not other_memberships:
+            demo_owned_user_ids.append(user_id)
+
+    for model_name in reversed(_TENANT_CARRIER_MODEL_NAMES):
         Model = django_apps.get_model("dealer_ai", model_name)
         Model.objects.filter(dealership=dealership).delete()
+
+    if demo_owned_user_ids:
+        User.objects.filter(pk__in=demo_owned_user_ids).delete()
 
 
 def list_demo_stores() -> list[Dealership]:
