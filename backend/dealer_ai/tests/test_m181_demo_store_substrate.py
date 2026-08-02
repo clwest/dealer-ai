@@ -400,24 +400,28 @@ class OutboundEgressScannerTests(TestCase):
 
 
 class CreateDemoStoreTests(TestCase):
-    def test_create_fails_when_archetype_still_a_stub(self) -> None:
-        # At M18.1 all three archetypes were stubs; M18.2 shipped
-        # retail_subprime; M18.3 shipped floor_planned; M18.4 ships
-        # bhph. Until then, ``bhph`` is the only archetype still
-        # raising NotImplementedError. The atomic ``create_demo_store``
-        # wraps Dealership.create + builder.build in one transaction,
-        # so a stub raising NotImplementedError rolls back the whole
-        # thing — the Dealership is NOT persisted.
-        with self.assertRaises(NotImplementedError):
-            create_demo_store(
-                slug="m181-create-stub-attempt",
-                archetype=DEMO_ARCHETYPE_BHPH,
+    def test_create_all_shipped_archetypes(self) -> None:
+        # M18.1 shipped substrate + stub builders. M18.2 shipped
+        # retail_subprime; M18.3 shipped floor_planned; M18.4 shipped
+        # bhph. All three archetypes are now real — the "creates
+        # against a stub" contract no longer holds. Sanity-check
+        # instead that create succeeds for each archetype (rolls back
+        # cleanly at slug uniqueness on repeat rather than raising
+        # NotImplementedError).
+        for archetype in (
+            DEMO_ARCHETYPE_RETAIL_SUBPRIME,
+            DEMO_ARCHETYPE_FLOOR_PLANNED,
+            DEMO_ARCHETYPE_BHPH,
+        ):
+            slug = f"m181-create-live-{archetype}"
+            dealership, summary = create_demo_store(
+                slug=slug, archetype=archetype,
             )
-        self.assertFalse(
-            Dealership.objects.filter(
-                slug="m181-create-stub-attempt"
-            ).exists()
-        )
+            self.assertTrue(dealership.is_demo)
+            self.assertEqual(dealership.demo_archetype, archetype)
+            self.assertGreater(
+                len(summary.seeded_stock_numbers), 0
+            )
 
 
 class ResetDemoStoreGuardTests(TestCase):
@@ -439,11 +443,23 @@ class ResetDemoStoreGuardTests(TestCase):
         with self.assertRaises(NonDemoResetError):
             reset_demo_store(dealership=broken)
 
-    def test_reset_stub_raises_not_implemented_but_clears_children(self) -> None:
+    def test_reset_clears_children_and_reseeds_via_real_archetype(self) -> None:
+        # As of M18.4, all archetype builders are real. Seed a rogue
+        # TesterFeedback row, reset the dealership, and confirm the
+        # reset clears the rogue row AND re-seeds the canonical
+        # archetype state (row counts match a fresh build).
         d = make_demo_dealership(
-            archetype=DEMO_ARCHETYPE_BHPH, slug="m181-reset-stub"
+            archetype=DEMO_ARCHETYPE_RETAIL_SUBPRIME,
+            slug="m181-reset-live",
         )
-        # Seed one child row so we can observe delete-then-rebuild.
+        # First build via reset (make_demo_dealership sets fields
+        # but doesn't run the archetype).
+        reset_demo_store(dealership=d)
+        vehicle_count_after_first_build = (
+            d.vehicles.count()  # type: ignore[attr-defined]
+        )
+        self.assertGreater(vehicle_count_after_first_build, 0)
+        # Seed a rogue feedback row.
         TesterFeedback.objects.create(
             dealership=d,
             tester_name="Casey Placeholderman",
@@ -451,15 +467,14 @@ class ResetDemoStoreGuardTests(TestCase):
             category=TESTER_FEEDBACK_CATEGORY_CONFUSION,
             note="present before reset",
         )
+        # Reset — rogue row cleared, archetype re-seeded.
+        reset_demo_store(dealership=d)
         self.assertEqual(
-            TesterFeedback.objects.filter(dealership=d).count(), 1
+            TesterFeedback.objects.filter(dealership=d).count(), 0
         )
-        # M18.1 stub raises inside build(); atomic rolls back the
-        # delete, so the child row survives.
-        with self.assertRaises(NotImplementedError):
-            reset_demo_store(dealership=d)
         self.assertEqual(
-            TesterFeedback.objects.filter(dealership=d).count(), 1
+            d.vehicles.count(),  # type: ignore[attr-defined]
+            vehicle_count_after_first_build,
         )
 
 
@@ -547,18 +562,18 @@ class DemoStoreCommandTests(TestCase):
         call_command("demo_store", "list", stdout=out)
         self.assertIn("m181-cmd-list-store", out.getvalue())
 
-    def test_create_subcommand_surfaces_stub_error(self) -> None:
-        # Archetype stubs raise NotImplementedError; the command
-        # surfaces via CommandError. Uses bhph (still a stub at
-        # M18.3; ships at M18.4).
-        with self.assertRaises(CommandError):
-            call_command(
-                "demo_store",
-                "create",
-                "--slug=m181-cmd-create-stub",
-                "--archetype=bhph",
-                stdout=StringIO(),
-            )
+    def test_create_subcommand_succeeds_for_shipped_archetype(self) -> None:
+        # All three archetypes shipped as of M18.4. The command
+        # completes without raising when handed a real archetype.
+        out = StringIO()
+        call_command(
+            "demo_store",
+            "create",
+            "--slug=m181-cmd-create-live",
+            "--archetype=retail_subprime",
+            stdout=out,
+        )
+        self.assertIn("Created demo store", out.getvalue())
 
     def test_reset_subcommand_missing_dealership_errors(self) -> None:
         with self.assertRaises(CommandError):
