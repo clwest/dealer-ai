@@ -1,9 +1,11 @@
 ---
 title: "Milestone 15 — M9 sale-booking GL post"
-status: active
+status: shipped
 type: planning-memo
 generated: 2026-08-02
 generated_at_session: SESSION_138 (skeleton), SESSION_139 (expansion)
+shipped_at_session: SESSION_141
+retrospective: docs/roadmap/MILESTONE_15_RETROSPECTIVE.md
 milestone: 15
 milestone_name: "M9 sale-booking GL post"
 sources:
@@ -991,5 +993,53 @@ M15.2).
 
 *Full memo. All six §5 decisions
 confirmed as-recommended at SESSION_139
-M15.0 open. M15.1 code begins at
-SESSION_140.*
+M15.0 open. M15.1 code shipped at
+SESSION_140. M15 SHIPPED at
+SESSION_141 M15.2 close.*
+
+## Closing note (M15.2)
+
+Milestone 15 shipped at SESSION_141
+per the M10.8 / M11.7 / M12.8 / M13.4
+/ M14.5 close-out precedent. Three
+increments (M15.0 planning + M15.1
+backend + M15.2 close-out) — smaller
+surface than M14's six per backend-
+only scope, matching M15 §6 lesson 8.
+
+**Backend delta:** 4,277 → **4,296
+pass**, 1 skipped, 0 fail (+19 tests,
+zero regressions). **Frontend Vitest:
+122 pass** (unchanged — no frontend at
+M15 per §5.f Option A). **Zero
+migrations shipped at any M15
+increment.** DRF admin surface 104
+(unchanged). Frontend operator routes
+20 (unchanged). Tenancy carriers 47
+(unchanged). Permission classes 8
+(unchanged — zero-drift streak
+extends to seven consecutive
+milestones: M10 + M11 + M12 + M13 +
+M14 + M15). Celery-beat task families
+9 (unchanged — sale booking is
+operator intent, not detector-
+shaped).
+
+**Streak update:** 58 planning-time
+as-recommended M5.1 → M15.0. Six
+consecutive milestones with every
+§5 decision confirmed as-
+recommended at planning-time open.
+Nine §0.a M15.1 micro-decisions do
+not count against the streak per
+M10 §9.
+
+Cross-links:
+
+- Delivery record → `docs/roadmap/MILESTONE_15_RETROSPECTIVE.md`
+- Shipped surface → `docs/CAPABILITY_MATRIX.md` §7p
+- Roadmap entry → `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+  §Milestone 15
+- Session handoffs → `docs/handoffs/SESSION_139_m15_inc0_planning.md`
+  · `docs/handoffs/SESSION_140_m15_inc1_backend.md`
+  · `docs/handoffs/SESSION_141_m15_close.md`

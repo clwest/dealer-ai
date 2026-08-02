@@ -1542,6 +1542,140 @@ surfacing — all four UI surfaces named in the M13 retrospective
   workflow; period-comparison verbs; CSV export.
 - Per-dealer COA overrides UI; `post_save` COA seeder wiring.
 
+### Milestone 15 — M9 sale-booking GL post — SHIPPED at SESSION_141
+
+*Full delivery record: `docs/roadmap/MILESTONE_15_PLANNING.md`
+§7 (annotated SHIPPED per increment; one §0.a change-log
+amendment recorded across M15.1 implementation session) and
+`docs/roadmap/MILESTONE_15_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7p. Backend test
+baseline delta: 4,277 → 4,296 (+19 tests, zero regressions).
+Frontend Vitest baseline: 122 (unchanged — no frontend at M15
+per §5.f Option A). Sessions 139 → 141. Zero new backend
+entities. One new module in `services/accounting/`
+(`sale_booking.py`) with one atomic sibling-service verb
+(`post_sale_booking_journal`) + `_lookup_required_account` +
+`_resolve_receivable_account` helpers + `UnmappedFinanceTypeError`
++ six account-code constants + finance-type → receivable
+mapping table. Extended `services/sale/computation.record_sale`
+with `posted_by_user` kwarg + per-vehicle un-posted-cost flush
+loop + sibling call to `post_sale_booking_journal`. Extended
+`views_sale.admin_sale_create` for `request.user` propagation.
+Extended `tests/_auth_helpers.make_dealership` to seed default
+COA on creation. Zero migrations. Zero new endpoints — sale-
+booking is a side effect of M9's existing create endpoint.
+Zero permission-class drift — extends zero-drift posture to
+seven consecutive milestones (M10 + M11 + M12 + M13 + M14 +
+M15). Zero new Celery-beat task families (sale booking is
+operator intent per M13 §5.d Option C hybrid — not detector-
+shaped). Zero new post-LLM scrub stages (M15 has no LLM
+path). DRF admin surface 104 (unchanged). Frontend operator
+routes 20 (unchanged — no frontend touched). Tenancy carrier
+47 (unchanged — no new models). **Six §5 decisions confirmed
+as-recommended at M15.0 open** — streak extends to 58 planning-
+time as-recommended M5.1 → M15.0 across six consecutive
+milestones (M10 + M11 + M12 + M13 + M14 + M15). Nine §0.a
+implementation-time micro-decisions across M15.1 — do not
+count against the streak per M10 §9.*
+
+**Business objective.** Wire the M9 sale write path to the
+M13 accounting substrate. Every sold vehicle produces a
+matching balanced JournalEntry automatically. Real accounting
+workflows now reflect the full retail operation, not just M2
+cost accrual + reversal.
+
+**Related research.**
+- `ACCOUNTING_DEPARTMENT_MAPPING.md` §3.5 (Contracts in
+  Transit + funding workflow) — M15 posts the sale-side
+  half (DR CIT at booking); the funding-side half (DR Cash
+  / CR CIT at funding) defers to a payments-inbound
+  milestone.
+- `MILESTONE_13_PLANNING.md` §5.d Option C hybrid
+  (sync sibling for M9 sale-booking, detector for M2 cost
+  accrual + M12 BHPH payment posting) — M15 exercises the
+  sync half.
+- `MILESTONE_13_RETROSPECTIVE.md` §8 + `MILESTONE_14_RETROSPECTIVE.md`
+  §8 — both flagged M9 sale-booking GL post as the M14
+  substrate-consuming target. M15 picks it up.
+
+**Operational pain resolved.**
+- Before M15, trial balance reflected only M2 cost accrual
+  activity (Recon WIP + A/P Trade). Revenue + COGS accounts
+  showed zero regardless of sales volume.
+- Before M15, the M14.3 journal-entry browser showed only
+  M13.2 cost-accrual entries — invisible to operators
+  looking for sale audit trails.
+- Before M15, Recon WIP grew unboundedly — every M13.2
+  posting added; nothing cleared. Balance was meaningless
+  after 30 days.
+- Before M15, receivables (Cash / CIT / BHPH Notes) were
+  never posted from the sale side — the accounting
+  department had no ledger record of what the sales team
+  had actually closed.
+
+**Existing reusable primitives.**
+- M13.1 `services/accounting/post_journal_entry` — the
+  atomic sibling target for M15's sale-booking verb.
+  Consumed unchanged.
+- M13.2 `services/accounting/post_vehicle_cost_journal` —
+  invoked per un-posted VehicleCost row for the sold
+  vehicle at sale time per §5.d Option A. Consumed
+  unchanged.
+- M13.2 `_lookup_required_account` — mirrored verbatim in
+  the sale-booking module for account resolution (not
+  promoted to shared helper — evidence gate for refactor
+  not tripped).
+- Default COA seeded per Dealership by M13.1 migration
+  `0043` — all six accounts M15 uses (100000 / 120000 /
+  122000 / 123000 / 400000 / 500000) exist for every
+  tenant.
+- M9 `services/sale/record_sale` — the write path extended
+  with `posted_by_user` kwarg + cost-flush loop + sibling
+  call. Already `@transaction.atomic`; the sibling calls
+  inherit that transaction.
+- M14.3 journal-entry browser + M14.2 trial-balance page —
+  the UI surface that surfaces M15's new entries
+  automatically. Zero frontend changes needed.
+- `IsSalesManagerOrOwnerAtActiveDealership` (via composed
+  `IsReconManagerSalesManagerOrOwnerAtActiveDealership`) —
+  the permission class on M9's existing create endpoint.
+  Reused — zero-drift streak extends to seven consecutive
+  milestones.
+
+**Gap.**
+- Wire `record_sale` to `post_journal_entry` (M15.1 fills
+  this).
+- Finance-type → receivable account mapping (M15.1 fills
+  this — §5.b Option A three-way branch).
+- Per-vehicle un-posted-cost flush at sale time (M15.1
+  fills this — §5.d Option A keeps trial balance always
+  internally consistent).
+
+**Scope (three increments).**
+- **M15.0** — planning refinement + target selection.
+- **M15.1** — backend sale-booking GL post (new sibling
+  module + `record_sale` extension + view `posted_by_user`
+  propagation).
+- **M15.2** — close-out docs.
+
+**Out of scope for M15** (deferrals cataloged in
+`MILESTONE_15_RETROSPECTIVE.md` §3):
+- Sales-tax posting; trade-in accounting; F&I product
+  revenue at sale; doc-fee revenue; reserve receivable at
+  sale; BHPH interest income accrual; wholesale sale
+  variant; sale-reversal workflow; JournalEntry ⇄ Sale FK
+  linkage; Contracts-in-Transit funding workflow; cost-of-
+  sale variance handling; GL-derived reporting analytics.
+- M10 F&I chargeback GL reversal + M12 BHPH payment GL
+  post — substrate ready per M13 §5.d Option C hybrid;
+  M15 demonstrated the sync-sibling pattern that M10
+  chargeback would follow; the M14 UI will surface any
+  resulting journal entries automatically once these ship.
+- Payroll / W-2 / 1099 (external services). GAAP-audited
+  financial reporting (out of scope for platform v1).
+  Direct DMS integration (belongs to a future vendor-
+  integration milestone).
+
 ---
 
 ## 5. Explicit non-goals and deferrals

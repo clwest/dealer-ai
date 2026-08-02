@@ -1412,6 +1412,139 @@ Milestone 14 close:**
   after M14 every M13 endpoint
   has a UI surface.
 
+## 7p. M9 sale-booking GL post (Milestone 15, shipped)
+
+Milestone 15 (SESSION_139 → SESSION_141)
+wired the M9 sale write path to the
+M13 accounting substrate. Every sold
+vehicle now produces a matching
+balanced JournalEntry via a sync
+`@transaction.atomic` sibling-service
+call inside `services/sale/record_sale`
+per M13 §5.d Option C hybrid posture.
+**One new backend module** in
+`services/accounting/` (`sale_booking.py`
+— fifth module alongside
+`default_coa.py`, `journal.py`,
+`snapshot.py`, `vehicle_cost.py`).
+**Zero new entities.** **Zero
+migrations.** **Zero new endpoints**
+— sale-booking is a side effect of
+M9's existing create endpoint. **Zero
+permission-class drift** (streak
+extends to seven consecutive
+milestones: M10 + M11 + M12 + M13 +
+M14 + M15). **No LLM path
+introduced.** **No new frontend
+surface** — the M14.3 journal-entry
+browser + M14.2 trial-balance page
+surface the resulting entries
+automatically with `posted_by_username`
+populated from the acting operator.
+Deferrals cataloged in
+`MILESTONE_15_RETROSPECTIVE.md` §3.
+See `docs/roadmap/MILESTONE_15_PLANNING.md`
++ `docs/roadmap/MILESTONE_15_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface (M15.1) | Notes |
+| --- | --- | --- |
+| Backend: sale-booking GL post (M15.1) | New module `services/accounting/sale_booking.py` with `post_sale_booking_journal(*, dealership, sale, posted_by_user=None) -> JournalEntry` atomic sibling-service verb. Composes finance-type-aware receivable line (§5.b Option A: cash → 100000 Cash on Hand; retail → 120000 Contracts in Transit; bhph → 123000 BHPH Notes Receivable) + revenue line (400000 Vehicle Sales — Retail) + COGS line (500000 Cost of Vehicle Sales — Retail) + Recon-WIP-clear line (122000 Recon Work in Process for `total_investment`). Delegates to `post_journal_entry` for balanced double-entry write. Six new account-code constants exported (`CASH_ACCOUNT_CODE`, `CONTRACTS_IN_TRANSIT_ACCOUNT_CODE`, `BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE`, `RECON_WIP_ACCOUNT_CODE`, `VEHICLE_SALES_RETAIL_ACCOUNT_CODE`, `COST_OF_VEHICLE_SALES_ACCOUNT_CODE`). New `UnmappedFinanceTypeError(RuntimeError)` for broken-invariant signal on unmapped finance-types. `_lookup_required_account` helper mirroring M13.2 verbatim. Zero-total-investment path per §5.c Option A: revenue-pair posts only + warning logged. | Read-then-write. Atomic — nested `@transaction.atomic` inside the existing `record_sale` block absorbs the sibling call cleanly. Fails-atomic if any downstream write breaks — Sale row rolls back too. Direct-call cross-tenant guard on Sale mismatched dealership → 404 fail-closed at the endpoint layer. |
+| Backend: record_sale extension (M15.1) | Extended `services/sale/computation.record_sale` with (a) `posted_by_user=None` kwarg (default preserves every existing call site — no return-shape change), (b) per-vehicle un-posted VehicleCost flush per §5.d Option A: iterates `detect_unposted_costs(dealership=...).filter(vehicle=vehicle)` and calls `post_vehicle_cost_journal` on each — same atomic transaction (either every prerequisite cost + the sale-booking entry commit or nothing does), (c) refreshes `gross_realized` denormalized value AFTER the flush so the Sale row matches the same ledger snapshot the sale-booking journal's COGS line uses, (d) sibling call to `post_sale_booking_journal(dealership=..., sale=sale, posted_by_user=posted_by_user)`. Extended `views_sale.admin_sale_create` to pass `request.user` through as `posted_by_user=request.user`. Extended `services/accounting/__init__.py` `__all__` for the new verb + constants + error class. | Backward-compatible on every existing call site. `record_sale` still refuses cross-tenant writes at entry + refuses duplicate sales via `SaleAlreadyExistsError` BEFORE any GL work (idempotency short-circuit — a re-attempted sale never double-posts). Existing analytics / delivery / tenancy call sites unaffected. |
+| Test-fixture extension (M15.1) | Extended `tests/_auth_helpers.make_dealership` to seed the default COA on dealership creation. Brings test dealerships in line with the M13.1 migration invariant that every Dealership has the full default chart of accounts. Patched `tests/test_m9_sale_computation.py` inline with `seed_default_coa` for four in-file `Dealership.objects.create` call sites (two setUps + two in-test dealership creates). | Zero test regressions. `make_dealership`'s seeding is transparent to every consumer — permissions tests, endpoint tests, analytics tests all continue to work identically; the sale-booking + cost-flush paths now succeed on any test dealership that goes through the helper. |
+| Test baseline | +19 backend (M14 close **4,277** → M15 close **4,296**) — all from M15.1 (M15.0 planning + M15.2 close-out are docs-only). Zero regressions. Frontend Vitest **122** unchanged. Zero migrations shipped at any M15 increment. `manage.py check` + `makemigrations --check` clean at every M15 close. | 19 focused tests across 9 TestCase classes in `tests/test_m151_sale_booking.py`: FinanceTypeMappingTests (3) + RevenueAndCogsLineTests (3) + ZeroCostBasisPathTests (2) + UnpostedCostFlushTests (2) + CrossTenantGuardTests (1) + MissingAccountErrorTests (1) + UnmappedFinanceTypeErrorTests (1) + PostedByUserPropagationTests (2) + AtomicRollbackTests (1) + IdempotencyShortCircuitTests (1) + ListEndpointSurfaceTests (1) + SaleCreateEndpointPropagationTests (1). |
+
+**What is NOT shipped in Milestone
+15** (deferred per
+`MILESTONE_15_RETROSPECTIVE.md` §3):
+
+- **Sales-tax posting.** Requires
+  Sale entity extension for
+  `sales_tax_amount`.
+- **Trade-in accounting.** Requires
+  Sale entity extension for trade
+  FK.
+- **F&I product revenue at sale.**
+  VSC / GAP / T&W commissions +
+  reserve-receivable posting.
+  Belongs to a follow-on M10
+  chargeback/reserve slice.
+- **Doc fee revenue.** Requires
+  Sale entity `doc_fee` field.
+- **Reserve receivable at sale.**
+  Blocked on Sale-side F&I detail.
+- **BHPH interest income
+  accrual.** Separate elapsed-
+  condition detector milestone.
+- **Wholesale sale variant.**
+  Requires
+  `SALE_FINANCE_TYPE_WHOLESALE`
+  vocab extension.
+- **Sale-reversal workflow.**
+  JournalEntry reversal ready
+  (M14.4); Sale-side reversal
+  contract still needs a spec.
+- **JournalEntry ⇄ Sale FK
+  linkage.** `description` text
+  drill-back sufficient at MVP.
+- **Contracts-in-Transit funding
+  workflow.** "DR Cash / CR CIT"
+  at funding time belongs to a
+  payments-inbound milestone.
+- **Cost-of-sale variance
+  handling.** Post-sale
+  VehicleCost rows continue to
+  post to Recon WIP per M13.2
+  (phantom balance accepted per
+  §5.e Option A).
+- **GL-derived reporting
+  analytics.** Period-over-
+  period revenue trends, COGS
+  ratios defer to a future
+  reporting milestone.
+- **Payroll / W-2 / 1099** —
+  external-service scope
+  boundary.
+- **GAAP-compliant audited
+  financial reporting** — out of
+  scope for platform v1.
+- **Direct DMS integration** —
+  belongs to a future vendor-
+  integration milestone.
+
+**What operators experienced at
+Milestone 15 close:**
+
+- **The M14.3 journal-entry
+  browser now shows sale-booking
+  entries alongside M13.2 cost-
+  accrual entries.** Every closed
+  sale surfaces as a
+  "M9 sale booking — Sale #<pk>
+  of stock <stock> (<finance
+  type>)" entry with
+  `posted_by=<sales manager who
+  booked the sale>`.
+- **The M14.2 trial balance
+  reflects the running gross-
+  profit picture.** 400000
+  Vehicle Sales — Retail (credit
+  balance = period revenue),
+  500000 Cost of Vehicle Sales
+  (debit balance = period COGS),
+  Cash / Contracts in Transit /
+  BHPH Notes Receivable
+  (receivables). Recon WIP no
+  longer grows unboundedly —
+  each sale clears its
+  contribution.
+- **Zero endpoint or route
+  changes.** Operators call the
+  same M9 POST endpoint they've
+  always called; the GL entry
+  appears synchronously in the
+  M14 browser.
+
 ---
 
 ## 8. Dealer branding + onboarding
