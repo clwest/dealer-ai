@@ -1241,6 +1241,179 @@ Milestone 13 close:**
 
 ---
 
+## 7o. Operator UI for accounting substrate (Milestone 14, shipped)
+
+Milestone 14 (SESSION_133 → SESSION_138)
+shipped the operator UI over the M13
+accounting substrate: trial-balance render
++ journal-entry browser + journal-entry
+detail + reversal-with-reason dialog +
+cost-posting failure card. **Two small
+additive backend query verbs** at M14.1
+(journal-entry list + cost-posting failure
+surfacer) — both consumed by the M14.2–M14.4
+UI. **Three new frontend pages** + **three
+new operator routes** under a new
+`dealer-ai-accounting/*` group. **One new
+frontend API client module**
+(`accountingApi.ts`) with four fetchers +
+one mutator. **Zero new backend entities.**
+**Zero migrations.** **Zero permission-
+class drift** (streak extends to six
+consecutive milestones: M10 + M11 + M12 +
+M13 + M14). **No LLM path introduced** —
+the entire UI is deterministic projection
+over M13.1 + M13.3 + M14.1 endpoints. **No
+M1-M13 business logic touched** — M14.1
+adds new sibling verbs in the same
+`services/accounting/` package; every M13
+verb + M13 endpoint returns the same shape
+it did at M13 close. Deferrals cataloged in
+`MILESTONE_14_RETROSPECTIVE.md` §3. See
+`docs/roadmap/MILESTONE_14_PLANNING.md` +
+`docs/roadmap/MILESTONE_14_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface (M14.1 – M14.4) | Notes |
+| --- | --- | --- |
+| Backend: journal-entry list + cost-posting failure endpoints (M14.1) | Two new pure query verbs. `list_journal_entries(dealership, page=1, page_size=25) → JournalEntryListPage` in `services/accounting/journal.py` — paginated, tenant-scoped, `-posted_at, -id` ordering (recent-first with stable secondary key), `total_debit` annotation via SUM+Coalesce, `select_related("posted_by_user")` for username access. **No filters** at M14.1 per §5.b Option B — filter surface layers at M15+ per operator evidence. `detect_cost_posting_failures(dealership, now=None, threshold_hours=24) → QuerySet[VehicleCost]` in `services/accounting/vehicle_cost.py` — same filter as M13.2 `detect_unposted_costs` plus `created_at__lte=now-threshold`. Default 24h == one M13.2 detector-run boundary. New `JournalEntryListPage` frozen dataclass matching M13.3 `TrialBalanceSnapshot` posture. Two new DRF admin endpoints in `views_accounting.py`: `GET admin/accounting/journal-entries/list/[?page=&page_size=]` (`page_size` bounded 1..100 via serializer) + `GET admin/accounting/cost-posting-failures/[?threshold_hours=]` (`threshold_hours` bounded 1..8760 via serializer). Both reuse `IsSalesManagerOrOwnerAtActiveDealership`. Empty-list responses for zero-portfolio / zero-failure tenants (not 404). Decimal-as-string on all money fields with `.quantize(Decimal("0.01"))` on `total_debit` — Sum drops trailing zeros; quantize preserves the M9-M13 wire convention. URL entries in `dealer_ai/urls.py`. `services/accounting/__init__.py` `__all__` extended. Tenancy carrier 47 (unchanged — no new models). DRF admin surface 102 → 104 (+2). 37 focused tests. | Read-only. No writes. No side effects. `total_debit` quantize resolves the SUM-drops-trailing-zeros gap discovered during endpoint testing. `page_size` cap 100 + `threshold_hours` cap 8760 bound worst-case query size. Zero-portfolio semantics per M13.3 §6 lesson 8 — empty response is a valid state, not 404. |
+| Frontend: trial-balance render page (M14.2) | New `frontend/src/lib/accountingApi.ts` module with `fetchTrialBalance()` + `TrialBalanceSnapshot` / `TrialBalanceRow` / `GLAccountType` TypeScript types. Decimal-as-string preserved per §5.c Option A; callers format via `Intl.NumberFormat`. New `AccountingTrialBalancePage.tsx` — h1 header + card with as-of timestamp + shadcn `<Badge>` balanced/unbalanced chip + per-account table (code/name/type-badge/debits/credits/natural-balance columns) + grand-totals footer (conditional on `rows>0`) + empty-state message referencing the M13.2 detector. `Intl.NumberFormat` `en-US` currency + `tabular-nums` for right-aligned numeric columns. Loading + error states via the M11/M12 `useEffect` + cancellation-flag pattern. New route `dealer-ai-accounting/trial-balance` under `RequireAuth` — first route of the new `dealer-ai-accounting/*` group per §5.d Option A. Frontend operator routes 17 → 18 (+1). 11 focused Vitest tests. Browser E2E verified. | Consumes the existing M13.3 `admin/accounting/trial-balance/` endpoint. No `as_of` picker at M14.2 — deferred to M15+ per §3 deferral 2 (belongs with close-workflow slice). Empty state hides totals footer to keep zero-portfolio render clean. `is_balanced=false` renders destructive-variant badge as an accounting-invariant break signal. |
+| Frontend: journal-entry browser + detail (M14.3) | Extended `accountingApi.ts` with `fetchJournalEntries({page, pageSize})` + `fetchJournalEntry(pk)` + `JournalEntryListEntry` / `JournalEntryListPage` / `JournalEntryLine` / `JournalEntry` TypeScript types. Two new pages. `AccountingJournalEntriesPage.tsx` — paginated list (Previous/Next buttons, disabled at boundaries) + reversal-linkage badges (destructive "Reversal of #X" vs outline "Original") + row-level View links + empty-state + count/page metadata. `AccountingJournalEntryDetailPage.tsx` — back link + header card (metadata + Reversal reason meta row rendered only on reversals) + lines table (zero-value cells blank, per-entry line totals computed client-side for display) + Corrections card. Not-found state via error-message regex; NaN pk short-circuits without API call. Two new routes under `RequireAuth`: `dealer-ai-accounting/journal-entries` + `journal-entries/:pk`. Frontend operator routes 18 → 20 (+2). 24 focused Vitest tests across two spec files. Browser E2E verified (2 originals + 1 reversal seeded; all states render correctly). | Consumes M14.1 list + M13.1 retrieve endpoints. No filter surface per §5.b Option B. Fixed `page_size=25` client-side; backend allows up to 100. Reversal discriminated via `reverses_id !== null` — no status enum on backend. `posted_by_username` from M14.1 list projection avoids per-row N+1 for user lookups. |
+| Frontend: reversal dialog + cost-posting failure card (M14.4) | Extended `accountingApi.ts` with `reverseJournalEntry(pk, {reason, posted_at?})` via `authPostJSON` (CSRF auto-attached from `csrftoken` cookie) + `fetchCostPostingFailures({thresholdHours?})` + `CostPostingFailure` / `CostPostingFailuresResponse` / `ReverseJournalEntryPayload` types. Wired the M14.3 placeholder Reverse button to a shadcn `<Dialog>` via new `ReverseEntryDialog` subcomponent — reason `<Textarea>` (`aria-required` + `aria-invalid` on blank; trim-based validation matching M13.1 serializer 400 per §5.e Option A belt+suspenders), optional `posted_at` text input, Cancel + Confirm reversal buttons (Confirm disabled when reason blank; "Posting…" during submit). Success closes dialog + resets form + triggers detail re-fetch via `reloadTick` state on `useEffect([pk, reloadTick])`. Error rendered inline via `role="alert"` without closing dialog. New `CostPostingFailuresCard` subcomponent on trial-balance page — both fetchers fire in `Promise.all` for single-paint render; card rendered **only when `failures.length > 0`** per zero-noise posture. Styled with `border-destructive/40` + destructive-colored title + "Attention" badge; table of unposted VehicleCosts >24h old (vehicle_stock + category + amount + age_in_hours + reference). 9 focused Vitest tests (7 dialog + 3 failure card). Browser E2E verified: real POST posts reversal entry with `posted_by=<current user>`, dialog closes, detail re-fetches; failure card renders live with real data. | Consumes M13.1 reverse + M14.1 failures endpoints. Dialog is a modal (no new route). `reason.trim().length === 0` client-side check mirrors M13.1's `(reason or "").strip()` service-verb check — belt+suspenders symmetric on all-whitespace input. Free-text `posted_at` input; date-picker widget defers to future. Verbatim `ApiError` message rendered — operator sees actual HTTP status + backend detail for useful bug reports. |
+| Test baseline | +37 backend (M13 close **4,240** → M14 close **4,277**) — all from M14.1 (M14.2–M14.4 are frontend-only). Zero regressions. +44 Vitest (M13 close **78** → M14 close **122**). Zero migrations shipped at any M14 increment. `tsc --noEmit` + `vite build` clean at every M14 close. | Distribution: M14.1 +37 backend, M14.2 +11 Vitest, M14.3 +24 Vitest, M14.4 +9 Vitest, M14.5 +0 (docs-only). Every M14 tenant-carrier / permission-class / endpoint count test uses `>=N` (growth-only posture). Every M14 vocab-set test uses exact equality (GL account type 5 — unchanged from M13). |
+
+**What is NOT shipped in Milestone
+14** (deferred per
+`MILESTONE_14_RETROSPECTIVE.md` §3):
+
+- **Journal-entry list filters**
+  (date range, posted_by,
+  reversal-only, description
+  search). Filter surface layers
+  at M15+ per operator evidence.
+- **`as_of` picker on trial-
+  balance page.** Operator date-
+  picker for historical snapshots
+  defers to M15+ (belongs with
+  monthly-close workflow slice).
+- **Journal-entry manual create
+  UI.** POST create endpoint
+  ships at M13.1; manual UI for
+  adjusting entries defers to
+  M15+ (belongs with period-close
+  workflow).
+- **Sidebar nav entry for
+  accounting.** Every M14 page
+  reachable only by direct URL
+  or cross-links. Matches M11/M12
+  pattern.
+- **Date-picker widget on
+  reversal dialog `posted_at`
+  input.** Plain text input at
+  MVP.
+- **Category-group-aware GL
+  mapping** for the M13.2
+  detector. Deferred pending
+  operator miscoding evidence
+  now unblocked via the M14.4
+  failure card.
+- **`TrialBalanceSnapshot`
+  materialization + monthly
+  close workflow.** M13.3 pure
+  recompute serves M14 render
+  needs.
+- **Period-comparison verbs**
+  (delta between two `as_of`
+  snapshots). Defers with M15+
+  close workflow.
+- **CSV / spreadsheet export**
+  for trial-balance and journal-
+  entry list. JSON payload +
+  rendered table only at M14.
+- **Per-dealer COA overrides
+  UI.** Deferred pending
+  operator evidence.
+- **`post_save` signal auto-
+  seeding COA for new
+  dealerships.** Deferred
+  pending onboarding-surface
+  trigger point definition.
+- **M9 sale-booking GL post,
+  M10 F&I chargeback GL
+  reversal, M12 BHPH payment GL
+  post.** Substrate-consuming
+  write-path work. Deferred to
+  M15+. **The M14 UI will
+  surface any resulting journal
+  entries automatically once
+  these ship.**
+- **M4 vendor invoice → A/P
+  reconciliation, title-arrival
+  tracking, floor-plan
+  reconciliation vs lender
+  statements, bank
+  reconciliation, contracts-in-
+  transit schedule.** Inherited
+  from M13 §3 deferrals.
+- **Payroll / W-2 / 1099** —
+  external-service scope
+  boundary.
+- **GAAP-compliant audited
+  financial reporting** — out of
+  scope for platform v1.
+- **Direct DMS integration** —
+  belongs to a future vendor-
+  integration milestone.
+
+**What operators experienced at
+Milestone 14 close:**
+
+- **Three new operator pages**
+  under a dedicated
+  `dealer-ai-accounting/*` route
+  group.
+- **Trial-balance render** — a
+  sales-manager / owner can
+  visit `/dealer-ai-accounting/
+  trial-balance` and see per-
+  account balances + grand
+  totals + balanced-flag chip.
+  Cost-posting failure card
+  auto-surfaces at the top when
+  the M13.2 detector missed
+  anything ≥24 hours old.
+- **Journal-entry browser** —
+  paginated list of every
+  journal entry the tenant has
+  posted, recent-first, with
+  reversal-linkage badges.
+- **Journal-entry detail** —
+  per-entry lines table +
+  reversal reason (on reversal
+  entries) + Corrections card
+  with reverse-entry dialog.
+- **Reverse a journal entry** —
+  operator opens the detail
+  page, clicks "Reverse this
+  entry", enters a reason, and
+  the reversal posts atomically
+  via M13.1's
+  `reverse_journal_entry`
+  service verb. New reversal
+  entry appears in the browser
+  with `posted_by=<current
+  user>` and correct debit/
+  credit swap.
+- **Real accounting workflows
+  are now operator-usable.**
+  Before M14 the M13 substrate
+  could only be observed via
+  `manage.py shell` or curl;
+  after M14 every M13 endpoint
+  has a UI surface.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

@@ -1,9 +1,11 @@
 ---
 title: "Milestone 14 — Operator UI for accounting substrate"
-status: active
+status: shipped
 type: planning-artifact
 generated: 2026-08-02
 generated_at_session: SESSION_132 (skeleton) → SESSION_133 (expansion)
+shipped_at_session: SESSION_138
+retrospective: docs/roadmap/MILESTONE_14_RETROSPECTIVE.md
 milestone: 14
 milestone_name: "Operator UI for accounting substrate"
 sources:
@@ -875,3 +877,24 @@ decisions locked (six as-
 recommended). §7 sequencing locks
 five code increments + one close-out.
 Flip to `shipped` at M14.5.*
+
+---
+
+**Shipped at SESSION_138.** All six
+§7 increments landed in the planned
+order (M14.0 planning → M14.1 backend
+→ M14.2 trial-balance → M14.3 browser+
+detail → M14.4 dialog+failures → M14.5
+close-out). Zero deviations. Zero
+regressions. Backend baseline 4,240 →
+4,277 (+37). Frontend Vitest 78 → 122
+(+44). DRF admin surface 102 → 104.
+Frontend operator routes 17 → 20.
+Tenancy carriers 47 (unchanged).
+Permission classes 8 (unchanged —
+zero-drift streak: six consecutive
+milestones now). Migrations: none.
+Retrospective at
+`docs/roadmap/MILESTONE_14_RETROSPECTIVE.md`.
+Shipped surface at
+`docs/CAPABILITY_MATRIX.md` §7o.

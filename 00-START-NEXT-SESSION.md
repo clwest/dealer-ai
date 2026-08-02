@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_137
+last_session_shipped: SESSION_138
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -15,103 +15,179 @@ milestone_10_status: shipped
 milestone_11_status: shipped
 milestone_12_status: shipped
 milestone_13_status: shipped
-milestone_14_status: in-progress
-next_session: SESSION_138
-next_milestone: 14
-next_milestone_name: "Operator UI for accounting substrate"
-next_increment: 5
-next_increment_name: "M14.5 — Close-out (retrospective + capability matrix + roadmap flip + M15 skeleton)"
+milestone_14_status: shipped
+milestone_15_status: planning
+next_session: SESSION_139
+next_milestone: 15
+next_milestone_name: "TBD — user names target at SESSION_139 open"
+next_increment: 0
+next_increment_name: "M15.0 — Planning refinement + target selection"
 ---
 
-# Next session — SESSION_138 · Milestone 14 · Increment 5 (M14.5 — Close-out)
+# Next session — SESSION_139 · Milestone 15 · Increment 0 (M15.0 — Planning refinement + target selection)
 
-> **SESSION_137 shipped M14.4 —**
-> reversal dialog + cost-posting
-> failure card. Extended
-> `accountingApi.ts` with two new
-> fetchers (`reverseJournalEntry` +
-> `fetchCostPostingFailures`) + two
-> new types. Wired the M14.3
-> placeholder Reverse button to a
-> shadcn `<Dialog>` with reason
-> textarea + optional posted_at +
-> Confirm/Cancel + inline error
-> handling. Added failure card to
-> the trial-balance page (rendered
-> only when count>0, "Attention"
-> badge, table of unposted
-> VehicleCosts >24h old). Detail
-> page now re-fetches on successful
-> reversal via a reloadTick
-> counter. 9 new Vitest tests. Zero
-> backend work. Browser E2E
-> verified end-to-end (typed
-> reason, confirmed, new reversal
-> entry appeared in list with
-> smoke_owner as posted_by, matching
-> $7,777.00 amount, "Reversal of
-> #6" badge). Failure card renders
-> live with real data.
+> **SESSION_138 shipped M14.5 —**
+> six close-out docs (retrospective +
+> capability matrix §7o + roadmap
+> §Milestone 14 SHIPPED entry added +
+> planning frontmatter flip + session-
+> start refresh + M15 planning
+> skeleton) + one coordinated commit.
+> **Milestone 14 — Operator UI for
+> accounting substrate — SHIPPED.**
 >
-> **Backend baseline: 4,277 pass**
-> (unchanged). **Frontend Vitest:
-> 113 → 122 pass** (+9). Frontend
-> operator routes: 20 (unchanged —
-> dialog is a modal, not a route).
-> DRF admin surface 104 (unchanged).
-> Tenancy carriers 47 (unchanged).
-> Permission classes 8 (unchanged
-> — zero drift extends to six
-> consecutive milestones now
-> including M14). Celery-beat task
-> families 9 (unchanged). Zero
-> migrations. `tsc --noEmit` clean;
-> `vite build` clean.
+> **M14 close totals:** zero new
+> backend entities. Two additive
+> sibling query verbs in
+> `services/accounting/` at M14.1 +
+> one new frozen dataclass. One new
+> frontend API client module
+> (`accountingApi.ts`) with 4
+> fetchers + 1 mutator. Three new
+> frontend pages
+> (`AccountingTrialBalancePage` +
+> `AccountingJournalEntriesPage` +
+> `AccountingJournalEntryDetailPage`).
+> Three new operator routes under a
+> new `dealer-ai-accounting/*`
+> group. Two new DRF admin endpoints
+> (M14.1). One shadcn `<Dialog>`
+> wired for reversal (modal, not a
+> route). One cost-posting failure
+> card. Zero migrations. Zero new
+> Celery-beat task families. Zero
+> new post-LLM scrub stages. **Six
+> planning-time §5 decisions
+> confirmed as-recommended at M14.0
+> open** — streak extends to **53
+> planning-time as-recommended M5.1
+> → M14.0** across five consecutive
+> milestones now (M10 + M11 + M12 +
+> M13 + M14). Thirty-one §0.a
+> implementation-time micro-
+> decisions across M14.1 + M14.2 +
+> M14.3 + M14.4 also all as-
+> recommended (do not count against
+> streak per M10 §9).
 >
-> **Nine M14.4 implementation-time
-> micro-decisions recorded** in
-> handoff (reloadTick counter /
-> reset on close AND cancel /
-> hidden card at count=0 /
-> Promise.all parallel fetch /
-> trim-based reason validation /
-> free-text posted_at not date
-> picker / verbatim ApiError render
-> / age_in_hours not derived days /
-> flaky test converted to
-> findByText). All as-recommended
-> per M10 §9 — do not count against
-> streak.
+> **Backend baseline: 4,277 pass, 1
+> skipped, 0 fail** (+37 tests, 0
+> regressions). **Frontend Vitest
+> baseline: 122 pass** (+44 tests,
+> 0 regressions). Migrations
+> `0043`–`0044` (unchanged since
+> M13.2). Tenancy carriers 47
+> (unchanged). DRF admin surface
+> 102 → 104. Frontend operator
+> routes 17 → 20. Permission
+> classes 8 (unchanged — zero
+> drift extends to six
+> consecutive milestones now).
 >
-> **Push authorization:** five
-> local commits queued (M14.0
-> planning + M14.1 backend + M14.2
-> trial-balance page + M14.3
-> browser+detail + M14.4
-> reversal+failures) pending user
-> authorization.
+> **Push authorization:** six local
+> commits (M14.0 through M14.5)
+> queued for user authorization at
+> SESSION_138 close.
 >
-> **SESSION_138 opens M14.5 —
-> close-out.** Documentation-only.
-> Per M10.8 / M11.7 / M12.8 / M13.4
-> precedent. Six close-out docs +
-> one coordinated commit landing
-> them all. **Milestone 14 —
-> Operator UI for accounting
-> substrate — will ship at
-> SESSION_138.**
+> **SESSION_139 opens M15.0 —
+> planning refinement + target
+> selection.** Per
+> `MILESTONE_15_PLANNING.md` (draft
+> planning skeleton written at
+> M14.5 close per standing user
+> directive). **§5.a is the load-
+> bearing decision** — user names
+> the M15 target at session open,
+> drawing from the M14
+> retrospective §8 unblocked-work
+> list + the M13 retrospective §8
+> unblocked-work list (most still
+> valid after M14).
 
-## First thing SESSION_138 must do
+## First thing SESSION_139 must do
 
-### 1. Verify starting state
+### 1. Name the M15 target milestone
 
-- `git status` — clean (M14.4
-  commit landed at SESSION_137
-  close; user authorized push
-  when ready).
-- `git log --oneline -6` — top
-  should be the M14.4 frontend
-  commit.
+`IMPLEMENTATION_ROADMAP.md`
+§Milestone sequence ends at
+Milestone 14. **M15 target is not
+predetermined** — user names it at
+session open based on operational
+evidence + business priority.
+
+Candidate targets drawn from
+`MILESTONE_14_RETROSPECTIVE.md` §8
+(what M14 unblocks) +
+`MILESTONE_13_RETROSPECTIVE.md` §8
+(what M13 unblocked, most still
+valid) — surfaced without
+recommendation because target
+selection is a business-priority
+call, not a technical
+recommendation:
+
+- **Option A** — M9 sale-booking
+  GL post. Sync sibling-service
+  call inside `record_sale` per
+  M13 §5.d Option C hybrid
+  trigger posture. **M14 UI will
+  surface the resulting entries
+  automatically.**
+- **Option B** — M12 BHPH payment
+  GL post. Detector at 11:00
+  project-time daily (next slot
+  after M13.2 10:00).
+- **Option C** — M10 F&I
+  chargeback GL reversal.
+  Chargebacks are already
+  reversal-shaped in the
+  operational surface.
+- **Option D** — Trial-balance
+  materialization + monthly close
+  workflow. `TrialBalanceSnapshot`
+  entity + freeze verb over the
+  M13.3 pure recompute
+  aggregator. The M14 trial-
+  balance page could grow an
+  `as_of` picker as part of
+  this.
+- **Option E** — Category-group-
+  aware GL mapping for the M13.2
+  detector. Now that M14.4's
+  failure card gives operators
+  visibility into detector
+  misses, miscoding evidence is
+  available.
+- **Option F** — M14 UX polish
+  (journal-entry list filters +
+  `as_of` picker + sidebar nav
+  entry for accounting).
+- **Option G** — Non-accounting
+  target user names at open
+  based on operational evidence
+  not visible in the M14
+  retrospective.
+
+Once the target is confirmed,
+expand `MILESTONE_15_PLANNING.md`
+§1 (business questions) + §5
+(load-bearing decisions) + §7
+(sequencing) into a full memo.
+
+### 2. Verify starting state
+
+- `git status` — clean (M14.5
+  commit landed at SESSION_138
+  close; batch push authorized +
+  executed).
+- `git log --oneline -7` — top
+  should be
+  `Milestone 14 shipped — Operator
+  UI for accounting substrate
+  (SESSION_133-138)` or similar.
+- `git log origin/main..HEAD
+  --oneline` — **empty** (all M14
+  commits pushed).
 - `python3 manage.py test dealer_ai`
   → **4,277 pass, 1 skipped, 0
   fail**.
@@ -123,202 +199,101 @@ next_increment_name: "M14.5 — Close-out (retrospective + capability matrix + r
   detected."
 - `cd frontend && npx tsc --noEmit`
   clean.
+- `redis-cli ping` → `PONG`.
 
-### 2. Read first (in order)
+## What M15.0 delivers
 
-- `docs/roadmap/MILESTONE_14_
-  PLANNING.md` §7 M14.5
-  (close-out spec).
-- `docs/roadmap/MILESTONE_13_
-  RETROSPECTIVE.md` (template
-  for the M14 retrospective —
-  copy the structure).
-- All five prior M14 handoffs
-  (`SESSION_133..137`) as the
-  source for the retrospective's
-  "what shipped" content.
-- `docs/CAPABILITY_MATRIX.md`
-  §7n (M13's append point;
-  §7o mirrors that structure).
-- `docs/roadmap/IMPLEMENTATION_
-  ROADMAP.md` §Milestone 14
-  (planning entry to flip).
+Per `MILESTONE_15_PLANNING.md` §5
+M15.0:
 
-## What M14.5 delivers
+- Full expansion of the planning
+  skeleton written at M14.5.
+- User names the M15 target
+  milestone (§5.a).
+- Additional §5 decisions surface
+  once target is confirmed (§5.b-
+  §5.f expected — historical §5
+  counts have been 6 for M10 /
+  M11 / M12 / M13 / M14).
+- §7 sequencing lands after §5
+  decisions are locked.
+- §0.a change log records the
+  target selection + all §5
+  confirmations.
 
-Per `MILESTONE_14_PLANNING.md` §7
-M14.5. **Documentation-only. No
-code changes.**
+**No code at M15.0.** Planning-
+only session. Backend baseline
+stays at 4,277 pass. Frontend
+Vitest stays at 122.
 
-### Six close-out docs
+## What SESSION_139 should do
 
-1. **`docs/roadmap/MILESTONE_14_
-   RETROSPECTIVE.md`** — new.
-   Structure per M13.4 template:
-   - §1 Planned scope.
-   - §2 What actually shipped
-     (per-increment table).
-   - §3 What was NOT shipped
-     (deferrals + non-goals held).
-   - §4 Deviations from plan.
-   - §5 Compatibility (M1-M13
-     surfaces untouched).
-   - §6 Lessons (12 M13 lessons
-     re-verified + M14-specific
-     lessons: UI-only milestone
-     posture, dialog wiring
-     pattern, browser-verify E2E
-     discipline).
-   - §7 Streak update (planning-
-     time as-recommended stands
-     at 53 M5.1→M14.0; five
-     consecutive milestones).
-   - §8 What M14 unblocks for
-     M15+ (real accounting
-     workflows now operator-
-     usable; M9/M10/M12 GL post
-     work now has visible
-     downstream surface).
-2. **`docs/CAPABILITY_MATRIX.md`
-   §7o** — append. Enumerate
-   the M14 shipped surface:
-   two new backend endpoints,
-   three new frontend pages
-   with route paths, extended
-   `accountingApi.ts` module,
-   test counts, browser-verified
-   status.
-3. **`docs/roadmap/IMPLEMENTATION_
-   ROADMAP.md` §Milestone 14** —
-   flip planning entry to
-   shipped. Update the
-   §Milestone sequence to
-   reflect M14 complete + M15
-   as next.
-4. **`docs/roadmap/MILESTONE_14_
-   PLANNING.md`** — frontmatter
-   `status: active` → `status:
-   shipped`. Add closing note
-   at bottom mirroring the M13
-   planning doc close.
-5. **`00-START-NEXT-SESSION.md`**
-   — overwrite with M15.0
-   priority (planning refinement
-   + target selection per M14.5
-   +M13.4 precedent).
-6. **`docs/roadmap/MILESTONE_15_
-   PLANNING.md`** — new
-   skeleton per standing user
-   directive (M14.5 close draft
-   for user review at M15.0
-   open). §1 candidate targets
-   drawn from the M14
-   retrospective §8; §5 draft
-   decisions flagged
-   `[NEEDS-DECISION-BEFORE-
-   M15.0]`.
+### Recommended step sequence
 
-### Coordinated commit
+1. **Confirm the M15 target with
+   the user** (§1 above).
 
-- Single commit landing all six
-  docs. Matches the M13.4 batch
-  posture.
+2. **Read first (in order):**
+   - `docs/roadmap/MILESTONE_15_PLANNING.md`
+     (this session's expansion
+     target).
+   - `docs/roadmap/MILESTONE_14_RETROSPECTIVE.md`
+     §6 (ten lessons carry into
+     M15) + §8 (unblocked work).
+   - `docs/roadmap/MILESTONE_13_RETROSPECTIVE.md`
+     §8 (M13 unblocked work —
+     most still valid after M14).
+   - `docs/handoffs/SESSION_138_m14_close.md`
+     (previous session).
+   - `docs/CAPABILITY_MATRIX.md`
+     §7o (M14 shipped surface).
+   - Target-specific research doc
+     (per the confirmed §5.a
+     option).
 
-## Deltas at M14.5 close
+3. **Verify starting state** (§2
+   above).
 
-- **Backend baseline:** 4,277
-  (unchanged).
-- **Frontend Vitest:** 122
-  (unchanged).
-- **Frontend operator routes:**
-  20 (unchanged).
-- **DRF admin surface:** 104
-  (unchanged).
-- **Tenancy carriers:** 47.
-- **Permission classes:** 8.
-- **Celery-beat task families:**
-  9.
-- **Migrations:** none.
-- **Milestone 14 status:**
-  in-progress → **SHIPPED**.
+4. **Draft §1 (business
+   questions) + §5 (load-bearing
+   decisions) + §7 (sequencing)**
+   in `MILESTONE_15_PLANNING.md`.
 
-## Milestone 14 close totals
+5. **Ship handoff at
+   `docs/handoffs/SESSION_139_m15_inc0_planning.md`.**
 
-- Two new pure query verbs (M14.1
-  backend: `list_journal_entries`
-  + `detect_cost_posting_failures`).
-- Two new DRF admin endpoints
-  (M14.1: `admin-journal-entry-
-  list` + `admin-cost-posting-
-  failures`).
-- One new frozen dataclass
-  (M14.1: `JournalEntryListPage`).
-- One new frontend API client
-  module (M14.2 + M14.3 + M14.4:
-  `accountingApi.ts` with 4
-  fetchers + 1 mutator).
-- Three new frontend pages
-  (M14.2 trial-balance, M14.3
-  journal-entry browser, M14.3
-  journal-entry detail).
-- Three new operator routes
-  (M14.2 + M14.3).
-- One shadcn `<Dialog>` wired
-  (M14.4 reversal).
-- One cost-posting failure card
-  (M14.4).
-- **Backend test delta:** 4,240
-  → 4,277 (+37).
-- **Frontend Vitest delta:** 78
-  → 122 (+44).
-- **Zero backend regressions.**
-- **Zero frontend regressions.**
-- **Zero schema changes / zero
-  migrations.**
-- **Zero permission-class
-  drift** (streak: 6 consecutive
-  milestones — M10 + M11 + M12 +
-  M13 + M14).
-- **Six planning-time §5
-  decisions confirmed as-
-  recommended at M14.0 open**
-  (streak stands at 53
-  M5.1→M14.0 across 5
-  consecutive milestones).
+6. **Overwrite
+   `00-START-NEXT-SESSION.md`**
+   with M15.1 priority (first
+   implementation increment for
+   the confirmed target).
 
-## Explicit non-goals for SESSION_138
+## Explicit non-goals for SESSION_139
 
-- ❌ Do NOT modify any code
-  (M14.5 is doc-only).
-- ❌ Do NOT add new tests.
-- ❌ Do NOT modify M1-M13
+- ❌ Do NOT ship M15.1+ code.
+- ❌ Do NOT modify M1-M14
   business logic.
 - ❌ Do NOT force-push or amend
   any earlier commits.
-- ❌ Do NOT start M15
-  implementation — M15.0
-  planning refinement is a
-  separate session.
 
 ## NEXT TASK
 
-Start SESSION_138 with (a)
-starting-state verification, (b)
-the read-first list, then (c)
-drafting the six M14.5 close-out
-docs + one coordinated commit
-per `MILESTONE_14_PLANNING.md` §7
-M14.5. Ship the M14.5 handoff at
-`docs/handoffs/SESSION_138_m14_
-inc5_closeout.md`.
+Start SESSION_139 with (a) naming
+the M15 target with the user
+(candidates in §1 above; user
+picks based on operational
+evidence + business priority),
+(b) the read-first list, (c)
+starting-state verification, then
+(d) expanding `MILESTONE_15_PLANNING.md`
+§1 + §5 + §7 into a full memo.
+Ship the M15.0 handoff.
 
-Backend baseline at SESSION_138
+Backend baseline at SESSION_139
 close: **4,277 pass** (unchanged
-— close-out is doc-only).
-Frontend Vitest baseline: **122**
-(unchanged). **Milestone 14 —
-Operator UI for accounting
-substrate — SHIPPED at M14.5.**
+— planning-only). Frontend
+baseline: **122 pass**
+(unchanged).
 
 ---
 
@@ -328,21 +303,22 @@ substrate — SHIPPED at M14.5.**
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_14_PLANNING.md`
-   §7 M14.5
-6. `docs/roadmap/MILESTONE_13_RETROSPECTIVE.md`
-   (retrospective template)
-7. All five M14 handoffs
-   (`SESSION_133..137`)
-8. `docs/CAPABILITY_MATRIX.md` §7n
-   (append template)
+5. `docs/roadmap/MILESTONE_15_PLANNING.md`
+6. `docs/roadmap/MILESTONE_14_RETROSPECTIVE.md`
+7. `docs/handoffs/SESSION_138_m14_close.md`
+   (this session's close)
+8. `docs/handoffs/SESSION_137_m14_inc4_reversal_and_failures.md`
+9. `docs/CAPABILITY_MATRIX.md` §7o
+10. Target-specific research
+    (per §5.a confirmed at
+    SESSION_139 open).
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_137 — M14.4 shipped)
+## Operational state (post-SESSION_138 — M14 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
@@ -360,28 +336,29 @@ research + code are facts.
   `django-celery-beat` 2.8.1
   DatabaseScheduler. **9
   scheduled task families
-  registered**. Next available
-  slot: 11:00.
+  registered** (M7.2 02:00 →
+  M13.2 10:00 — no gaps in the
+  02:00-10:00 hourly grid). Next
+  available slot: 11:00.
 - **Milestones shipped:** M1 →
-  **M13**. **M14 in progress**
-  (M14.0 + M14.1 + M14.2 +
-  M14.3 + M14.4 shipped; M14.5
-  close-out is the only
-  remaining step).
+  **M14** (SESSION_138 close).
+  M15 planning drafted.
 - **DRF admin surface:** **104**
   endpoints.
 - **Frontend operator routes:**
-  **20** (three new
+  **20** (three
   `dealer-ai-accounting/*`
   routes shipped across M14.2 +
   M14.3).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
-- **Service surface:** four M13
-  accounting modules + M14.1
-  two additive query verbs
-  (`list_journal_entries` +
-  `detect_cost_posting_failures`).
+- **Service surface:** complete
+  `services/f_and_i/` (M10) +
+  five M11 packages + seven M12
+  packages + `services/
+  accounting/` (M13 four modules
+  + M14.1 two additive query
+  verbs).
 - **Frontend accounting
   surface:** `frontend/src/lib/
   accountingApi.ts` with 4
@@ -403,7 +380,8 @@ research + code are facts.
 - **Permission classes:** **8**
   (unchanged — zero-drift
   streak extends to six
-  consecutive milestones).
+  consecutive milestones: M10 +
+  M11 + M12 + M13 + M14).
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17 scrub
@@ -411,8 +389,10 @@ research + code are facts.
   no LLM path).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 14 next:** M14.5
-  close-out per
-  `MILESTONE_14_PLANNING.md` §7
-  Increment 5. **After M14.5
-  the milestone ships.**
+- **Milestone 15 next:** M15.0
+  planning refinement + target
+  selection. User names target
+  at session open from the M14
+  §8 unblocked-work list. M15.1
+  implementation deferred to
+  post-planning session.

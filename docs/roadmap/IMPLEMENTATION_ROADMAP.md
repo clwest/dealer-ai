@@ -1433,6 +1433,115 @@ earlier milestone, ask: does this operational event produce a
 financial journal entry someone needs to see at month-end? If
 yes, that accounting slice belongs to *that* milestone.
 
+### Milestone 14 — Operator UI for accounting substrate — SHIPPED at SESSION_138
+
+*Full delivery record: `docs/roadmap/MILESTONE_14_PLANNING.md`
+§7 (annotated SHIPPED per increment; four §0.a change-log
+amendments recorded across M14.1 + M14.2 + M14.3 + M14.4
+implementation sessions) and
+`docs/roadmap/MILESTONE_14_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7o. Backend test
+baseline delta: 4,240 → 4,277 (+37 tests, zero regressions).
+Frontend Vitest baseline delta: 78 → 122 (+44 tests, zero
+regressions). Sessions 133 → 138. Zero new backend entities.
+Two additive sibling verbs in `services/accounting/` (M14.1
+`list_journal_entries` in `journal.py` +
+`detect_cost_posting_failures` in `vehicle_cost.py`) — both
+consumed by the M14.2–M14.4 UI. One new frontend API client
+module (`accountingApi.ts`) with four fetchers + one mutator.
+Three new frontend pages (`AccountingTrialBalancePage` +
+`AccountingJournalEntriesPage` +
+`AccountingJournalEntryDetailPage`). Three new operator routes
+under a new `dealer-ai-accounting/*` group. One shadcn
+`<Dialog>` wired for reversal (modal, not a route). Zero
+migrations. Zero permission-class drift — extends zero-drift
+posture to six consecutive milestones (M10 + M11 + M12 + M13 +
+M14). Zero new Celery-beat task families (M14 is entirely
+read-only + one operator-intent write path that reuses M13.1
+substrate). Zero new post-LLM scrub stages (M14 has no LLM
+path). DRF admin surface 102 → 104 (+2 endpoints: journal-
+entry list + cost-posting failures). Frontend operator routes
+17 → 20 (+3). Tenancy carrier 47 (unchanged — no new models).
+**Six §5 decisions confirmed as-recommended at M14.0 open** —
+streak extends to 53 planning-time as-recommended M5.1 → M14.0
+across five consecutive milestones (M10 + M11 + M12 + M13 +
+M14). Thirty-one §0.a implementation-time micro-decisions
+across M14.1 (7) + M14.2 (7) + M14.3 (8) + M14.4 (9) — do not
+count against the streak per M10 §9.*
+
+**Business objective.** Make the M13 accounting reconciliation
+core operator-usable. Trial-balance render + journal-entry
+browser + reversal-with-reason dialog + cost-posting failure
+surfacing — all four UI surfaces named in the M13 retrospective
+§3 item 4 shipped as a single milestone.
+
+**Related research.**
+- `ACCOUNTING_DEPARTMENT_MAPPING.md` §"Accounting is the
+  reconciliation layer that validates every operational
+  event" — the operator side of that reconciliation is
+  what M14 surfaces.
+- `MILESTONE_13_RETROSPECTIVE.md` §3 item 4 (operator UI
+  deferred per §5.f Option C) + §8 (M13 unblocked-work
+  list) — M14 is the "Option D" pick from that list.
+
+**Operational pain resolved.**
+- The M13 substrate is unreachable without `manage.py shell`
+  or raw curl — accounting operators can't visually confirm
+  trial-balance state or audit-trail journal-entry postings.
+- Cost-posting failures from the M13.2 detector are logged
+  but not surfaced — operators discover them only by seeing
+  M2 costs stay unposted for days, then hunting through logs.
+- Mis-posted journal entries require a `manage.py shell`
+  call to `reverse_journal_entry` — inaccessible to non-
+  engineers.
+
+**Existing reusable primitives.**
+- All four M13 admin endpoints (three M13.1 journal-entry +
+  one M13.3 trial-balance) — the frontend consumes them
+  unchanged.
+- M13.1 `reverse_journal_entry` service verb + endpoint —
+  the M14.4 reversal dialog routes through this without
+  modification.
+- M12 BHPH portfolio page pattern (`useEffect` +
+  cancellation flag + shadcn `<Card>` + `<Table>` +
+  `<Badge>`) — the M14 pages mirror this posture.
+- `authGetJSON` / `authPostJSON` from
+  `frontend/src/lib/authFetch.ts` — the M14 API client
+  module funnels through the shared operator fetch
+  primitive.
+- `RequireAuth` route wrapper — every M14 route inherits
+  the M1 authentication gate.
+
+**Gap.**
+- Frontend accounting surface (M14 fills this).
+- Journal-entry list endpoint (M14.1 fills this).
+- Cost-posting failure surfacer endpoint (M14.1 fills this).
+
+**Scope (six increments).**
+- **M14.0** — planning refinement + target selection.
+- **M14.1** — backend list + failure endpoints (2 pure
+  query verbs + 2 admin endpoints).
+- **M14.2** — frontend trial-balance render page + new
+  `accountingApi.ts` module.
+- **M14.3** — frontend journal-entry browser + detail page.
+- **M14.4** — frontend reversal dialog + cost-posting
+  failure card.
+- **M14.5** — close-out docs.
+
+**Out of scope for M14** (deferrals cataloged in
+`MILESTONE_14_RETROSPECTIVE.md` §3):
+- Journal-entry list filters; `as_of` picker on trial-
+  balance; manual create UI; sidebar nav entry; date-picker
+  widget on reversal `posted_at`; category-group-aware GL
+  mapping.
+- M9 sale-booking GL post; M10 F&I chargeback GL reversal;
+  M12 BHPH payment GL post (substrate-consuming write-path
+  milestones; the M14 UI will surface any resulting
+  journal entries automatically once these ship).
+- `TrialBalanceSnapshot` materialization + monthly close
+  workflow; period-comparison verbs; CSV export.
+- Per-dealer COA overrides UI; `post_save` COA seeder wiring.
+
 ---
 
 ## 5. Explicit non-goals and deferrals
