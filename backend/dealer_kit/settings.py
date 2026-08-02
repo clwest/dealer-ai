@@ -446,6 +446,25 @@ CELERY_BEAT_SCHEDULE: dict = {
         # No positional args; the orchestrator takes no kwargs.
         "kwargs": {},
     },
+    "bhph-delinquency-detector-daily-08-00": {
+        "task": (
+            "dealer_ai.services.bhph_delinquency.tasks"
+            ".detect_delinquencies_for_all_tenants"
+        ),
+        # 08:00 project-time daily — one hour after the M11.5
+        # no-show detector. Continues the non-overlapping window
+        # pattern (M7.2 at 02:00, M7.3 at 03:00, M7.4 at 04:00,
+        # M7.5 at 05:00, M11.4 at 06:00, M11.5 at 07:00, M12.3 at
+        # 08:00). State-transitioning per M11 §6 lesson 17 — aging
+        # is objectively elapsed (calendar math), same posture as
+        # the M11.5 detector. Recomputes ``current_bucket`` +
+        # ``days_past_due`` on every active BhphNote per tenant;
+        # only writes when the derived value differs from the
+        # stored value (idempotent within a run).
+        "schedule": crontab(hour=8, minute=0),
+        # No positional args; the orchestrator takes no kwargs.
+        "kwargs": {},
+    },
 }
 
 # ---- Milestone 11 · Increment 5 (SESSION_118) — BeBack no-show grace.

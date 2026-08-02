@@ -6431,6 +6431,38 @@ BHPH_PAYMENT_FREQUENCY_CHOICES = (
 )
 
 
+# Aging-bucket vocab per MILESTONE_12_PLANNING.md §1.3 + §5.c Option A
+# (locked at SESSION_121 open — fixed 7-value vocab, not operator-
+# configurable). Boundaries at M12.3 §0.a M12.3 open decision 1
+# (as-recommended — from-scheduled-due-date after grace expires).
+#
+# Bucket → days-past-due:
+#   current               → 0
+#   1_15                  → 1..15
+#   16_30                 → 16..30
+#   31_60                 → 31..60
+#   61_90                 → 61..90
+#   over_90               → 91..119
+#   charge_off_candidate  → 120+
+BHPH_AGING_BUCKET_CURRENT = "current"
+BHPH_AGING_BUCKET_1_15 = "1_15"
+BHPH_AGING_BUCKET_16_30 = "16_30"
+BHPH_AGING_BUCKET_31_60 = "31_60"
+BHPH_AGING_BUCKET_61_90 = "61_90"
+BHPH_AGING_BUCKET_OVER_90 = "over_90"
+BHPH_AGING_BUCKET_CHARGE_OFF_CANDIDATE = "charge_off_candidate"
+
+BHPH_AGING_BUCKET_CHOICES = (
+    (BHPH_AGING_BUCKET_CURRENT, "Current"),
+    (BHPH_AGING_BUCKET_1_15, "1-15 days"),
+    (BHPH_AGING_BUCKET_16_30, "16-30 days"),
+    (BHPH_AGING_BUCKET_31_60, "31-60 days"),
+    (BHPH_AGING_BUCKET_61_90, "61-90 days"),
+    (BHPH_AGING_BUCKET_OVER_90, "Over 90 days"),
+    (BHPH_AGING_BUCKET_CHARGE_OFF_CANDIDATE, "Charge-off candidate"),
+)
+
+
 class BhphNote(models.Model):
     """Milestone 12 · Increment 1 — a buy-here-pay-here loan record.
 
@@ -6498,6 +6530,18 @@ class BhphNote(models.Model):
     payment_amount = models.DecimalField(max_digits=8, decimal_places=2)
     first_payment_due = models.DateField()
     default_grace_days = models.PositiveIntegerField(default=5)
+    # Milestone 12 · Increment 3 (SESSION_123) — additive aging columns
+    # per §1.3 + §5.c Option A. Denormalized at write time by the
+    # M12.3 :mod:`services.bhph_delinquency` detector at 08:00
+    # project-time daily. New notes start ``current`` / 0 (no
+    # payments yet, no aging clock); the detector recomputes both
+    # after every payment intake window.
+    current_bucket = models.CharField(
+        max_length=32,
+        choices=BHPH_AGING_BUCKET_CHOICES,
+        default=BHPH_AGING_BUCKET_CURRENT,
+    )
+    days_past_due = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
