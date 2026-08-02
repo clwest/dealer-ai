@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_152
+last_session_shipped: SESSION_153
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -20,166 +20,133 @@ milestone_15_status: shipped
 milestone_16_status: shipped
 milestone_17_status: shipped
 milestone_18_status: shipped
-milestone_19_status: planning
-next_session: SESSION_153
+milestone_19_status: in-progress
+next_session: SESSION_154
 next_milestone: 19
-next_milestone_name: "TBD — user names target at SESSION_153 open"
-next_increment: 0
-next_increment_name: "M19.0 — Planning refinement + target selection"
+next_milestone_name: "Founding Dealer Pilot Onboarding"
+next_increment: 1
+next_increment_name: "M19.1 — Backend substrate: schema + service package + guards"
 ---
 
-# Next session — SESSION_153 · Milestone 19 · Increment 0 (M19.0 — Planning refinement + target selection)
+# Next session — SESSION_154 · Milestone 19 · Increment 1 (M19.1 — Backend substrate)
 
-> **SESSION_152 shipped M18.6 —** the
-> Milestone 18 close-out. Six close-out
-> artifacts + one coordinated commit
-> landing all M18.6 docs together.
-> **Milestone 18 — Demo Store Simulation
-> + Pilot Validation Readiness —
-> SHIPPED.**
+> **SESSION_153 shipped M19.0 —**
+> planning refinement + all eight §5
+> load-bearing decisions resolved at
+> open. **§5.a Option V confirmed** —
+> pilot-customer onboarding. Milestone
+> name: **"Founding Dealer Pilot
+> Onboarding."** Tester sessions have
+> not happened since M18 close so
+> Option T stays deferred. Option V
+> builds the controlled conversion
+> path from demo → pilot so testers
+> who commit have a place to land.
 >
-> **M18 close totals:** three archetype
-> builders (retail_subprime +
-> floor_planned + bhph) + 13 daily
-> briefs + POST feedback endpoint +
-> CSV exporter. **175 backend tests
-> across all M18 increments** (M17
-> close 4,363 → M18 close **4,538
-> pass**). One new tenant carrier
-> (`TesterFeedback`; 49 → **50**).
-> One additive migration (`0047_m181_
-> demo_store_substrate.py`). Two
-> additive `Dealership` columns
-> (`is_demo` + `demo_archetype`). One
-> new endpoint (POST
-> `/admin/demo-store/feedback/`; DRF
-> admin surface 107 → **108**). Zero
-> new operator routes. Zero new
-> permission classes — **zero-drift
-> streak fourteen consecutive
-> milestones** (M10 → M18.5).
-> Seven §5 decisions confirmed as-
-> recommended at M18.0 open; five
-> §0.a implementation-time micro-
-> decisions across M18.1 + M18.2 do
-> not count against the streak per
-> M10 §9.
+> **§5.b–§5.h all confirmed as-
+> recommended.** Streak extends to
+> **85 planning-time as-recommended
+> M5.1 → M19.0** across **ten
+> consecutive milestones now** (M10 +
+> M11 + M12 + M13 + M14 + M15 + M16
+> + M17 + M18 + M19). Historical §5
+> counts have been 6-7 per milestone;
+> M19 at eight reflects the pilot-
+> onboarding scope's breadth
+> (fourteen planning topics
+> compressed into eight decisions).
 >
 > **Backend baseline: 4,538 pass**,
-> 1 skipped, 0 fail. **Frontend
-> Vitest baseline: 140 pass**. All
-> unchanged since M18.5 (M18.6 is
-> docs-only). Migrations
-> `0043`–`0047`. Tenancy carriers
-> **50**. DRF admin surface **108**.
-> Frontend operator routes 20.
-> Permission classes 7. Celery-beat
-> task families 10.
+> 1 skipped, 0 fail (unchanged —
+> planning-only). **Frontend Vitest
+> baseline: 140 pass** (unchanged).
+> Migrations `0043`–`0047`
+> (unchanged). Tenancy carriers 50
+> (unchanged — PilotOnboardingChecklist
+> + PilotOnboardingStep land at M19.1).
+> DRF admin surface 108 (unchanged
+> — 4 new endpoints land at M19.3).
+> Frontend operator routes 20
+> (unchanged — M19.4 extends
+> existing admin route in place).
+> Permission classes 7 (unchanged
+> — zero-drift streak holds at
+> fourteen consecutive milestones;
+> M19.3 endpoint additions reuse
+> existing classes). Celery-beat
+> task families 10 (unchanged — M19
+> has no beat entry).
 >
-> **SESSION_153 opens M19.0 —
-> planning refinement + target
-> selection.** Per
-> `MILESTONE_19_PLANNING.md` (draft
-> skeleton written at M18.6 close per
-> standing user directive). **§5.a is
-> the load-bearing decision** — user
-> names the M19 target at session
-> open. **Distinctive at M19.0:**
-> if Chris has run tester sessions
-> using the M18 demo stores + daily
-> briefs, the M18.5 CSV export
-> becomes primary planning input.
+> **SESSION_154 opens M19.1 —
+> backend substrate.** Migration
+> `0048_m191_pilot_substrate.py`
+> bundling three additive
+> `Dealership` columns +
+> `PilotProspect` +
+> `PilotOnboardingChecklist` +
+> `PilotOnboardingStep`. New
+> `services/pilot_onboarding/`
+> package. Extend M18.1 outbound
+> guard. Single backend increment;
+> ~40-50 focused tests.
 
-## First thing SESSION_153 must do
+## First thing SESSION_154 must do
 
-### 1. Name the M19 target milestone
+### 1. Resolve §0.a M19.1 micro-decisions
 
-`IMPLEMENTATION_ROADMAP.md` §Milestone
-sequence ends at Milestone 18. **M19
-target is not predetermined** — user
-names it at session open based on
-operational evidence + business
-priority + **tester feedback if any
-has landed via the M18 pilot
-sessions**.
+Two micro-decisions surfaced in
+the M19.0 planning memo that need
+resolution at M19.1 open:
 
-Candidate targets drawn from
-`MILESTONE_18_RETROSPECTIVE.md` §8
-+ `MILESTONE_17_RETROSPECTIVE.md` §8
-(still-valid unblocked-work items):
+1. **`PilotProspect` tenancy
+   posture.** The model has no
+   `Dealership` FK by §5.b design
+   (it's scoped to Chris's operator
+   surface, not a specific
+   dealership tenant). Should it
+   be registered in
+   `_TENANT_CARRIER_MODEL_NAMES`
+   for the pre_save autofill
+   safety net? **Recommendation:**
+   yes, register it. The autofill
+   attaches the default dealership
+   defensively; the
+   `list_prospects` verb filters
+   by operator role, not by
+   tenancy scope. Registering
+   preserves the M18.1 pattern
+   without special-casing. Tenancy
+   carrier count 50 → **53** (+3
+   for PilotProspect + Checklist
+   + Step) instead of 50 → 52.
+2. **`suppress_if_demo` rename.**
+   The M18.1 helper is called
+   `suppress_if_demo`; §5.g Option
+   A introduces
+   `is_synthetic_tenant()`.
+   Should `suppress_if_demo` be
+   renamed to
+   `suppress_if_synthetic` +
+   preserve the old name as a
+   deprecated alias?
+   **Recommendation:** yes,
+   rename. All existing callers
+   of `suppress_if_demo` update
+   in the same commit; the alias
+   stays as a shim until M20+
+   confirms no external usage.
 
-- **Option T — Process tester
-  feedback.** **Primary candidate if
-  M18-shipped demo stores have been
-  used by real testers.** Scope
-  depends on volume + quality of
-  feedback captured via the M18.5
-  POST endpoint + CSV export.
-- **Option U — Hosted-demo
-  substrate.** Public self-serve
-  demo signup + tester-tracking
-  dashboard. Deferred at M18 §3.
-- **Option V — Pilot-customer
-  onboarding.** Real-data onboarding
-  for testers who convert. Deferred
-  at M18 §3.
-- **Option A** — M10 F&I chargeback
-  GL reversal.
-- **Option B** — BhphFee entity +
-  late-fee GL posting.
-- **Option C** — Deposit / bank
-  reconciliation workflow.
-- **Option D** — NSF / payment-
-  reversal workflow.
-- **Option E** — Period-close
-  comparison view / audit.
-- **Option F** — Financial-reports
-  substrate (P&L, balance sheet).
-- **Option G** — CSV / PDF export of
-  frozen snapshots.
-- **Option H** — Auto-freeze on
-  schedule.
-- **Option I** — Reopen / unfreeze
-  workflow.
-- **Option J** — Category-group-
-  aware GL mapping for M13.2
-  detector.
-- **Option K** — M14 UX polish
-  (JE filters + sidebar nav).
-- **Option L** — Cost-of-sale
-  variance handling.
-- **Option M** — Sale-reversal
-  workflow.
-- **Option N** — BHPH interest
-  accrual detector (accrual-basis).
-- **Option O** — Non-accounting
-  target user names at open based
-  on operational evidence not
-  visible in prior retrospectives.
-
-**M18 §9 standing question:**
-recommendation was to carry the
-question forward but NOT preemptively
-lock M19 as tester-feedback
-processing. Target selection at
-M19.0 should follow the standard
-business-priority pattern. If
-tester feedback has landed with
-volume and quality that names
-Option T, M19 becomes T. If not,
-target selection falls back to
-business-priority ranking from the
-candidate list.
-
-Once the target is confirmed,
-expand `MILESTONE_19_PLANNING.md`
-§1 + §5 + §7 into a full memo.
+Present both to the user briefly
+at open; expect confirm-as-
+recommended per the M5.1 → M19.0
+streak posture. Record as §0.a
+M19.1 amendments.
 
 ### 2. Verify starting state
 
 - `git status` — clean.
-- `git log --oneline -10` — top
-  should be the M18.6 close-out
+- `git log --oneline -5` — top
+  should be the M19.0 planning
   commit.
 - `python3 manage.py test dealer_ai`
   → **4,538 pass, 1 skipped, 0
@@ -188,118 +155,289 @@ expand `MILESTONE_19_PLANNING.md`
   **140 pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
-  --check --dry-run` → "No changes
-  detected."
-- `cd frontend && npx tsc --noEmit`
-  clean.
+  --check --dry-run` → "No
+  changes detected."
+- `cd frontend && npx tsc
+  --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-## What M19.0 delivers
+## What M19.1 delivers
 
-Per `MILESTONE_19_PLANNING.md` §5
-M19.0:
+Per `MILESTONE_19_PLANNING.md` §7
+M19.1:
 
-- Full expansion of the planning
-  skeleton written at M18.6.
-- User names the M19 target
-  milestone (§5.a).
-- Additional §5 decisions surface
-  once target is confirmed
-  (§5.b-§5.f expected — historical
-  §5 counts have been 6 for M10 /
-  M11 / M12 / M13 / M14 / M15 /
-  M16 / M17 and 7 for M18).
-- §7 sequencing lands after §5
-  decisions are locked.
-- §0.a change log records the
-  target selection + all §5
-  confirmations.
+### Schema
 
-**No code at M19.0.** Planning-
-only session. Backend baseline
-stays at 4,538 pass. Frontend
-Vitest stays at 140.
+- **Migration
+  `0048_m191_pilot_substrate.py`**
+  bundling all M19 schema
+  additions (per M13.1 / M18.1
+  bundling precedent):
+  - `AddField
+    Dealership.is_pilot`
+    BooleanField(default=False).
+  - `AddField
+    Dealership.terminated_at`
+    DateTimeField(null=True,
+    blank=True).
+  - `AddField
+    Dealership.termination_reason`
+    TextField(blank=True,
+    default="").
+  - `CreateModel PilotProspect`
+    per §5.b field set (no
+    dealership FK).
+  - `CreateModel
+    PilotOnboardingChecklist`
+    (dealership FK CASCADE,
+    is_ready BooleanField,
+    created_at, updated_at).
+  - `CreateModel
+    PilotOnboardingStep`
+    (checklist FK CASCADE,
+    dealership FK CASCADE,
+    step_slug CharField
+    choices, completed_at
+    DateTimeField null, notes
+    TextField blank,
+    created_at).
+    `Meta.unique_together =
+    (('checklist',
+    'step_slug'),)`.
 
-## What SESSION_153 should do
+### Vocab constants
 
-### Recommended step sequence
+In `models.py`:
 
-1. **Ask about tester sessions.** Has
-   Chris used the M18 demo stores +
-   daily briefs with real operators
-   since M18 close? If yes: pull the
-   M18.5 CSV export as input. If no:
-   note this in §0.a and proceed to
-   business-priority ranking.
+- `PILOT_PROSPECT_STATE_*` +
+  `PILOT_PROSPECT_STATE_CHOICES`
+  (fixed vocab: prospect /
+  qualified / converted /
+  declined).
+- `PILOT_ONBOARDING_STEP_*`
+  slug constants +
+  `PILOT_ONBOARDING_STEP_CHOICES`
+  (fixed vocab: seven step
+  slugs per §5.f).
 
-2. **Confirm the M19 target with
-   the user** (§1 above).
+Exact-set assertions at test
+time.
 
-3. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_19_PLANNING.md`
-     (this session's expansion
-     target).
-   - `docs/roadmap/MILESTONE_18_RETROSPECTIVE.md`
-     §6 (seven lessons carry into
-     M19) + §8 (M18 unblocks) + §9
-     (standing question).
-   - `docs/roadmap/MILESTONE_17_RETROSPECTIVE.md`
-     §8 (M17 unblocked work —
-     still mostly valid after M18).
-   - `docs/handoffs/SESSION_152_m18_inc6_close.md`
-     (previous session).
-   - `docs/CAPABILITY_MATRIX.md` §7s
-     (M18 shipped surface).
-   - Target-specific research /
-     tester-feedback CSV per §5.a
-     confirmed at open.
+### Tenancy registration
 
-4. **Verify starting state** (§2
-   above).
+Register `PilotProspect` +
+`PilotOnboardingChecklist` +
+`PilotOnboardingStep` in
+`_TENANT_CARRIER_MODEL_NAMES`
+in `services/tenancy.py`.
+Count 50 → **53** per §0.a
+M19.1 decision 1 (see
+"First thing" above).
 
-5. **Draft §1 (business questions)
-   + §5 (load-bearing decisions) +
-   §7 (sequencing)** in
-   `MILESTONE_19_PLANNING.md`.
+### Service package
 
-6. **Ship handoff at
-   `docs/handoffs/SESSION_153_m19_inc0_planning.md`.**
+New `services/pilot_onboarding/`
+package (per §5.d Option A):
 
-7. **Overwrite
-   `00-START-NEXT-SESSION.md`**
-   with M19.1 priority (first
-   implementation increment for
-   the confirmed target).
+- `__init__.py` with `__all__`
+  exports.
+- `errors.py`:
+  - `PilotAlreadyExistsError`
+    (409 mapping).
+  - `NonPilotTerminationError`
+    (500 broken-invariant guard).
+  - `PilotReadinessNotConfirmedError`
+    (409 mapping).
+- `registry.py`:
+  - `create_pilot_dealership(*,
+    slug, name, owner_user,
+    profile_kwargs) ->
+    Dealership` — atomic. Catches
+    `IntegrityError` on slug +
+    re-raises as
+    `PilotAlreadyExistsError`.
+    Auto-fires
+    `PilotOnboardingChecklist`.
+  - `list_pilot_dealerships() ->
+    list[Dealership]` — pure
+    read (`is_pilot=True,
+    terminated_at=NULL`).
+  - `terminate_pilot(*,
+    dealership, reason, actor,
+    mode) -> Dealership` —
+    atomic. Raises
+    `NonPilotTerminationError`
+    if `is_pilot=False`; belt-
+    and-suspenders `assert
+    dealership.is_pilot` at top.
+- `prospects.py`:
+  - `create_prospect(...)`.
+  - `advance_prospect_state(*,
+    prospect, new_state)`.
+  - `list_prospects() ->
+    list[PilotProspect]`.
+- `checklist.py`:
+  - `create_checklist(*,
+    dealership) ->
+    PilotOnboardingChecklist`
+    (called by
+    `create_pilot_dealership`).
+  - `advance_step(*, checklist,
+    step_slug, notes='') ->
+    PilotOnboardingStep`
+    (raises
+    `PilotReadinessNotConfirmedError`
+    if trying to advance
+    `readiness_confirmed`
+    before prior steps
+    complete).
+  - `is_pilot_ready(dealership)
+    -> bool`.
+- `inventory_import.py`:
+  - `PilotInventoryImportResult`
+    frozen dataclass.
+  - `import_pilot_inventory`
+    stub (raises
+    `NotImplementedError`;
+    ships fully at M19.2).
 
-## Explicit non-goals for SESSION_153
+### Extend M18.1 outbound guard
 
-- ❌ Do NOT ship M19.1+ code.
-- ❌ Do NOT modify M1-M18 business
-  logic.
+Update
+`services/demo_store/outbound_guard.py`
+per §5.g Option A + §0.a
+M19.1 decision 2:
+
+- Add
+  `is_pilot_dealership(dealership)
+  -> bool`.
+- Add
+  `is_synthetic_tenant(dealership)
+  -> bool` (`is_demo or
+  is_pilot`).
+- Rename `suppress_if_demo` →
+  `suppress_if_synthetic`;
+  preserve `suppress_if_demo`
+  as deprecated alias
+  (shim + logger.warning +
+  DeprecationWarning).
+- Preserve
+  `is_demo_dealership()` as
+  deprecated alias.
+- **Extend the outbound-egress
+  scanner test** to hold —
+  it should still pass without
+  modification since the
+  extended helper is a drop-in
+  replacement.
+
+### Test helper
+
+Extend `tests/_auth_helpers.py`
+with:
+
+- `make_pilot_dealership(*,
+  slug, name, owner_user_kwargs,
+  profile_kwargs) ->
+  Dealership` companion to
+  `make_dealership`.
+
+### Tests
+
+**~40-50 focused tests** in new
+`tests/test_m191_pilot_substrate.py`:
+
+- Model defaults + vocab
+  exact-set equality.
+- `PilotProspect` model +
+  state machine transitions.
+- Checklist model +
+  unique_together per step.
+- `create_pilot_dealership`
+  happy path (atomic; all
+  substrate commits together).
+- Slug collision raises
+  `PilotAlreadyExistsError`.
+- `create_pilot_dealership`
+  against existing demo slug
+  raises.
+- `list_pilot_dealerships`
+  filters correctly.
+- `terminate_pilot` both
+  modes (`archive` + `cleanup`).
+- `terminate_pilot` raises
+  `NonPilotTerminationError`
+  on non-pilot.
+- Belt-and-suspenders `assert`
+  fires on bypass mock.
+- Checklist step advance
+  happy path.
+- Checklist advance blocked
+  when `readiness_confirmed`
+  precondition not met.
+- `is_pilot_ready` returns
+  True only when checklist
+  complete.
+- Outbound guard extension
+  (is_synthetic_tenant for
+  demo / pilot / both / live).
+- Scanner test continues to
+  hold.
+- Tenancy carrier count 53
+  (or 52 depending on §0.a
+  decision 1) — `>=`
+  assertion.
+- Permission-class set
+  equality unchanged (zero-
+  drift streak fifteen
+  consecutive milestones).
+- Endpoint count 108
+  (unchanged at M19.1).
+
+### Non-goals for M19.1
+
+- ❌ No DRF endpoints (M19.3).
+- ❌ No frontend.
+- ❌ No inventory import
+  implementation body (M19.2).
+- ❌ No playbook or template
+  docs (M19.5).
+- ❌ No new Celery-beat
+  entries.
+- ❌ No new permission classes.
+- ❌ No new operator routes.
+
+## Backend baseline target
+
+**4,538 → ~4,578-4,588 pass**
+(+40-50 tests, 0 regressions).
+Frontend Vitest: 140 (unchanged
+— M19.4 delta only).
+
+## Explicit non-goals for SESSION_154
+
+- ❌ Do NOT ship M19.2 inventory
+  import implementation.
+- ❌ Do NOT modify M1-M18
+  business logic (except the
+  deliberate M18.1 outbound
+  guard extension).
 - ❌ Do NOT force-push or amend
   any earlier commits.
 
 ## NEXT TASK
 
-Start SESSION_153 with (a)
-checking whether tester feedback
-has landed since M18 close and
-if so pulling the M18.5 CSV
-export as planning input, (b)
-naming the M19 target with the
-user (candidates in §1 above),
-(c) the read-first list, (d)
-starting-state verification, then
-(e) expanding
-`MILESTONE_19_PLANNING.md` §1 +
-§5 + §7 into a full memo. Ship
-the M19.0 handoff.
-
-Backend baseline at SESSION_153
-close: **4,538 pass** (unchanged
-— planning-only). Frontend
-baseline: **140 pass**
-(unchanged).
+Start SESSION_154 with (a)
+resolving the two §0.a M19.1
+micro-decisions with the user
+(PilotProspect tenancy
+registration + `suppress_if_demo`
+rename), (b) starting-state
+verification, (c) building
+schema + service package +
+outbound guard extension + tests
+per §7 M19.1. Ship the M19.1
+handoff.
 
 ---
 
@@ -310,25 +448,18 @@ baseline: **140 pass**
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_19_PLANNING.md`
-6. `docs/roadmap/MILESTONE_18_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_152_m18_inc6_close.md`
-   (this session's close)
+   (active memo)
+6. `docs/handoffs/SESSION_153_m19_inc0_planning.md`
+   (this session's handoff)
+7. `docs/roadmap/MILESTONE_18_RETROSPECTIVE.md`
 8. `docs/CAPABILITY_MATRIX.md` §7s
-9. **Tester feedback CSV** (from
-   M18.5 `demo_store
-   export_feedback`) if any
-   tester sessions have
-   happened.
-10. Target-specific research (per
-    §5.a confirmed at SESSION_153
-    open).
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_152 — M18 SHIPPED)
+## Operational state (post-SESSION_153 — M19.0 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
@@ -348,42 +479,59 @@ research + code are facts.
   scheduled task families
   registered**.
 - **Milestones shipped:** M1 →
-  **M18** (SESSION_152 close).
-  M19 planning drafted.
+  M18. M19 in progress: M19.0
+  planning shipped at
+  SESSION_153. M19.1 substrate
+  next (SESSION_154).
 - **DRF admin surface:** **108**
-  endpoints (feedback POST
-  landed at M18.5).
+  endpoints. Grows to 112 at
+  M19.3 (+4 pilot endpoints).
 - **Frontend operator routes:**
-  **20** (unchanged through M18
-  — testers use existing routes).
-- **Public endpoints:** +1 M6.5
-  showroom (unchanged).
+  **20** — unchanged through
+  M19 (M19.4 extends existing
+  admin route in place).
+- **Public endpoints:** +1
+  M6.5 showroom (unchanged).
 - **Service surface:** complete
   `services/f_and_i/` (M10) +
-  five M11 packages + seven M12
-  packages + `services/accounting/`
-  (seven modules) +
-  **`services/demo_store/` (ten
-  modules including briefs
-  package)**.
-- **Frontend accounting surface:**
-  unchanged from M17.
-- **Tenancy carriers:** **50**
-  (unchanged since M18.1).
-- **Permission classes:** **7
-  actual** — **zero-drift streak
-  fourteen consecutive milestones**
-  (M10 → M18.5).
+  five M11 packages + seven
+  M12 packages + `services/
+  accounting/` (seven modules)
+  + `services/demo_store/`
+  (ten modules including
+  briefs package). **New at
+  M19.1**:
+  `services/pilot_onboarding/`
+  package.
+- **Frontend accounting
+  surface:** unchanged from
+  M17.
+- **Tenancy carriers:**
+  **50**. Grows to 53 at
+  M19.1 (PilotProspect +
+  PilotOnboardingChecklist +
+  PilotOnboardingStep per
+  §0.a M19.1 decision 1).
+- **Permission classes:**
+  **7 actual** — zero-drift
+  streak fourteen consecutive
+  milestones (M10 → M18.5).
+  Extends to fifteen after
+  M19.3 as no new class
+  ships.
 - **`Vehicle.is_available`:**
   unchanged.
-- **AI safety stack:** 17 scrub
-  stages (unchanged — M18 has
-  no LLM path).
+- **AI safety stack:** 17
+  scrub stages (unchanged —
+  M19 has no LLM path).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 19 next:** M19.0
-  planning refinement + target
-  selection. User names target
-  at session open — with tester
-  feedback (if it exists) as
-  primary planning input.
+- **Milestone 19 status:**
+  M19.0 planning SHIPPED
+  (SESSION_153). M19.1
+  substrate next
+  (SESSION_154). M19.2
+  inventory import, M19.3
+  endpoints, M19.4 frontend,
+  M19.5 playbook + dry-run,
+  M19.6 close-out to follow.
