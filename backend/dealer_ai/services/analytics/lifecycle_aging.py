@@ -45,7 +45,9 @@ from ...models import (
     VEHICLE_STAGE_CHOICES,
     VEHICLE_STAGE_FRONTLINE,
     Dealership,
+    Sale,
     StageAgingSnapshot,
+    VehicleStageEvent,
 )
 
 
@@ -262,4 +264,198 @@ def days_at_frontline_proxy(
         mean_p90_days=mean_p90,
         latest_vehicle_count=latest["vehicle_count"],
         latest_snapshot_at=latest["snapshot_at"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Q8 true — inventory turn / days-to-sale (SESSION_102, M9.3)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class InventoryTurnReport:
+    """The Q8 true summary — days-from-frontline-to-sale statistics
+    across a rolling window of closed sales.
+
+    The M9.3 counterpart to :class:`DaysAtFrontlineReport` (the M8.4
+    proxy). Both verbs coexist per M8 §6 lesson 11 — the proxy stays
+    valid ("how long are vehicles sitting on frontline today?") and
+    the true verb answers the original operational question ("what
+    was the median days from frontline entry to sale?").
+
+    Frozen because the aggregation output is immutable; callers
+    should project into a serialized shape rather than mutate.
+
+    **Days-to-sale semantics.** For each :class:`Sale` closed in the
+    window, the days-to-sale is
+    ``sale.sale_date - min(VehicleStageEvent.entered_at.date() for
+    event in sale.vehicle.stage_events where to_stage=frontline)``.
+    The MIN over frontline events handles a vehicle that returned
+    to frontline (rare — the M5 lifecycle permits regression). Only
+    vehicles whose stage-event log records at least one frontline
+    entry contribute; vehicles with no frontline entry are skipped
+    (would be a data-quality issue — every sold vehicle should have
+    passed through frontline).
+
+    Fields:
+
+    - ``sold_count`` — number of sold vehicles in the window that
+      contribute to the distribution (i.e. have both a Sale in the
+      window and at least one frontline stage-event).
+    - ``mean_days`` — arithmetic mean of days-to-sale across the
+      contributing vehicles. Quantized to two decimal places.
+      ``None`` when ``sold_count == 0``.
+    - ``p50_days`` — median (50th percentile). ``None`` when
+      ``sold_count == 0``. Integer — days are counted whole.
+    - ``p90_days`` — 90th percentile. ``None`` when
+      ``sold_count == 0``. Integer.
+    - ``min_days`` — minimum days-to-sale. ``None`` when
+      ``sold_count == 0``. Integer.
+    - ``max_days`` — maximum days-to-sale. ``None`` when
+      ``sold_count == 0``. Integer.
+    """
+
+    sold_count: int
+    mean_days: Optional[Decimal]
+    p50_days: Optional[int]
+    p90_days: Optional[int]
+    min_days: Optional[int]
+    max_days: Optional[int]
+
+
+def _percentile(sorted_values: list[int], pct: int) -> int:
+    """Return the ``pct``-th percentile of a sorted list of integers
+    using the "nearest-rank" method (matches numpy's default
+    ``interpolation="nearest"``-like behavior for integer buckets).
+
+    Kept as a local helper — the vocabulary is small (p50 + p90),
+    the M7.3 snapshot code has its own percentile logic, and taking
+    a numpy dependency here would be disproportionate.
+    """
+    if not sorted_values:
+        raise ValueError("Cannot compute percentile of empty list.")
+    # Nearest-rank: rank = ceil(pct / 100 * n).
+    n = len(sorted_values)
+    rank = max(1, (pct * n + 99) // 100)
+    return sorted_values[rank - 1]
+
+
+def inventory_turn(
+    dealership: Dealership,
+    *,
+    window_days: int = 90,
+) -> InventoryTurnReport:
+    """Q8 true aggregation — days-from-frontline-to-sale over a
+    rolling window.
+
+    Answers *"what is the true inventory turn / days-to-sale?"* —
+    the operational question :func:`days_at_frontline_proxy` (M8.4)
+    could only proxy while the M9 Sale substrate was pending.
+    Reads :class:`VehicleStageEvent` for frontline entries + M9.1
+    :class:`Sale` for the close-out event and computes per-vehicle
+    days-to-sale.
+
+    Parameters
+    ----------
+    dealership : Dealership
+        The tenant to aggregate. Required — single-tenant.
+    window_days : int, optional
+        Number of days of history to return. Default 90.
+        Filters ``sale_date >= today - window_days``.
+
+    Returns
+    -------
+    InventoryTurnReport
+        Summary of the days-to-sale distribution across the
+        window. Empty window (no sales OR no vehicles with
+        frontline entries) produces a report with
+        ``sold_count == 0`` and every percentile field ``None`` —
+        the "no signal" state is distinct from "distribution
+        happens to be zero."
+
+    Notes
+    -----
+    Read-only. Vehicles with a Sale but no ``frontline``
+    :class:`VehicleStageEvent` are skipped (data-quality issue —
+    every sold vehicle should have passed through frontline). A
+    dedicated "sold-without-frontline-event" data-quality report
+    can land later if operator evidence surfaces need.
+    """
+    today = timezone.now().date()
+    since = today - dt.timedelta(days=window_days)
+
+    sale_qs = Sale.objects.filter(
+        dealership=dealership,
+        sale_date__gte=since,
+    ).values_list("vehicle_id", "sale_date")
+
+    sales_by_vehicle: dict[int, dt.date] = dict(sale_qs)
+    if not sales_by_vehicle:
+        return InventoryTurnReport(
+            sold_count=0,
+            mean_days=None,
+            p50_days=None,
+            p90_days=None,
+            min_days=None,
+            max_days=None,
+        )
+
+    # Pull every frontline stage-event for the sold vehicles in one
+    # query. For each vehicle we want the earliest ``entered_at`` on
+    # a ``frontline`` transition — the "first arrival at frontline"
+    # is the reference point for days-to-sale. Later re-entries do
+    # not restart the clock (a vehicle bounced back to recon and
+    # returned to frontline is still "the same customer-facing
+    # inventory item," not a fresh arrival).
+    event_qs = VehicleStageEvent.objects.filter(
+        dealership=dealership,
+        vehicle_id__in=sales_by_vehicle.keys(),
+        to_stage=VEHICLE_STAGE_FRONTLINE,
+    ).values_list("vehicle_id", "entered_at")
+
+    earliest_frontline_by_vehicle: dict[int, dt.datetime] = {}
+    for vehicle_id, entered_at in event_qs:
+        current = earliest_frontline_by_vehicle.get(vehicle_id)
+        if current is None or entered_at < current:
+            earliest_frontline_by_vehicle[vehicle_id] = entered_at
+
+    # Compute per-vehicle days-to-sale for contributors only.
+    days_values: list[int] = []
+    for vehicle_id, sale_date in sales_by_vehicle.items():
+        entered_at = earliest_frontline_by_vehicle.get(vehicle_id)
+        if entered_at is None:
+            # Sold vehicle with no frontline entry — data-quality
+            # gap. Skip per docstring.
+            continue
+        delta = (sale_date - entered_at.date()).days
+        # Guard: sale before frontline entry (should not happen —
+        # would mean the vehicle sold before ever reaching
+        # frontline). Skip rather than pollute the distribution
+        # with negatives.
+        if delta < 0:
+            continue
+        days_values.append(delta)
+
+    if not days_values:
+        return InventoryTurnReport(
+            sold_count=0,
+            mean_days=None,
+            p50_days=None,
+            p90_days=None,
+            min_days=None,
+            max_days=None,
+        )
+
+    n = len(days_values)
+    total = sum(days_values)
+    mean = (Decimal(total) / Decimal(n)).quantize(Decimal("0.01"))
+    sorted_days = sorted(days_values)
+
+    return InventoryTurnReport(
+        sold_count=n,
+        mean_days=mean,
+        p50_days=_percentile(sorted_days, 50),
+        p90_days=_percentile(sorted_days, 90),
+        min_days=sorted_days[0],
+        max_days=sorted_days[-1],
     )

@@ -19,6 +19,7 @@ import VehicleLifecyclePage from "@/pages/VehicleLifecyclePage";
 import VehicleListingEditorPage from "@/pages/VehicleListingEditorPage";
 import VehiclePhotoGalleryPage from "@/pages/VehiclePhotoGalleryPage";
 import VehicleReconPage from "@/pages/VehicleReconPage";
+import VehicleSalePage from "@/pages/VehicleSalePage";
 import LeadsPage from "@/pages/LeadsPage";
 import LiveAssistantPage from "@/pages/LiveAssistantPage";
 import LoginPage from "@/pages/LoginPage";
@@ -93,6 +94,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route
                 path="dealer-ai-inventory/:stock/listing"
                 element={<VehicleListingEditorPage />}
+              />
+              <Route
+                path="dealer-ai-inventory/:stock/sale"
+                element={<VehicleSalePage />}
               />
               <Route path="dealer-ai-leads" element={<LeadsPage />} />
               <Route path="dealer-ai-demo" element={<DealerAIDemo />} />

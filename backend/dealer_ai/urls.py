@@ -3,10 +3,12 @@ from django.urls import path
 from . import (
     views,
     views_analytics,
+    views_delivery,
     views_lifecycle,
     views_listings,
     views_photos,
     views_recon,
+    views_sale,
     views_showroom,
 )
 
@@ -419,5 +421,64 @@ urlpatterns = [
         "admin/analytics/days-at-frontline-proxy/",
         views_analytics.admin_analytics_days_at_frontline_proxy,
         name="admin-analytics-days-at-frontline-proxy",
+    ),
+    # ---- Milestone 9 · Increment 3 — analytics extensions unlocking
+    # M8 deferrals (Q3 true / Q6 gross-profit trend / Q8 true inventory
+    # turn). Same role gate + query-arg conventions as M8.1-M8.4.
+    path(
+        "admin/analytics/vehicle-type-profitability/",
+        views_analytics.admin_analytics_vehicle_type_profitability,
+        name="admin-analytics-vehicle-type-profitability",
+    ),
+    path(
+        "admin/analytics/gross-profit-trend/",
+        views_analytics.admin_analytics_gross_profit_trend,
+        name="admin-analytics-gross-profit-trend",
+    ),
+    path(
+        "admin/analytics/inventory-turn/",
+        views_analytics.admin_analytics_inventory_turn,
+        name="admin-analytics-inventory-turn",
+    ),
+    # ---- Milestone 9 · Increment 4 — Q7 buyer estimate accuracy.
+    # Q7 was deferred at M8 pending the acquisition-buyer FK; the
+    # substrate shipped at M9.1 and the verb now consumes it.
+    path(
+        "admin/analytics/buyer-estimate-accuracy/",
+        views_analytics.admin_analytics_buyer_estimate_accuracy,
+        name="admin-analytics-buyer-estimate-accuracy",
+    ),
+    # ---- Milestone 9 · Increment 1 — Sale admin API -------------------
+    # Role-gated on
+    # ``IsReconManagerSalesManagerOrOwnerAtActiveDealership`` per
+    # MILESTONE_9_PLANNING.md §1.6 (mirrors the M4-M8 pattern).
+    # Domain-error mapping in ``views_sale.py``:
+    #   CrossTenantSaleError → 404;
+    #   SaleAlreadyExistsError → 409;
+    #   ValueError → 400.
+    # POST creates the Sale; GET reads it (M9.5 additive per
+    # SESSION_104 §0.a). Same URL name preserved.
+    path(
+        "admin/vehicles/<str:stock_number>/sale/",
+        views_sale.admin_sale_create,
+        name="admin-sale-create",
+    ),
+    # ---- Milestone 9 · Increment 2 — Delivery admin API ---------------
+    # Role-gated per M4-M8 pattern. Domain-error mapping in
+    # ``views_delivery.py``:
+    #   CrossTenantDeliveryError → 404;
+    #   SaleNotFoundForDeliveryError → 409 (workflow ordering);
+    #   DeliveryAlreadyExistsError → 409;
+    #   UnknownChecklistKeyError → 400;
+    #   ValueError → 400.
+    path(
+        "admin/vehicles/<str:stock_number>/delivery/",
+        views_delivery.admin_delivery_create,
+        name="admin-delivery-create",
+    ),
+    path(
+        "admin/deliveries/<int:delivery_id>/",
+        views_delivery.admin_delivery_update,
+        name="admin-delivery-update",
     ),
 ]

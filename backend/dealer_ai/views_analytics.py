@@ -45,8 +45,12 @@ from .services import analytics as analytics_service
 from .services.analytics import (
     AgingTrendPoint,
     BreachPatternReport,
+    BuyerAccuracyRow,
     DaysAtFrontlineReport,
+    GrossProfitPoint,
+    InventoryTurnReport,
     SourcePerformanceRow,
+    VehicleTypeProfitabilityRow,
     VehicleTypeReconCostRow,
     VendorPerformanceRow,
 )
@@ -146,6 +150,58 @@ def _project_vehicle_type_row(row: VehicleTypeReconCostRow) -> dict:
         "vehicle_count": row.vehicle_count,
         "total_recon_cost": str(row.total_recon_cost),
         "mean_recon_cost": str(row.mean_recon_cost),
+    }
+
+
+def _project_vehicle_type_profitability_row(
+    row: VehicleTypeProfitabilityRow,
+) -> dict:
+    return {
+        "make": row.make,
+        "model": row.model,
+        "sold_count": row.sold_count,
+        # Decimals → strings for the same precision-preserving reason
+        # as the M8 sibling projections.
+        "total_sale_gross": str(row.total_sale_gross),
+        "total_sold_price": str(row.total_sold_price),
+        "mean_gross_pct": str(row.mean_gross_pct),
+    }
+
+
+def _project_gross_profit_point(point: GrossProfitPoint) -> dict:
+    return {
+        "sale_date": point.sale_date.isoformat(),
+        "sale_count": point.sale_count,
+        "total_gross_realized": str(point.total_gross_realized),
+    }
+
+
+def _project_inventory_turn_report(report: InventoryTurnReport) -> dict:
+    return {
+        "sold_count": report.sold_count,
+        # ``None`` on empty-window sentinel; JSON null preserves the
+        # "no signal" state distinct from "distribution happens to
+        # be zero."
+        "mean_days": (
+            str(report.mean_days) if report.mean_days is not None else None
+        ),
+        "p50_days": report.p50_days,
+        "p90_days": report.p90_days,
+        "min_days": report.min_days,
+        "max_days": report.max_days,
+    }
+
+
+def _project_buyer_accuracy_row(row: BuyerAccuracyRow) -> dict:
+    return {
+        "buyer_user_id": row.buyer_user_id,
+        "buyer_display": row.buyer_display,
+        "vehicle_count": row.vehicle_count,
+        "work_order_count": row.work_order_count,
+        # Decimals → strings for the same precision-preserving reason
+        # as the M8 / M9.3 sibling projections.
+        "mean_absolute_variance_pct": str(row.mean_absolute_variance_pct),
+        "bias_pct": str(row.bias_pct),
     }
 
 
@@ -551,5 +607,248 @@ def admin_analytics_days_at_frontline_proxy(request: Request) -> Response:
         {
             "window_days": window_days,
             "report": _project_frontline_report(report),
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 9 · Increment 3 (SESSION_102) — analytics extensions unlocking
+# M8 deferrals (Q3 true / Q6 gross-profit trend / Q8 true inventory turn).
+# ---------------------------------------------------------------------------
+
+
+@api_view(["GET"])
+@permission_classes(_M81_PERMS)
+def admin_analytics_vehicle_type_profitability(
+    request: Request,
+) -> Response:
+    """Q3 true — profitability per vehicle-type (see
+    :func:`services.analytics.vehicle_type_profitability`).
+
+    Sibling of :func:`admin_analytics_vehicle_type_recon_cost`
+    (M8.4 proxy). Both endpoints coexist per M8 §6 lesson 11.
+
+    Response shape::
+
+        {
+            "rows": [
+                {
+                    "make": "Ford",
+                    "model": "F-150",
+                    "sold_count": 5,
+                    "total_sale_gross": "12500.00",
+                    "total_sold_price": "185000.00",
+                    "mean_gross_pct": "6.75"
+                },
+                ...
+            ]
+        }
+    """
+    dealership = get_current_dealership(request)
+
+    window_start, err = _parse_iso_date_or_none(
+        request.query_params.get("window_start"),
+        field_name="window_start",
+    )
+    if err is not None:
+        return err
+    window_end, err = _parse_iso_date_or_none(
+        request.query_params.get("window_end"),
+        field_name="window_end",
+    )
+    if err is not None:
+        return err
+
+    rows = analytics_service.vehicle_type_profitability(
+        dealership,
+        window_start=window_start,
+        window_end=window_end,
+    )
+    return Response(
+        {
+            "rows": [
+                _project_vehicle_type_profitability_row(r) for r in rows
+            ]
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes(_M81_PERMS)
+def admin_analytics_gross_profit_trend(request: Request) -> Response:
+    """Q6 — daily-bucket gross-profit time series (see
+    :func:`services.analytics.gross_profit_trend`).
+
+    Query args:
+
+    - ``window_days`` — optional (default 90). Positive integer.
+
+    Response shape::
+
+        {
+            "window_days": 90,
+            "points": [
+                {
+                    "sale_date": "2026-07-15",
+                    "sale_count": 3,
+                    "total_gross_realized": "8250.00"
+                },
+                ...
+            ]
+        }
+
+    Points are sparse (dates with zero sales in the window are
+    omitted). Empty window returns ``"points": []``.
+    """
+    dealership = get_current_dealership(request)
+
+    window_days, err = _parse_positive_int_or_default(
+        request.query_params.get("window_days"),
+        default=90,
+        field_name="window_days",
+    )
+    if err is not None:
+        return err
+
+    points = analytics_service.gross_profit_trend(
+        dealership, window_days=window_days
+    )
+    return Response(
+        {
+            "window_days": window_days,
+            "points": [_project_gross_profit_point(p) for p in points],
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes(_M81_PERMS)
+def admin_analytics_inventory_turn(request: Request) -> Response:
+    """Q8 true — days-from-frontline-to-sale distribution (see
+    :func:`services.analytics.inventory_turn`).
+
+    Sibling of :func:`admin_analytics_days_at_frontline_proxy`
+    (M8.4 proxy). Both endpoints coexist per M8 §6 lesson 11.
+
+    Query args:
+
+    - ``window_days`` — optional (default 90). Positive integer.
+
+    Response shape::
+
+        {
+            "window_days": 90,
+            "report": {
+                "sold_count": 42,
+                "mean_days": "22.31",
+                "p50_days": 18,
+                "p90_days": 47,
+                "min_days": 3,
+                "max_days": 89
+            }
+        }
+
+    Every field in ``report`` (other than ``sold_count``) is
+    ``null`` when ``sold_count == 0`` — the "no signal" state is
+    distinct from "distribution happens to be zero."
+    """
+    dealership = get_current_dealership(request)
+
+    window_days, err = _parse_positive_int_or_default(
+        request.query_params.get("window_days"),
+        default=90,
+        field_name="window_days",
+    )
+    if err is not None:
+        return err
+
+    report = analytics_service.inventory_turn(
+        dealership, window_days=window_days
+    )
+    return Response(
+        {
+            "window_days": window_days,
+            "report": _project_inventory_turn_report(report),
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 9 · Increment 4 (SESSION_103) — Q7 buyer estimate accuracy.
+# ---------------------------------------------------------------------------
+
+
+@api_view(["GET"])
+@permission_classes(_M81_PERMS)
+def admin_analytics_buyer_estimate_accuracy(
+    request: Request,
+) -> Response:
+    """Q7 — per-buyer recon-cost estimate accuracy (see
+    :func:`services.analytics.buyer_estimate_accuracy`).
+
+    Query args:
+
+    - ``window_days`` — optional (default 90). Positive integer.
+    - ``buyer_user_id`` — optional. When present, filters to that
+      buyer only (0 or 1 rows). When absent, returns all buyers
+      with contributing data.
+
+    Response shape::
+
+        {
+            "window_days": 90,
+            "buyer_user_id": null,
+            "rows": [
+                {
+                    "buyer_user_id": 42,
+                    "buyer_display": "Alice Bidder",
+                    "vehicle_count": 8,
+                    "work_order_count": 23,
+                    "mean_absolute_variance_pct": "12.50",
+                    "bias_pct": "-3.25"
+                },
+                ...
+            ]
+        }
+
+    Rows sorted by ``mean_absolute_variance_pct`` ascending (most
+    accurate buyers first).
+    """
+    dealership = get_current_dealership(request)
+
+    window_days, err = _parse_positive_int_or_default(
+        request.query_params.get("window_days"),
+        default=90,
+        field_name="window_days",
+    )
+    if err is not None:
+        return err
+
+    buyer_raw = request.query_params.get("buyer_user_id")
+    buyer_user_id: Optional[int] = None
+    if buyer_raw is not None and buyer_raw != "":
+        try:
+            buyer_user_id = int(buyer_raw)
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    "detail": (
+                        f"Invalid buyer_user_id: expected integer, "
+                        f"got {buyer_raw!r}."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    rows = analytics_service.buyer_estimate_accuracy(
+        dealership,
+        window_days=window_days,
+        buyer_user_id=buyer_user_id,
+    )
+    return Response(
+        {
+            "window_days": window_days,
+            "buyer_user_id": buyer_user_id,
+            "rows": [_project_buyer_accuracy_row(r) for r in rows],
         }
     )

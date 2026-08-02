@@ -40,6 +40,7 @@ from ...models import (
     ACQUISITION_SOURCE_CHOICES,
     RECON_CATEGORIES,
     Dealership,
+    Sale,
     Vehicle,
     VehicleAcquisition,
     VehicleCost,
@@ -356,4 +357,168 @@ def vehicle_type_recon_cost(
     # Sort by total spend desc; deterministic tiebreak on
     # ``(make, model)`` asc.
     rows.sort(key=lambda r: (-r.total_recon_cost, r.make, r.model))
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Q3 true — vehicle-type profitability (SESSION_102, M9.3)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class VehicleTypeProfitabilityRow:
+    """One aggregation row — true profitability rolled up under one
+    ``(make, model)`` vehicle-type discriminator.
+
+    The M9.3 counterpart to :class:`VehicleTypeReconCostRow` (the M8.4
+    proxy). Both verbs coexist per M8 §6 lesson 11 — the proxy stays
+    valid ("what did we spend to prep?") and the true verb answers
+    the original operational question ("what did we realize on
+    it?").
+
+    Frozen because the aggregation output is immutable; callers
+    should project into a serialized shape rather than mutate.
+
+    **Discriminator choice.** Same ``(make, model)`` grouping as
+    the M8.4 proxy — dealer operators reason in terms of models,
+    not body-styles. Consistency across the two verbs matters more
+    than optimizing per verb.
+
+    Fields:
+
+    - ``make`` / ``model`` — the vehicle-type discriminator, as
+      stored on :attr:`Vehicle.make` + :attr:`Vehicle.model`.
+    - ``sold_count`` — distinct sold vehicles of this type whose
+      :attr:`Sale.sale_date` fell inside the window.
+    - ``total_sale_gross`` — sum of :attr:`Sale.gross_realized`
+      across those vehicles. Signed :class:`Decimal` — negative
+      when the type ran a net loss over the window.
+    - ``total_sold_price`` — sum of :attr:`Sale.sold_price` across
+      the same vehicles. Included so the caller can compute the
+      aggregate gross-margin ratio (``total_sale_gross /
+      total_sold_price``) at rendering time without a second
+      round-trip.
+    - ``mean_gross_pct`` — mean of per-vehicle gross-margin
+      percentages (``gross_realized / sold_price * 100`` per
+      Sale, then averaged) quantized to two decimal places.
+      Equal-weighted across vehicles regardless of price, so a
+      single high-price sale does not dominate. Callers wanting
+      revenue-weighted margin should compute the aggregate ratio
+      from the two totals.
+    """
+
+    make: str
+    model: str
+    sold_count: int
+    total_sale_gross: Decimal
+    total_sold_price: Decimal
+    mean_gross_pct: Decimal
+
+
+def vehicle_type_profitability(
+    dealership: Dealership,
+    *,
+    window_start: Optional[dt.date] = None,
+    window_end: Optional[dt.date] = None,
+) -> list[VehicleTypeProfitabilityRow]:
+    """Q3 true aggregation — profitability per vehicle-type.
+
+    Answers *"which vehicle types produce the highest profit?"* —
+    the operational question ``vehicle_type_recon_cost`` (M8.4)
+    could only proxy while the M9 Sale substrate was pending.
+    Reads :attr:`Sale.gross_realized` (denormalized at M9.1 write
+    time via :func:`services.sale.record_sale`) grouped by
+    ``(Vehicle.make, Vehicle.model)``.
+
+    Parameters
+    ----------
+    dealership : Dealership
+        The tenant to aggregate. Required — single-tenant.
+    window_start : dt.date, optional
+        Inclusive lower bound on :attr:`Sale.sale_date`. ``None``
+        means "no lower bound" (all history).
+    window_end : dt.date, optional
+        Inclusive upper bound on :attr:`Sale.sale_date`. ``None``
+        means "no upper bound" (through today).
+
+    Returns
+    -------
+    list[VehicleTypeProfitabilityRow]
+        One row per ``(make, model)`` combination that produced
+        any sale in the window. Rows sorted by
+        ``total_sale_gross`` descending; deterministic tiebreak on
+        ``(make, model)`` ascending. Vehicle-types with zero
+        sales in the window are omitted — absence signals "no
+        signal here."
+
+    Notes
+    -----
+    Read-only. Reads ``Sale.gross_realized`` denormalized column
+    directly rather than recomputing via
+    :func:`services.sale.gross_realized` per row — the M9.1 verb
+    denormalized at write time precisely so aggregations stay
+    single-query.
+    """
+    sale_qs = Sale.objects.filter(dealership=dealership).select_related(
+        "vehicle"
+    )
+    if window_start is not None:
+        sale_qs = sale_qs.filter(sale_date__gte=window_start)
+    if window_end is not None:
+        sale_qs = sale_qs.filter(sale_date__lte=window_end)
+
+    # Pull all in-window sale rows in one query with the vehicle
+    # discriminator via select_related. The per-vehicle aggregation
+    # runs in Python — the vocabulary of vehicle-types is small enough
+    # that iterating in the app process avoids a group-by-with-count
+    # subquery that would need denormalized make/model on Sale.
+    totals_by_type: dict[tuple[str, str], Decimal] = {}
+    prices_by_type: dict[tuple[str, str], Decimal] = {}
+    counts_by_type: dict[tuple[str, str], int] = {}
+    pct_sum_by_type: dict[tuple[str, str], Decimal] = {}
+
+    for sale in sale_qs:
+        vehicle_type = (sale.vehicle.make, sale.vehicle.model)
+        totals_by_type[vehicle_type] = (
+            totals_by_type.get(vehicle_type, ZERO) + sale.gross_realized
+        )
+        prices_by_type[vehicle_type] = (
+            prices_by_type.get(vehicle_type, ZERO) + sale.sold_price
+        )
+        counts_by_type[vehicle_type] = (
+            counts_by_type.get(vehicle_type, 0) + 1
+        )
+        # Per-vehicle margin percentage. Guard against zero
+        # sold_price — impossible in practice (DB has no such
+        # constraint but M9.1 record_sale requires a positive
+        # Decimal) but defensive.
+        if sale.sold_price > 0:
+            pct = (sale.gross_realized / sale.sold_price) * Decimal("100")
+            pct_sum_by_type[vehicle_type] = (
+                pct_sum_by_type.get(vehicle_type, ZERO) + pct
+            )
+
+    rows: list[VehicleTypeProfitabilityRow] = []
+    for (make, model), total in totals_by_type.items():
+        count = counts_by_type[(make, model)]
+        pct_sum = pct_sum_by_type.get((make, model), ZERO)
+        mean_pct = (
+            (pct_sum / count).quantize(Decimal("0.01"))
+            if count > 0
+            else ZERO
+        )
+        rows.append(
+            VehicleTypeProfitabilityRow(
+                make=make,
+                model=model,
+                sold_count=count,
+                total_sale_gross=total,
+                total_sold_price=prices_by_type[(make, model)],
+                mean_gross_pct=mean_pct,
+            )
+        )
+
+    # Sort by total sale gross desc; deterministic tiebreak on
+    # ``(make, model)`` asc so ties render stably across runs.
+    rows.sort(key=lambda r: (-r.total_sale_gross, r.make, r.model))
     return rows

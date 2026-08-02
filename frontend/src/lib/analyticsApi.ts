@@ -181,6 +181,110 @@ export function fetchDaysAtFrontlineProxy(
 }
 
 // ---------------------------------------------------------------------------
+// Milestone 9 · Increment 3 (SESSION_102) + Increment 4 (SESSION_103) —
+// analytics extensions unlocking M8 deferrals.
+//
+// Q3 true / Q6 gross-profit trend / Q7 buyer estimate accuracy / Q8
+// true inventory turn. Shipped alongside the M8.4 proxy verbs — both
+// coexist (per M8 §6 lesson 11 additive extension). M9.5 UI reads
+// the true verbs.
+// ---------------------------------------------------------------------------
+
+// Q3 true — vehicle-type profitability.
+export interface VehicleTypeProfitabilityRow {
+  make: string;
+  model: string;
+  sold_count: number;
+  total_sale_gross: string;
+  total_sold_price: string;
+  mean_gross_pct: string;
+}
+
+export interface VehicleTypeProfitabilityResponse {
+  rows: VehicleTypeProfitabilityRow[];
+}
+
+export function fetchVehicleTypeProfitability(): Promise<VehicleTypeProfitabilityResponse> {
+  return authGetJSON<VehicleTypeProfitabilityResponse>(
+    "/admin/analytics/vehicle-type-profitability/",
+  );
+}
+
+// Q6 — gross-profit trend (sparse per-day series).
+export interface GrossProfitPoint {
+  sale_date: string; // ISO date (YYYY-MM-DD)
+  sale_count: number;
+  total_gross_realized: string;
+}
+
+export interface GrossProfitTrendResponse {
+  window_days: number;
+  points: GrossProfitPoint[];
+}
+
+export function fetchGrossProfitTrend(
+  windowDays = 90,
+): Promise<GrossProfitTrendResponse> {
+  const params = new URLSearchParams({ window_days: String(windowDays) });
+  return authGetJSON<GrossProfitTrendResponse>(
+    `/admin/analytics/gross-profit-trend/?${params.toString()}`,
+  );
+}
+
+// Q8 true — days-from-frontline-to-sale distribution.
+export interface InventoryTurnReport {
+  sold_count: number;
+  mean_days: string | null;
+  p50_days: number | null;
+  p90_days: number | null;
+  min_days: number | null;
+  max_days: number | null;
+}
+
+export interface InventoryTurnResponse {
+  window_days: number;
+  report: InventoryTurnReport;
+}
+
+export function fetchInventoryTurn(
+  windowDays = 90,
+): Promise<InventoryTurnResponse> {
+  const params = new URLSearchParams({ window_days: String(windowDays) });
+  return authGetJSON<InventoryTurnResponse>(
+    `/admin/analytics/inventory-turn/?${params.toString()}`,
+  );
+}
+
+// Q7 — per-buyer recon-cost estimate accuracy.
+export interface BuyerAccuracyRow {
+  buyer_user_id: number;
+  buyer_display: string;
+  vehicle_count: number;
+  work_order_count: number;
+  mean_absolute_variance_pct: string;
+  bias_pct: string;
+}
+
+export interface BuyerEstimateAccuracyResponse {
+  window_days: number;
+  buyer_user_id: number | null;
+  rows: BuyerAccuracyRow[];
+}
+
+export function fetchBuyerEstimateAccuracy(
+  windowDays = 90,
+  buyerUserId: number | null = null,
+): Promise<BuyerEstimateAccuracyResponse> {
+  const params = new URLSearchParams({ window_days: String(windowDays) });
+  if (buyerUserId !== null) {
+    params.set("buyer_user_id", String(buyerUserId));
+  }
+  return authGetJSON<BuyerEstimateAccuracyResponse>(
+    `/admin/analytics/buyer-estimate-accuracy/?${params.toString()}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Display helpers
 // ---------------------------------------------------------------------------
 
@@ -214,5 +318,22 @@ export function formatSnapshotAt(iso: string): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+  });
+}
+
+// ISO date-only string (YYYY-MM-DD) → "Aug 1" for compact trend
+// chart x-axis labels. Locale-neutral month abbreviation. Kept
+// separate from formatSnapshotAt because a date-only value has no
+// time component to render.
+export function formatShortDate(iso: string): string {
+  // Parse as UTC to avoid the "one-day-off in negative-offset
+  // timezones" bug that hits `new Date("2026-08-01")` — the JSON
+  // wire format is a bare date, not a timestamp.
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
   });
 }

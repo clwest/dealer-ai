@@ -1,7 +1,7 @@
 ---
 state: active
-date: 2026-08-01
-last_session_shipped: SESSION_099
+date: 2026-08-02
+last_session_shipped: SESSION_105
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -10,48 +10,52 @@ milestone_5_status: shipped
 milestone_6_status: shipped
 milestone_7_status: shipped
 milestone_8_status: shipped
-milestone_9_status: planning
-next_session: SESSION_100
-next_milestone: 9
-next_milestone_name: "Sale + delivery closure"
+milestone_9_status: shipped
+milestone_10_status: planning
+next_session: SESSION_106
+next_milestone: 10
+next_milestone_name: "Finance (F&I) deal desk"
 next_increment: 1
-next_increment_name: "M9.1 — Sale entity + gross_realized"
+next_increment_name: "M10.1 — CreditApplication entity + retention discipline"
 ---
 
-# Next session — SESSION_100 · Milestone 9 · Increment 1 (M9.1 — Sale entity + gross_realized)
+# Next session — SESSION_106 · Milestone 10 · Increment 1 (M10.1 — CreditApplication entity)
 
-> **SESSION_099 shipped M8.6 closeout —
-> `MILESTONE_8_RETROSPECTIVE.md` (fifteen
-> lessons — one new: verify handoff claims via
-> direct inspection) + `CAPABILITY_MATRIX.md`
-> §7i + `IMPLEMENTATION_ROADMAP.md` §M8
-> SHIPPED header + `MILESTONE_8_PLANNING.md`
-> frontmatter flip + `DEALER_KIT_SESSION_START.md`
-> refresh (baseline 3,150 → 3,274; frontend 0 →
-> 19) + `MILESTONE_9_PLANNING.md` new (per
+> **SESSION_105 shipped M9.6 closeout —**
+> `MILESTONE_9_RETROSPECTIVE.md` (sixteen
+> lessons — one new: substrate-gap pushback
+> as a productive session-open pattern) +
+> `CAPABILITY_MATRIX.md` §7j + roadmap flip
+> + planning frontmatter flip + session-
+> start refresh (baseline 3,274 → 3,426
+> backend, 19 → 34 frontend) +
+> `MILESTONE_10_PLANNING.md` new (per
 > standing user directive) + coordinated
-> commit `34352ed` landing every M8.1-M8.6
-> stage.**
+> commit landing every M9.1–M9.6 stage.
 >
-> **Push to `origin/main` is deferred pending
-> explicit user authorization** — check with
-> the user at session open whether the commit
-> should push or stay local.
+> **Push to `origin/main` is deferred
+> pending explicit user authorization** —
+> check with the user at session open
+> whether the commit should push or stay
+> local.
 >
-> **Backend baseline: 3,274 pass, 1 skipped, 0
-> fail.** Frontend Vitest baseline: 19 pass.
-> Migrations `0001`–`0022`.
+> **Backend baseline: 3,426 pass, 1
+> skipped, 0 fail.** Frontend Vitest
+> baseline: 34 pass. Migrations
+> `0001`–`0024`.
 >
-> **SESSION_100 opens M9.1 — Sale entity +
-> gross_realized.** Three §9 decisions in
-> `MILESTONE_9_PLANNING.md` §5 to confirm at
-> session open before code lands.
+> **SESSION_106 opens M10.1 —
+> CreditApplication entity + retention
+> discipline.** Four §5 decisions in
+> `MILESTONE_10_PLANNING.md` §5 to
+> confirm at session open before code
+> lands.
 
-## First thing SESSION_100 must do
+## First thing SESSION_106 must do
 
-### 1. Check push authorization for commit `34352ed`
+### 1. Check push authorization for the M9-close commit
 
-The M8-close commit lives locally on `main`
+The M9-close commit lives locally on `main`
 only. Verify with the user:
 
 - Is the commit still local? (`git log
@@ -60,166 +64,197 @@ only. Verify with the user:
 - Should it push now? If yes: `git push
   origin main` after explicit user "go."
 
-Push is a shared-state action; per CLAUDE.md
-safety posture, requires per-push confirmation
-independent of the per-milestone authorization
-that landed the commit.
+Push is a shared-state action; per
+CLAUDE.md safety posture, requires per-push
+confirmation independent of the per-
+milestone authorization that landed the
+commit. Matches SESSION_100 M8-close-commit
+push flow.
 
-### 2. Confirm the three §9 decisions in `MILESTONE_9_PLANNING.md`
+### 2. Confirm the four §5 decisions in `MILESTONE_10_PLANNING.md`
 
-Recommendations (all Option A):
+Recommendations (drawn from §9):
 
-1. **§5.a Acquisition-buyer provenance
-   bundling.** Bundle the M2 buyer-FK
-   extension into M9 so Q7 unlocks in the
-   same milestone (adds migration `0024` in
-   the M9 chain).
-2. **§5.b Sale.buyer representation.**
-   `Sale.buyer` FK to existing
-   `CustomerLead`. Reuses M3-M5 CRM
-   substrate.
-3. **§5.c Sale finance-type vocabulary.**
-   Three initial values: `cash` / `retail` /
-   `bhph`. Small vocabulary; extend when
-   operator evidence surfaces need.
+1. **§5.a — CreditApplication attach
+   point.** Recommendation TBD; will
+   surface at session open after re-
+   reading FINANCE §workflow.
+2. **§5.b — Stipulation vocabulary
+   partition.** Option A (small fixed
+   set: proof of income / insurance /
+   residence / references / other).
+3. **§5.c — Chargeback impact on
+   `Sale.gross_realized`.** Option B
+   (additive `net_realized` verb; no
+   M9 schema change). Follows M8 §6
+   lesson 11 additive-extension
+   pattern.
+4. **§5.d — Onboarding lender
+   migration.** Option C (leave both;
+   the structured
+   `LenderProgram` catalog is
+   additive alongside the free-text
+   `subprime_lenders` field).
 
-**Do not write M9.1 code until every
-`[NEEDS-DECISION-BEFORE-M9.N]` item is
+**Do not write M10.1 code until every
+`[NEEDS-DECISION-BEFORE-M10.N]` item is
 resolved.** If the user overrides any
-decision, amend `MILESTONE_9_PLANNING.md`
-§0.a narrowly at session top (per M8 §0.a
-precedent — SESSION_095 + SESSION_097
-change-log entries) before implementation.
+decision, amend
+`MILESTONE_10_PLANNING.md` §0.a narrowly
+at session top (per M5-M9 §0.a
+precedent) before implementation.
 
 ### 3. Verify starting state
 
-- `git status` — should be clean (M8-close
-  commit landed at SESSION_099 close).
+- `git status` — clean (M9-close commit
+  landed at SESSION_105 close).
 - `git log --oneline -3` — top should be
-  `34352ed Milestone 8 shipped …`.
+  `Milestone 9 shipped — sale + delivery
+  closure (SESSION_100-105)` or similar.
 - `python3 manage.py test dealer_ai` →
-  **3,274 pass, 1 skipped, 0 fail.**
+  **3,426 pass, 1 skipped, 0 fail.**
 - `python3 manage.py check` clean.
-- `python3 manage.py makemigrations --check
-  --dry-run` → "No changes detected."
-- `cd frontend && npm test` → **19 pass**.
-- `npx tsc --noEmit` clean.
-- `npx vite build` clean.
+- `python3 manage.py makemigrations
+  --check --dry-run` → "No changes
+  detected."
+- `cd frontend && npm test` → **34
+  pass**.
+- `npx tsc --noEmit` + `npx vite build`
+  both clean.
 - `redis-cli ping` → `PONG`.
 
-## What M9.1 delivers
+## What M10.1 delivers
 
-Per `MILESTONE_9_PLANNING.md` §7 M9.1:
+Per `MILESTONE_10_PLANNING.md` §7 M10.1:
 
-- **New `Sale` model + migration `0023`**
-  (fields per §1.1: `buyer` FK — target
-  depends on §5.b, `vehicle` FK unique,
-  `sale_date`, `sold_price` Decimal,
-  `finance_type` from §5.c vocabulary,
-  `lender_name` nullable text,
-  `gross_realized` Decimal).
-- **`services/sale/` package + `computation.py::gross_realized`
-  verb** reading M2 `vehicle_ledger.compute_totals(sale.vehicle)`.
-  Read-only.
-- **First endpoint:**
-  `POST /api/dealer-ai/admin/vehicles/<stock>/sale/`.
-  Role-gated per the M4-M8 pattern.
-- **Tenancy-carrier extension 22 → 23**
-  (`Sale`).
+- **New `CreditApplication` model +
+  migration `0025`** attached per §5.a
+  decision. Legal retention clock at
+  the model layer (created_at +
+  retention_expires_at computed from
+  policy constants; `delete()` refuses
+  unexpired records at the model
+  layer, not the service layer).
+- **New `services/f_and_i/` package** +
+  first verbs (`record_credit_application`
+  + read verb + retention-clock verb).
+- **Tenancy-carrier extension 24 → 25**
+  (`CreditApplication`).
+- **New permission class**
+  `IsFinanceManagerOrOwnerAtActiveDealership`
+  in `permissions.py` — `f_and_i_manager`
+  role already exists in M1
+  `ROLE_CHOICES`; the permission class
+  composes with `IsAuthenticated` per
+  the M4-M9 pattern.
+- **First endpoint**
+  `POST /api/dealer-ai/admin/credit-applications/`
+  or a per-lead / per-sale nested path
+  depending on §5.a decision. Role-
+  gated on the new permission class.
 - **~30 focused tests.**
-- **Baseline target 3,274 → ~3,304.**
+- **Baseline target 3,426 → ~3,456.**
 
-If §5.a Option A confirmed, M9.1 may also
-land the `VehicleAcquisition.buyer` FK +
-migration `0024` alongside (decide at
-session open per Sale-FK-first vs
-buyer-FK-first sequencing).
+### Non-goals for M10.1
 
-### Non-goals for M9.1
+- ❌ No `DealStructure` yet (M10.2).
+- ❌ No lender / stip / contract /
+  funding / chargeback entities
+  (M10.3-M10.7).
+- ❌ No operator UI (M10.7).
+- ❌ No direct lender-portal
+  integrations (deferred per
+  IMPLEMENTATION_ROADMAP §Milestone 10
+  non-goals).
 
-- ❌ No `Delivery` model yet (M9.2).
-- ❌ No analytics extensions
-  (`vehicle_type_profitability`,
-  `gross_profit_trend`, `inventory_turn`) —
-  M9.3.
-- ❌ No frontend / operator UI (M9.5).
-- ❌ No F&I / stips / chargebacks (M10).
-
-## What SESSION_100 should do
+## What SESSION_106 should do
 
 ### Recommended step sequence
 
-0. **Push authorization check** (§1 above).
+0. **Push authorization check** (§1
+   above).
 
-1. **Confirm the three §9 decisions with the
-   user** (§2 above). Do NOT write code
-   until every
-   `[NEEDS-DECISION-BEFORE-M9.N]` item is
-   resolved.
+1. **Confirm the four §5 decisions with
+   the user** (§2 above). Do NOT write
+   code until every
+   `[NEEDS-DECISION-BEFORE-M10.N]` item
+   is resolved.
 
 2. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_9_PLANNING.md`
-     §1.1 + §1.4 + §5 + §7 M9.1.
-   - `docs/handoffs/SESSION_099_m8_closeout.md`
+   - `docs/roadmap/MILESTONE_10_PLANNING.md`
+     §1.1 + §1.8 + §5 + §7 M10.1.
+   - `docs/handoffs/SESSION_105_m9_closeout.md`
      (previous session).
-   - `docs/roadmap/MILESTONE_8_RETROSPECTIVE.md`
-     §6 (fifteen lessons carry into M9).
-   - `docs/CAPABILITY_MATRIX.md` §7i (M8
-     substrate M9 layers on top of).
-   - `backend/dealer_ai/models.py::Vehicle`
-     (Sale parent).
+   - `docs/roadmap/MILESTONE_9_RETROSPECTIVE.md`
+     §6 (sixteen lessons carry into
+     M10).
+   - `docs/CAPABILITY_MATRIX.md` §7j
+     (M9 substrate M10 layers on top
+     of).
+   - `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
+     §workflow + §compliance + pains
+     #1 / #4 / #6 / #7 / #9.
    - `backend/dealer_ai/models.py::CustomerLead`
-     (potential Sale.buyer target — §5.b).
-   - `backend/dealer_ai/services/vehicle_ledger.py::compute_totals`
-     (the read path `gross_realized` calls
-     through).
+     (potential CreditApplication
+     attach target — §5.a).
+   - `backend/dealer_ai/models.py::Sale`
+     (M9.1 substrate for chargeback
+     plumbing — §5.c).
+   - `backend/dealer_ai/permissions.py`
+     (add `IsFinanceManagerOrOwnerAtActiveDealership`).
 
 3. **Verify starting state** (§3 above).
 
 4. **Draft (in order):**
-   - `Sale` model + migration `0023` (+
-     `VehicleAcquisition.buyer` migration
-     `0024` if §5.a Option A).
-   - `services/sale/__init__.py` +
-     `services/sale/computation.py::gross_realized`
-     verb.
+   - `CreditApplication` model +
+     migration `0025` (per §5.a
+     decision).
+   - Retention-clock enforcement at
+     the model layer.
+   - `services/f_and_i/__init__.py` +
+     first verbs.
    - Tenancy carrier addition.
+   - New permission class.
    - First endpoint + URL.
    - ~30 focused tests.
 
 5. **Full-suite verification.** Target
-   3,274 → ~3,304.
+   3,426 → ~3,456.
 
 6. **Ship handoff at
-   `docs/handoffs/SESSION_100_m9_inc1_sale_entity.md`.**
+   `docs/handoffs/SESSION_106_m10_inc1_credit_application.md`.**
 
 7. **Overwrite `00-START-NEXT-SESSION.md`**
-   with M9.2 priority.
+   with M10.2 priority.
 
-## Explicit non-goals for SESSION_100
+## Explicit non-goals for SESSION_106
 
-- ❌ Do NOT ship `Delivery` model or
-  checklist (M9.2).
-- ❌ Do NOT ship analytics extensions
-  (M9.3).
-- ❌ Do NOT ship frontend UI (M9.5).
-- ❌ Do NOT modify M1-M8 business logic.
-- ❌ Do NOT force-push or amend the M8-close
-  commit `34352ed`.
+- ❌ Do NOT ship DealStructure /
+  LenderProgram / LenderSubmission /
+  Stipulation / Contract / Funding /
+  Chargeback / ComplianceRecord
+  entities (M10.2-M10.7).
+- ❌ Do NOT ship frontend UI (M10.7).
+- ❌ Do NOT modify M1-M9 business logic.
+- ❌ Do NOT force-push or amend the
+  M9-close commit.
 
 ## NEXT TASK
 
-Start SESSION_100 with (a) push-authorization
-check for the M8-close commit, (b) confirming
-the three §9 decisions with the user, (c) the
-read-first list, (d) starting-state
-verification, then (e) `Sale` model + first
-endpoint + ~30 tests. Target baseline 3,274 →
-~3,304. Ship the M9.1 handoff.
+Start SESSION_106 with (a) push-
+authorization check for the M9-close
+commit, (b) confirming the four §5
+decisions with the user, (c) the read-
+first list, (d) starting-state
+verification, then (e) `CreditApplication`
+model + retention-clock enforcement +
+first endpoint + ~30 tests. Target
+baseline 3,426 → ~3,456. Ship the M10.1
+handoff.
 
-Backend baseline at SESSION_100 close:
-**~3,304 pass**. Frontend baseline: unchanged
-(no frontend at M9.1).
+Backend baseline at SESSION_106 close:
+**~3,456 pass**. Frontend baseline:
+unchanged (no frontend at M10.1).
 
 ---
 
@@ -227,68 +262,77 @@ Backend baseline at SESSION_100 close:
 
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 9
+3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 10
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_9_PLANNING.md`
-6. `docs/roadmap/MILESTONE_8_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_099_m8_closeout.md`
-8. `docs/handoffs/SESSION_098_m8_inc5_operator_ui.md`
-9. `docs/handoffs/SESSION_097_m8_inc4_acquisition_frontline_proxies.md`
-10. `docs/handoffs/SESSION_096_m8_inc3_aging_sla_patterns.md`
-11. `docs/handoffs/SESSION_095_m8_inc2_vendor_performance.md`
-12. `docs/handoffs/SESSION_094_m8_inc1_analytics_infra.md`
-13. `docs/roadmap/MILESTONE_8_PLANNING.md` (with §0.a
-    SESSION_095 + SESSION_097 amendments; shipped)
-14. `docs/CAPABILITY_MATRIX.md` §7i
-15. `docs/research/VEHICLE_CENTRIC_PIVOT.md` §Phase 8
-16. `docs/research/SALES_DEPARTMENT_MAPPING.md`
+5. `docs/roadmap/MILESTONE_10_PLANNING.md`
+6. `docs/roadmap/MILESTONE_9_RETROSPECTIVE.md`
+7. `docs/handoffs/SESSION_105_m9_closeout.md`
+8. `docs/handoffs/SESSION_104_m9_inc5_operator_ui.md`
+9. `docs/handoffs/SESSION_103_m9_inc4_buyer_accuracy.md`
+10. `docs/handoffs/SESSION_102_m9_inc3_analytics_extensions.md`
+11. `docs/handoffs/SESSION_101_m9_inc2_delivery.md`
+12. `docs/handoffs/SESSION_100_m9_inc1_sale_entity.md`
+13. `docs/CAPABILITY_MATRIX.md` §7j
+14. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
 
 Narrative docs are claims. Rules + research +
 code are facts.
 
 ---
 
-## Operational state (post-SESSION_099 — M8 SHIPPED)
+## Operational state (post-SESSION_105 — M9 SHIPPED)
 
 - **Backend (local):** Django on `:8001`.
-  Migrations `0001`–`0022`. Test baseline:
-  **3,274 pass**, 1 skipped, 0 fail.
+  Migrations `0001`–`0024`. Test baseline:
+  **3,426 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`.
   `tsc --noEmit` + `vite build` clean.
-  **Vitest baseline: 19 pass** (established
-  at M8.5).
+  **Vitest baseline: 34 pass**.
 - **Frontend (prod):** NONE.
 - **Async runtime:** Celery 5.5.3 + Redis
   6.4.0 + `django-celery-beat` 2.8.1
-  DatabaseScheduler. **4 scheduled task
-  families registered** at hourly cadence
-  02:00 – 05:00 project-time (unchanged
-  from M7).
-- **Milestones shipped:** M1 → **M8**
-  (SESSION_099 close). M9 planning drafted.
-- **DRF admin surface:** 40 endpoints.
-- **Frontend operator routes:** 8 (M8.5
-  added `/dealer-ai-analytics/`).
+  DatabaseScheduler. 4 scheduled task
+  families registered (unchanged from
+  M7).
+- **Milestones shipped:** M1 → **M9**
+  (SESSION_105 close). M10 planning
+  drafted.
+- **DRF admin surface:** 47 endpoints.
+- **Frontend operator routes:** 9 (M9.5
+  added `dealer-ai-inventory/:stock/sale`).
 - **Public endpoints:** +1 M6.5 showroom
   (unchanged).
 - **Service surface:** M8 added
-  `services/analytics/` (4 submodules) +
-  M7.4 verb-extension.
-- **Tenancy carriers:** 22 (M1 six + M3
+  `services/analytics/` (4 submodules);
+  M9.1 `services/sale/`; M9.2
+  `services/delivery/`; M9.3 added
+  `services/analytics/gross_profit.py`
+  submodule + extended M8.4 modules with
+  true-verb siblings; M9.4 extended
+  `services/analytics/recon.py` with Q7
+  buyer-estimate-accuracy verb.
+- **Tenancy carriers:** 24 (M1 six + M3
   three + M4 six + M5 two + M6 two + M7
-  two + M8 one — `SlaBreachRecord`).
+  two + M8 one + M9.1 one — `Sale` +
+  M9.2 one — `Delivery`).
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** unchanged.
 - **Deterministic rules:** unchanged.
-- **M8 aggregation surface (shipped +
-  wired to UI):** Q1 (recon per source),
-  Q2 + Q4 (vendor performance), Q5 + Q9
-  (stage aging trend), Q10 (SLA breach
-  patterns), Q3 proxy (vehicle-type recon
-  cost), Q8 proxy (days at frontline).
-  Six aggregations, six endpoints.
-- **Milestone 9 next:** M9.1 Sale entity +
-  gross_realized. Three §9 decisions to
+- **M9 aggregation + workflow surface
+  (shipped + wired to UI):** Sale entity
+  with `gross_realized` denormalized at
+  write, Delivery entity with 5-item
+  checklist + verify-insurance,
+  `VehicleAcquisition.buyer` FK
+  (nullable) enabling Q7. Q3 true / Q6
+  gross-profit trend / Q7 buyer
+  accuracy / Q8 true inventory turn.
+  Fifth operator UI tab **Realized
+  Gross** + new per-vehicle Sale +
+  Delivery page.
+- **Milestone 10 next:** M10.1
+  CreditApplication + retention
+  discipline. Four §5 decisions to
   confirm at session open. ~30 tests.
-  Baseline ~3,274 → ~3,304.
+  Baseline 3,426 → ~3,456.

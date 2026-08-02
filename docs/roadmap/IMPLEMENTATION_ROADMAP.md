@@ -907,7 +907,47 @@ source data; Milestone 7 for scheduled refresh.
 
 ---
 
-### Milestone 9 — Sale + delivery closure
+### Milestone 9 — Sale + delivery closure — SHIPPED at SESSION_105
+
+*Full delivery record: `docs/roadmap/MILESTONE_9_PLANNING.md`
+§7 (annotated SHIPPED per increment; five §0.a
+change-log amendments recorded — one for the M9.1
+combined-migration sequencing decision, one for the
+M9.2 Delivery-OneToOne interpretation clarification,
+one for the M9.3 implementation notes, one for the
+M9.4 `LeadVehicleInterest` annotation deferral
+substrate-gap, one for the M9.5 UI decisions + GET
+dispatch substrate-gap) and
+`docs/roadmap/MILESTONE_9_RETROSPECTIVE.md`. Shipped
+surface enumerated in `docs/CAPABILITY_MATRIX.md`
+§7j. Backend test baseline delta: 3,274 → 3,426
+(+152 tests, zero regressions). Frontend Vitest
+baseline: 19 → 34 (+15). Sessions 100 → 105. Two
+new entities (Sale + Delivery) with mandatory
+OneToOne (Delivery.sale). Two new services packages
+(`services/sale/` + `services/delivery/`). Four
+"true" analytics verbs closing M8 deferrals — Q3
+(`vehicle_type_profitability`), Q6
+(`gross_profit_trend`), Q7 (`buyer_estimate_accuracy`),
+Q8 (`inventory_turn`). Seven new DRF endpoints (one
+M9.1 Sale + two M9.2 Delivery + three M9.3 + one
+M9.4). Fifth analytics tab **Realized Gross** + new
+per-vehicle `dealer-ai-inventory/:stock/sale/` page.
+GET dispatch added additively to M9.1 + M9.2 write
+URLs via `@api_view(["GET", "POST"])` method-multiplex
+(URL names preserved). Migrations `0023` +
+`0024`. Tenancy carriers 22 → 24 (+`Sale`,
++`Delivery`). `VehicleAcquisition.buyer` FK
+(nullable) shipped alongside M9.1 as the M2
+substrate Q7 reads. `LeadVehicleInterest.stage_at_interest`
+annotation deferred per §0.a SESSION_103
+substrate-gap (through-model doesn't exist).
+Sale/Delivery cross-vehicle list views + dense
+gross-profit series + `AnalyticsCache`
+materialization all deferred pending operator
+evidence. No DMS / e-filing / sales-tax /
+BHPH / F&I work per planning §scope-boundary
+non-goals.*
 
 **Business objective.** Close the loop between the vehicle
 side and the customer side. When a Vehicle transitions to

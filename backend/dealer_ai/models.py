@@ -939,6 +939,24 @@ class VehicleAcquisition(models.Model):
     title_acquisition_cost = models.DecimalField(
         max_digits=10, decimal_places=2, default=0
     )
+    # Milestone 9 · Increment 1 (SESSION_100) — acquisition-buyer
+    # provenance per MILESTONE_9_PLANNING.md §5.a Option A (user-
+    # confirmed at SESSION_100 open). The in-house buyer who made the
+    # purchase decision (auction bidder / trade appraiser / wholesale
+    # negotiator). Nullable + SET_NULL so historical rows written
+    # before M9.1 remain intact (no buyer provenance was captured) and
+    # so a User deletion doesn't retract the acquisition record. The
+    # M9.4 :func:`services.analytics.recon.buyer_estimate_accuracy`
+    # verb reads this FK; a NULL row means "no provenance recorded"
+    # and is excluded from the aggregation rather than treated as a
+    # single anonymous buyer bucket.
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="acquisitions_bought",
+    )
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -3829,3 +3847,306 @@ class SlaBreachRecord(models.Model):
             f"{self.breach_days}d) "
             f"@ {self.detected_at:%Y-%m-%d %H:%M}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 9 · Increment 1 (SESSION_100) — Sale entity vocabulary.
+# ---------------------------------------------------------------------------
+
+# Sale finance-type vocabulary — MILESTONE_9_PLANNING.md §5.c Option A
+# (user-confirmed at SESSION_100 open, recorded in §0.a). Three
+# initial values match the M8 planning §1.6 catalog. Extensions
+# (`lease`, `wholesale_out`, `internal_transfer`,
+# `wholesale_disposal`) land when operator evidence surfaces need,
+# per §5.c Option B (deferred).
+SALE_FINANCE_TYPE_CASH = "cash"
+SALE_FINANCE_TYPE_RETAIL = "retail"
+SALE_FINANCE_TYPE_BHPH = "bhph"
+
+SALE_FINANCE_TYPE_CHOICES = (
+    (SALE_FINANCE_TYPE_CASH, "Cash"),
+    (SALE_FINANCE_TYPE_RETAIL, "Retail (bank / credit union)"),
+    (SALE_FINANCE_TYPE_BHPH, "Buy-here-pay-here"),
+)
+
+
+class Sale(models.Model):
+    """Milestone 9 · Increment 1 — one Sale per Vehicle.
+
+    Persists the closing event that turns a Vehicle from inventory
+    into a completed transaction. OneToOne on ``vehicle`` — the
+    business invariant "a car sells exactly once from this dealer's
+    lot" is enforced at the schema level.
+
+    Every business question Milestone 9 answers ("what did we
+    realize on this sale?", "what's the gross-profit trend?", "what
+    is true days-to-sale for this vehicle-type?") starts from this
+    row plus the M2 ledger. See
+    ``docs/roadmap/MILESTONE_9_PLANNING.md`` §1.1 for the field
+    contract and §1.4 for the ``gross_realized`` computation
+    contract.
+
+    **`buyer` FK to `CustomerLead`** — §5.b Option A (user-
+    confirmed at SESSION_100 open). Reuses the M3-M5 CRM
+    substrate: the customer already exists as a lead by the time a
+    Sale writes. Nullable + SET_NULL so historical CustomerLead
+    deletion doesn't cascade into the Sale record (the Sale itself
+    is the ledger of record; the lead is provenance context).
+
+    **`gross_realized` denormalized on the row** — populated at
+    write time by :func:`services.sale.record_sale` via
+    :func:`services.sale.computation.gross_realized`. Stored (not
+    computed on read) so M9.3 analytics queries can aggregate
+    without per-row ledger recomputation. The verb is pure — same
+    ``sale`` + same DB state → same Decimal — so the stored value
+    can be re-derived at any time if the ledger evolves.
+
+    **Cross-tenant guard.** ``clean()`` enforces two invariants —
+    ``dealership`` must match ``vehicle.dealership`` and, when
+    ``buyer`` is set, ``buyer.dealership``. Belt (model) +
+    suspenders (service layer's
+    :class:`services.sale.CrossTenantSaleError`).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="sales",
+    )
+    vehicle = models.OneToOneField(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="sale",
+    )
+    # §5.b Option A: FK to CustomerLead. SET_NULL so lead deletion
+    # doesn't retract the Sale record — the Sale is the source of
+    # truth for the closing event, the lead is context provenance.
+    buyer = models.ForeignKey(
+        "CustomerLead",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales",
+    )
+    sale_date = models.DateField()
+    sold_price = models.DecimalField(max_digits=10, decimal_places=2)
+    finance_type = models.CharField(
+        max_length=32,
+        choices=SALE_FINANCE_TYPE_CHOICES,
+    )
+    # Free text until a Lender entity emerges (deferred beyond M9).
+    # Blank for cash sales (finance_type='cash') — the service layer
+    # requires a non-empty value only when finance_type != 'cash'.
+    lender_name = models.CharField(max_length=255, blank=True, default="")
+    # Denormalized ledger read — computed at Sale write time by the
+    # service verb per §1.4. Signed Decimal (negative when the sale
+    # closed below total_investment).
+    gross_realized = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-sale_date", "-created_at")
+        verbose_name = "Sale"
+        verbose_name_plural = "Sales"
+
+    def __str__(self) -> str:
+        return (
+            f"Sale #{self.pk} of #{self.vehicle.stock_number} "
+            f"@ ${self.sold_price} ({self.get_finance_type_display()})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guards at the model layer.
+
+        Two invariants:
+
+        1. ``dealership`` must match ``vehicle.dealership`` — mirrors
+           :meth:`VehicleAcquisition.clean` /
+           :meth:`VehicleCost.clean`. A mis-scoped view resolving
+           tenant from ``get_current_dealership(request)`` and
+           writing a Sale against a vehicle owned by a different
+           dealership would silently corrupt tenant scoping.
+        2. When ``buyer`` is set, ``buyer.dealership`` must match
+           ``dealership`` — prevents a Sale at Dealership A from
+           referencing a lead at Dealership B.
+
+        Both raise before the row reaches the DB. Data-scoping is
+        layer 4 in ``AUTHENTICATION_MODEL.md`` §1.
+        """
+        super().clean()
+        if self.vehicle_id is None or self.dealership_id is None:
+            return
+        if self.vehicle.dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "Sale.dealership must match the parent Vehicle's "
+                        "dealership. Cross-tenant contamination guard "
+                        "(see AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+        if (
+            self.buyer_id is not None
+            and self.buyer.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "buyer": (
+                        "Sale.buyer must belong to the same dealership as "
+                        "the Sale. Cross-tenant contamination guard "
+                        "(see AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 9 · Increment 2 (SESSION_101) — Delivery entity vocabulary.
+# ---------------------------------------------------------------------------
+
+# Delivery checklist item vocabulary per MILESTONE_9_PLANNING.md §1.2.
+# Five initial keys from SALES_DEPARTMENT_MAPPING.md §delivery workflow.
+# Extensions (`walkaround_video`, `key_fob_pairing`, `plate_bracket_installed`,
+# `owner_manual_walkthrough`, `service_intro`) land when operator evidence
+# surfaces need. Kept as module-level constants so
+# ``services.delivery.update_checklist_item`` and the M9.2 tests import
+# the canonical string literals without redeclaring (mirrors the
+# ``SALE_FINANCE_TYPE_*`` pattern above).
+DELIVERY_CHECKLIST_DETAIL_BOOKED = "detail_booked"
+DELIVERY_CHECKLIST_FUELED = "fueled"
+DELIVERY_CHECKLIST_TEMP_TAG = "temp_tag"
+DELIVERY_CHECKLIST_INSURANCE_VERIFIED = "insurance_verified"
+DELIVERY_CHECKLIST_CUSTOMER_WALKTHROUGH = "customer_walkthrough"
+
+DELIVERY_CHECKLIST_KEYS = (
+    DELIVERY_CHECKLIST_DETAIL_BOOKED,
+    DELIVERY_CHECKLIST_FUELED,
+    DELIVERY_CHECKLIST_TEMP_TAG,
+    DELIVERY_CHECKLIST_INSURANCE_VERIFIED,
+    DELIVERY_CHECKLIST_CUSTOMER_WALKTHROUGH,
+)
+
+
+def _default_delivery_checklist() -> dict:
+    """Return a fresh dict with every M9.2 checklist key set to False.
+
+    Used as the ``default=`` callable on :attr:`Delivery.checklist` so
+    every new row starts with an unchecked checklist that renders the
+    same shape (no missing keys) as a fully-populated row. Passing a
+    callable rather than a dict literal follows Django's guidance for
+    mutable field defaults.
+    """
+    return {key: False for key in DELIVERY_CHECKLIST_KEYS}
+
+
+class Delivery(models.Model):
+    """Milestone 9 · Increment 2 — one Delivery per Sale.
+
+    Persists the delivery-preparation workflow that a Sale
+    transitions through before the customer takes possession.
+    OneToOne on ``sale`` (mandatory per
+    ``MILESTONE_9_PLANNING.md`` §1.2 Option A — user-confirmed at
+    SESSION_101 open, recorded in §0.a). Cash-and-carry sales
+    still get a Delivery row; the ``checklist`` just carries fewer
+    keys marked False at creation time.
+
+    Business questions answered — Q2 from
+    :doc:`../../docs/roadmap/MILESTONE_9_PLANNING.md` §1.0. Locks
+    the "what pieces of a delivery are tracked to completion?"
+    surface (five checklist keys + temp-tag + insurance
+    verification + free-text notes).
+
+    **Denormalized ``dealership`` FK.** Same rationale as
+    :class:`Sale.dealership` — the parent ``sale.dealership`` is
+    the source of truth, but the redundant FK lets tenant-scoped
+    querysets skip a join. ``clean()`` enforces the invariant.
+
+    **`checklist` JSONField.** Populated at write time with every
+    M9.2 key set to False via
+    :func:`_default_delivery_checklist`. Callers toggle individual
+    items via
+    :func:`services.delivery.update_checklist_item`; extra keys
+    are refused (:class:`services.delivery.UnknownChecklistKeyError`)
+    so the vocabulary stays authoritative at the service layer.
+    Historical rows survive vocabulary extensions — new keys land
+    as False on subsequent Delivery rows without a data migration.
+
+    **Insurance columns are denormalized from the checklist.**
+    ``insurance_verified`` (boolean) + ``insurance_verified_at``
+    (timestamp) mirror the ``insurance_verified`` checklist key
+    but as queryable columns. Rationale: verifying insurance
+    before delivery is a legal-compliance moment (many states
+    require proof-of-insurance at title transfer), so operator
+    dashboards and future compliance reports need to filter and
+    aggregate on it without JSON extraction. The
+    :func:`services.delivery.verify_insurance` verb writes both
+    the column and the checklist key atomically.
+
+    **Cross-tenant guard.** ``clean()`` enforces
+    ``dealership`` matches ``sale.dealership``. Belt (model) +
+    suspenders (service layer's
+    :class:`services.delivery.CrossTenantDeliveryError`).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="deliveries",
+    )
+    sale = models.OneToOneField(
+        "Sale",
+        on_delete=models.CASCADE,
+        related_name="delivery",
+    )
+    delivery_date = models.DateField(null=True, blank=True)
+    # Populated at insert time via ``_default_delivery_checklist`` so
+    # every row renders the same shape. Toggled item-by-item via the
+    # M9.2 update verb. Refuses keys outside the M9.2 vocabulary.
+    checklist = models.JSONField(default=_default_delivery_checklist, blank=True)
+    temp_tag_number = models.CharField(max_length=32, blank=True, default="")
+    # Denormalized boolean + timestamp mirroring the
+    # ``insurance_verified`` checklist key — see class docstring for
+    # the "compliance moment" rationale.
+    insurance_verified = models.BooleanField(default=False)
+    insurance_verified_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Delivery"
+        verbose_name_plural = "Deliveries"
+
+    def __str__(self) -> str:
+        # Sale.__str__ already renders the vehicle stock number, so
+        # inlining the sale summary keeps the delivery string
+        # scannable without a second attribute lookup.
+        return (
+            f"Delivery #{self.pk} for Sale #{self.sale_id} "
+            f"(insurance_verified={self.insurance_verified})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guard at the model layer.
+
+        The denormalized ``dealership`` FK must match the parent
+        Sale's tenant. Mirrors :meth:`Sale.clean` /
+        :meth:`VehicleAcquisition.clean` / :meth:`VehicleCost.clean`.
+        Data-scoping is layer 4 in ``AUTHENTICATION_MODEL.md`` §1.
+        """
+        super().clean()
+        if self.sale_id is None or self.dealership_id is None:
+            return
+        if self.sale.dealership_id != self.dealership_id:
+            raise ValidationError(
+                {
+                    "dealership": (
+                        "Delivery.dealership must match the parent "
+                        "Sale's dealership. Cross-tenant contamination "
+                        "guard (see AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )

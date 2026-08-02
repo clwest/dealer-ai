@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 
 import { AcquisitionReconTab } from "@/components/analytics/AcquisitionReconTab";
 import { LifecycleAgingTab } from "@/components/analytics/LifecycleAgingTab";
+import { RealizedGrossTab } from "@/components/analytics/RealizedGrossTab";
 import { SlaBreachTab } from "@/components/analytics/SlaBreachTab";
 import { VendorPerformanceTab } from "@/components/analytics/VendorPerformanceTab";
 import {
@@ -37,6 +38,7 @@ const TAB_ITEMS = [
   { value: "vendor", label: "Vendor Performance" },
   { value: "aging", label: "Lifecycle Aging" },
   { value: "sla", label: "SLA Breach Patterns" },
+  { value: "realized-gross", label: "Realized Gross" },
 ] as const;
 
 type TabValue = (typeof TAB_ITEMS)[number]["value"];
@@ -65,8 +67,8 @@ export default function DealerAnalyticsPage() {
           Operational Intelligence
         </h1>
         <p className="text-sm text-muted-foreground">
-          Aggregations over acquisition, recon, lifecycle aging, and
-          SLA-breach substrate shipped M8.1–M8.4.
+          Aggregations over acquisition, recon, lifecycle aging,
+          SLA-breach (M8.1–M8.4), and realized-gross (M9.3 + M9.4).
         </p>
       </header>
 
@@ -95,6 +97,9 @@ export default function DealerAnalyticsPage() {
         </TabsContent>
         <TabsContent value="sla">
           <SlaBreachTab />
+        </TabsContent>
+        <TabsContent value="realized-gross">
+          <RealizedGrossTab />
         </TabsContent>
       </Tabs>
     </div>

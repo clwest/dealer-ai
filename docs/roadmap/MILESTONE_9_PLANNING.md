@@ -1,9 +1,10 @@
 ---
 title: "Milestone 9 — Implementation-Planning Pass"
-status: draft
+status: shipped
 type: planning-artifact
 generated: 2026-08-01
 generated_at_session: SESSION_099 (post-M8-closeout)
+shipped_at_session: SESSION_105
 milestone: 9
 milestone_name: "Sale + delivery closure"
 sources:
@@ -71,9 +72,325 @@ implementation time as substrate reality asserts
 itself. Every amendment records the session,
 option, and the affected sections.
 
-*(None yet — planning-time only. Amendments
-recorded at the top of each M9 session that
-requires one.)*
+### SESSION_100 (M9.1 open) — §5.a / §5.b / §5.c confirmed (all Option A)
+
+- **Amendment.** All three §9 load-bearing
+  decisions confirmed by the user at
+  SESSION_100 open (all Option A). No spec
+  changes — the recommended path becomes the
+  ratified path.
+- **§5.a — Acquisition-buyer provenance
+  bundling: Option A.** M2
+  `VehicleAcquisition.buyer` FK ships in M9
+  alongside `Sale`. Django's `makemigrations`
+  combined both changes into a single M9.1
+  migration `0023_sale_entity_and_buyer_fk`
+  (planning had projected `0024` — combining
+  is cleaner: one atomic delivery, one
+  reverse operation). Unlocks Q7
+  (`buyer_estimate_accuracy`) in the same
+  milestone rather than a follow-on.
+- **§5.b — Sale.buyer representation:
+  Option A.** `Sale.buyer` is FK to
+  existing `CustomerLead` (M3-M5 CRM
+  substrate reused).
+- **§5.c — Sale finance-type vocabulary:
+  Option A.** Three initial values:
+  `cash` / `retail` / `bhph`. Additional
+  values (`lease`, `wholesale_out`,
+  `internal_transfer`, `wholesale_disposal`)
+  land when operator evidence surfaces
+  need.
+- **Sequencing decision** (M9.1
+  implementation-time): **combined into
+  single migration**. Django ordered
+  operations as (a) AddField
+  `VehicleAcquisition.buyer`, then (b)
+  CreateModel `Sale`. Both ship in M9.1
+  atomically. No M2 code path changes at
+  M9.1 close — Q7 verb + endpoint land at
+  M9.4 per §7.
+- **Effect on §7 M9.1 scope.**
+  - Ships: `Sale` model + `gross_realized`
+    verb + first endpoint (`POST /admin/vehicles/<stock>/sale/`)
+    + tenancy carrier 22→23 +
+    `VehicleAcquisition.buyer` FK.
+  - Test target: ~30 (unchanged; adds
+    ~3-5 focused tests for the
+    additive-buyer-FK migration on top of
+    the Sale-substrate tests).
+  - Baseline projection: 3,274 → **~3,304**
+    (unchanged from planning).
+
+### SESSION_101 (M9.2 open) — §1.2 Delivery-OneToOne confirmed (Option A) + M9 commit strategy (bundle)
+
+- **Amendment (§1.2 open question).** The
+  Delivery-OneToOne question surfaced in
+  the SESSION_100 handoff (three options —
+  mandatory OneToOne / nullable OneToOne /
+  no OneToOne) resolves to **Option A —
+  mandatory OneToOne**. `Delivery.sale`
+  is a NOT NULL OneToOne FK to `Sale`.
+- **Interpretation clarification.**
+  "Mandatory OneToOne" means the DB
+  invariant "every Delivery row references
+  a Sale". It does **not** mean automatic
+  Delivery creation on Sale write —
+  Delivery is created via the explicit
+  M9.2 endpoint (`POST /admin/vehicles/<stock>/delivery/`)
+  after Sale creation. This preserves the
+  M9.1 boundary (no post_save signal on
+  `Sale`; no coupling change in
+  :func:`services.sale.record_sale`) while
+  matching the SALES §delivery-workflow
+  research assumption that every sale
+  eventually transitions through delivery.
+- **Cash-and-carry.** No special-case
+  handling. The `checklist` JSON just
+  ships with fewer items marked True at
+  Delivery-create time (`temp_tag`,
+  `insurance_verified`, `customer_walkthrough`
+  can all be True on the first PATCH).
+- **M9 commit strategy.** **Bundle**
+  per M7/M8 precedent. M9.1 changes
+  remain uncommitted; the M9.6 closeout
+  will ship one coordinated commit for
+  all of M9.1-M9.6. Working tree stays
+  dirty across session boundaries — this
+  is the established M8 pattern
+  (SESSION_099 landed commit `34352ed`
+  covering M8.1-M8.6).
+- **Effect on §7 M9.2 scope.**
+  - Ships: `Delivery` model + migration
+    `0024` + `services/delivery/` package
+    (write verb + checklist update verb +
+    insurance verification verb) +
+    tenancy carrier 23→24 + endpoints
+    (POST create + PATCH update).
+  - Test target: ~25 (unchanged from
+    planning).
+  - Baseline projection: 3,320 →
+    **~3,345** (unchanged from planning).
+
+### SESSION_102 (M9.3 open) — analytics extensions shipped
+
+- **No new user decisions.** Plan
+  §1.5 was fully specified at planning-time
+  close; SESSION_102 executed against it
+  directly.
+- **Implementation-time notes.**
+  - **Q3 `vehicle_type_profitability`
+    row shape.** Chose Sale-centric shape
+    (`sold_count`, `total_sale_gross`,
+    `total_sold_price`, `mean_gross_pct`)
+    rather than literally extending M8.4's
+    `VehicleTypeReconCostRow` — the two
+    verbs answer different questions (M8.4:
+    "prep cost per type", M9.3: "profit
+    per type"). Composing them into one row
+    would conflate the two aggregation
+    universes.
+  - **`mean_gross_pct` semantics.** Mean
+    of per-vehicle margin percentages
+    (equal-weighted). Callers wanting
+    revenue-weighted margin compute
+    `total_sale_gross / total_sold_price`
+    from the row.
+  - **Q8 `inventory_turn` reference-point.**
+    Uses the *earliest* frontline
+    `VehicleStageEvent` per vehicle (not
+    latest re-entry). A vehicle that
+    bounced back to recon then returned to
+    frontline is still "the same inventory
+    item" for turn-measurement purposes.
+  - **Test-only signal awareness.**
+    `dealer_ai/tests/__init__.py`
+    auto-bootstraps a `frontline`
+    VehicleStageEvent on every Vehicle
+    save. M9.3's `test_skips_sold_vehicles_without_frontline_event`
+    deletes the bootstrap event
+    post-seed to simulate the data-
+    quality gap the verb docstring
+    describes.
+  - **Sparse gross-profit series.**
+    `gross_profit_trend` returns one
+    point per date that had at least
+    one sale — dates with zero sales
+    are omitted. Dense series (one
+    point per calendar day, zero-filled)
+    lands later if operator evidence
+    surfaces need.
+- **Effect on §7 M9.3 scope.**
+  - Ships: three verbs
+    (`vehicle_type_profitability`,
+    `gross_profit_trend`,
+    `inventory_turn`) + three DRF
+    endpoints + smoke tests locking the
+    M8.4-proxy shapes.
+  - Test target: ~25 → actual 32
+    (verb + endpoint + M8.4-proxy
+    smoke). Slightly over plan due to
+    per-verb error-path coverage.
+  - Baseline projection: 3,362 →
+    **actual 3,394** (unchanged
+    from planning bracket).
+
+### SESSION_103 (M9.4 open) — §1.3 annotation deferred (substrate gap)
+
+- **Amendment (§1.3 open question).**
+  `LeadVehicleInterest.stage_at_interest`
+  annotation is **deferred from M9.4** to
+  a later increment or its own planning
+  session.
+- **Trigger.** §1.3 assumes
+  `LeadVehicleInterest` exists as a
+  through-model on the
+  `CustomerLead.interested_vehicles`
+  M2M relationship. **It does not.**
+  The current schema uses a plain
+  `ManyToManyField(Vehicle)` on
+  `CustomerLead`, backed by the
+  implicit Django-generated table
+  `dealer_ai_customerlead_interested_vehicles`
+  (no `created_at`, no through-model,
+  no domain-model class to extend).
+- **Decision.** **Option 2 (user-
+  confirmed at SESSION_103 open) —
+  ship Q7 only at M9.4.**
+  Q7 (`buyer_estimate_accuracy`) does
+  not depend on `LeadVehicleInterest`
+  at all — it reads
+  `VehicleAcquisition.buyer` +
+  `Sale.gross_realized`. The annotation
+  is independent scope.
+- **Rejected — Option 1** (create
+  through-model + data migrate at
+  M9.4). Substantial scope creep: adds
+  a data migration to convert the
+  implicit M2M table into an explicit
+  through-model with `created_at` +
+  `stage_at_interest`, plus sweeps of
+  ~5 call sites in `views.py` /
+  `serializers.py` / `admin.py` to
+  switch from plain `add()` to
+  explicit `.through.objects.create(...)`.
+  Violates PROJECT_RULES.md #4 (scope
+  discipline) for a single increment.
+- **Rejected — Option 3** (JSONField
+  hack on `CustomerLead`). Loses
+  per-vehicle granularity; hard to
+  query.
+- **Re-entry path.** The annotation
+  can land in whatever milestone
+  through-model creation is
+  independently justified — most
+  likely M11+ if the CRM tightens up,
+  or its own dedicated increment with
+  its own planning session. Nothing
+  about M9.4's Q7 code shape blocks a
+  future annotation addition.
+- **Effect on §7 M9.4 scope.**
+  - Ships: `buyer_estimate_accuracy`
+    verb + one DRF endpoint.
+  - Does NOT ship at M9.4:
+    `LeadVehicleInterest.stage_at_interest`
+    field + write-path integration +
+    through-model migration.
+  - Test target: ~20 → **~10-12**
+    (Q7 verb + endpoint only; no
+    annotation tests).
+  - Baseline projection: 3,394 →
+    **~3,406** (was ~3,414).
+- **Also confirmed:** the §1.3 backfill
+  posture question (Option A forward-
+  only vs Option B/C historical
+  reconstruction) is **moot** — the
+  annotation itself is deferred. When
+  the through-model lands in its own
+  session, the backfill posture
+  decision surfaces then.
+
+### SESSION_104 (M9.5 open) — §1.7 UI decisions confirmed (both Option A)
+
+- **No new backend changes at M9.5.**
+  UI-only increment consuming the M8
+  + M9 aggregation endpoints and the
+  M9.1/M9.2 Sale + Delivery admin API.
+- **Decision A — Q7 placement:
+  Option A confirmed.** Q7
+  buyer-accuracy rank surface bundles
+  into the fifth "Realized Gross"
+  tab alongside Q3 vehicle-type
+  profitability. Both answer "who
+  produced the profit?" — grouping
+  keeps the operator's mental model
+  tight.
+- **Decision B — Sale + Delivery UI:
+  Option A confirmed** (per-vehicle
+  page pattern). Interpretation
+  clarified: the M8.5 codebase does
+  NOT have a unified "vehicle-detail
+  page with sub-tabs" — every
+  per-vehicle feature lives at its
+  own dedicated route
+  (`dealer-ai-inventory/:stock/ledger`,
+  `.../:stock/condition-report`,
+  `.../:stock/recon`,
+  `.../:stock/lifecycle`,
+  `.../:stock/photos`,
+  `.../:stock/listing`). M9.5 adds
+  `dealer-ai-inventory/:stock/sale/`
+  matching the same shape (new
+  `VehicleSalePage.tsx`). "Sub-tab"
+  in the planning-time wording was
+  imprecise — the actual codebase
+  pattern is dedicated per-feature
+  pages, not sub-tabs.
+- **Effect on §7 M9.5 scope.**
+  - Ships: fifth `AnalyticsSection`
+    tab **Realized Gross** wrapping
+    Q3 / Q6 / Q7 / Q8; new
+    `saleApi.ts` client; new
+    `VehicleSalePage.tsx` at
+    `dealer-ai-inventory/:stock/sale/`;
+    route registration in
+    `main.tsx`.
+  - Test target: ~15 frontend
+    Vitest + ~10 backend endpoint-
+    shape locks.
+  - Baseline projection: backend
+    3,414 → **~3,424**; frontend
+    19 → **~34**.
+- **Substrate-gap #2 (implementation-
+  time).** M9.5 opened before the GET
+  companions to the M9.1/M9.2 write
+  endpoints existed. Ships **Option A
+  (user-confirmed)** — add GET
+  dispatch to the same URL as POST
+  via `@api_view(["GET", "POST"])`
+  method-multiplex. Preserves URL
+  names (`admin-sale-create`,
+  `admin-delivery-create`) so existing
+  tests + docs stay green. Adds two
+  `_lookup_*_or_404` helpers +
+  method-branch bodies (~50 backend
+  lines). Rejected — separate
+  `admin-sale-read` URL (URL sprawl)
+  and write-only UI (broken UX after
+  page reload).
+- **Actual delivery vs planning.**
+  - Backend +12 shape-lock tests
+    (target ~10, slightly over
+    because GET × 2 endpoints ×
+    auth-matrix rows landed as
+    exhaustive coverage). Final
+    3,414 → **3,426**.
+  - Frontend +15 tests exactly on
+    plan (RealizedGrossTab 7 +
+    VehicleSalePage 7 +
+    DealerAnalyticsPage +1
+    realized-gross hash-honor test).
+    Final 19 → **34**.
 
 ---
 

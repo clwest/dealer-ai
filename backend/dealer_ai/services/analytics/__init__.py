@@ -62,17 +62,30 @@ from __future__ import annotations
 
 from .acquisition import (
     SourcePerformanceRow,
+    VehicleTypeProfitabilityRow,
     VehicleTypeReconCostRow,
     recon_cost_per_source,
+    vehicle_type_profitability,
     vehicle_type_recon_cost,
+)
+from .gross_profit import (
+    GrossProfitPoint,
+    gross_profit_trend,
 )
 from .lifecycle_aging import (
     AgingTrendPoint,
     DaysAtFrontlineReport,
+    InventoryTurnReport,
     days_at_frontline_proxy,
+    inventory_turn,
     stage_aging_trend,
 )
-from .recon import VendorPerformanceRow, vendor_performance
+from .recon import (
+    BuyerAccuracyRow,
+    VendorPerformanceRow,
+    buyer_estimate_accuracy,
+    vendor_performance,
+)
 from .sla_breaches import (
     BreachPatternReport,
     KindBreachCount,
@@ -83,16 +96,24 @@ from .sla_breaches import (
 __all__ = (
     "AgingTrendPoint",
     "BreachPatternReport",
+    "BuyerAccuracyRow",
     "DaysAtFrontlineReport",
+    "GrossProfitPoint",
+    "InventoryTurnReport",
     "KindBreachCount",
     "SourcePerformanceRow",
+    "VehicleTypeProfitabilityRow",
     "VehicleTypeReconCostRow",
     "VendorBreachCount",
     "VendorPerformanceRow",
     "breach_patterns",
+    "buyer_estimate_accuracy",
     "days_at_frontline_proxy",
+    "gross_profit_trend",
+    "inventory_turn",
     "recon_cost_per_source",
     "stage_aging_trend",
+    "vehicle_type_profitability",
     "vehicle_type_recon_cost",
     "vendor_performance",
 )

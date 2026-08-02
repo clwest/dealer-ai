@@ -677,6 +677,82 @@ per `MILESTONE_8_RETROSPECTIVE.md` §4):
 
 ---
 
+## 7j. Sale + delivery closure (Milestone 9, shipped)
+
+Milestone 9 (SESSION_100 → SESSION_105) shipped
+the `Sale` + `Delivery` entities that close the
+vehicle-side / customer-side loop, the four "true"
+analytics verbs unlocking M8's deferrals
+(Q3/Q6/Q7/Q8), and the operator UI extending
+`/dealer-ai-analytics/` with a fifth **Realized
+Gross** tab plus a per-vehicle
+`dealer-ai-inventory/:stock/sale/` page. **No new
+runtime dependencies added.** **No M1–M8 business
+logic touched** — every M9 write path is a new
+service module; every M9 read path adds sibling
+verbs alongside the M8.4 proxies (which continue
+to return their original shapes). One deferral
+recorded (`LeadVehicleInterest.stage_at_interest`
+annotation) — the plan assumed a through-model
+that doesn't exist; deferred to a future dedicated
+increment. See
+`docs/roadmap/MILESTONE_9_PLANNING.md` +
+`docs/roadmap/MILESTONE_9_RETROSPECTIVE.md` for
+what shipped vs. deferred.
+
+| Domain | Surface (M9.1 – M9.5) | Notes |
+| --- | --- | --- |
+| Sale entity (M9.1) | New `Sale` model + migration `0023_sale_entity_and_buyer_fk` (fields: `dealership` FK CASCADE, `vehicle` OneToOne CASCADE, `buyer` FK `CustomerLead` SET_NULL nullable, `sale_date`, `sold_price` Decimal, `finance_type` from `SALE_FINANCE_TYPE_CHOICES` (`cash` / `retail` / `bhph`), `lender_name` optional CharField, `gross_realized` Decimal denormalized at write time). Same migration adds `VehicleAcquisition.buyer` FK to `settings.AUTH_USER_MODEL` SET_NULL nullable (M2 additive extension per §5.a Option A — Django combined the two changes into one atomic migration). Model-level `clean()` cross-tenant guard on both `dealership` vs `vehicle.dealership` and `dealership` vs `buyer.dealership`. New `services/sale/` package: `computation.py::gross_realized(sale) -> Decimal` pure read verb reading M2 `vehicle_ledger.compute_totals` (excludes estimates per M2 semantic) + `record_sale(vehicle, *, dealership, sale_date, sold_price, finance_type, buyer=None, lender_name="")` transactional write that denormalizes `gross_realized` at insert time. Three error classes: `CrossTenantSaleError` / `SaleAlreadyExistsError`. Endpoint: `POST /api/dealer-ai/admin/vehicles/<stock>/sale/` (GET dispatch added at M9.5). Tenancy-carrier extension 22 → 23. | Reads M2 substrate for `gross_realized`. Answers Q1 (CRM activation) + Q3 precondition. §5.b Option A confirmed — `Sale.buyer` FK to existing `CustomerLead` (reuses M3-M5 CRM substrate). §5.c Option A confirmed — three-value finance-type vocabulary. Extensions to the vocabulary land when operator evidence surfaces need. |
+| Delivery entity (M9.2) | New `Delivery` model + migration `0024_delivery_entity` (fields: `dealership` FK CASCADE, `sale` OneToOne CASCADE mandatory per §1.2 Option A, `delivery_date` nullable DateField, `checklist` JSONField defaulting via `_default_delivery_checklist()` to five M9.2 keys defaulted False, `temp_tag_number` CharField, `insurance_verified` BooleanField, `insurance_verified_at` DateTimeField nullable, `notes` TextField). Checklist vocabulary constants at module level: `DELIVERY_CHECKLIST_DETAIL_BOOKED` / `_FUELED` / `_TEMP_TAG` / `_INSURANCE_VERIFIED` / `_CUSTOMER_WALKTHROUGH`. New `services/delivery/` package: `workflow.py::record_delivery(vehicle, *, dealership, ...)` transactional write refusing duplicate + no-Sale cases + `update_checklist_item(delivery, *, dealership, key, value)` toggle refusing unknown / reserved-`insurance_verified` keys + `verify_insurance(delivery, *, dealership, at=None)` atomic column-and-key mutation with idempotency (second call preserves original timestamp). Four error classes: `CrossTenantDeliveryError` / `DeliveryAlreadyExistsError` / `SaleNotFoundForDeliveryError` / `UnknownChecklistKeyError`. Endpoints: `POST /admin/vehicles/<stock>/delivery/` (create; GET dispatch added at M9.5) + `PATCH /admin/deliveries/<id>/` (update; supports column fields + checklist toggle + verify-insurance in a single request). Tenancy-carrier extension 23 → 24. | Answers Q2 (delivery workflow tracking). §1.2 Option A confirmed — mandatory OneToOne means "every Delivery references a Sale," NOT auto-creation on Sale write. Preserves the M9.1 boundary — no `post_save` signal on `Sale`, no coupling change in `services.sale.record_sale`. Cash-and-carry sales still get a Delivery row; the checklist just carries fewer items marked False at creation. `insurance_verified` denormalized from JSON key to a queryable column for compliance filtering. |
+| Q3 true — vehicle-type profitability (M9.3) | `services/analytics/acquisition.py::vehicle_type_profitability(dealership, *, window_start=None, window_end=None) -> list[VehicleTypeProfitabilityRow]` (new sibling of M8.4 `vehicle_type_recon_cost` proxy). Row: `make` + `model` + `sold_count` + `total_sale_gross` + `total_sold_price` + `mean_gross_pct` (equal-weighted mean of per-vehicle margin percentages, 2dp quantized). Reads M9.1 `Sale.gross_realized` denormalized column grouped by `(Vehicle.make, Vehicle.model)`. Sort by `total_sale_gross` desc / `(make, model)` asc. Endpoint: `GET /api/dealer-ai/admin/analytics/vehicle-type-profitability/`. | **True verb closing M8.4 proxy deferral.** M8.4 `vehicle_type_recon_cost` continues to work as-is (locked by smoke test); M9.3 adds the profitability sibling. Row shape is Sale-centric rather than literally extending M8.4 — the two verbs answer different questions (prep cost vs profit). Callers wanting revenue-weighted margin compute `total_sale_gross / total_sold_price` from the row. |
+| Q6 — gross-profit trend (M9.3) | New module `services/analytics/gross_profit.py::gross_profit_trend(dealership, *, window_days=90) -> list[GrossProfitPoint]`. Point: `sale_date` (calendar date) + `sale_count` + `total_gross_realized` (2dp quantized signed Decimal — negative on net-loss days). Reads M9.1 `Sale` grouped by `sale_date` via Django `values().annotate(Sum())`. Sparse series — dates with zero sales in the window are omitted (dense-fill deferred pending operator evidence). Ordered by `sale_date` asc. Endpoint: `GET /admin/analytics/gross-profit-trend/?window_days=<n>`. | **New verb closing M8 deferral** (M8 §1.6 explicitly cited M9 as intended home). Reads `Sale.gross_realized` directly (denormalized at write time by `record_sale`) so the aggregation stays a single ORM group-by-and-sum. Explicit `.quantize(Decimal("0.01"))` because Django `Sum` returns unquantized Decimal on single-row aggregations. |
+| Q7 — buyer estimate accuracy (M9.4) | `services/analytics/recon.py::buyer_estimate_accuracy(dealership, *, window_days=90, buyer_user_id=None) -> list[BuyerAccuracyRow]`. Row: `buyer_user_id` + `buyer_display` (User full_name or username fallback) + `vehicle_count` (distinct sold vehicles) + `work_order_count` (contributing completed WOs) + `mean_absolute_variance_pct` (mean of `|actual - estimated| / estimated * 100`, 2dp) + `bias_pct` (signed mean — positive = under-estimator, negative = over-estimator). Reads M9.1 `VehicleAcquisition.buyer` FK to attribute completed `WorkOrder` variance to the buyer whose acquisition brought the vehicle in. NULL-buyer acquisitions excluded. Only completed WOs with both non-null costs + positive estimate contribute. Window filters `VehicleAcquisition.purchase_date` (buyer's activity window, not WO completion date). Sort by `mean_absolute_variance_pct` asc (most accurate first). Endpoint: `GET /admin/analytics/buyer-estimate-accuracy/?window_days=<n>&buyer_user_id=<optional>`. | **Q7 closes the M8.2 deferral.** M8 planning §1.8 spec'd single-row return type; M9.4 ships list-returning to match dashboard's need to rank buyers in one call. `buyer_user_id` filter recovers single-row shape. Historical acquisitions without buyer provenance excluded rather than bucketed as an anonymous "unknown buyer." |
+| Q8 true — inventory turn (M9.3) | `services/analytics/lifecycle_aging.py::inventory_turn(dealership, *, window_days=90) -> InventoryTurnReport`. Report: `sold_count` + `mean_days` (2dp Decimal) + `p50_days` + `p90_days` + `min_days` + `max_days` (all `None` on empty window). Reads earliest `VehicleStageEvent` with `to_stage=frontline` per sold vehicle (bounced-back re-entries do not restart the clock) + M9.1 `Sale.sale_date`. Computes per-vehicle days-to-sale distribution; nearest-rank percentile method (M7.3's percentile code not reused because M7.3 does the math at snapshot time). Sold vehicles with no `frontline` event are skipped (data-quality gap). Endpoint: `GET /admin/analytics/inventory-turn/?window_days=<n>`. | **True verb closing M8.4 proxy deferral.** M8.4 `days_at_frontline_proxy` continues to work as-is (locked by smoke test); M9.3 adds the true-turn sibling. Answers "days from frontline entry to sale" (the original operational question the M8.4 proxy could only approximate via snapshots). |
+| Operator UI extension (M9.5) | Fifth **Realized Gross** tab on `/dealer-ai-analytics/` via new `RealizedGrossTab.tsx` component with four sub-sections: vehicle-type profitability table (Q3), gross-profit trend line chart (Q6, sparse per-day), inventory-turn summary card (Q8 — 6 stat cells), buyer-accuracy rank table (Q7). Tab state persisted via URL hash (`#realized-gross`). `frontend/src/lib/analyticsApi.ts` extended with 4 new hooks + `formatShortDate` helper. `frontend/src/lib/saleApi.ts` new (create + read + update Sale + Delivery). New `VehicleSalePage.tsx` at route `dealer-ai-inventory/:stock/sale/` (three render states: no-Sale create-form → Sale-no-Delivery start-button → Sale+Delivery checklist with per-item toggle buttons + dedicated verify-insurance button). Role gate via `hasRole(...WRITE_ROLES)` for write affordance display; backend authoritative. **Backend GET dispatch additions** on M9.1 + M9.2 write endpoints via `@api_view(["GET", "POST"])` method-multiplex — preserves URL names (`admin-sale-create`, `admin-delivery-create`); every M9.1 + M9.2 test continues to pass. | recharts (M8.5 dep) reused. Vitest (M8.5 dep) baseline extended 19 → 34. Bundle 1,069 kB → 1,084 kB (delta ~15 kB, mostly `VehicleSalePage` component tree). §1.7 Decisions A + B both Option A confirmed at session open. Substrate-gap #2 (M9.1/M9.2 had no GET companions) resolved Option A user-confirmed. |
+| Test baseline | +152 tests (M8 close **3,274** → M9 close **3,426**). Zero regressions. Migrations `0023` + `0024` shipped at M9.1 + M9.2; M9.3 – M9.6 shipped no schema changes. `tsc --noEmit` + `vite build` clean. **Frontend Vitest 19 → 34** (+15 exactly per plan). | Distribution: M9.1 +46, M9.2 +42, M9.3 +32, M9.4 +20, M9.5 +12 backend + 15 frontend, M9.6 +0 (docs-only). Two smoke tests locked M8.4 proxy shapes unchanged after M9.3 (`M84ProxyStillWorksAfterM93Tests`). |
+
+**What is NOT shipped in Milestone 9** (deferred
+per `MILESTONE_9_RETROSPECTIVE.md` §4):
+
+- **`LeadVehicleInterest.stage_at_interest`
+  annotation** — deferred at SESSION_103 open
+  per §0.a amendment. Requires
+  `LeadVehicleInterest` through-model creation
+  (its own increment or planning session). The
+  plan §1.3 assumed the through-model existed;
+  direct inspection surfaced that
+  `CustomerLead.interested_vehicles` is a
+  plain `ManyToManyField(Vehicle)` backed by an
+  implicit Django table.
+- **Sale / Delivery cross-vehicle list views**
+  — plan §1.7 offered as Options B/C for the UI
+  shape. M9.5 chose Option A (per-vehicle
+  dedicated page). Cross-vehicle lists land
+  later if operator evidence surfaces need.
+- **Dense gross-profit series** — sparse ships
+  at M9.3; dense-fill deferred.
+- **`Vehicle.is_available` flip on Delivery
+  completion** — M9.2 did not modify M1
+  `Vehicle.is_available`. Whether delivery
+  completion should flip retail availability
+  is deferred; today the field stays operator-
+  controlled.
+- **`AnalyticsCache` materialization layer** —
+  carry-forward from M8. No M9 endpoint
+  produced latency evidence justifying
+  materialization.
+- **DMS write-back integrations** — planning
+  §scope-boundary explicit non-goal.
+- **State e-filing integrations** — same.
+- **Sales-tax computation** — belongs to
+  Accounting track.
+- **Portfolio-level BHPH analytics** — depends
+  on Milestone 12 BHPH substrate.
+- **F&I / stips / chargebacks** — Milestone 10
+  substrate.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

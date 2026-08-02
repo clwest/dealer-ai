@@ -330,6 +330,21 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # ``get_or_create`` call, so the autofill signal only fires when
     # a caller bypasses the verb.
     "SlaBreachRecord",
+    # Milestone 9 · Increment 1 (SESSION_100) — Sale entity per
+    # MILESTONE_9_PLANNING.md §1.1 + §5.b Option A (user-confirmed at
+    # SESSION_100 open) (22 → 23). ``Sale`` OneToOne with
+    # ``Vehicle``; the M9.1 :func:`services.sale.record_sale` writes
+    # ``dealership`` explicitly on every row. The autofill signal
+    # here is the safety net for callers that bypass the service
+    # (Django admin form, ad-hoc management command).
+    "Sale",
+    # Milestone 9 · Increment 2 (SESSION_101) — Delivery entity per
+    # MILESTONE_9_PLANNING.md §1.2 Option A (user-confirmed at
+    # SESSION_101 open, recorded in §0.a) (23 → 24). ``Delivery``
+    # OneToOne with ``Sale`` (mandatory). The M9.2
+    # :func:`services.delivery.record_delivery` writes ``dealership``
+    # explicitly on every row; the autofill signal is the safety net.
+    "Delivery",
 )
 
 

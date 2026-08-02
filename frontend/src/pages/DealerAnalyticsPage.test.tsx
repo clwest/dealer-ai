@@ -25,6 +25,9 @@ vi.mock("@/components/analytics/LifecycleAgingTab", () => ({
 vi.mock("@/components/analytics/SlaBreachTab", () => ({
   SlaBreachTab: () => <div>MOCK-sla</div>,
 }));
+vi.mock("@/components/analytics/RealizedGrossTab", () => ({
+  RealizedGrossTab: () => <div>MOCK-realized-gross</div>,
+}));
 
 // Reset the URL hash between tests — the page reads it on mount to
 // resolve the initial tab.
@@ -38,7 +41,7 @@ async function renderPage() {
 }
 
 describe("DealerAnalyticsPage", () => {
-  it("renders all four tab triggers", async () => {
+  it("renders all five tab triggers", async () => {
     await renderPage();
     expect(
       screen.getByRole("tab", { name: /acquisition & recon cost/i }),
@@ -52,6 +55,15 @@ describe("DealerAnalyticsPage", () => {
     expect(
       screen.getByRole("tab", { name: /sla breach patterns/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /realized gross/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("honors the realized-gross URL hash on first mount", async () => {
+    window.location.hash = "#realized-gross";
+    await renderPage();
+    expect(screen.getByText("MOCK-realized-gross")).toBeInTheDocument();
   });
 
   it("defaults to the Acquisition & Recon Cost tab", async () => {

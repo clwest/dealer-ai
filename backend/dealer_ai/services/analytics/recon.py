@@ -1,21 +1,30 @@
-"""Milestone 8 · Increment 2 (SESSION_095) — recon analytics.
+"""Milestone 8 · Increment 2 (SESSION_095) + Milestone 9 · Increment 4 (SESSION_103) — recon analytics.
 
-Owns the aggregations rooted in M4 :class:`WorkOrder` — today: Q2 +
-Q4 (:func:`vendor_performance`). Q7 (buyer estimate accuracy) is
-deferred per ``MILESTONE_8_PLANNING.md`` §0.a (SESSION_095) — its
-substrate (acquisition-buyer provenance) is not shipped.
+Owns the aggregations rooted in M4 :class:`WorkOrder`:
 
-**Read-only.** No verb here writes to the DB — the aggregations run
-against live ``WorkOrder`` rows per §5.a Option C (hybrid, compute-
-on-request v1). If evidence surfaces latency pain, an M7-Beat
-materialization layer can wrap this without touching the verb shape.
+- :func:`vendor_performance` (Q2 + Q4, M8.2) — per-vendor completion
+  time + variance rollup.
+- :func:`buyer_estimate_accuracy` (Q7, M9.4) — per-buyer recon-cost
+  estimate accuracy. Reads the M9.1
+  :attr:`VehicleAcquisition.buyer` FK for provenance.
+
+**Q7 substrate journey.** M8.2 planning §1.8 spec was deferred at
+SESSION_095 because :attr:`VehicleAcquisition.buyer` did not exist
+(``MILESTONE_8_PLANNING.md`` §0.a SESSION_095). M9.1 shipped the
+FK as a nullable additive extension (SESSION_100). M9.4 now
+implements the verb — historical acquisition rows without buyer
+provenance (buyer IS NULL) are excluded from the aggregation
+rather than treated as a single anonymous bucket.
+
+**Read-only.** No verb here writes to the DB — same posture as the
+sibling verbs (§5.a Option C, compute-on-request v1).
 
 **Tenant-scoped.** Every verb takes ``dealership`` as a required
-first positional argument. The verb enforces tenant scoping in its
-own querysets; there is no shared filter-manager layer.
+first positional argument.
 
 Source of truth: ``docs/roadmap/MILESTONE_8_PLANNING.md`` §1.3 +
-§7 M8.2 (as amended §0.a SESSION_095).
+§1.8 + §7 M8.2 (as amended §0.a SESSION_095) +
+``docs/roadmap/MILESTONE_9_PLANNING.md`` §1.5 Q7 + §7 M9.4.
 """
 
 from __future__ import annotations
@@ -25,12 +34,18 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
+from django.contrib.auth import get_user_model
+
 from ...models import (
     WORK_ORDER_STATUS_COMPLETED,
     WORK_ORDER_VENUE_OUTSOURCED,
     Dealership,
+    VehicleAcquisition,
     WorkOrder,
 )
+
+
+User = get_user_model()
 
 
 ZERO = Decimal("0.00")
@@ -244,4 +259,241 @@ class _VendorState:
             mean_completion_days=mean_days,
             mean_variance_pct=mean_variance,
             over_budget_count=self.over_budget_count,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Q7 — buyer_estimate_accuracy (SESSION_103, M9.4)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class BuyerAccuracyRow:
+    """One aggregation row — recon-cost estimate accuracy rolled up
+    under one acquisition buyer.
+
+    Frozen because the aggregation output is immutable; callers
+    should project into a serialized shape rather than mutate.
+
+    Semantic — *"how accurate were this buyer's recon-cost
+    expectations?"* The buyer's implicit expectation is the sum of
+    :attr:`WorkOrder.estimated_cost` on vehicles they acquired; the
+    reality is the sum of :attr:`WorkOrder.actual_cost`. The
+    variance and bias metrics express how the two compare over the
+    window.
+
+    Fields:
+
+    - ``buyer_user_id`` — the acquisition-buyer's User PK
+      (:attr:`VehicleAcquisition.buyer`).
+    - ``buyer_display`` — human-readable buyer identifier. Prefers
+      the User's full name; falls back to username.
+    - ``vehicle_count`` — distinct vehicles this buyer acquired in
+      the window that had at least one completed WorkOrder with
+      both non-null costs and a positive estimate.
+    - ``work_order_count`` — completed WorkOrders across those
+      vehicles that contributed to the variance / bias metrics.
+    - ``mean_absolute_variance_pct`` — mean of ``|actual -
+      estimated| / estimated * 100`` across contributing WOs.
+      Quantized to 2dp. Never negative.
+    - ``bias_pct`` — mean of signed ``(actual - estimated) /
+      estimated * 100`` across contributing WOs. Positive =
+      "under-estimator" (actuals ran higher than estimates on
+      average); negative = "over-estimator." Quantized to 2dp.
+
+    Both metrics equal-weight WOs (not vehicles) so a vehicle with
+    ten WOs weighs more than a vehicle with one — matches how
+    recon-cost variance manifests operationally.
+    """
+
+    buyer_user_id: int
+    buyer_display: str
+    vehicle_count: int
+    work_order_count: int
+    mean_absolute_variance_pct: Decimal
+    bias_pct: Decimal
+
+
+def _buyer_display_for(user) -> str:
+    """Best available human-readable identifier for a User.
+
+    Prefers ``get_full_name()`` when populated; falls back to
+    ``username`` otherwise. Kept as a private helper so the
+    endpoint layer's projection can be trivial.
+    """
+    full = (user.get_full_name() or "").strip()
+    return full if full else user.username
+
+
+def buyer_estimate_accuracy(
+    dealership: Dealership,
+    *,
+    window_days: int = 90,
+    buyer_user_id: Optional[int] = None,
+) -> list[BuyerAccuracyRow]:
+    """Q7 aggregation — per-buyer recon-cost estimate accuracy.
+
+    Answers *"which buyer's estimates land closest to actuals?"*
+    (RECON §"To Ownership" + M8 §1.8). Reads the M9.1
+    :attr:`VehicleAcquisition.buyer` FK to attribute each
+    :class:`WorkOrder` to the buyer whose acquisition brought the
+    parent Vehicle in.
+
+    Parameters
+    ----------
+    dealership : Dealership
+        The tenant to aggregate. Required — single-tenant.
+    window_days : int, optional
+        Number of days of history. Default 90. Filters
+        ``VehicleAcquisition.purchase_date >= today - window_days``
+        — the buyer's "window activity" is measured by acquisitions
+        they made, not by when the WOs completed. A buyer who
+        acquired heavily 6 months ago and whose WOs completed
+        yesterday would NOT appear in a 90-day window; that's
+        intentional (the buyer's decisions predate the window).
+    buyer_user_id : int, optional
+        If provided, filters to that buyer only. Empty list when
+        the buyer has no acquisitions in the window OR no
+        contributing WorkOrders on those acquisitions. When
+        ``None`` (default), returns rows for every buyer with
+        contributing data.
+
+    Returns
+    -------
+    list[BuyerAccuracyRow]
+        One row per buyer with at least one contributing WO in the
+        window. Rows sorted by ``mean_absolute_variance_pct`` asc
+        (most accurate buyers first); deterministic tiebreak on
+        ``buyer_user_id`` asc.
+
+    Notes
+    -----
+    Read-only. **NULL-buyer acquisitions excluded** — historical
+    rows written before M9.1 have no buyer provenance; treating
+    them as an anonymous "unknown buyer" bucket would produce a
+    misleading aggregation. Completed WOs only
+    (``status='completed'``) with both non-null ``estimated_cost``
+    + ``actual_cost`` and a positive estimate — matches the M8.2
+    ``vendor_performance`` variance semantics.
+
+    **Deviation from M8 §1.8 spec.** M8 planning specified single-
+    buyer-row return (``-> BuyerAccuracyRow``). M9.4 ships list-
+    returning to match the dashboard's needs (rank all buyers by
+    accuracy in one call). Filtering by ``buyer_user_id`` recovers
+    the single-buyer shape (0 or 1 rows). Recorded in
+    ``MILESTONE_9_PLANNING.md`` §0.a SESSION_103.
+    """
+    today = dt.date.today()
+    since = today - dt.timedelta(days=window_days)
+
+    # Pull acquisitions in-window with non-null buyer. When
+    # ``buyer_user_id`` is provided, filter further so downstream
+    # aggregation only touches that buyer's data.
+    acq_qs = VehicleAcquisition.objects.filter(
+        dealership=dealership,
+        purchase_date__gte=since,
+        buyer__isnull=False,
+    )
+    if buyer_user_id is not None:
+        acq_qs = acq_qs.filter(buyer_id=buyer_user_id)
+
+    # Map vehicle_id → buyer_id so we can attribute WO cost variance
+    # to the buyer. One query.
+    buyer_by_vehicle: dict[int, int] = dict(
+        acq_qs.values_list("vehicle_id", "buyer_id")
+    )
+    if not buyer_by_vehicle:
+        return []
+
+    # Pull contributing WOs across those vehicles in one query.
+    # Completed only + both non-null costs + positive estimate —
+    # matches vendor_performance's variance-eligibility gate.
+    wo_qs = WorkOrder.objects.filter(
+        dealership=dealership,
+        vehicle_id__in=buyer_by_vehicle.keys(),
+        status=WORK_ORDER_STATUS_COMPLETED,
+        estimated_cost__isnull=False,
+        actual_cost__isnull=False,
+        estimated_cost__gt=ZERO,
+    ).values_list("vehicle_id", "estimated_cost", "actual_cost")
+
+    # Per-buyer accumulators. Nested vehicle_ids set so we can count
+    # distinct vehicles that contributed.
+    accum_by_buyer: dict[int, _BuyerAccum] = {}
+    for vehicle_id, estimated, actual in wo_qs:
+        buyer_id = buyer_by_vehicle[vehicle_id]
+        accum = accum_by_buyer.get(buyer_id)
+        if accum is None:
+            accum = _BuyerAccum()
+            accum_by_buyer[buyer_id] = accum
+        accum.absorb(vehicle_id, estimated, actual)
+
+    if not accum_by_buyer:
+        return []
+
+    # Resolve User rows for display in one query.
+    users_by_id: dict[int, "User"] = {
+        u.pk: u
+        for u in User.objects.filter(pk__in=accum_by_buyer.keys())
+    }
+
+    rows: list[BuyerAccuracyRow] = []
+    for buyer_id, accum in accum_by_buyer.items():
+        user = users_by_id.get(buyer_id)
+        display = _buyer_display_for(user) if user else f"user#{buyer_id}"
+        rows.append(accum.to_row(buyer_id=buyer_id, buyer_display=display))
+
+    # Most-accurate buyers first (lowest mean absolute variance).
+    # Deterministic tiebreak on buyer_user_id asc.
+    rows.sort(key=lambda r: (r.mean_absolute_variance_pct, r.buyer_user_id))
+    return rows
+
+
+class _BuyerAccum:
+    """Mutable per-buyer accumulator for the Q7 aggregation pass.
+
+    Kept private — the public row is :class:`BuyerAccuracyRow`,
+    produced by :meth:`to_row` at the end of the pass.
+    """
+
+    __slots__ = (
+        "_vehicle_ids",
+        "_wo_count",
+        "_abs_variance_total",
+        "_signed_variance_total",
+    )
+
+    def __init__(self) -> None:
+        self._vehicle_ids: set[int] = set()
+        self._wo_count = 0
+        self._abs_variance_total = ZERO
+        self._signed_variance_total = ZERO
+
+    def absorb(
+        self,
+        vehicle_id: int,
+        estimated: Decimal,
+        actual: Decimal,
+    ) -> None:
+        self._vehicle_ids.add(vehicle_id)
+        self._wo_count += 1
+        signed_pct = ((actual - estimated) / estimated) * Decimal("100")
+        self._signed_variance_total += signed_pct
+        self._abs_variance_total += abs(signed_pct)
+
+    def to_row(
+        self, *, buyer_id: int, buyer_display: str
+    ) -> BuyerAccuracyRow:
+        n = Decimal(self._wo_count)
+        return BuyerAccuracyRow(
+            buyer_user_id=buyer_id,
+            buyer_display=buyer_display,
+            vehicle_count=len(self._vehicle_ids),
+            work_order_count=self._wo_count,
+            mean_absolute_variance_pct=(
+                self._abs_variance_total / n
+            ).quantize(Decimal("0.01")),
+            bias_pct=(
+                self._signed_variance_total / n
+            ).quantize(Decimal("0.01")),
         )

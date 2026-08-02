@@ -51,20 +51,21 @@ on OpenAI `gpt-5-mini` (Ollama llama3.2 also supported via
 
 ## Current baseline
 
-Verified 2026-08-01 (after SESSION_099 M8 closeout). Update if any row changes.
+Verified 2026-08-02 (after SESSION_105 M9 closeout). Update if any row changes.
 
 | Surface | State |
 |---|---|
-| Backend tests | **3274 passed, 1 skipped, 0 failed** (`cd backend && python3 manage.py test dealer_ai`) |
-| Frontend tests | **19 passed** (`cd frontend && npm test`) — new baseline established at M8.5 (project had zero frontend tests before that session) |
-| Milestones shipped | M1 (multi-tenancy + auth), M2 (investment ledger), M3 (structured condition report), M4 (recon automation), M5 (vehicle lifecycle stages + retail gating), M6 (photography + listing generation), M7 (async infrastructure — SESSION_093), **M8 (operational intelligence — SESSION_099)** |
+| Backend tests | **3426 passed, 1 skipped, 0 failed** (`cd backend && python3 manage.py test dealer_ai`) |
+| Frontend tests | **34 passed** (`cd frontend && npm test`) — grew from M8.5 baseline (19) by +15 at M9.5 |
+| Milestones shipped | M1 (multi-tenancy + auth), M2 (investment ledger), M3 (structured condition report), M4 (recon automation), M5 (vehicle lifecycle stages + retail gating), M6 (photography + listing generation), M7 (async infrastructure — SESSION_093), M8 (operational intelligence — SESSION_099), **M9 (sale + delivery closure — SESSION_105)** |
 | M5 lifecycle surface | 2 models + migration `0017` (bootstrap seeds every existing Vehicle to `frontline`/`off_market` + matching event) + 12-stage vocabulary + 4-trigger vocabulary + `services/vehicle_lifecycle.py` (5 fns + 4 distinct domain errors + 3 rule evaluators + 1 dataclass + read helper + annotation helper) + 2 Vehicle `@property` accessors + 3 M5.4 admin endpoints + M5.6 operator UI (`/dealer-ai-inventory/:stock/lifecycle`) + `customer_visible_vehicles()` filters on `stage=frontline` (choke-point flip; every retail-side surface inherits) |
 | M6 photo + listing surface | 2 models (`VehiclePhoto`, `VehicleListing`) + migrations `0018` (additive) + `0019` (public_id backfill) + `services/photo_gallery/` package (6 verbs + 4 domain errors + 3 module constants — 1024×768 dimension threshold + 8 photo count threshold; restructured from flat module to package at SESSION_092 M7.5 for reaper sibling) + `services/vehicle_listing.py` (5 verbs + 5 domain errors + M4.5-shape source-bundle assembly + LLM factory integration) + `services/photo_storage.py` extended (`store_vehicle_photo`, `put_bytes` on both adapters, `build_canonical_vehicle_photo_key`, `parse_canonical_vehicle_photo_key`, `delete_vehicle_photo_object` sibling added at M7.5) + `services/llm_safety.py::_RECON_COMM_KINDS` extended 2 → 3 (dispatch-only) + M6.4 rules (`_rule_photography_to_listing` filled + `_rule_listing_to_frontline` new) + 13 M6.5 admin/showroom endpoints + 2 M6.5 operator UI routes (`/dealer-ai-inventory/:stock/photos`, `/listing`) + SESSION_075 §5.i truthful-language refactor (customer-lookup path requires frontline + published listing) |
 | M7 async substrate | Celery 5.5.3 + Redis 6.4.0 + `django-celery-beat` 2.8.1 DatabaseScheduler. `backend/dealer_kit/celery.py` + settings block (`REDIS_URL` → broker + result backend; `CELERY_TASK_ALWAYS_EAGER=_is_running_tests()`; JSON-only serialization pins). Cross-cutting `@instrumented_task` decorator (`services/jobs/instrumentation.py`) with retry-on-transient-error policy. `JobRunLog` model + migration `0020` (composite `(task_name, -started_at)` index). Four scheduled job families at hourly cadence: **02:00** floor-plan interest accrual (`services/floor_plan/`) — extracted M2 command body verbatim; **03:00** aging-per-stage snapshot (`services/lifecycle_aging/`) with new `StageAgingSnapshot` model + migration `0021` (composite `(dealership, stage, -snapshot_at)` index); **04:00** vendor SLA warnings (`services/vendor_sla/`) — read-only, emits `logging.WARNING` per breach (three locked policy constants: 7-day approved-stale, 0-day ETA grace, outsourced-only); **05:00** photo tombstone reaper (`services/photo_gallery/reaper.py`) — 30-day retention, storage-first delete, iteration-level failure isolation. Every task wraps `@instrumented_task` writing one `JobRunLog` per invocation. |
 | M8 operational intelligence | `services/analytics/` package (4 submodules) shipping 6 aggregations across 6 DRF endpoints under `/api/dealer-ai/admin/analytics/` — Q1 recon per source, Q2+Q4 vendor performance, Q5+Q9 stage aging trend, Q10 SLA breach patterns, Q3 proxy vehicle-type recon cost, Q8 proxy days-at-frontline. `SlaBreachRecord` model + migration `0022` (composite `(dealership, kind, -detected_at)` index + unique `(work_order, kind, detected_at_date)` anchoring M7.4 daily-scan idempotency); M7.4 `detect_sla_breaches` verb extended additively to write rows via `get_or_create` (log warning contract preserved). Operator UI at `/dealer-ai-analytics/` (4 tabs — Acquisition & Recon Cost / Vendor Performance / Lifecycle Aging / SLA Breach Patterns) with recharts. **First frontend test infra in the project's history** — Vitest + `@testing-library/react` + `jsdom` + `@testing-library/jest-dom` + `@testing-library/user-event`. Q6 (gross-profit trend) + Q7 (buyer estimate accuracy) deferred to Milestone 9 pending Sale + acquisition-buyer-provenance substrate; Q3 + Q8 shipped as proxies pending the same Sale substrate. `AnalyticsCache` materialization deferred per §5.a Option C hybrid pending operator latency evidence. |
-| Tenancy carriers | 22 (M1 six + M3 three + M4 six + M5 two + M6 two + M7 two + M8 one — `SlaBreachRecord` at M8.1) |
-| DRF admin endpoints | 40 (21 pre-M6 + 13 M6.5 + M7 zero + 6 M8 analytics) |
-| Frontend operator routes | 8 (5 pre-M6 + 2 M6.5 + 1 M8.5 `/dealer-ai-analytics/`) |
+| M9 sale + delivery closure | Two new entities — `Sale` (M9.1, migration `0023_sale_entity_and_buyer_fk` — same migration adds `VehicleAcquisition.buyer` FK nullable) + `Delivery` (M9.2, migration `0024_delivery_entity`, mandatory OneToOne with Sale). Two new service packages — `services/sale/` (`gross_realized` pure verb + `record_sale` transactional write denormalizing `gross_realized` at insert time) + `services/delivery/` (`record_delivery` + `update_checklist_item` + `verify_insurance` atomic column-and-key). Four "true" analytics verbs closing M8 deferrals — `vehicle_type_profitability` (Q3 true), `gross_profit_trend` (Q6, new `services/analytics/gross_profit.py` module), `buyer_estimate_accuracy` (Q7, reads M9.1 buyer FK), `inventory_turn` (Q8 true, reads M5 `VehicleStageEvent.entered_at`). M8.4 proxy verbs preserved with smoke tests locking their shapes unchanged. Seven new DRF endpoints — one M9.1 Sale POST (with GET dispatch added at M9.5 via `@api_view(["GET", "POST"])` method-multiplex), two M9.2 Delivery (POST + PATCH; POST also GET-dispatched at M9.5), three M9.3 analytics extensions, one M9.4 Q7 endpoint. Fifth "Realized Gross" tab on `/dealer-ai-analytics/` wrapping Q3/Q6/Q7/Q8. New per-vehicle page at `dealer-ai-inventory/:stock/sale/` (three render states: no-Sale create-form → Sale-no-Delivery start-button → Sale+Delivery checklist). `LeadVehicleInterest.stage_at_interest` annotation deferred (substrate gap — through-model doesn't exist; SESSION_103 §0.a). |
+| Tenancy carriers | 24 (M1 six + M3 three + M4 six + M5 two + M6 two + M7 two + M8 one + M9.1 one — `Sale` + M9.2 one — `Delivery`) |
+| DRF admin endpoints | 47 (21 pre-M6 + 13 M6.5 + M7 zero + 6 M8 analytics + 7 M9 — 1 Sale + 2 Delivery + 3 M9.3 analytics + 1 M9.4 Q7) |
+| Frontend operator routes | 9 (5 pre-M6 + 2 M6.5 + 1 M8.5 `/dealer-ai-analytics/` + 1 M9.5 `dealer-ai-inventory/:stock/sale`) |
 | Public endpoints | +1 M6.5 showroom (`GET /api/dealer-ai/showroom/vehicles/<stock_number>/`) |
 | Frontend | typecheck + build clean (`cd frontend && npx tsc --noEmit && npx vite build`); Vitest suite green (`cd frontend && npm test`) |
 | LLM | OpenAI `gpt-5-mini` (API key in repo-root `.env`); Ollama llama3.2 supported via provider env |
@@ -117,7 +118,7 @@ If the change touched **the backend**:
 cd backend && python3 manage.py test dealer_ai
 ```
 
-Expect: `3274 passed, 1 skipped, 0 failed`.
+Expect: `3426 passed, 1 skipped, 0 failed`.
 
 If the change touched **the frontend**:
 
@@ -125,9 +126,10 @@ If the change touched **the frontend**:
 cd frontend && npx tsc --noEmit && npx vite build && npm test
 ```
 
-Expect: 0 errors from `tsc` / `vite`; **19 passing** from Vitest
-(baseline established at M8.5 SESSION_098 — grows as frontend
-test coverage extends).
+Expect: 0 errors from `tsc` / `vite`; **34 passing** from Vitest
+(baseline established at M8.5 SESSION_098 with 19; extended to
+34 at M9.5 SESSION_104 with the Realized Gross tab +
+VehicleSalePage components).
 
 If the change touched **anything that can affect chat output**:
 
