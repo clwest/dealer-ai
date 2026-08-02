@@ -972,4 +972,22 @@ urlpatterns = [
         views_accounting.admin_trial_balance,
         name="admin-trial-balance",
     ),
+    # Milestone 14 · Increment 1 (SESSION_134) — list + failures endpoints
+    # per MILESTONE_14_PLANNING.md §7 M14.1 + §5.a Option A (four-surface
+    # UI scope) + §5.b Option B (filter-less list — filters land at M15+
+    # per operator evidence). Read-only. Same permission class as M13
+    # accounting endpoints (zero drift extends to a sixth consecutive
+    # milestone). Empty-list responses for zero-portfolio / zero-failure
+    # tenants (not 404) per M13.3 §0.a decision 5 zero-portfolio
+    # semantics.
+    path(
+        "admin/accounting/journal-entries/list/",
+        views_accounting.admin_journal_entry_list,
+        name="admin-journal-entry-list",
+    ),
+    path(
+        "admin/accounting/cost-posting-failures/",
+        views_accounting.admin_cost_posting_failures,
+        name="admin-cost-posting-failures",
+    ),
 ]

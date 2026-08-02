@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
+from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -46,7 +47,9 @@ from .services.accounting import (
     TrialBalanceSnapshot,
     UnbalancedJournalEntryError,
     compute_trial_balance,
+    detect_cost_posting_failures,
     get_journal_entry,
+    list_journal_entries,
     post_journal_entry,
     reverse_journal_entry,
 )
@@ -295,5 +298,165 @@ def admin_trial_balance(request):
     )
     return Response(
         {"trial_balance": _project_trial_balance(snapshot)},
+        status=status.HTTP_200_OK,
+    )
+
+
+# --- Milestone 14 · Increment 1 (SESSION_134) — list + failures endpoints ----
+#
+# Per MILESTONE_14_PLANNING.md §7 M14.1. Two new read-only endpoints
+# feeding the M14.2-M14.4 operator UI. Both reuse
+# ``IsSalesManagerOrOwnerAtActiveDealership`` (permission-class count
+# stays at 8 — zero drift extends to a sixth consecutive milestone).
+# Money-on-the-wire is Decimal-as-string per §5.c Option A.
+
+
+class JournalEntryListQuerySerializer(serializers.Serializer):
+    """Query-param validator for the journal-entry list endpoint.
+
+    ``page_size`` capped at 100 to bound worst-case query size.
+    """
+
+    page = serializers.IntegerField(
+        min_value=1, required=False, default=1
+    )
+    page_size = serializers.IntegerField(
+        min_value=1, max_value=100, required=False, default=25
+    )
+
+
+def _project_list_entry(entry: JournalEntry) -> dict:
+    """Compact projection for the list view.
+
+    Omits per-line detail (loaded by the detail retrieve endpoint) but
+    includes the ``total_debit`` annotation added by
+    :func:`list_journal_entries` so the operator UI can render an
+    "amount" column without N+1 line queries.
+    """
+    return {
+        "id": entry.pk,
+        "description": entry.description,
+        "posted_at": entry.posted_at.isoformat(),
+        "posted_by_user_id": entry.posted_by_user_id,
+        "posted_by_username": (
+            entry.posted_by_user.username
+            if entry.posted_by_user_id
+            else None
+        ),
+        "reverses_id": entry.reverses_id,
+        "reason": entry.reason,
+        # Sum() aggregation drops trailing zeros; quantize to money shape
+        # (2dp) so the wire matches every other M13 accounting endpoint
+        # per §5.c Option A Decimal-as-string convention.
+        "total_debit": str(entry.total_debit.quantize(Decimal("0.01"))),
+    }
+
+
+@api_view(["GET"])
+@permission_classes(_M131_PERMS)
+def admin_journal_entry_list(request):
+    """GET /admin/accounting/journal-entries/list/[?page=&page_size=]
+
+    Paginated, recent-first (``-posted_at, -id``). No filters at
+    M14.1 per §5.b Option B — filters land at M15+ per operator
+    evidence. Empty-list response for zero-portfolio tenants (not
+    404) per M13.3 lesson 8 zero-portfolio semantics.
+    """
+    dealership = get_current_dealership(request)
+    query = JournalEntryListQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    page = list_journal_entries(
+        dealership=dealership,
+        page=query.validated_data["page"],
+        page_size=query.validated_data["page_size"],
+    )
+    return Response(
+        {
+            "journal_entries": {
+                "entries": [
+                    _project_list_entry(e) for e in page.entries
+                ],
+                "total_count": page.total_count,
+                "page": page.page,
+                "page_size": page.page_size,
+            }
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+class CostPostingFailuresQuerySerializer(serializers.Serializer):
+    """Query-param validator for the cost-posting-failures endpoint.
+
+    ``threshold_hours`` bounded to 8760 (one year) to avoid runaway
+    queries; default 24h matches one M13.2 detector-run boundary
+    (the detector runs at 10:00 project-time daily, so a row older
+    than 24h that isn't posted has already missed at least one run).
+    """
+
+    threshold_hours = serializers.IntegerField(
+        min_value=1, max_value=8760, required=False, default=24
+    )
+
+
+def _project_failure(cost, now) -> dict:
+    """Projection for one unposted VehicleCost row.
+
+    ``age_in_hours`` is computed at projection time from
+    ``now - created_at`` — the endpoint captures ``now`` once so
+    every failure in the response uses the same reference moment.
+    """
+    age_seconds = (now - cost.created_at).total_seconds()
+    age_in_hours = int(age_seconds // 3600)
+    return {
+        "id": cost.pk,
+        "vehicle_id": cost.vehicle_id,
+        "vehicle_stock": (
+            cost.vehicle.stock_number if cost.vehicle_id else None
+        ),
+        "category": cost.category,
+        "category_display": cost.get_category_display(),
+        "amount": str(cost.amount),
+        "reference": cost.reference,
+        "vendor": cost.vendor,
+        "incurred_at": cost.incurred_at.isoformat(),
+        "created_at": cost.created_at.isoformat(),
+        "age_in_hours": age_in_hours,
+    }
+
+
+@api_view(["GET"])
+@permission_classes(_M131_PERMS)
+def admin_cost_posting_failures(request):
+    """GET /admin/accounting/cost-posting-failures/[?threshold_hours=]
+
+    Returns unposted, non-estimate VehicleCost rows older than the
+    threshold — costs the M13.2 detector should have posted but
+    didn't (typically :class:`MissingDefaultAccountError` or another
+    broken invariant surfaced in
+    :func:`post_all_unposted_costs_for_dealership` logging). Empty
+    list for zero-failure tenants (not 404).
+    """
+    dealership = get_current_dealership(request)
+    query = CostPostingFailuresQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    threshold_hours = query.validated_data["threshold_hours"]
+    now = timezone.now()
+    failures = list(
+        detect_cost_posting_failures(
+            dealership=dealership,
+            now=now,
+            threshold_hours=threshold_hours,
+        )
+    )
+    return Response(
+        {
+            "cost_posting_failures": {
+                "failures": [_project_failure(c, now) for c in failures],
+                "count": len(failures),
+                "threshold_hours": threshold_hours,
+                "as_of": now.isoformat(),
+            }
+        },
         status=status.HTTP_200_OK,
     )

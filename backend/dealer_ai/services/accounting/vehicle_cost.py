@@ -68,6 +68,48 @@ class MissingDefaultAccountError(RuntimeError):
     """
 
 
+def detect_cost_posting_failures(
+    *,
+    dealership: Dealership,
+    now: Optional[dt.datetime] = None,
+    threshold_hours: int = 24,
+) -> QuerySet[VehicleCost]:
+    """Return unposted, non-estimate VehicleCost rows older than the age threshold.
+
+    Pure query — no writes. Same filter as
+    :func:`detect_unposted_costs` plus an age boundary
+    (``created_at <= now - threshold_hours``) — the residue signals
+    costs the M13.2 detector *should have* posted by now but didn't.
+    Root cause is typically :class:`MissingDefaultAccountError` or
+    another broken-invariant condition logged inside
+    :func:`post_all_unposted_costs_for_dealership` and counted as
+    ``failed_count`` in its return summary.
+
+    Default ``threshold_hours=24`` == one detector-run boundary (the
+    M13.2 detector runs at 10:00 project-time daily). A row created
+    yesterday that isn't posted today is a real anomaly worth
+    surfacing to the operator.
+
+    Zero-failure tenants return an empty QuerySet (not a 404) — per
+    M13.3 §0.a decision 5 zero-portfolio semantics.
+
+    ``select_related("vehicle")`` keeps stock-number access in the
+    endpoint projection single-query for large failure lists.
+    """
+    effective = now or timezone.now()
+    threshold = effective - dt.timedelta(hours=threshold_hours)
+    return (
+        VehicleCost.objects.filter(
+            dealership=dealership,
+            posted_at__isnull=True,
+            is_estimate=False,
+            created_at__lte=threshold,
+        )
+        .select_related("vehicle")
+        .order_by("created_at", "id")
+    )
+
+
 def detect_unposted_costs(
     *, dealership: Dealership
 ) -> QuerySet[VehicleCost]:

@@ -23,6 +23,8 @@ from decimal import Decimal
 from typing import Optional
 
 from django.db import transaction
+from django.db.models import DecimalField, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from ...models import (
@@ -280,3 +282,81 @@ def get_journal_entry(
         return JournalEntry.objects.get(pk=pk, dealership=dealership)
     except JournalEntry.DoesNotExist:
         return None
+
+
+# --- Milestone 14 · Increment 1 (SESSION_134) — paginated list verb -----------
+
+
+@dataclass(frozen=True)
+class JournalEntryListPage:
+    """One page of the paginated tenant-scoped JournalEntry list.
+
+    Fields:
+
+    - ``entries`` — the JournalEntry rows for this page, ordered
+      ``-posted_at, -id`` (recent-first, stable secondary key for
+      pagination). Each row carries a ``.total_debit`` annotation
+      (sum of its lines' debits) for the list projection at the
+      endpoint layer.
+    - ``total_count`` — total matching rows across all pages for
+      this tenant.
+    - ``page`` — 1-indexed page number (echoes the caller's input).
+    - ``page_size`` — rows per page (echoes the caller's input).
+
+    Zero-portfolio semantics per M13 §6 lesson 8: a tenant with no
+    postings returns ``entries=()`` + ``total_count=0``. Not a 404.
+    """
+
+    entries: tuple[JournalEntry, ...]
+    total_count: int
+    page: int
+    page_size: int
+
+
+def list_journal_entries(
+    *,
+    dealership: Dealership,
+    page: int = 1,
+    page_size: int = 25,
+) -> JournalEntryListPage:
+    """Paginated tenant-scoped JournalEntry list.
+
+    Pure. Read-only. No filters at M14.1 per §5.b Option B — filter
+    surface (date range, posted_by, reversal-only) layers at M15+
+    when operator evidence names specific needs.
+
+    Ordering ``-posted_at, -id`` gives recent-first with a stable
+    secondary key so pagination is deterministic when many entries
+    share a ``posted_at`` (bulk detector runs at 10:00 project-time
+    stamp every VehicleCost post with the same timestamp).
+
+    Each returned entry has a ``.total_debit`` annotation (sum of
+    line debits) so the endpoint projection avoids per-row N+1
+    queries. ``select_related("posted_by_user")`` keeps username
+    access single-query.
+
+    Callers are trusted to pass ``page >= 1`` and
+    ``1 <= page_size <= 100``; the endpoint layer validates the
+    query params via a DRF serializer. Out-of-range inputs slice
+    into an empty tuple rather than erroring — the pagination
+    contract is best-effort.
+    """
+    zero = Value(
+        _ZERO,
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
+    qs = (
+        JournalEntry.objects.filter(dealership=dealership)
+        .select_related("posted_by_user")
+        .annotate(total_debit=Coalesce(Sum("lines__debit"), zero))
+        .order_by("-posted_at", "-id")
+    )
+    total_count = qs.count()
+    start = max(page - 1, 0) * page_size
+    end = start + page_size
+    return JournalEntryListPage(
+        entries=tuple(qs[start:end]),
+        total_count=total_count,
+        page=page,
+        page_size=page_size,
+    )
