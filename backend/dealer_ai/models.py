@@ -6080,3 +6080,213 @@ class DealWriteup(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 11 · Increment 4 (SESSION_117) — Follow-up cadence orchestration.
+# ---------------------------------------------------------------------------
+
+
+# Fixed template vocabulary per SESSION_117 §0.a M11.4 amendment
+# (implementation-time default). Six named schedules mapping to the
+# canonical follow-up windows named in MILESTONE_11_PLANNING.md §1.4.
+# Each template is a fixed sequence of offsets (in days from cadence
+# start) that :func:`services.follow_ups.start_cadence` uses to seed
+# :class:`FollowUpTask` rows.
+FOLLOW_UP_TEMPLATE_24HR = "24hr"
+FOLLOW_UP_TEMPLATE_1WK = "1wk"
+FOLLOW_UP_TEMPLATE_30DAY = "30day"
+FOLLOW_UP_TEMPLATE_90DAY = "90day"
+FOLLOW_UP_TEMPLATE_6MO = "6mo"
+FOLLOW_UP_TEMPLATE_1YR = "1yr"
+
+FOLLOW_UP_TEMPLATE_CHOICES = (
+    (FOLLOW_UP_TEMPLATE_24HR, "24 hours"),
+    (FOLLOW_UP_TEMPLATE_1WK, "1 week"),
+    (FOLLOW_UP_TEMPLATE_30DAY, "30 days"),
+    (FOLLOW_UP_TEMPLATE_90DAY, "90 days"),
+    (FOLLOW_UP_TEMPLATE_6MO, "6 months"),
+    (FOLLOW_UP_TEMPLATE_1YR, "1 year"),
+)
+
+# Offset schedules (days from cadence start) per template. Kept as a
+# module-level constant so the seeding logic + tests share one source
+# of truth. Fractional-day offsets use timedelta at the service layer.
+FOLLOW_UP_TEMPLATE_OFFSETS: dict[str, tuple[float, ...]] = {
+    FOLLOW_UP_TEMPLATE_24HR: (1.0,),
+    FOLLOW_UP_TEMPLATE_1WK: (1.0, 3.0, 7.0),
+    FOLLOW_UP_TEMPLATE_30DAY: (1.0, 3.0, 7.0, 14.0, 30.0),
+    FOLLOW_UP_TEMPLATE_90DAY: (1.0, 7.0, 30.0, 60.0, 90.0),
+    FOLLOW_UP_TEMPLATE_6MO: (7.0, 30.0, 90.0, 180.0),
+    FOLLOW_UP_TEMPLATE_1YR: (30.0, 90.0, 180.0, 365.0),
+}
+
+# Task state vocabulary. Two terminal states (completed / skipped) +
+# the initial state (pending). No auto-skip at M11.4 — the beat
+# surfacer flags stale tasks in logs but never transitions state per
+# SESSION_117 §0.a M11.4 amendment (decision 3).
+FOLLOW_UP_TASK_STATE_PENDING = "pending"
+FOLLOW_UP_TASK_STATE_COMPLETED = "completed"
+FOLLOW_UP_TASK_STATE_SKIPPED = "skipped"
+
+FOLLOW_UP_TASK_STATE_CHOICES = (
+    (FOLLOW_UP_TASK_STATE_PENDING, "Pending"),
+    (FOLLOW_UP_TASK_STATE_COMPLETED, "Completed"),
+    (FOLLOW_UP_TASK_STATE_SKIPPED, "Skipped"),
+)
+
+
+class FollowUpCadence(models.Model):
+    """Milestone 11 · Increment 4 — the follow-up cadence header.
+
+    Per MILESTONE_11_PLANNING.md §1.4 + §5.d Option A (user-confirmed at
+    SESSION_114 open, recorded in §0.a). Two-entity model —
+    :class:`FollowUpCadence` is the header (one per lead per template
+    instance); :class:`FollowUpTask` rows are the scheduled contact
+    points. Cadence rows are queryable per-lead; task rows are the
+    operator's primary work unit and queryable independently.
+
+    **Idempotency (per-lead per-template).** The service verb
+    :func:`services.follow_ups.start_cadence` refuses to create a
+    duplicate active cadence for the same (lead, template) pair.
+    Historical (paused / completed) cadences don't block a fresh
+    start.
+
+    **Pause semantics.** ``is_active=False`` halts future beat
+    surfacing but leaves the task rows intact — an operator can
+    resume by re-activating, or leave paused as a permanent record
+    of the sequence attempted. Task-row deletion is never automatic.
+
+    **Cross-tenant guard.** ``clean()`` enforces same-tenant `lead`.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="follow_up_cadences",
+    )
+    lead = models.ForeignKey(
+        "CustomerLead",
+        on_delete=models.CASCADE,
+        related_name="follow_up_cadences",
+    )
+    template = models.CharField(
+        max_length=16, choices=FOLLOW_UP_TEMPLATE_CHOICES
+    )
+    started_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"FollowUpCadence #{self.pk} — lead #{self.lead_id} × "
+            f"{self.template}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.lead_id is not None
+            and self.lead.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "lead": (
+                        "FollowUpCadence.lead must belong to the same "
+                        "dealership as the cadence. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )
+
+
+class FollowUpTask(models.Model):
+    """Milestone 11 · Increment 4 — a scheduled follow-up contact point.
+
+    Rows seeded by :func:`services.follow_ups.start_cadence` at cadence
+    creation using the template's offset schedule
+    (:data:`FOLLOW_UP_TEMPLATE_OFFSETS`).
+
+    **State machine.**
+
+    - Initial: ``pending``.
+    - ``pending`` → ``completed`` via
+      :func:`services.follow_ups.complete_task`.
+    - ``pending`` → ``skipped`` via
+      :func:`services.follow_ups.skip_task`.
+    - No auto-transitions at M11.4 (per SESSION_117 §0.a decision 3).
+
+    **Beat surfacer** (M11.4 orchestrator) reads
+    ``state=pending`` + ``due_at <= now()`` and logs the count, but
+    doesn't mutate state — operator intent is required for every
+    transition.
+
+    **CASCADE on cadence delete.** Deleting a cadence removes its
+    tasks. A pause + soft-null posture on the cadence is preferred
+    to deletion.
+
+    **Cross-tenant guard.** ``clean()`` enforces same-tenant
+    ``cadence``.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="follow_up_tasks",
+    )
+    cadence = models.ForeignKey(
+        FollowUpCadence,
+        on_delete=models.CASCADE,
+        related_name="tasks",
+    )
+    due_at = models.DateTimeField(db_index=True)
+    state = models.CharField(
+        max_length=16,
+        choices=FOLLOW_UP_TASK_STATE_CHOICES,
+        default=FOLLOW_UP_TASK_STATE_PENDING,
+    )
+    completed_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="follow_up_tasks_completed",
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["due_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"FollowUpTask #{self.pk} — cadence #{self.cadence_id} "
+            f"({self.state}, due {self.due_at.isoformat()})"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.cadence_id is not None
+            and self.cadence.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "cadence": (
+                        "FollowUpTask.cadence must belong to the same "
+                        "dealership as the task. Cross-tenant contamination "
+                        "guard (see AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )

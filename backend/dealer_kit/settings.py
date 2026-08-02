@@ -407,6 +407,25 @@ CELERY_BEAT_SCHEDULE: dict = {
         # task defaults to ``timezone.now()``.
         "kwargs": {},
     },
+    "follow-up-task-surface-daily-06-00": {
+        "task": (
+            "dealer_ai.services.follow_ups.tasks"
+            ".surface_due_follow_up_tasks_for_all_tenants"
+        ),
+        # 06:00 project-time daily — one hour after the M7.5
+        # tombstone reaper. Continues the non-overlapping window
+        # pattern (M7.2 at 02:00, M7.3 at 03:00, M7.4 at 04:00,
+        # M7.5 at 05:00, M11.4 at 06:00). The M11.4 orchestrator is
+        # read-only — it counts + logs due pending tasks per tenant
+        # but never transitions state (operator intent is required
+        # for every state transition per SESSION_117 §0.a M11.4
+        # decision 3). Positioned after M7.5 so the daily task
+        # surfacing sees today's snapshots + accruals reflected in
+        # any lead-status filters that get added downstream.
+        "schedule": crontab(hour=6, minute=0),
+        # No positional args; the orchestrator takes no kwargs.
+        "kwargs": {},
+    },
 }
 
 # DB-backed scheduler (django-celery-beat). PeriodicTask + CrontabSchedule

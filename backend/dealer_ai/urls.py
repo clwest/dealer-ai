@@ -6,6 +6,7 @@ from . import (
     views_deal_writeups,
     views_delivery,
     views_f_and_i,
+    views_follow_ups,
     views_leads,
     views_lifecycle,
     views_listings,
@@ -698,5 +699,45 @@ urlpatterns = [
         "admin/deal-writeups/<int:pk>/hand-off/",
         views_deal_writeups.admin_deal_writeup_hand_off,
         name="admin-deal-writeup-hand-off",
+    ),
+    # ---- Milestone 11 · Increment 4 — Follow-up cadence admin API ------
+    # Five endpoints per MILESTONE_11_PLANNING.md §1.4 + §5.d Option A
+    # + §7 M11.4. Gated on ``IsSalesManagerOrOwnerAtActiveDealership``
+    # (same posture as M11.1 / M11.2 / M11.3 per §1.9).
+    # Domain-error mapping in ``views_follow_ups.py``:
+    #   CrossTenantCadenceError / CrossTenantTaskError → 404;
+    #   DuplicateActiveCadenceError → 409 (idempotency guard);
+    #   UnknownTemplateError → 400;
+    #   TaskAlreadyTerminalError → 409 (state machine);
+    #   missing lookups in-tenant → 404;
+    #   serializer error → 400.
+    # Beat orchestrator registered in
+    # ``dealer_kit/settings.py::CELERY_BEAT_SCHEDULE`` at 06:00
+    # project-time daily. State transitions are operator-triggered
+    # only (SESSION_117 §0.a M11.4 decision 3).
+    path(
+        "admin/follow-up-cadences/",
+        views_follow_ups.admin_follow_up_cadence_create,
+        name="admin-follow-up-cadence-create",
+    ),
+    path(
+        "admin/follow-up-cadences/<int:pk>/pause/",
+        views_follow_ups.admin_follow_up_cadence_pause,
+        name="admin-follow-up-cadence-pause",
+    ),
+    path(
+        "admin/follow-up-tasks/",
+        views_follow_ups.admin_follow_up_task_list,
+        name="admin-follow-up-task-list",
+    ),
+    path(
+        "admin/follow-up-tasks/<int:pk>/complete/",
+        views_follow_ups.admin_follow_up_task_complete,
+        name="admin-follow-up-task-complete",
+    ),
+    path(
+        "admin/follow-up-tasks/<int:pk>/skip/",
+        views_follow_ups.admin_follow_up_task_skip,
+        name="admin-follow-up-task-skip",
     ),
 ]

@@ -202,6 +202,62 @@ these implementation-time defaults are
 not counted against the streak per M10
 §9 (planning-time decisions only).
 
+### SESSION_117 · M11.4 open — cadence + beat micro-decisions recorded
+
+At M11.4 implementation time three
+substrate-shape defaults surfaced. All
+three are implementation-time
+selections that don't close future
+options — resolved by proceeding with
+the defaults and recording here per
+the M11.3 precedent.
+
+1. **Cadence templates: fixed constants.**
+   The six named templates (`24hr`,
+   `1wk`, `30day`, `90day`, `6mo`,
+   `1yr`) live as module-level
+   constants (`FOLLOW_UP_TEMPLATE_*`
+   + `FOLLOW_UP_TEMPLATE_CHOICES`)
+   matching the M11.1 lead-channel
+   vocab-set pattern. Operator-
+   configurable rows would be a
+   larger planning decision (would
+   require a `CadenceTemplate` entity
+   + admin CRUD); deferred until
+   operator evidence surfaces need.
+2. **Beat schedule ownership: code-
+   first bootstrap + DatabaseScheduler
+   overlay.** The M11.4 orchestrator
+   is added to
+   `CELERY_BEAT_SCHEDULE` in
+   `dealer_kit/settings.py` at the
+   next M7 slot (06:00 project-time
+   daily; M7.2-M7.5 occupy 02:00-
+   05:00). Django-celery-beat's
+   `DatabaseScheduler` (already
+   configured per M7) surfaces the
+   entry into the DB on first Beat
+   start so operators can adjust
+   without redeploy. Matches the
+   M7.2-M7.5 posture unchanged.
+3. **Task auto-skip: operator-
+   triggered only.** `skip_task`
+   verb requires an explicit call;
+   the beat-surfacer task only
+   flags stale tasks in
+   :class:`JobRunLog`, never auto-
+   transitions state. Auto-skip
+   after N days would be a separate
+   planning decision (needs
+   operator input on the N default
+   + the observability of quiet
+   state changes); deferred.
+
+None of the three close future
+options. Streak stands at 35
+as-recommended (planning-time
+decisions only).
+
 ---
 
 ## 1. Design memo

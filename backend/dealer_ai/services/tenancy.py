@@ -452,6 +452,19 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # M10.1 CreditApplication via the existing
     # :func:`services.f_and_i.record_credit_application` verb.
     "DealWriteup",
+    # Milestone 11 · Increment 4 (SESSION_117) — FollowUpCadence +
+    # FollowUpTask entities per MILESTONE_11_PLANNING.md §1.4 + §5.d
+    # Option A (user-confirmed at SESSION_114 open, recorded in
+    # §0.a). Two entities per §5.d Option A (36 → 38). Cadence FK to
+    # CustomerLead (CASCADE); Task FK to Cadence (CASCADE). The
+    # M11.4 :mod:`services.follow_ups` verbs write ``dealership``
+    # explicitly on every row + the M11.4 Celery-beat orchestrator
+    # (:mod:`services.follow_ups.tasks`) also passes ``dealership_id``
+    # kwarg per the M7.2 pattern so ``JobRunLog`` rows carry tenant
+    # context. Autofill signal is the safety net for callers that
+    # bypass the service.
+    "FollowUpCadence",
+    "FollowUpTask",
 )
 
 
