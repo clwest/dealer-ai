@@ -14,6 +14,7 @@ inputs, rounding, day-count convention, APR unit convention).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
@@ -344,3 +345,173 @@ def affordable_max_price(
     subtotal = max_financed + down_payment + trade_in_value
     price = (subtotal - fees) / (1 + tax_rate / 100.0)
     return max(0.0, price)
+
+
+# ---- Milestone 12 · Increment 1 — BhphNote amortization ------------------
+#
+# Pure math for the dealer-as-lender side. Distinct from
+# :func:`estimate_bhph_payment` (the customer-shopping estimator that
+# consumes sticker price + taxes + fees + down/trade-in). BhphNote
+# origination already has the net principal in hand (the M9 Sale row
+# ledger settled taxes/fees/down/trade); the note math amortizes that
+# principal over ``term_weeks`` at ``apr`` on the chosen cadence.
+#
+# Adds ``semi_monthly`` (24 periods/year — twice per month, common at
+# BHPH portfolios) to the M2 cadence set. Semi-monthly period spacing
+# is 15 calendar days — the convention that pairs cleanly with the
+# 365/24 ≈ 15.2-day theoretical spacing and matches operator practice
+# (1st + 15th style schedules).
+
+BhphNoteFrequency = Literal["weekly", "biweekly", "semi_monthly"]
+
+# Periods per year per cadence. Kept as Decimal so the amortization
+# formula stays in Decimal end-to-end (no float promotion).
+_BHPH_NOTE_PERIODS_PER_YEAR: dict[str, Decimal] = {
+    "weekly": Decimal("52"),
+    "biweekly": Decimal("26"),
+    "semi_monthly": Decimal("24"),
+}
+
+# Days between successive payments. Weekly / biweekly are exact
+# calendar spans; semi_monthly is the 15-day convention (see comment
+# above).
+_BHPH_NOTE_PERIOD_DAYS: dict[str, int] = {
+    "weekly": 7,
+    "biweekly": 14,
+    "semi_monthly": 15,
+}
+
+
+class UnknownBhphFrequencyError(ValueError):
+    """Raised when ``payment_frequency`` is not in the M12.1 vocab."""
+
+
+def _validate_bhph_note_inputs(
+    principal: Decimal,
+    apr: Decimal,
+    term_weeks: int,
+    payment_frequency: str,
+) -> None:
+    if payment_frequency not in _BHPH_NOTE_PERIODS_PER_YEAR:
+        raise UnknownBhphFrequencyError(
+            f"Unsupported BHPH payment_frequency: {payment_frequency!r}. "
+            f"Valid: {sorted(_BHPH_NOTE_PERIODS_PER_YEAR)!r}."
+        )
+    if principal <= 0:
+        raise ValueError(
+            f"principal must be > 0 (got {principal}); a zero-principal "
+            "BhphNote has no schedule to amortize."
+        )
+    if apr < 0:
+        raise ValueError(
+            f"apr must be >= 0 (got {apr}); negative APR is not a valid "
+            "BhphNote scenario."
+        )
+    if term_weeks <= 0:
+        raise ValueError(
+            f"term_weeks must be > 0 (got {term_weeks}); a zero-term note "
+            "cannot amortize."
+        )
+
+
+def bhph_note_number_of_periods(
+    term_weeks: int, payment_frequency: BhphNoteFrequency
+) -> int:
+    """Number of periodic payments for a BhphNote of ``term_weeks`` at
+    ``payment_frequency``.
+
+    Weekly = ``term_weeks`` periods. Biweekly = ``term_weeks / 2`` (14-
+    day spans). Semi-monthly = ``term_weeks * 24 / 52`` — non-integer
+    inputs round half-up to the nearest whole period; operator UI
+    should surface the resulting term-in-periods so quoted schedules
+    are unambiguous.
+    """
+    if payment_frequency not in _BHPH_NOTE_PERIODS_PER_YEAR:
+        raise UnknownBhphFrequencyError(
+            f"Unsupported BHPH payment_frequency: {payment_frequency!r}."
+        )
+    periods_per_year = _BHPH_NOTE_PERIODS_PER_YEAR[payment_frequency]
+    raw = Decimal(term_weeks) * periods_per_year / Decimal("52")
+    rounded = raw.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return max(1, int(rounded))
+
+
+def bhph_note_periodic_payment(
+    principal: Decimal,
+    apr: Decimal,
+    term_weeks: int,
+    payment_frequency: BhphNoteFrequency,
+) -> Decimal:
+    """Amortize ``principal`` into a per-period BhphNote payment.
+
+    Pure. No I/O. ``apr`` is percent units (matches
+    :data:`DEFAULT_APR` convention). Returns a :class:`Decimal`
+    quantized to cents (``ROUND_HALF_UP``) so callers can persist
+    the result directly into
+    :attr:`dealer_ai.models.BhphNote.payment_amount`
+    (DecimalField(8, 2)) without silent precision loss.
+
+    Formula: standard amortization at the per-period rate ``r`` and
+    period count ``n``:
+
+        payment = principal * r * (1 + r) ** n / ((1 + r) ** n - 1)
+
+    Zero-APR case degenerates cleanly to ``principal / n``.
+    """
+    if not isinstance(principal, Decimal):
+        principal = Decimal(str(principal))
+    if not isinstance(apr, Decimal):
+        apr = Decimal(str(apr))
+    _validate_bhph_note_inputs(principal, apr, term_weeks, payment_frequency)
+
+    n_periods = bhph_note_number_of_periods(term_weeks, payment_frequency)
+    if apr == 0:
+        raw = principal / Decimal(n_periods)
+        return raw.quantize(_CENTS, rounding=ROUND_HALF_UP)
+
+    periods_per_year = _BHPH_NOTE_PERIODS_PER_YEAR[payment_frequency]
+    period_rate = apr / periods_per_year / Decimal("100")
+    one_plus_r_pow_n = (Decimal("1") + period_rate) ** n_periods
+    numerator = principal * period_rate * one_plus_r_pow_n
+    denominator = one_plus_r_pow_n - Decimal("1")
+    raw = numerator / denominator
+    return raw.quantize(_CENTS, rounding=ROUND_HALF_UP)
+
+
+def bhph_note_schedule(
+    principal: Decimal,
+    apr: Decimal,
+    term_weeks: int,
+    payment_frequency: BhphNoteFrequency,
+    first_payment_due: date,
+) -> list[tuple[date, Decimal]]:
+    """Return the full payment schedule for a BhphNote.
+
+    Pure. Equal-amount installments (matches how BHPH portfolios quote
+    a fixed weekly/biweekly/semi-monthly figure to the buyer). Each
+    tuple is ``(due_date, amount)`` with dates spaced by
+    :data:`_BHPH_NOTE_PERIOD_DAYS` for the cadence.
+
+    The final period may absorb rounding drift when a future payoff
+    verb settles the balance; M12.1 returns the quoted-amount
+    schedule only. Amortization drift over even a 130-week schedule
+    at BHPH APRs is typically < $2 total, and is settled by the
+    lender at closeout — not something the operator quotes to the
+    buyer.
+    """
+    if not isinstance(principal, Decimal):
+        principal = Decimal(str(principal))
+    if not isinstance(apr, Decimal):
+        apr = Decimal(str(apr))
+
+    n_periods = bhph_note_number_of_periods(term_weeks, payment_frequency)
+    periodic = bhph_note_periodic_payment(
+        principal, apr, term_weeks, payment_frequency
+    )
+    step_days = _BHPH_NOTE_PERIOD_DAYS[payment_frequency]
+
+    schedule: list[tuple[date, Decimal]] = []
+    for i in range(n_periods):
+        due = first_payment_due + timedelta(days=step_days * i)
+        schedule.append((due, periodic))
+    return schedule

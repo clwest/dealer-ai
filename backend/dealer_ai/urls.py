@@ -4,6 +4,7 @@ from . import (
     views,
     views_analytics,
     views_be_backs,
+    views_bhph_notes,
     views_deal_writeups,
     views_delivery,
     views_f_and_i,
@@ -783,5 +784,26 @@ urlpatterns = [
         "admin/be-backs/<int:pk>/mark-no-show/",
         views_be_backs.admin_be_back_mark_no_show,
         name="admin-be-back-mark-no-show",
+    ),
+    # Milestone 12 · Increment 1 (SESSION_121) — BhphNote origination.
+    # Domain-error mapping in ``views_bhph_notes.py``:
+    #   CrossTenantBhphNoteError → 404;
+    #   NonBhphSaleError → 400;
+    #   DuplicateBhphNoteError → 409;
+    #   UnknownBhphFrequencyError → 400;
+    #   missing lookups in-tenant → 404;
+    #   serializer error → 400.
+    # Retrieve endpoint returns the note + the computed payment schedule
+    # (equal-amount installments derived from
+    # ``services.payment_engine.bhph_note_schedule``).
+    path(
+        "admin/bhph-notes/",
+        views_bhph_notes.admin_bhph_note_create,
+        name="admin-bhph-note-create",
+    ),
+    path(
+        "admin/bhph-notes/<int:pk>/",
+        views_bhph_notes.admin_bhph_note_retrieve,
+        name="admin-bhph-note-retrieve",
     ),
 ]

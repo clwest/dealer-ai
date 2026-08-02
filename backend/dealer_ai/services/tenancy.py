@@ -475,6 +475,14 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # kwarg per the M7.2 / M11.4 pattern. Autofill signal is the
     # safety net for callers that bypass the service.
     "BeBack",
+    # Milestone 12 · Increment 1 (SESSION_121) — BhphNote entity per
+    # MILESTONE_12_PLANNING.md §1.1 + §5.a Option A (user-confirmed
+    # at SESSION_121 open, recorded in §0.a) (39 → 40). OneToOne FK
+    # to Sale (CASCADE) where ``Sale.finance_type == "bhph"``. The
+    # M12.1 :mod:`services.bhph_notes` verbs write ``dealership``
+    # explicitly on every row. Autofill signal is the safety net for
+    # callers that bypass the service.
+    "BhphNote",
 )
 
 

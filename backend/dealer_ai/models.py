@@ -6407,3 +6407,128 @@ class BeBack(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 12 · Increment 1 (SESSION_121) — BhphNote origination.
+# ---------------------------------------------------------------------------
+
+
+# Payment-frequency vocab per MILESTONE_12_PLANNING.md §1.1 + §5.a
+# Option A (user-confirmed at SESSION_121 open, recorded in §0.a).
+# Fixed 3-value vocab. Weekly / biweekly extend M2's existing
+# ``payment_engine`` cadences; semi_monthly adds the third BHPH cadence
+# common at real portfolios. Additions defer to operator evidence per
+# M11.1 vocab-set pattern.
+BHPH_PAYMENT_FREQUENCY_WEEKLY = "weekly"
+BHPH_PAYMENT_FREQUENCY_BIWEEKLY = "biweekly"
+BHPH_PAYMENT_FREQUENCY_SEMI_MONTHLY = "semi_monthly"
+
+BHPH_PAYMENT_FREQUENCY_CHOICES = (
+    (BHPH_PAYMENT_FREQUENCY_WEEKLY, "Weekly"),
+    (BHPH_PAYMENT_FREQUENCY_BIWEEKLY, "Biweekly"),
+    (BHPH_PAYMENT_FREQUENCY_SEMI_MONTHLY, "Semi-monthly"),
+)
+
+
+class BhphNote(models.Model):
+    """Milestone 12 · Increment 1 — a buy-here-pay-here loan record.
+
+    Per MILESTONE_12_PLANNING.md §1.1 + SESSION_121 §0.a M12.1
+    confirmation. The dealer-as-lender's origination row: when a Sale
+    with ``finance_type="bhph"`` closes, a BhphNote captures the loan
+    terms and drives the subsequent payment schedule + delinquency
+    + collections workflow (M12.2-M12.7).
+
+    **Attach shape (§5.a Option A).** OneToOne with :class:`Sale`
+    where ``sale.finance_type == "bhph"``. Preserves M10.5 Contract
+    byte-for-byte — no new ``contract_type`` vocab member. The
+    ``finance_type`` field on the M9 Sale is the load-bearing signal
+    that this transaction is dealer-carried paper.
+
+    **Payment math (§5.b Option A).** Per-note ``payment_amount`` is
+    denormalized at write time from
+    :func:`services.payment_engine.bhph_note_periodic_payment` — a
+    pure amortization verb consuming ``principal_financed`` / ``apr``
+    / ``term_weeks`` / ``payment_frequency``. Storing the amount (not
+    computing on read) means downstream aging + intake queries don't
+    re-run amortization per row. The verb is pure so the stored value
+    can be re-derived any time.
+
+    **Cross-tenant guard.** ``clean()`` enforces (1)
+    ``sale.dealership`` matches ``dealership`` (belt/suspenders with
+    the service-layer :class:`services.bhph_notes.CrossTenantBhphNoteError`)
+    and (2) ``sale.finance_type == "bhph"`` — a non-BHPH Sale must
+    not be attached to a BhphNote.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="bhph_notes",
+    )
+    # OneToOne per §5.a — one BhphNote per BHPH Sale. CASCADE so
+    # historical Sale deletion (already an unusual event) cleans up
+    # the derived note record.
+    sale = models.OneToOneField(
+        "Sale",
+        on_delete=models.CASCADE,
+        related_name="bhph_note",
+    )
+    # Loan terms. Decimal(10, 2) matches Sale.sold_price /
+    # VehicleCost.amount width; Decimal(5, 2) for APR matches the
+    # M2 payment_engine percent-unit convention (e.g. 21.90 for
+    # 21.9%); term_weeks stays a positive integer per §0.a.
+    principal_financed = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    apr = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    term_weeks = models.PositiveIntegerField()
+    payment_frequency = models.CharField(
+        max_length=16,
+        choices=BHPH_PAYMENT_FREQUENCY_CHOICES,
+    )
+    # Denormalized at write time — see class docstring.
+    payment_amount = models.DecimalField(max_digits=8, decimal_places=2)
+    first_payment_due = models.DateField()
+    default_grace_days = models.PositiveIntegerField(default=5)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"BhphNote #{self.pk} — sale #{self.sale_id} "
+            f"${self.principal_financed} @ {self.apr}% × {self.term_weeks}w "
+            f"({self.payment_frequency})"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        errors: dict[str, str] = {}
+        if self.sale_id is not None:
+            if self.sale.dealership_id != self.dealership_id:
+                errors["sale"] = (
+                    "BhphNote.sale must belong to the same dealership as "
+                    "the BhphNote. Cross-tenant contamination guard "
+                    "(see AUTHENTICATION_MODEL.md §1 layer 4)."
+                )
+            elif self.sale.finance_type != SALE_FINANCE_TYPE_BHPH:
+                errors["sale"] = (
+                    "BhphNote.sale.finance_type must be 'bhph' "
+                    f"(got {self.sale.finance_type!r}). Per M12.1 §5.a "
+                    "Option A — BhphNote attaches to Sales with the "
+                    "M9.1 'bhph' finance_type only."
+                )
+        if errors:
+            raise ValidationError(errors)
