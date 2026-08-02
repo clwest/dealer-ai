@@ -3693,3 +3693,139 @@ class StageAgingSnapshot(models.Model):
             f"p50={self.p50_days}d, p90={self.p90_days}d) "
             f"@ {self.snapshot_at:%Y-%m-%d %H:%M}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 8 · Increment 1 — SLA-breach materialization substrate
+# ---------------------------------------------------------------------------
+
+# Breach-kind vocabulary — MUST stay in lockstep with the string
+# constants that live inside
+# ``dealer_ai.services.vendor_sla.detection``. Duplicated here (rather
+# than imported) because ``models.py`` must not import service modules
+# at load time. The M8.1 verb-extension writes rows using the same
+# string values the M7.4 detection module emits into the log stream, so
+# the two surfaces are wire-compatible.
+SLA_BREACH_KIND_IN_PROGRESS_PAST_ETA = "in_progress_past_eta"
+SLA_BREACH_KIND_APPROVED_STALE = "approved_stale"
+
+SLA_BREACH_KIND_CHOICES = (
+    (SLA_BREACH_KIND_IN_PROGRESS_PAST_ETA, "In progress past ETA"),
+    (SLA_BREACH_KIND_APPROVED_STALE, "Approved stale"),
+)
+
+
+class SlaBreachRecord(models.Model):
+    """Milestone 8 · Increment 1 — one row per detected SLA breach.
+
+    The materialized counterpart to the M7.4
+    :func:`services.vendor_sla.detect_sla_breaches` verb's
+    ``logging.WARNING`` records. Chosen at
+    :doc:`../roadmap/MILESTONE_8_PLANNING.md` §5.b Option B (user-
+    confirmed at SESSION_094 open) — the log stream is not queryable
+    substrate for M8 dashboards, so the M7.4 verb writes an
+    ``SlaBreachRecord`` row per breach in addition to the log
+    warning. M8.3 (:func:`services.analytics.sla_breaches.breach_patterns`)
+    reads this table.
+
+    **Idempotency invariant.** ``(work_order, kind, detected_at_date)``
+    is unique. Same-day re-scans of the same tenant produce zero new
+    rows — the M7.4 verb uses ``get_or_create`` on this triple. This
+    mirrors the M2 floor-plan accrual idempotency pattern
+    (``VehicleCost.reference='ACCRUAL:<iso-date>'``): re-running the
+    scheduled job posts nothing new.
+
+    **Denormalized ``vehicle_stock`` + ``vendor_name``.** Captured at
+    detection time rather than joined on read. Rationale: the M8
+    dashboards need the human-readable identifiers alongside every
+    breach row, and denormalizing lets those queries stay single-table
+    aggregations. Historical accuracy also survives vendor renames /
+    vehicle stock-number changes — the row shows what the operator
+    would have seen at breach time.
+
+    **Cross-tenant guard.** ``clean()`` is a no-op — the model has no
+    parent-tenant relation to compare against (unlike
+    ``VehicleAcquisition`` ⇐ ``Vehicle``). The M7.4 verb-extension
+    writes ``dealership`` explicitly on every row; the M7.1 tenant-
+    carrier autofill signal fills in the default tenant as a safety-
+    net path if a caller bypasses the verb.
+
+    Source of truth: ``docs/roadmap/MILESTONE_8_PLANNING.md`` §1.5 +
+    §5.b (Option B) + §7 M8.1.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="sla_breach_records",
+    )
+    # CASCADE — a WorkOrder deletion (rare; the M4 model has no
+    # public DELETE surface) implicitly retracts its breach history.
+    # M8 aggregations that project breaches per WO become meaningless
+    # once the WO is gone, so cascading is the right shape.
+    work_order = models.ForeignKey(
+        "WorkOrder",
+        on_delete=models.CASCADE,
+        related_name="sla_breach_records",
+    )
+    kind = models.CharField(
+        max_length=32,
+        choices=SLA_BREACH_KIND_CHOICES,
+    )
+    # Whole days past the SLA threshold at detection time.
+    # ``in_progress_past_eta`` = ``(as_of - estimated_completion_date).days``
+    # (positive integer starting at 1 on the first day past ETA).
+    # ``approved_stale`` = ``(as_of - approved_at.date()).days`` (an
+    # integer > 7 by construction — the threshold constant).
+    breach_days = models.PositiveIntegerField()
+    # Wall-clock detection time. Populated at
+    # ``get_or_create`` time by the M7.4 verb extension. The M8
+    # dashboards bucket by ``detected_at`` for the "breach patterns
+    # in the last N days" query.
+    detected_at = models.DateTimeField(db_index=True)
+    # Denormalized date derived from ``detected_at``. Populated
+    # explicitly by the verb (not via a generated column) so the
+    # unique constraint below is enforceable on every supported
+    # backend without engine-specific SQL. The M7.4 daily scan
+    # writes one row per breach-kind per WO per calendar day; same-
+    # day re-runs collide on this triple and no-op.
+    detected_at_date = models.DateField()
+    # Denormalized identifiers — see class docstring for the "historical
+    # accuracy survives rename" rationale.
+    vehicle_stock = models.CharField(max_length=64)
+    vendor_name = models.CharField(max_length=255)
+
+    class Meta:
+        # ``-detected_at`` first so the M8 dashboard's default view
+        # (most-recent-first) is a straight index scan.
+        ordering = ("-detected_at",)
+        verbose_name = "SLA breach record"
+        verbose_name_plural = "SLA breach records"
+        constraints = [
+            # Idempotency for the M7.4 daily scan — same-day re-runs
+            # post zero new rows.
+            models.UniqueConstraint(
+                fields=("work_order", "kind", "detected_at_date"),
+                name="sbr_wo_kind_date_uq",
+            ),
+        ]
+        indexes = [
+            # Support the "breach pattern for tenant X, kind Y" query
+            # per M8.3 dashboards without a full-table scan. Composite
+            # because the M8 aggregation always constrains all three
+            # columns together.
+            models.Index(
+                fields=("dealership", "kind", "-detected_at"),
+                name="sbr_tenant_kind_time_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.get_kind_display()} on "
+            f"WO #{self.work_order_id} "
+            f"(vehicle={self.vehicle_stock}, "
+            f"vendor={self.vendor_name}, "
+            f"{self.breach_days}d) "
+            f"@ {self.detected_at:%Y-%m-%d %H:%M}"
+        )

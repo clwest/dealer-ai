@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
+  BarChart3,
   Bot,
   Car,
   GraduationCap,
@@ -42,6 +43,12 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-manager-chat", label: "Coaching Mode", icon: GraduationCap, end: false },
   { to: "/dealer-ai-admin", label: "Admin", icon: LineChart, end: true },
   { to: "/dealer-ai-admin/team", label: "Team", icon: Users, end: false },
+  {
+    to: "/dealer-ai-analytics",
+    label: "Analytics",
+    icon: BarChart3,
+    end: false,
+  },
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },
 ];
 

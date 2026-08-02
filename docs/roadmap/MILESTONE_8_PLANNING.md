@@ -1,6 +1,7 @@
 ---
 title: "Milestone 8 — Implementation-Planning Pass"
-status: draft
+status: shipped
+shipped_at_session: SESSION_099
 type: planning-artifact
 generated: 2026-08-01
 generated_at_session: SESSION_093 (post-M7-closeout)
@@ -45,6 +46,105 @@ layer over M2-M7 substrate.
 
 **Zero implementation this session.** Planning artifact
 only. SESSION_094 opens M8.1.
+
+---
+
+## 0.a Change log (implementation-time amendments)
+
+Per M5/M6/M7 §9 mandates, load-bearing planning
+decisions may need narrow amendment at
+implementation time as substrate reality asserts
+itself. Every amendment records the session,
+option, and the affected sections.
+
+### SESSION_097 (M8.4 open) — Q1 already shipped; Q3 → proxy
+
+- **Amendment 1 — Q1 scope reallocation.** §7 M8.4
+  originally listed "Q1 + Q3 + Q8." **Q1
+  (`recon_cost_per_source`) already shipped at
+  M8.1** as the analytics substrate proof-of-
+  concept (see SESSION_094 handoff). Revised M8.4
+  scope: **Q3 + Q8 only.**
+- **Trigger.** M8.1 needed a first aggregation to
+  land alongside the `services/analytics/` package
+  + first endpoint. Q1 was the simplest fit
+  (single-table aggregate over M2 substrate). The
+  planning doc's original §7 sequencing (Q1 at
+  M8.4) predated that decision.
+- **Effect on §7 M8.4 scope.** Test target: ~25 →
+  **~20**. Baseline projection: 3,247 → **~3,267**.
+- **Amendment 2 — Q3 substrate gap → ship proxy.**
+  §1.2 spec'd Q3 as "which vehicle types produce
+  the highest **profit**?" — true profit requires
+  sale-side data (M9 substrate not yet shipped).
+- **Decision.** **Option A — ship a proxy.** New
+  verb `vehicle_type_recon_cost(dealership, *,
+  window_start=None, window_end=None)`. Rows carry
+  `(make, model)` discriminator + `vehicle_count`
+  + `total_recon_cost` + `mean_recon_cost`.
+  Filtered to `RECON_CATEGORIES + is_estimate=False`.
+  Naming is deliberate — the verb is honest about
+  the substrate ("recon cost per type") rather
+  than claiming "profitability" it cannot yet
+  compute.
+- **Rejected: Option B** (defer Q3 to M9) — leaves
+  M8.4 unbalanced with one aggregation only.
+- **Rejected: Option C** (broader "total cost per
+  type" summing recon + acquisition + admin) —
+  mixes recon signal (dealer-controlled) with
+  acquisition signal (market-driven); dilutes
+  the actionable indicator.
+- **Q3 M9 re-entry path.** When M9 Sale substrate
+  ships, a new `vehicle_type_profitability` verb
+  can land alongside this one (row extends with
+  `total_sale_gross` + `mean_gross_pct`) OR
+  replace it (row rename + shape extension).
+  Either way no callers break.
+
+### SESSION_095 (M8.2 open) — Q7 deferred
+
+- **Amendment.** §1.8 (buyer-estimate-accuracy
+  aggregation, Q7) is **deferred from M8.2** to a
+  later increment or milestone.
+- **Trigger.** §1.8 assumes acquisition-buyer
+  provenance ("buyer_user_id") exists on the M2
+  ledger. **It does not.** `VehicleAcquisition` has
+  no `buyer` FK. `VehicleAcquisition.buyer_fees` is
+  an auction-house buyer's-premium *fee* (Decimal),
+  not a person. `WorkOrder.assignee` /
+  `approved_by` / `started_by` / `completed_by`
+  are in-house recon roles, not acquisition
+  decision-makers.
+- **Decision.** **Option A — defer Q7.** Q7 lands
+  once acquisition-buyer provenance ships as a
+  targeted M2 additive extension (its own planning
+  session, its own increment).
+- **Rejected: Option B** (add buyer FK + migration
+  `0023` now) — violates M8.2 "no new models, no
+  new migrations" scope bound set in the
+  SESSION_094 handoff. Historical rows would
+  populate NULL and the aggregation would return
+  misleading data until backfilled.
+- **Rejected: Option C** (use
+  `VehicleCost.created_by` as a proxy for buyer)
+  — semantically wrong: `created_by` is the
+  data-entry person, not the acquisition
+  decision-maker. Violates PROJECT_RULES.md #3
+  (research → architecture → implementation chain).
+- **Effect on §7 M8.2 scope.**
+  - Ships: `vendor_performance` (Q2 + Q4). One
+    aggregation, one endpoint.
+  - Does NOT ship at M8.2:
+    `buyer_estimate_accuracy` (Q7).
+  - Test target: ~25 → **~15**.
+  - Baseline projection: 3,192 → **~3,207** (was
+    ~3,217).
+- **Q7 re-entry path.** When acquisition-buyer
+  provenance ships (dedicated planning session +
+  M2 additive extension), Q7 can land as a
+  standalone increment in whatever milestone that
+  provenance surfaces in. Nothing about M8.2's
+  code shape blocks a future Q7 addition.
 
 ---
 
@@ -469,11 +569,14 @@ B confirmed: `SlaBreachRecord` model + migration `0022`
 
 ### Increment 2 (M8.2) — Vendor + buyer performance aggregations
 
-**Scope.** Q2 + Q4 + Q7 aggregations
-(`vendor_performance`, `buyer_estimate_accuracy`).
-Endpoints + role-gate.
+**Scope (as amended SESSION_095 open — see §0.a).**
+Q2 + Q4 aggregation only (`vendor_performance`).
+One endpoint + role-gate. **Q7
+(`buyer_estimate_accuracy`) deferred** — depends
+on M2 acquisition-buyer provenance not yet
+shipped.
 
-**Tests.** ~25 focused. Baseline ~3,180 → ~3,205.
+**Tests.** ~15 focused. Baseline ~3,192 → ~3,207.
 
 ### Increment 3 (M8.3) — Aging + SLA aggregations
 
@@ -485,11 +588,15 @@ snapshots + M7.4 (log or `SlaBreachRecord` per §5.b).
 
 ### Increment 4 (M8.4) — Acquisition + inventory-turn proxies
 
-**Scope.** Q1 + Q3 + Q8 aggregations
-(`recon_cost_per_source`, `vehicle_type_profitability`,
-`days_at_frontline_proxy`).
+**Scope (as amended SESSION_097 open — see §0.a).**
+Q3 + Q8 aggregations only
+(`vehicle_type_recon_cost`,
+`days_at_frontline_proxy`). **Q1
+(`recon_cost_per_source`) already shipped at
+M8.1.** Q3 ships as a proxy — true profitability
+depends on M9 Sale substrate not yet shipped.
 
-**Tests.** ~25 focused. Baseline ~3,230 → ~3,255.
+**Tests.** ~20 focused. Baseline ~3,247 → ~3,267.
 
 ### Increment 5 (M8.5) — Operator UI
 

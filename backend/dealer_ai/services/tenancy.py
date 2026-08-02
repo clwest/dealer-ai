@@ -318,6 +318,18 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # on every row, so the autofill signal only fires when a caller
     # bypasses the verb.
     "StageAgingSnapshot",
+    # Milestone 8 · Increment 1 (SESSION_094) — SLA-breach
+    # materialization substrate. Extended per MILESTONE_8_PLANNING.md
+    # §5.b Option B (user-confirmed at SESSION_094 open) (21 → 22).
+    # ``SlaBreachRecord`` has no parent-tenant relation (the M4
+    # ``WorkOrder`` parent has its own ``dealership`` FK but the
+    # tenancy resolver does not walk work-order FKs), so the
+    # ``_parent_session_dealership_id`` branch is unreachable and
+    # the fallback path is "attach the default tenant." The M7.4
+    # verb-extension writes ``dealership`` explicitly on every
+    # ``get_or_create`` call, so the autofill signal only fires when
+    # a caller bypasses the verb.
+    "SlaBreachRecord",
 )
 
 

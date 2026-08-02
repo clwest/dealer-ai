@@ -40,6 +40,7 @@ from ...models import (
     WORK_ORDER_STATUS_IN_PROGRESS,
     WORK_ORDER_VENUE_OUTSOURCED,
     Dealership,
+    SlaBreachRecord,
     WorkOrder,
 )
 
@@ -196,6 +197,16 @@ def detect_sla_breaches(
         .order_by("pk")
     )
 
+    # Detection-time wall-clock timestamp. Captured once per verb
+    # invocation so every breach in this run shares a ``detected_at``
+    # and — via ``as_of`` on the ``detected_at_date`` column — the
+    # same date bucket. This anchors the M8.1 idempotency invariant:
+    # same-day re-scans collide on
+    # ``(work_order, kind, detected_at_date)`` and no-op.
+    from django.utils import timezone
+
+    detected_at = timezone.now()
+
     for wo in candidates:
         breach = _classify(wo, as_of)
         if breach is None:
@@ -211,8 +222,52 @@ def detect_sla_breaches(
             breach.vendor_name,
             breach.breach_days,
         )
+        _materialize_breach_record(
+            breach, dealership=dealership, detected_at=detected_at, as_of=as_of
+        )
 
     return report
+
+
+def _materialize_breach_record(
+    breach: "SlaBreach",
+    *,
+    dealership: Dealership,
+    detected_at: dt.datetime,
+    as_of: dt.date,
+) -> None:
+    """Milestone 8 · Increment 1 — persist one breach as an
+    :class:`SlaBreachRecord` row.
+
+    Extends the M7.4 verb per ``MILESTONE_8_PLANNING.md`` §5.b Option
+    B (user-confirmed at SESSION_094 open). The row is what the M8.3
+    ``breach_patterns`` aggregation reads — the log warning stays for
+    operator triage.
+
+    **Idempotent.** ``get_or_create`` on
+    ``(work_order, kind, detected_at_date=as_of)`` — the same
+    unique-constraint triple the DB enforces. Same-day re-runs
+    produce zero new rows and do not update the existing row (a
+    breach re-detected the same day is the same breach — the first
+    detection's ``breach_days`` / ``detected_at`` are the operational
+    truth).
+
+    **Denormalizes vehicle_stock + vendor_name at write time.**
+    Rationale is in ``SlaBreachRecord`` class docstring — captures the
+    identifiers as the operator would have seen them at detection.
+    """
+    SlaBreachRecord.objects.get_or_create(
+        work_order_id=breach.work_order_id,
+        kind=breach.kind,
+        detected_at_date=as_of,
+        defaults={
+            "dealership": dealership,
+            "breach_days": breach.breach_days,
+            "detected_at": detected_at,
+            "vehicle_stock": breach.vehicle_stock,
+            "vendor_name": breach.vendor_name,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

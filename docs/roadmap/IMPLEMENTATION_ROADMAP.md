@@ -820,7 +820,34 @@ maintenance tax with nothing to run.
 
 ---
 
-### Milestone 8 — Operational intelligence
+### Milestone 8 — Operational intelligence — SHIPPED at SESSION_099
+
+*Full delivery record: `docs/roadmap/MILESTONE_8_PLANNING.md`
+§7 (annotated SHIPPED per increment; two §0.a change-log
+amendments required — Q7 deferral at M8.2 open and Q1
+reallocation + Q3 proxy at M8.4 open, both substrate-gap
+discoveries surfaced at session open) and
+`docs/roadmap/MILESTONE_8_RETROSPECTIVE.md`. Shipped
+surface enumerated in `docs/CAPABILITY_MATRIX.md` §7i.
+Backend test baseline delta: 3,150 → 3,274 (+124 tests,
+zero regressions). Frontend Vitest baseline established
+from scratch at M8.5: 19 pass (new — project had zero
+frontend tests before M8.5). Sessions 094 → 099. Six
+operational-intelligence aggregations shipped (Q1 + Q2 +
+Q4 + Q5 + Q9 + Q10) plus two proxies (Q3 for vehicle-
+type recon cost + Q8 for days-at-frontline) pending M9
+Sale substrate. One materialized model (`SlaBreachRecord`)
++ M7.4 verb-extension. Six DRF endpoints under
+`/api/dealer-ai/admin/analytics/`. One operator UI at
+`/dealer-ai-analytics/` with four tabs + recharts +
+first frontend test infra in the project's history
+(Vitest + @testing-library/react + jsdom). Q6 (gross-
+profit trend) + Q7 (buyer estimate accuracy) deferred to
+Milestone 9 pending Sale + acquisition-buyer-provenance
+substrate. `AnalyticsCache` materialization deferred per
+§5.a Option C hybrid pending operator latency evidence.
+No predictive ML per VCP; no external BI exports per
+planning §1.0.*
 
 **Business objective.** Answer the questions the corpus
 explicitly names: which auctions produce the highest recon

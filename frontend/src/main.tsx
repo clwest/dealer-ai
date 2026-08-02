@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import App from "@/App";
 import RequireAuth from "@/components/RequireAuth";
 import AdvisorWorkspacePage from "@/pages/AdvisorWorkspacePage";
+import DealerAnalyticsPage from "@/pages/DealerAnalyticsPage";
 import DealerAIDemo from "@/pages/DealerAIDemo";
 import DealerAdmin from "@/pages/DealerAdmin";
 import DealershipHomePage from "@/pages/DealershipHomePage";
@@ -105,6 +106,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               />
               <Route path="dealer-ai-admin" element={<DealerAdmin />} />
               <Route path="dealer-ai-admin/team" element={<SalesTeamPage />} />
+              <Route
+                path="dealer-ai-analytics"
+                element={<DealerAnalyticsPage />}
+              />
               <Route
                 path="dealer-ai-advisor/:slug"
                 element={<AdvisorWorkspacePage />}

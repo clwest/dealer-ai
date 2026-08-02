@@ -102,14 +102,23 @@ class StageAgingSnapshotStrRepresentation(TestCase):
 
 
 class TenantCarrierExtension(TestCase):
-    """M7.3 extended ``_TENANT_CARRIER_MODEL_NAMES`` 20 → 21."""
+    """M7.3 extended ``_TENANT_CARRIER_MODEL_NAMES`` 20 → 21.
 
-    def test_carrier_count_is_twenty_one(self):
-        self.assertEqual(
+    Uses ``>=`` per M7 retrospective §6 lesson 14: prior-increment
+    count assertions should use ``>=`` at the milestone-shape floor,
+    not ``==``. The exact-count invariant is owned by the shipping
+    increment's own test (this class's original ``==21`` locked M7.3
+    at shipping time; M8.1 extended to 22 and codified the >= pattern
+    here). Future milestones extend further without needing to
+    re-edit this test.
+    """
+
+    def test_carrier_count_at_least_twenty_one(self):
+        self.assertGreaterEqual(
             len(_TENANT_CARRIER_MODEL_NAMES),
             21,
             "Milestone 7 · Increment 3 extended the tenancy-carrier "
-            "tuple from 20 → 21 (added StageAgingSnapshot).",
+            "tuple to at least 21 (added StageAgingSnapshot).",
         )
 
     def test_stage_aging_snapshot_present(self):

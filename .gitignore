@@ -34,3 +34,6 @@ db.migration_check.sqlite3
 
 # Obsidian vault (project-local knowledge base, not part of the repo)
 Dealer OS/
+
+# Claude Code session-local artifacts (scheduled_tasks.lock, etc.)
+.claude/

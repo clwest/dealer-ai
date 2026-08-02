@@ -611,6 +611,72 @@ shipped vs. deferred.
 
 ---
 
+## 7i. Operational intelligence (Milestone 8, shipped)
+
+Milestone 8 (SESSION_094 → SESSION_099) shipped the
+`services/analytics/` aggregation package, seven
+operational-intelligence aggregations across six
+DRF endpoints, one materialized substrate model
+(`SlaBreachRecord` + M7.4 verb extension), and the
+first operator-facing analytics UI. **No new
+runtime dependencies added** (recharts is a UI
+library; Vitest / testing-library are dev-only).
+**No new backend business logic** — every
+aggregation reads M2/M4/M7 substrate already
+shipped by prior milestones. See
+`docs/roadmap/MILESTONE_8_PLANNING.md` +
+`docs/roadmap/MILESTONE_8_RETROSPECTIVE.md` for
+what shipped vs. deferred.
+
+| Domain | Surface (M8.1 – M8.5) | Notes |
+| --- | --- | --- |
+| Analytics substrate (M8.1) | New `dealer_ai/services/analytics/` package (`__init__.py` facade re-exporting every verb + return type). New `dealer_ai/views_analytics.py` module + query-arg helpers (`_parse_iso_date_or_none` at M8.1; `_parse_positive_int_or_default` at M8.3). Every endpoint role-gated on `IsReconManagerSalesManagerOrOwnerAtActiveDealership` (composed with `IsAuthenticated`) — same permission class as M4/M5/M6 admin surfaces. **Read-only** — no aggregation ever writes; the M8.1 `SlaBreachRecord` verb-extension in `services/vendor_sla/detection.py` is the one exception (additive persistence side effect via `get_or_create`). | Chosen at MILESTONE_8_PLANNING §5.a Option C (hybrid — compute-on-request v1, materialize when operator evidence surfaces latency pain). `AnalyticsCache` model deferred. |
+| SLA-breach materialization (M8.1) | New `SlaBreachRecord` model + migration `0022` (fields: `dealership` FK CASCADE, `work_order` FK CASCADE, `kind` from `SLA_BREACH_KIND_CHOICES`, `breach_days` PositiveIntegerField, `detected_at` DateTimeField indexed, `detected_at_date` DateField, `vehicle_stock` CharField, `vendor_name` CharField). Composite index `(dealership, kind, -detected_at)` (`sbr_tenant_kind_time_idx`). Unique constraint on `(work_order, kind, detected_at_date)` (`sbr_wo_kind_date_uq`) — anchors M7.4 daily-scan idempotency at the DB level. M7.4 `detect_sla_breaches` verb-extension writes one row per breach via `get_or_create` in addition to the log warning (contract preserved). Tenancy-carrier extension 21 → 22. | Chosen at §5.b Option B (user-confirmed at SESSION_094 open). The log stream is not queryable substrate for M8 dashboards; the materialized row is what Q10's `breach_patterns` reads. |
+| Q1 — recon cost per acquisition source (M8.1) | `services/analytics/acquisition.py::recon_cost_per_source(dealership, *, window_start=None, window_end=None) -> list[SourcePerformanceRow]`. Row: `source` + `source_display` + `vehicle_count` + `total_recon_cost` + `mean_recon_cost` (2dp quantized). Filters M2 `VehicleCost` to `RECON_CATEGORIES + is_estimate=False`; groups by `VehicleAcquisition.source`. Sort by total desc / source asc. Endpoint: `GET /api/dealer-ai/admin/analytics/recon-cost-per-source/`. | Reads M2 substrate. Answers INVENTORY §"To Ownership" — gross performance per source. |
+| Q2 + Q4 — vendor performance (M8.2) | `services/analytics/recon.py::vendor_performance(dealership, *, window_start=None, window_end=None) -> list[VendorPerformanceRow]`. Row: `vendor_slug` + `vendor_name` + `completed_count` + `mean_completion_days` (nullable, clock-skew-clamped) + `mean_variance_pct` (nullable Decimal 2dp — mean absolute % of `actual_cost` vs `estimated_cost`) + `over_budget_count` (`actual > authorized` when authorized set). Filters M4 `WorkOrder` to `status=completed AND venue=outsourced AND vendor IS NOT NULL`. Window on `completed_at.date()`. Sort by count desc / slug asc. Aggregation runs in a private `_VendorState` accumulator. Endpoint: `GET /api/dealer-ai/admin/analytics/vendor-performance/`. | Reads M4 substrate. Answers RECON §"To Ownership" — cost + turn-time discipline. Missing timestamps skipped from mean but still counted; missing / zero estimated cost skipped from variance; over-budget check skipped when authorized is null (matches M4.3 approval semantics). |
+| Q5 + Q9 — stage aging trend (M8.3) | `services/analytics/lifecycle_aging.py::stage_aging_trend(dealership, stage, *, window_days=30) -> list[AgingTrendPoint]`. Row: `snapshot_at` + `vehicle_count` + `p50_days` + `p90_days`. Reads M7.3 `StageAgingSnapshot` filtered to `(dealership, stage, snapshot_at >= now - window_days)`, ordered by `snapshot_at` asc. Unknown `stage` raises `ValueError` → endpoint 400. Endpoint: `GET /api/dealer-ai/admin/analytics/stage-aging-trend/?stage=<key>&window_days=<n>`. | Reads M7.3 substrate; no recomputation. Answers RECON §pain #7 + #12 (aging trends per stage). Silent-empty rejected to catch operator typos in the query arg. |
+| Q10 — SLA-breach patterns (M8.3) | `services/analytics/sla_breaches.py::breach_patterns(dealership, *, window_days=30) -> BreachPatternReport`. Report: `total_breach_count` + `average_breach_days` (nullable 2dp Decimal, `None` when window empty) + `top_vendors_by_breach_count` (top-5 sorted count desc / name asc) + `breaches_by_kind` (every observed kind, sorted count desc / kind asc). Reads M8.1 `SlaBreachRecord` rows filtered to `(dealership, detected_at >= now - window_days)`. Endpoint: `GET /api/dealer-ai/admin/analytics/sla-breach-patterns/?window_days=<n>`. | Reads the M8.1 substrate materialized from the M7.4 verb-extension. Top-N cap on vendors is a business rule (dashboard-tile fit); kind vocabulary is small (2 today) so every kind surfaces. |
+| Q3 proxy — recon cost per vehicle-type (M8.4) | `services/analytics/acquisition.py::vehicle_type_recon_cost(dealership, *, window_start=None, window_end=None) -> list[VehicleTypeReconCostRow]`. Row: `make` + `model` + `vehicle_count` + `total_recon_cost` + `mean_recon_cost` (2dp). Same shape as Q1. Filters M2 `VehicleCost` to `RECON_CATEGORIES + is_estimate=False`; groups by `Vehicle.make + Vehicle.model`. Sort by total desc / (make, model) asc. Endpoint: `GET /api/dealer-ai/admin/analytics/vehicle-type-recon-cost/`. | **Proxy pending M9 Sale substrate.** True vehicle-type profitability requires realized gross, which depends on M9. Naming is honest (`vehicle_type_recon_cost` not `vehicle_type_profitability`) so the M9 rewrite path can add the true-profit verb alongside without disturbing callers. See MILESTONE_8_PLANNING §0.a SESSION_097 for the option matrix. |
+| Q8 proxy — days at frontline (M8.4) | `services/analytics/lifecycle_aging.py::days_at_frontline_proxy(dealership, *, window_days=30) -> DaysAtFrontlineReport`. Report: `snapshot_count` + `mean_p50_days` (nullable 2dp) + `mean_p90_days` (nullable 2dp) + `latest_vehicle_count` + `latest_snapshot_at`. Empty window → every derived field `None` (distinct from "average is zero"). Reads M7.3 `StageAgingSnapshot` filtered to `stage='frontline' + window`. Endpoint: `GET /api/dealer-ai/admin/analytics/days-at-frontline-proxy/?window_days=<n>`. | **Proxy pending M9 Sale substrate.** True inventory-turn (days from acquisition to sale) depends on M9. |
+| Operator UI (M8.5) | New route `/dealer-ai-analytics/` (frontend), gated to `recon_manager` / `sales_manager` / `dealer_owner` as a UX convenience (server is authoritative). Four tabs: (1) Acquisition & Recon Cost (Q1 + Q3), (2) Vendor Performance (Q2 + Q4), (3) Lifecycle Aging (Q5 + Q8 + Q9 with stage selector), (4) SLA Breach Patterns (Q10 with top-vendors bar chart + kind-distribution pie chart). Tab state persisted via URL hash (`#acquisition` / `#vendor` / `#aging` / `#sla`). New `frontend/src/lib/analyticsApi.ts` (6 endpoint wrappers + 3 display helpers). Five components under `src/components/analytics/`. Sidebar nav item "Analytics" (`BarChart3` icon). Data-fetching pattern: plain `useEffect + useState + authFetch` — matches the existing 17-page operator-page convention. **First frontend test infra in the project's history** — Vitest + `@testing-library/react` + `jsdom` + `@testing-library/jest-dom` + `@testing-library/user-event`. 19 render tests. | recharts `^3.10.1` added as production dep (bundle 618 kB → 1,069 kB / 293 kB gzip — expected). No React Query (matches existing convention). |
+| Test baseline | +124 tests (M7 close **3,150** → M8 close **3,274**). Zero regressions. Zero migration drift after `0022`. `tsc --noEmit` + `vite build` clean. **19 frontend Vitest tests (new baseline).** | Distribution: M8.1 +42, M8.2 +24, M8.3 +31, M8.4 +27, M8.5 +19 frontend (backend unchanged), M8.6 +0 (docs-only). One M7.3 test relaxation at M8.1 open (`==21` → `>=21` on carrier count) codifying M7 §6 lesson 14. |
+
+**What is NOT shipped in Milestone 8** (deferred
+per `MILESTONE_8_RETROSPECTIVE.md` §4):
+
+- **Q6 gross-profit trend** — planning §1.6
+  explicitly cites Milestone 9 as intended home.
+  Enters M9 scope alongside the Sale substrate
+  itself.
+- **Q7 buyer estimate accuracy** — deferred at
+  SESSION_095 open per §0.a amendment.
+  Acquisition-buyer provenance schema does not
+  yet exist on M2 ledger; Q7 lands as a
+  standalone increment when it does.
+- **True inventory turn (Q8)** — M8.4 shipped
+  the days-at-frontline proxy pending M9 Sale
+  substrate.
+- **True vehicle-type profitability (Q3)** —
+  M8.4 shipped the recon-cost proxy pending M9
+  Sale substrate.
+- **`AnalyticsCache` materialization layer** —
+  §5.a Option C hybrid: compute-on-request v1,
+  materialize when operator evidence surfaces
+  latency pain.
+- **External BI-tool exports** — planning §1.0
+  explicit non-goal.
+- **Portfolio-level BHPH analytics** — depends
+  on Milestone 12 BHPH substrate.
+- **Predictive ML** — VCP explicitly rules ML
+  out of M8.
+- **Real-time dashboards** — planning §1.0
+  explicit non-goal.
+- **Playwright end-to-end tests for the
+  analytics UI** — Vitest render tests shipped
+  at M8.5; Playwright happy-path deferred.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

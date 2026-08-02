@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import (
     views,
+    views_analytics,
     views_lifecycle,
     views_listings,
     views_photos,
@@ -383,5 +384,40 @@ urlpatterns = [
         "showroom/vehicles/<str:stock_number>/",
         views_showroom.showroom_vehicle_detail,
         name="showroom-vehicle-detail",
+    ),
+    # ---- Milestone 8 · Increment 1 — analytics admin API -------------
+    # Every endpoint role-gated on
+    # ``IsReconManagerSalesManagerOrOwnerAtActiveDealership`` per
+    # MILESTONE_8_PLANNING.md §1.9. Additional aggregations land at
+    # M8.2 – M8.4; the operator UI at M8.5.
+    path(
+        "admin/analytics/recon-cost-per-source/",
+        views_analytics.admin_analytics_recon_cost_per_source,
+        name="admin-analytics-recon-cost-per-source",
+    ),
+    path(
+        "admin/analytics/vendor-performance/",
+        views_analytics.admin_analytics_vendor_performance,
+        name="admin-analytics-vendor-performance",
+    ),
+    path(
+        "admin/analytics/stage-aging-trend/",
+        views_analytics.admin_analytics_stage_aging_trend,
+        name="admin-analytics-stage-aging-trend",
+    ),
+    path(
+        "admin/analytics/sla-breach-patterns/",
+        views_analytics.admin_analytics_sla_breach_patterns,
+        name="admin-analytics-sla-breach-patterns",
+    ),
+    path(
+        "admin/analytics/vehicle-type-recon-cost/",
+        views_analytics.admin_analytics_vehicle_type_recon_cost,
+        name="admin-analytics-vehicle-type-recon-cost",
+    ),
+    path(
+        "admin/analytics/days-at-frontline-proxy/",
+        views_analytics.admin_analytics_days_at_frontline_proxy,
+        name="admin-analytics-days-at-frontline-proxy",
     ),
 ]
