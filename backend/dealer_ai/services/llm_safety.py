@@ -77,7 +77,9 @@ from .dealer_config import get_dealer_profile
 
 SafetyKind = str
 # Valid kinds: "chat" | "vehicle_ask" | "ad" | "follow_up" |
-# "vendor_comm" | "parts_order". The recon kinds land in M4.5.
+# "vendor_comm" | "parts_order" | "collection_contact".
+# The recon kinds land in M4.5; ``collection_contact`` lands in
+# M12.5 for the FDCPA-adjacent scrub layer.
 
 
 # Kinds that trigger the invented-recon-fact scrub. Kept module-level
@@ -189,6 +191,179 @@ def _scrub_indie_prohibited(text: str) -> Tuple[str, bool]:
             cleaned = pattern.sub(replacement, cleaned)
             changed = True
     if changed:
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)
+        cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
+        cleaned = cleaned.strip()
+    return cleaned, changed
+
+
+# ---- Milestone 12 · Increment 5 (SESSION_125) — collection-language ---------
+#
+# FDCPA-adjacent scrub layer. Runs on ``kind="collection_contact"``
+# drafts only. Three pattern categories per MILESTONE_12_PLANNING.md
+# §1.5:
+#
+#   1. Deficiency threats — implied consequences the dealer cannot
+#      make on a whim (credit-bureau reporting used as leverage,
+#      lawsuit threats without counsel review, wage-garnishment
+#      threats, jail-time threats).
+#   2. Harassment-adjacent language — contacting people other than
+#      the debtor (workplace, neighbors, family) or repeated-contact
+#      pressure phrasing.
+#   3. False-representation claims — impersonating attorneys, law
+#      enforcement, court officials, or credit bureaus.
+#
+# Rewrites (log-and-replace) matches the M2 default-assumption /
+# internal-directive / rate-language scrub pattern per §0.a M12.5
+# decision 5. Operator sees the neutralized copy + a scrub-fired log
+# entry; a full FDCPA classifier is deferred beyond M12 (§7 M12.5
+# non-goal).
+#
+# The scrub is text-only — no DB access, no dealer_profile gating.
+# FDCPA-adjacent phrasing is equally problematic at both independent
+# and franchise BHPH portfolios.
+
+_COLLECTION_LANGUAGE_PATTERNS: List[Tuple[re.Pattern[str], str]] = [
+    # ---- Category 1: deficiency threats ------------------------------------
+    # Credit-bureau reporting framed as leverage (not "we will report",
+    # but "we will report you to").
+    (
+        re.compile(
+            r"\bwe\s+(?:will|'ll|are\s+going\s+to)\s+report\s+you\s+to\s+"
+            r"(?:the\s+)?credit\s+(?:bureau|bureaus|agencies)\b",
+            re.IGNORECASE,
+        ),
+        "we may report late payments to credit bureaus",
+    ),
+    # Lawsuit threats without counsel-review qualifier.
+    (
+        re.compile(
+            r"\bwe\s+(?:will|'ll|are\s+going\s+to)\s+sue\s+you\b",
+            re.IGNORECASE,
+        ),
+        "legal action is one option we may consider",
+    ),
+    # Wage-garnishment threats — presumes a court judgment that
+    # hasn't happened.
+    (
+        re.compile(
+            r"\bwe\s+(?:will|'ll|are\s+going\s+to)\s+garnish\s+your\s+"
+            r"(?:wages|paycheck|pay)\b",
+            re.IGNORECASE,
+        ),
+        "wage garnishment requires a court order",
+    ),
+    # Jail-time threats — illegal under FDCPA §807(4).
+    (
+        re.compile(
+            r"\byou\s+(?:can|could|will|'ll)\s+go\s+to\s+"
+            r"(?:jail|prison)\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    (
+        re.compile(
+            r"\bwe\s+(?:will|'ll|are\s+going\s+to)\s+have\s+you\s+"
+            r"arrested\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+
+    # ---- Category 2: harassment-adjacent language --------------------------
+    # Threatening to contact employer / workplace (limited by FDCPA §805).
+    (
+        re.compile(
+            r"\bwe\s+(?:will|'ll|are\s+going\s+to)\s+(?:call|contact)\s+"
+            r"(?:you\s+at\s+)?(?:your\s+)?(?:employer|workplace|work|job)\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    # Contacting neighbors / family / friends — FDCPA §805(b)
+    # generally restricts third-party contact.
+    (
+        re.compile(
+            r"\bwe\s+(?:will|'ll|are\s+going\s+to)\s+(?:call|contact|tell)\s+"
+            r"(?:your\s+)?(?:neighbors|family|friends|relatives)\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    # Repeated-contact pressure — "we will keep calling you until…"
+    (
+        re.compile(
+            r"\bwe\s+(?:will|'ll)\s+(?:keep|continue)\s+calling\s+"
+            r"(?:you\s+)?until\b",
+            re.IGNORECASE,
+        ),
+        "we will follow up as needed",
+    ),
+
+    # ---- Category 3: false-representation claims ---------------------------
+    # Impersonating an attorney.
+    (
+        re.compile(
+            r"\b(?:this\s+is|i\s+am|we\s+are)\s+(?:your\s+|the\s+)?"
+            r"attorney(?:'?s)?(?:\s+office)?\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    # Impersonating law enforcement.
+    (
+        re.compile(
+            r"\b(?:this\s+is|i\s+am|we\s+are)\s+(?:from\s+)?(?:the\s+)?"
+            r"(?:police|sheriff|law\s+enforcement)\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    # Impersonating court officials.
+    (
+        re.compile(
+            r"\b(?:this\s+is|i\s+am|we\s+are)\s+(?:from\s+)?(?:the\s+)?"
+            r"(?:court|courthouse|court\s+officer|process\s+server)\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    # Impersonating a credit bureau.
+    (
+        re.compile(
+            r"\b(?:this\s+is|i\s+am|we\s+are)\s+(?:from\s+)?(?:the\s+)?"
+            r"credit\s+bureau\b",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+]
+
+
+def _scrub_collection_language(text: str) -> Tuple[str, bool]:
+    """Neutralize FDCPA-adjacent phrasing in a drafted collection contact.
+
+    Rewrites offending phrases (log-and-replace) rather than blocking
+    the whole draft — matches the M2 default-assumption /
+    internal-directive scrub pattern per §0.a M12.5 decision 5.
+
+    Text-only. No DB access. Called only when
+    ``kind == "collection_contact"``. The scrub is intentionally
+    narrow (fixed phrase list per category); a full FDCPA classifier
+    is deferred beyond M12.
+    """
+    if not text:
+        return text, False
+    cleaned = text
+    changed = False
+    for pattern, replacement in _COLLECTION_LANGUAGE_PATTERNS:
+        if pattern.search(cleaned):
+            cleaned = pattern.sub(replacement, cleaned)
+            changed = True
+    if changed:
+        # Collapse whitespace + trim trailing whitespace before
+        # punctuation — matches the indie-prohibited scrub cleanup.
         cleaned = re.sub(r"\s{2,}", " ", cleaned)
         cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
         cleaned = cleaned.strip()
@@ -899,6 +1074,20 @@ def apply_post_llm_scrubs(
         cleaned, appt_changed = _scrub_invented_appointment(cleaned)
         if appt_changed:
             scrubs.append("invented_appointment")
+
+    # 3b. Collection-language scrub (Milestone 12 · Increment 5).
+    #     Fires on ``collection_contact`` kind only. Neutralizes
+    #     FDCPA-adjacent phrasing (deficiency threats, harassment-
+    #     adjacent language, false-representation claims) per §5.e
+    #     Option A + §0.a M12.5 decisions 4-5. Rewrites the text
+    #     (log-and-replace, not block) matching the M2 partial-scrub
+    #     posture — a full FDCPA classifier is deferred beyond M12.
+    #     No dealer-type gating; the FDCPA rules apply equally at
+    #     independent and franchise BHPH portfolios.
+    if kind == "collection_contact":
+        cleaned, collection_changed = _scrub_collection_language(cleaned)
+        if collection_changed:
+            scrubs.append("collection_language")
 
     # 4. Independent-dealer-only scrub. Runs on every kind (chat,
     #    vehicle_ask, ad, follow_up) because the prohibited copy is

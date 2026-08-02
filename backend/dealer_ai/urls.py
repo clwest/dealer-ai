@@ -7,6 +7,7 @@ from . import (
     views_bhph_notes,
     views_bhph_payments,
     views_bhph_promises,
+    views_collection_contacts,
     views_deal_writeups,
     views_delivery,
     views_f_and_i,
@@ -859,5 +860,27 @@ urlpatterns = [
         "admin/bhph-promises/<int:pk>/mark-broken/",
         views_bhph_promises.admin_bhph_promise_mark_broken,
         name="admin-bhph-promise-mark-broken",
+    ),
+    # Milestone 12 · Increment 5 (SESSION_125) — CollectionContact
+    # audit log. Nested under the note per RESTful convention; the
+    # paired FDCPA-adjacent scrub layer lives in
+    # ``services.llm_safety.apply_post_llm_scrubs`` under
+    # ``kind="collection_contact"``.
+    #
+    # Domain-error mapping in ``views_collection_contacts.py``:
+    #   CrossTenantContactError → 404;
+    #   UnknownChannelError → 400;
+    #   UnknownOutcomeError → 400;
+    #   missing lookups in-tenant → 404;
+    #   serializer error → 400.
+    path(
+        "admin/bhph-notes/<int:pk>/contacts/",
+        views_collection_contacts.admin_collection_contact_create,
+        name="admin-collection-contact-create",
+    ),
+    path(
+        "admin/bhph-notes/<int:pk>/contacts/list/",
+        views_collection_contacts.admin_collection_contact_list,
+        name="admin-collection-contact-list",
     ),
 ]

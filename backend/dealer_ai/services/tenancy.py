@@ -506,6 +506,15 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # Autofill signal is the safety net for callers that bypass the
     # service.
     "BhphPromiseToPay",
+    # Milestone 12 · Increment 5 (SESSION_125) — CollectionContact
+    # entity per MILESTONE_12_PLANNING.md §1.5 + §5.e Option A
+    # (locked at SESSION_121 open) (42 → 43). Mandatory FK to
+    # BhphNote (CASCADE). Immutable audit record of collection
+    # contact attempts. The M12.5
+    # :mod:`services.collection_contacts` verb writes
+    # ``dealership`` explicitly on every row. Autofill signal is
+    # the safety net for callers that bypass the service.
+    "CollectionContact",
 )
 
 

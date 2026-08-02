@@ -6799,3 +6799,109 @@ class BhphPromiseToPay(models.Model):
             )
         if errors:
             raise ValidationError(errors)
+
+
+# ---------------------------------------------------------------------------
+# Milestone 12 · Increment 5 (SESSION_125) — CollectionContact log.
+# ---------------------------------------------------------------------------
+
+
+# Channel vocab per §0.a M12.5 decision 1 (as-recommended). Fixed 5-
+# value vocab matching the five collection-contact modalities BHPH
+# operators actually use.
+BHPH_CONTACT_CHANNEL_PHONE = "phone"
+BHPH_CONTACT_CHANNEL_LETTER = "letter"
+BHPH_CONTACT_CHANNEL_SMS = "sms"
+BHPH_CONTACT_CHANNEL_EMAIL = "email"
+BHPH_CONTACT_CHANNEL_IN_PERSON = "in_person"
+
+BHPH_CONTACT_CHANNEL_CHOICES = (
+    (BHPH_CONTACT_CHANNEL_PHONE, "Phone"),
+    (BHPH_CONTACT_CHANNEL_LETTER, "Letter"),
+    (BHPH_CONTACT_CHANNEL_SMS, "SMS"),
+    (BHPH_CONTACT_CHANNEL_EMAIL, "Email"),
+    (BHPH_CONTACT_CHANNEL_IN_PERSON, "In person"),
+)
+
+# Outcome vocab per §0.a M12.5 decision 2 (as-recommended). Fixed 4-
+# value vocab matching what actually happens on a collection contact
+# attempt.
+BHPH_CONTACT_OUTCOME_CONTACT_MADE = "contact_made"
+BHPH_CONTACT_OUTCOME_LEFT_MESSAGE = "left_message"
+BHPH_CONTACT_OUTCOME_NO_ANSWER = "no_answer"
+BHPH_CONTACT_OUTCOME_REFUSED_TO_SPEAK = "refused_to_speak"
+
+BHPH_CONTACT_OUTCOME_CHOICES = (
+    (BHPH_CONTACT_OUTCOME_CONTACT_MADE, "Contact made"),
+    (BHPH_CONTACT_OUTCOME_LEFT_MESSAGE, "Left message"),
+    (BHPH_CONTACT_OUTCOME_NO_ANSWER, "No answer"),
+    (BHPH_CONTACT_OUTCOME_REFUSED_TO_SPEAK, "Refused to speak"),
+)
+
+
+class CollectionContact(models.Model):
+    """Milestone 12 · Increment 5 — a logged collection-contact attempt.
+
+    Per MILESTONE_12_PLANNING.md §1.5. Immutable audit record of every
+    collection contact the dealer's staff makes against a BhphNote —
+    the FDCPA-adjacent side of the collections workflow.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="collection_contacts",
+    )
+    note = models.ForeignKey(
+        "BhphNote",
+        on_delete=models.CASCADE,
+        related_name="collection_contacts",
+    )
+    contacted_at = models.DateTimeField(
+        help_text="Operator-supplied timestamp for the contact attempt."
+    )
+    contacted_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    channel = models.CharField(
+        max_length=16, choices=BHPH_CONTACT_CHANNEL_CHOICES
+    )
+    outcome = models.CharField(
+        max_length=32, choices=BHPH_CONTACT_OUTCOME_CHOICES
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-contacted_at", "-created_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"CollectionContact #{self.pk} — note #{self.note_id} "
+            f"{self.channel}/{self.outcome} at "
+            f"{self.contacted_at.isoformat()}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.note_id is not None
+            and self.note.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "note": (
+                        "CollectionContact.note must belong to the "
+                        "same dealership as the CollectionContact. "
+                        "Cross-tenant contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
