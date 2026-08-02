@@ -36,6 +36,13 @@ from .archetypes import (
     ArchetypeBuilder,
     get_archetype_builder,
 )
+from .briefs import (
+    BRIEF_ROLES,
+    Brief,
+    BriefNotFoundError,
+    get_brief,
+    list_briefs,
+)
 from .errors import NonDemoResetError
 from .outbound_guard import (
     SuppressedOutbound,
@@ -59,14 +66,19 @@ from .synthetic_names import SYNTHETIC_NAMES, get_synthetic_name
 __all__ = [
     "ARCHETYPE_BUILDERS",
     "ArchetypeBuilder",
+    "BRIEF_ROLES",
+    "Brief",
+    "BriefNotFoundError",
     "NonDemoResetError",
     "SYNTHETIC_NAMES",
     "ScenarioSummary",
     "SuppressedOutbound",
     "create_demo_store",
     "get_archetype_builder",
+    "get_brief",
     "get_synthetic_name",
     "is_demo_dealership",
+    "list_briefs",
     "list_demo_stores",
     "reset_demo_store",
     "suppress_if_demo",

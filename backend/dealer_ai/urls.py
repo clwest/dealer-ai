@@ -12,6 +12,7 @@ from . import (
     views_collection_contacts,
     views_deal_writeups,
     views_delivery,
+    views_demo_store,
     views_f_and_i,
     views_follow_ups,
     views_leads,
@@ -1011,5 +1012,15 @@ urlpatterns = [
         "admin/accounting/trial-balance/snapshots/<int:pk>/",
         views_accounting.admin_trial_balance_snapshot_retrieve,
         name="admin-trial-balance-snapshot-retrieve",
+    ),
+    # Milestone 18 · Increment 5 (SESSION_151) — TesterFeedback POST.
+    # Per MILESTONE_18_PLANNING.md §7 M18.5 + §5.e Option A. Reuses
+    # ``IsSalesManagerOrOwnerAtActiveDealership`` (zero-drift streak
+    # extends to fourteen consecutive milestones). Refuses submissions
+    # against a non-demo Dealership per §5.g Option A guard.
+    path(
+        "admin/demo-store/feedback/",
+        views_demo_store.admin_demo_store_feedback_create,
+        name="admin-demo-store-feedback-create",
     ),
 ]
