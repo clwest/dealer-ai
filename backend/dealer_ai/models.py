@@ -4830,3 +4830,165 @@ class LenderSubmission(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 4 (SESSION_109) — Stipulation vocabulary.
+# ---------------------------------------------------------------------------
+
+# Stipulation type vocabulary per MILESTONE_10_PLANNING.md §5.b
+# Option A (user-confirmed at SESSION_106 open, recorded in §0.a).
+# Small fixed set covering the FINANCE §1.9 catalog's most common
+# categories; the ``other`` fallback handles the long tail
+# (photo of vehicle / odometer statement / Buyer's Guide / driver's
+# license copy / trade payoff verification / deal recap / CPI
+# disclosure) until operator evidence surfaces need for structured
+# subtypes.
+STIP_TYPE_PROOF_OF_INCOME = "proof_of_income"
+STIP_TYPE_PROOF_OF_INSURANCE = "proof_of_insurance"
+STIP_TYPE_PROOF_OF_RESIDENCE = "proof_of_residence"
+STIP_TYPE_REFERENCES = "references"
+STIP_TYPE_OTHER = "other"
+
+STIPULATION_TYPE_CHOICES = (
+    (STIP_TYPE_PROOF_OF_INCOME, "Proof of income"),
+    (STIP_TYPE_PROOF_OF_INSURANCE, "Proof of insurance"),
+    (STIP_TYPE_PROOF_OF_RESIDENCE, "Proof of residence"),
+    (STIP_TYPE_REFERENCES, "References"),
+    (STIP_TYPE_OTHER, "Other"),
+)
+
+# Stipulation state vocabulary per MILESTONE_10_PLANNING.md §1.4.b
+# Option A (user-confirmed at SESSION_109 open, recorded in §0.a).
+# Fixed three-value set matching FINANCE §1.9 workflow. "Stip
+# creep" manifests as new stip rows opened after previous ones
+# cleared, not as a state transition on existing rows.
+STIPULATION_STATE_OPEN = "open"
+STIPULATION_STATE_CLEARED = "cleared"
+STIPULATION_STATE_WAIVED = "waived"
+
+STIPULATION_STATE_CHOICES = (
+    (STIPULATION_STATE_OPEN, "Open (evidence outstanding)"),
+    (STIPULATION_STATE_CLEARED, "Cleared (evidence provided)"),
+    (STIPULATION_STATE_WAIVED, "Waived (lender no longer requires)"),
+)
+
+
+class Stipulation(models.Model):
+    """Milestone 10 · Increment 4 — a lender-required stipulation.
+
+    Persists the F&I workflow of tracking lender-required
+    stipulations per FINANCE §1.9 — additional documents / actions
+    the lender wants *in addition to* the signed contract before
+    they will fund the deal. Per FINANCE §7.3 F&I is typically
+    managing 15-40 open deals with various stip states at any
+    given moment.
+
+    **Attach shape — mandatory FK to LenderSubmission (CASCADE)**
+    per ``MILESTONE_10_PLANNING.md`` §1.4.a Option A (user-
+    confirmed at SESSION_109 open, recorded in §0.a). Stips are
+    lender-specific per FINANCE §1.9 — every stip belongs to
+    exactly one submission. Deleting a submission cascades to its
+    stips. Deal-level pre-delivery items (insurance verification,
+    odometer statement) belong to M9.2 :class:`Delivery`'s
+    checklist, not to this tracker.
+
+    **State machine.** ``open`` (default) → ``cleared`` (customer
+    produced the evidence) OR ``waived`` (lender no longer
+    requires). Any-to-any transition allowed at M10.4 (matches
+    M10.3 :func:`services.f_and_i.update_lender_submission_status`
+    posture — operator behavior captured as-recorded). The
+    :func:`services.f_and_i.stipulation.update_stipulation_state`
+    verb auto-populates :attr:`cleared_at` on transition to
+    ``cleared`` / ``waived`` and clears it on transition back to
+    ``open`` (rare — usually an operator error correction).
+
+    **`documented_by` FK to User (nullable, SET_NULL).** Per
+    §1.4.c Option A — audit-trail rigor. The F&I manager who
+    cleared the stip is traceable. Nullable because a fresh stip
+    hasn't been cleared yet. ``SET_NULL`` on user delete preserves
+    historical stip rows when a user leaves the dealership.
+
+    **No photo / document evidence at M10.4.** Per §1.4.d Option
+    A — deferred to M10.7 compliance layer. Operators record
+    "photo emailed to lender"-style evidence in the free-text
+    ``notes`` field until the M10.7 layer adds structured
+    storage plumbing.
+
+    **Cross-tenant guard.** ``clean()`` enforces ``dealership``
+    matches ``lender_submission.dealership``. Belt (model) +
+    suspenders (service layer's
+    :class:`services.f_and_i.CrossTenantStipulationError`).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="stipulations",
+    )
+    lender_submission = models.ForeignKey(
+        "LenderSubmission",
+        on_delete=models.CASCADE,
+        related_name="stipulations",
+    )
+    stip_type = models.CharField(
+        max_length=32,
+        choices=STIPULATION_TYPE_CHOICES,
+    )
+    state = models.CharField(
+        max_length=16,
+        choices=STIPULATION_STATE_CHOICES,
+        default=STIPULATION_STATE_OPEN,
+    )
+    documented_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stipulations_documented",
+    )
+    # Populated automatically by the service verb when the state
+    # transitions to ``cleared`` or ``waived``. Reset to NULL if
+    # the state transitions back to ``open`` (operator error
+    # correction path).
+    cleared_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Stipulation"
+        verbose_name_plural = "Stipulations"
+
+    def __str__(self) -> str:
+        return (
+            f"Stipulation #{self.pk} — {self.get_stip_type_display()} "
+            f"({self.get_state_display()})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guard at the model layer.
+
+        The denormalized ``dealership`` FK must match the parent
+        LenderSubmission's tenant. Mirrors
+        :meth:`LenderSubmission.clean` / :meth:`DealStructure.clean`.
+        Data-scoping is layer 4 in ``AUTHENTICATION_MODEL.md`` §1.
+        """
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.lender_submission_id is not None
+            and self.lender_submission.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "lender_submission": (
+                        "Stipulation.lender_submission must belong to "
+                        "the same dealership as the Stipulation. "
+                        "Cross-tenant contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )

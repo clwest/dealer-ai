@@ -62,6 +62,13 @@ from .lender import (
     record_lender_submission,
     update_lender_submission_status,
 )
+from .stipulation import (
+    CrossTenantStipulationError,
+    get_stipulation,
+    list_stipulations_for_submission,
+    record_stipulation,
+    update_stipulation_state,
+)
 
 __all__ = [
     # M10.1 — credit application
@@ -86,4 +93,10 @@ __all__ = [
     "record_lender_program",
     "record_lender_submission",
     "update_lender_submission_status",
+    # M10.4 — stipulation lifecycle
+    "CrossTenantStipulationError",
+    "get_stipulation",
+    "list_stipulations_for_submission",
+    "record_stipulation",
+    "update_stipulation_state",
 ]

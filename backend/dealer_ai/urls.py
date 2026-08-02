@@ -534,4 +534,20 @@ urlpatterns = [
         views_f_and_i.admin_lender_submission_update,
         name="admin-lender-submission-update",
     ),
+    # ---- Milestone 10 · Increment 4 — Stipulation admin API -----------
+    # Role-gated on the same permission class as M10.1-M10.3
+    # (``_M101_PERMS``). Flat URL shape per §1.9.a.
+    # Domain-error mapping in ``views_f_and_i.py``:
+    #   CrossTenantStipulationError → 404;
+    #   ValueError → 400.
+    path(
+        "admin/stipulations/",
+        views_f_and_i.admin_stipulation_create,
+        name="admin-stipulation-create",
+    ),
+    path(
+        "admin/stipulations/<int:pk>/",
+        views_f_and_i.admin_stipulation_update,
+        name="admin-stipulation-update",
+    ),
 ]

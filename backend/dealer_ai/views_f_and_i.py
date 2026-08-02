@@ -41,12 +41,15 @@ from .models import (
     CREDIT_APP_FORMAT_CHOICES,
     CREDIT_APP_STATUS_CHOICES,
     LENDER_SUBMISSION_STATUS_CHOICES,
+    STIPULATION_STATE_CHOICES,
+    STIPULATION_TYPE_CHOICES,
     CreditApplication,
     CustomerLead,
     DealStructure,
     LenderProgram,
     LenderSubmission,
     Sale,
+    Stipulation,
     Vehicle,
 )
 from .permissions import IsFinanceManagerOrOwnerAtActiveDealership
@@ -55,6 +58,7 @@ from .services.f_and_i import (
     CrossTenantCreditApplicationError,
     CrossTenantDealStructureError,
     CrossTenantLenderSubmissionError,
+    CrossTenantStipulationError,
     DuplicateLenderProgramError,
 )
 from .services.tenancy import get_current_dealership
@@ -606,5 +610,172 @@ def admin_lender_submission_update(request, pk):
 
     return Response(
         {"lender_submission": _project_lender_submission(submission)},
+        status=status.HTTP_200_OK,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 4 (SESSION_109) — Stipulation admin endpoints.
+# ---------------------------------------------------------------------------
+#
+# Two endpoints:
+#   - POST /admin/stipulations/         — create (state=open)
+#   - PATCH /admin/stipulations/<pk>/   — update state + docs
+#
+# Same permission composition + flat URL pattern as M10.1-M10.3.
+
+
+def _lookup_stipulation_or_404(dealership, pk):
+    try:
+        return Stipulation.objects.filter(dealership=dealership).get(pk=pk)
+    except Stipulation.DoesNotExist:
+        return None
+
+
+def _lookup_lender_submission_by_pk_or_404(dealership, submission_id):
+    try:
+        return LenderSubmission.objects.filter(dealership=dealership).get(
+            pk=submission_id
+        )
+    except LenderSubmission.DoesNotExist:
+        return None
+
+
+def _project_stipulation(stip: Stipulation) -> dict:
+    return {
+        "id": stip.pk,
+        "lender_submission_id": stip.lender_submission_id,
+        "stip_type": stip.stip_type,
+        "state": stip.state,
+        "documented_by_id": stip.documented_by_id,
+        "cleared_at": (
+            stip.cleared_at.isoformat() if stip.cleared_at is not None else None
+        ),
+        "notes": stip.notes,
+        "created_at": stip.created_at.isoformat(),
+        "updated_at": stip.updated_at.isoformat(),
+    }
+
+
+class StipulationCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/stipulations/``."""
+
+    lender_submission_id = serializers.IntegerField()
+    stip_type = serializers.ChoiceField(
+        choices=[key for key, _ in STIPULATION_TYPE_CHOICES]
+    )
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class StipulationUpdateRequestSerializer(serializers.Serializer):
+    """Request shape for ``PATCH /admin/stipulations/<pk>/``.
+
+    ``state`` is required — the PATCH always transitions state.
+    Notes optional. ``documented_by`` is inferred from the
+    authenticated ``request.user`` at the view layer (not passed
+    in the request body).
+    """
+
+    state = serializers.ChoiceField(
+        choices=[key for key, _ in STIPULATION_STATE_CHOICES]
+    )
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_stipulation_create(request):
+    """POST: create a Stipulation (initial state ``open``).
+
+    Cross-tenant lender_submission surfaces as 404. Unknown
+    stip_type → 400.
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = StipulationCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    submission = _lookup_lender_submission_by_pk_or_404(
+        dealership, data["lender_submission_id"]
+    )
+    if submission is None:
+        return Response(
+            {"detail": "Lender submission not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        stip = f_and_i_service.record_stipulation(
+            dealership=dealership,
+            lender_submission=submission,
+            stip_type=data["stip_type"],
+            notes=data.get("notes", ""),
+        )
+    except CrossTenantStipulationError:
+        return Response(
+            {"detail": "Parent resource not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"stipulation": _project_stipulation(stip)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["PATCH"])
+@permission_classes(_M101_PERMS)
+def admin_stipulation_update(request, pk):
+    """PATCH: update stipulation state (+ optional notes).
+
+    ``documented_by`` is populated from ``request.user`` — the
+    F&I manager clearing the stip is captured for audit trail.
+    Unknown / cross-tenant pk → 404. Unknown state → 400.
+    """
+    dealership = get_current_dealership(request)
+
+    stip = _lookup_stipulation_or_404(dealership, pk)
+    if stip is None:
+        return Response(
+            {"detail": "Stipulation not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = StipulationUpdateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    # ``documented_by`` sourced from the authenticated user — the
+    # F&I manager clearing the stip is the natural audit-trail
+    # attribution. On a back-transition to ``open`` we still pass
+    # request.user so the FK stays populated (the previous
+    # documenter is preserved as historical record via the
+    # service layer's None-vs-omitted distinction — passing an
+    # explicit user always sets, never clears).
+    update_kwargs = dict(
+        new_state=data["state"],
+        documented_by=request.user,
+    )
+    if "notes" in data:
+        update_kwargs["notes"] = data["notes"]
+
+    try:
+        stip = f_and_i_service.update_stipulation_state(stip, **update_kwargs)
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"stipulation": _project_stipulation(stip)},
         status=status.HTTP_200_OK,
     )

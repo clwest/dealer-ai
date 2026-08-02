@@ -380,6 +380,16 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # service.
     "LenderProgram",
     "LenderSubmission",
+    # Milestone 10 · Increment 4 (SESSION_109) — Stipulation
+    # entity per MILESTONE_10_PLANNING.md §1.4 (four §1.4.a-d
+    # decisions confirmed at SESSION_109 open, all Option A,
+    # recorded in §0.a) (28 → 29). Mandatory FK to
+    # LenderSubmission (CASCADE). The M10.4
+    # :mod:`services.f_and_i.stipulation` verbs write
+    # ``dealership`` explicitly on every row and auto-populate
+    # ``cleared_at`` on state transitions; the autofill signal
+    # is the safety net for callers that bypass the service.
+    "Stipulation",
 )
 
 

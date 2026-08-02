@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_108
+last_session_shipped: SESSION_109
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -12,131 +12,141 @@ milestone_7_status: shipped
 milestone_8_status: shipped
 milestone_9_status: shipped
 milestone_10_status: in_progress
-next_session: SESSION_109
+next_session: SESSION_110
 next_milestone: 10
 next_milestone_name: "Finance (F&I) deal desk"
-next_increment: 4
-next_increment_name: "M10.4 — Stipulation tracking"
+next_increment: 5
+next_increment_name: "M10.5 — Contract + FundingPacket + FundingStatus entities"
 ---
 
-# Next session — SESSION_109 · Milestone 10 · Increment 4 (M10.4 — Stipulation tracking)
+# Next session — SESSION_110 · Milestone 10 · Increment 5 (M10.5 — Contract + Funding)
 
-> **SESSION_108 shipped M10.3 —**
-> `LenderProgram` + `LenderSubmission`
-> entities + `services/f_and_i/lender.py`
-> module (six verbs) + three new
-> endpoints (`POST /admin/lender-programs/`,
-> `POST /admin/lender-submissions/`,
-> `PATCH /admin/lender-submissions/<pk>/`)
-> + tenancy carrier extensions (26 → 28)
-> + 53 focused tests. Four design
+> **SESSION_109 shipped M10.4 —**
+> `Stipulation` entity attached to
+> `LenderSubmission` (CASCADE) +
+> `documented_by` FK to
+> `settings.AUTH_USER_MODEL`
+> (nullable, SET_NULL) +
+> `services/f_and_i/stipulation.py`
+> module (four verbs) + two new
+> endpoints (`POST /admin/stipulations/`,
+> `PATCH /admin/stipulations/<pk>/`) +
+> tenancy carrier extension (28 → 29)
+> + 35 focused tests. Four design
 > questions resolved at session open
-> (all four as-recommended, all Option
-> A): §1.3.a (attach FK to
-> DealStructure), §1.3.b (fixed 4-value
-> status), §1.3.c (per-dealership
-> catalog), §1.3.d (free-form JSON
-> terms).
+> (all as-recommended, all Option A):
+> §1.4.a (mandatory FK to
+> LenderSubmission), §1.4.b (fixed
+> 3-value state), §1.4.c
+> (documented_by as User FK
+> SET_NULL), §1.4.d (defer photo
+> evidence to M10.7).
 >
-> **Backend baseline: 3,586 pass, 1
-> skipped, 0 fail** (was 3,533 at
-> SESSION_107 close). Frontend Vitest
-> baseline: 34 pass (unchanged; no
-> frontend at M10.3). Migrations
-> `0001`–`0027`. Tenancy carriers 28.
-> DRF admin surface 52.
+> **Backend baseline: 3,621 pass, 1
+> skipped, 0 fail** (was 3,586 at
+> SESSION_108 close). Frontend
+> Vitest baseline: 34 pass
+> (unchanged; no frontend at M10.4).
+> Migrations `0001`–`0028`. Tenancy
+> carriers 29. DRF admin surface
+> 54.
 >
-> **Push to `origin/main` for the
-> M10.1 + M10.2 + M10.3 commits is
-> deferred pending explicit user
+> **Push to `origin/main` for M10.1
+> + M10.2 + M10.3 + M10.4 commits
+> is deferred pending explicit user
 > authorization** per M9-close
-> convention. Three commits pending.
+> convention. Four commits
+> pending.
 >
-> **SESSION_109 opens M10.4 —
-> Stipulation tracking.** Attach shape
-> and vocabulary decisions surface at
-> session open. `§5.b Option A` from
-> SESSION_106 already ratified the
-> fixed 5-value stipulation vocabulary
-> (`proof_of_income` / `proof_of_insurance`
-> / `proof_of_residence` /
-> `references` / `other`).
+> **SESSION_110 opens M10.5 —
+> Contract + FundingPacket +
+> FundingStatus entities.** This
+> is the **largest single M10
+> increment sketch** (three
+> entities in one session). Expect
+> five design decisions to surface
+> at session open.
 
-## First thing SESSION_109 must do
+## First thing SESSION_110 must do
 
-### 1. Check push authorization for the M10.1 + M10.2 + M10.3 commits
+### 1. Check push authorization for the M10.1-M10.4 commits
 
-Three M10 commits live locally on
+Four M10 commits live locally on
 `main` only. Verify with the user:
 
 - `git log origin/main..HEAD
-  --oneline` — should show three
-  commits (M10.1, M10.2, M10.3).
-- Should they push now? If yes:
-  `git push origin main` after
-  explicit user "go."
+  --oneline` — should show four
+  commits.
+- Should they push now? Consider
+  batching at M10 close (matches
+  M9-close SESSION_105 pattern) or
+  pushing incrementally.
 
-Push is a shared-state action; per
-CLAUDE.md safety posture, requires
-per-push confirmation independent of
-the per-increment authorization that
-landed each commit.
+### 2. Confirm M10.5 §5-equivalent decisions
 
-### 2. Confirm M10.4 §5-equivalent decisions
+Re-read `MILESTONE_10_PLANNING.md`
+§1.5 + §1.6 + §7 M10.5 at session
+open. Questions likely to surface:
 
-Planning §1.4 covers Stipulation
-sketch but leaves several decisions
-for session open. Re-read
-`MILESTONE_10_PLANNING.md` §1.4 +
-§5.b at session open. Questions
-likely to surface:
+- **Contract entity split.** One
+  `Contract` model (with a
+  `contract_type` vocabulary
+  covering RISC / lease / cash),
+  or separate `Contract` (RISC)
+  + `BackEndProductAgreement`
+  (per-product VSC / GAP
+  agreement) entities?
+- **FundingPacket vs FundingStatus.**
+  Planning §1.6 sketches both.
+  Are they one entity (a
+  FundingRecord with packet-
+  assembly fields + status fields)
+  or two (FundingPacket = docs
+  assembled; FundingStatus = has
+  the lender funded yet)?
+- **Contract state machine.**
+  `unsigned` → `signed` → …?
+  What are the terminal /
+  intermediate states? Does
+  `re-signed` need to be its own
+  state or is that captured by
+  editing an existing signed
+  Contract row (with an audit
+  trail)?
+- **Contract attach point.** FK
+  to `DealStructure` (the version
+  that was signed) or
+  `LenderSubmission` (the
+  approved terms that were
+  contracted)? Or both?
+- **Product-agreement vocabulary
+  (VSC / GAP / paint & fabric /
+  etc.).** Structured now (fixed
+  set matching M9.1 finance-
+  type / M10.1 stip-type
+  precedents) or free-form JSON
+  (mirroring M10.2's
+  `back_end_products` and M10.3's
+  `counter_terms`)?
 
-- **Stipulation attach point.** Per
-  `§1.4`: "attached to a
-  `LenderSubmission`" — is that
-  mandatory (Option A), or should
-  it be nullable + also attach to
-  `DealStructure` for deal-level
-  stips that predate lender
-  submission (Option B, mirrors
-  M10.1 §5.a Option C pattern)?
-- **State vocabulary.** Planning
-  §1.4 suggests three values
-  (`open` / `cleared` / `waived`).
-  Fixed set (matches M10.1 §5.b /
-  M10.3 §1.3.b) or extensible?
-- **`documented_by` field.** User FK
-  vs free-text string? User FK
-  requires the F&I manager to be
-  logged in as themselves;
-  free-text is more forgiving but
-  loses audit-trail rigor.
-- **Photo / document evidence
-  capture.** Nested at M10.4
-  (Stipulation gains `evidence_photo`
-  field + storage plumbing) or
-  defer to M10.7 compliance layer
-  (this session ships state
-  tracking only)?
-
-**If any decision surfaces, do NOT
-write M10.4 code until it's resolved
-with the user.** Amend
+**If any decision surfaces, do
+NOT write M10.5 code until it's
+resolved with the user.** Amend
 `MILESTONE_10_PLANNING.md` §0.a
 narrowly per prior precedent.
 
 ### 3. Verify starting state
 
-- `git status` — clean (M10.3
-  commit landed at SESSION_108
+- `git status` — clean (M10.4
+  commit landed at SESSION_109
   close).
 - `git log --oneline -3` — top
   should be `Milestone 10 ·
-  Increment 3 — LenderProgram +
-  LenderSubmission entities …
-  (SESSION_108)` or similar.
+  Increment 4 — Stipulation
+  tracking (SESSION_109)` or
+  similar.
 - `python3 manage.py test dealer_ai`
-  → **3,586 pass, 1 skipped, 0
+  → **3,621 pass, 1 skipped, 0
   fail.**
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
@@ -148,141 +158,150 @@ narrowly per prior precedent.
   build` both clean.
 - `redis-cli ping` → `PONG`.
 
-## What M10.4 delivers
+## What M10.5 delivers
 
 Per `MILESTONE_10_PLANNING.md` §7
-M10.4:
+M10.5:
 
-- **New `Stipulation` model +
-  migration `0028`.** FK to
-  `LenderSubmission` (attach
-  shape per §5-equivalent). Fields:
-  `stip_type` from fixed
-  vocabulary (per §5.b Option A —
-  `proof_of_income` /
-  `proof_of_insurance` /
-  `proof_of_residence` /
-  `references` / `other`),
-  `state` (`open` / `cleared` /
-  `waived`), `documented_by`
-  (User FK OR free-text — TBD),
-  `cleared_at` DateTime null,
-  `notes` TextField.
-- **Tenancy-carrier extension
-  28 → 29.**
-- **New `services/f_and_i/stipulation.py`**
-  module — sibling to
-  `services/f_and_i/credit_application.py`
-  / `deal_structure.py` /
-  `lender.py`. Verbs:
-  record_stipulation, clear/waive
-  (state transitions), get, list
-  by submission.
-- **New endpoints** —
-  `POST /admin/stipulations/`,
-  `PATCH /admin/stipulations/<pk>/`
-  (state update).
-- **~20 focused tests.**
-- **Baseline target 3,586 →
-  ~3,606.**
+- **New `Contract` model +
+  migration `0029`.** Attached
+  to `DealStructure` (or per §5
+  decision). Fields per §1.5:
+  `contract_type` (RISC / lease
+  / cash), `signed_at` DateTime
+  nullable, `signed_by` FK
+  User nullable SET_NULL,
+  `financed_amount` +
+  `total_of_payments` +
+  `finance_charge` Decimals,
+  `apr_disclosure` TextField
+  (regulatory disclosure), 
+  `first_payment_date` Date
+  nullable, `back_end_products`
+  JSONField (or FK entity per
+  §5 decision).
+- **New `FundingPacket` +
+  `FundingStatus` entities** (or
+  single unified entity per §5
+  decision).
+- **Tenancy-carrier extensions
+  29 → ~32** (three or two new
+  carriers depending on §5.b
+  decision).
+- **New `services/f_and_i/contract.py`**
+  + **`services/f_and_i/funding.py`**
+  modules — sibling to M10.1-
+  M10.4 modules.
+- **New endpoints** — POST /
+  PATCH for each entity.
+- **~25 focused tests.**
+- **Baseline target 3,621 →
+  ~3,646.**
 
-### Non-goals for M10.4
+### Non-goals for M10.5
 
-- ❌ No `Contract` / `FundingPacket`
-  / `FundingStatus` entities
-  (M10.5).
-- ❌ No `Chargeback` / `net_realized`
-  verb (M10.6).
+- ❌ No `Chargeback` /
+  `net_realized` verb (M10.6).
 - ❌ No `ComplianceRecord` /
   operator UI (M10.7).
-- ❌ No photo / document storage
-  plumbing (deferred to M10.7 per
-  the design question above,
-  unless user rules otherwise at
-  session open).
+- ❌ No direct lender-portal
+  funding integrations (deferred
+  beyond M10).
+- ❌ No document / e-signature
+  storage plumbing (M10.7
+  compliance layer).
 
-## What SESSION_109 should do
+## What SESSION_110 should do
 
 ### Recommended step sequence
 
 0. **Push authorization check** (§1
    above).
 
-1. **Confirm M10.4 §5-equivalent
+1. **Confirm M10.5 §5-equivalent
    decisions with the user** (§2
-   above). Do NOT write code until
-   every open decision is
+   above). Do NOT write code
+   until every open decision is
    resolved.
 
 2. **Read first (in order):**
    - `docs/roadmap/MILESTONE_10_PLANNING.md`
-     §1.4 + §5.b + §7 M10.4.
-   - `docs/handoffs/SESSION_108_m10_inc3_lender.md`
+     §1.5 + §1.6 + §7 M10.5.
+   - `docs/handoffs/SESSION_109_m10_inc4_stipulation.md`
      (previous session).
    - `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
-     §1.9 (stipulations workflow)
-     + §7.3 (stipulation-tracking
-     pain).
-   - `backend/dealer_ai/models.py::LenderSubmission`
-     (M10.3 substrate — attach
-     target).
-   - `backend/dealer_ai/services/f_and_i/lender.py`
+     §5 (contract), §6 (funding),
+     §4.3-§4.5 (back-end products
+     — VSC / GAP / tire &
+     wheel).
+   - `backend/dealer_ai/models.py::DealStructure`
+     (M10.2 substrate — likely
+     Contract attach target).
+   - `backend/dealer_ai/models.py::Stipulation`
+     + services/stipulation.py
      (pattern to mirror for
-     `stipulation.py`).
+     Contract state machine +
+     signed_at auto-populate).
 
 3. **Verify starting state** (§3
    above).
 
-4. **Draft (in order):**
-   - `Stipulation` model +
-     migration `0028`.
-   - Tenancy carrier addition
-     (28 → 29).
-   - `services/f_and_i/stipulation.py`
-     module.
+4. **Draft (in order — bundle
+   depends on §5 decisions):**
+   - `Contract` +
+     `FundingPacket` +
+     `FundingStatus` models +
+     migration `0029` (or
+     narrower per §5 decisions).
+   - Tenancy carrier additions.
+   - Two new service modules.
    - Endpoints + URLs.
-   - ~20 focused tests.
+   - ~25 focused tests.
 
 5. **Full-suite verification.**
-   Target 3,586 → ~3,606.
+   Target 3,621 → ~3,646.
 
 6. **Ship handoff at
-   `docs/handoffs/SESSION_109_m10_inc4_stipulation.md`.**
+   `docs/handoffs/SESSION_110_m10_inc5_contract_funding.md`.**
 
 7. **Overwrite
    `00-START-NEXT-SESSION.md`** with
-   M10.5 priority.
+   M10.6 priority.
 
-## Explicit non-goals for SESSION_109
+## Explicit non-goals for SESSION_110
 
-- ❌ Do NOT ship Contract /
-  FundingPacket / FundingStatus /
-  Chargeback / ComplianceRecord
-  entities (M10.5-M10.7).
+- ❌ Do NOT ship Chargeback /
+  ComplianceRecord entities
+  (M10.6-M10.7).
 - ❌ Do NOT ship frontend UI
   (M10.7).
 - ❌ Do NOT modify M1-M9 or M10.1-
-  M10.3 business logic.
-- ❌ Do NOT force-push or amend the
-  M10.1 / M10.2 / M10.3 commits.
+  M10.4 business logic.
+- ❌ Do NOT force-push or amend
+  the M10.1-M10.4 commits.
+- ❌ Do NOT ship document / e-
+  signature storage plumbing
+  (M10.7).
 
 ## NEXT TASK
 
-Start SESSION_109 with (a) push-
-authorization check for M10.1 +
-M10.2 + M10.3 commits, (b)
-confirming M10.4 §5-equivalent
-decisions with the user, (c) the
-read-first list, (d) starting-state
-verification, then (e) `Stipulation`
-model + service + endpoints + ~20
-tests. Target baseline 3,586 →
-~3,606. Ship the M10.4 handoff.
+Start SESSION_110 with (a) push-
+authorization check for M10.1-
+M10.4 commits, (b) confirming
+M10.5 §5-equivalent decisions
+with the user (~5 questions
+expected), (c) the read-first
+list, (d) starting-state
+verification, then (e) three
+new models + two service modules
++ endpoints + ~25 tests. Target
+baseline 3,621 → ~3,646. Ship
+the M10.5 handoff.
 
-Backend baseline at SESSION_109
-close: **~3,606 pass**. Frontend
-baseline: unchanged (no frontend at
-M10.4).
+Backend baseline at SESSION_110
+close: **~3,646 pass**. Frontend
+baseline: unchanged (no frontend
+at M10.5).
 
 ---
 
@@ -294,37 +313,34 @@ M10.4).
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_10_PLANNING.md`
 6. `docs/roadmap/MILESTONE_9_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_108_m10_inc3_lender.md`
-8. `docs/handoffs/SESSION_107_m10_inc2_deal_structure.md`
-9. `docs/handoffs/SESSION_106_m10_inc1_credit_application.md`
-10. `docs/handoffs/SESSION_105_m9_closeout.md`
-11. `docs/handoffs/SESSION_104_m9_inc5_operator_ui.md`
-12. `docs/handoffs/SESSION_103_m9_inc4_buyer_accuracy.md`
-13. `docs/handoffs/SESSION_102_m9_inc3_analytics_extensions.md`
-14. `docs/handoffs/SESSION_101_m9_inc2_delivery.md`
-15. `docs/handoffs/SESSION_100_m9_inc1_sale_entity.md`
-16. `docs/CAPABILITY_MATRIX.md` §7j
-17. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
+7. `docs/handoffs/SESSION_109_m10_inc4_stipulation.md`
+8. `docs/handoffs/SESSION_108_m10_inc3_lender.md`
+9. `docs/handoffs/SESSION_107_m10_inc2_deal_structure.md`
+10. `docs/handoffs/SESSION_106_m10_inc1_credit_application.md`
+11. `docs/handoffs/SESSION_105_m9_closeout.md`
+12. `docs/CAPABILITY_MATRIX.md` §7j
+13. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
 
-Narrative docs are claims. Rules + research +
-code are facts.
+Narrative docs are claims. Rules +
+research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_108 — M10.3 SHIPPED)
+## Operational state (post-SESSION_109 — M10.4 SHIPPED)
 
 - **Backend (local):** Django on
-  `:8001`. Migrations `0001`–`0027`.
-  Test baseline: **3,586 pass**, 1
-  skipped, 0 fail.
+  `:8001`. Migrations
+  `0001`–`0028`. Test baseline:
+  **3,621 pass**, 1 skipped, 0
+  fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
-  `:5173`. `tsc --noEmit` + `vite
-  build` clean. **Vitest baseline:
-  34 pass**.
+  `:5173`. `tsc --noEmit` +
+  `vite build` clean. **Vitest
+  baseline: 34 pass**.
 - **Frontend (prod):** NONE.
-- **Async runtime:** Celery 5.5.3 +
-  Redis 6.4.0 +
+- **Async runtime:** Celery
+  5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1
   DatabaseScheduler. 4 scheduled
   task families registered
@@ -333,75 +349,90 @@ code are facts.
   **M9** (SESSION_105 close); M10
   in progress (SESSION_106 M10.1;
   SESSION_107 M10.2; SESSION_108
-  M10.3).
-- **DRF admin surface:** 52
+  M10.3; SESSION_109 M10.4).
+- **DRF admin surface:** 54
   endpoints (M9 47 + M10.1
   credit-applications + M10.2
-  deal-structures + M10.3 lender-
-  programs + lender-submissions
-  POST + lender-submissions PATCH).
+  deal-structures + M10.3
+  lender-programs / lender-
+  submissions POST + PATCH +
+  M10.4 stipulations POST +
+  PATCH).
 - **Frontend operator routes:** 9
   (unchanged; no frontend at
-  M10.1-M10.3).
+  M10.1-M10.4).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** M8 added
   `services/analytics/` (4
   submodules); M9.1
   `services/sale/`; M9.2
-  `services/delivery/`; M9.3-M9.4
-  extended M8 modules; M10.1
-  added `services/f_and_i/`
-  (with `credit_application.py`);
-  M10.2 extended
+  `services/delivery/`; M9.3-
+  M9.4 extended M8 modules;
+  M10.1 added
   `services/f_and_i/` with
-  `deal_structure.py`; **M10.3
-  extended `services/f_and_i/`
-  with `lender.py`** — now three
-  submodules in the F&I package.
-- **Tenancy carriers:** 28 (M1 six
-  + M3 three + M4 six + M5 two +
-  M6 two + M7 two + M8 one + M9.1
-  one — `Sale` + M9.2 one —
-  `Delivery` + M10.1 one —
-  `CreditApplication` + M10.2 one
-  — `DealStructure` + **M10.3
-  two — `LenderProgram` +
-  `LenderSubmission`**).
+  `credit_application.py`;
+  M10.2 extended with
+  `deal_structure.py`; M10.3
+  extended with `lender.py`;
+  **M10.4 extended with
+  `stipulation.py`** — now four
+  submodules in the F&I
+  package.
+- **Tenancy carriers:** 29 (M1
+  six + M3 three + M4 six + M5
+  two + M6 two + M7 two + M8
+  one + M9.1 one — `Sale` +
+  M9.2 one — `Delivery` +
+  M10.1 one — `CreditApplication`
+  + M10.2 one — `DealStructure`
+  + M10.3 two — `LenderProgram`
+  + `LenderSubmission` + **M10.4
+  one — `Stipulation`**).
 - **Permission classes:** 8 in
-  `dealer_ai/permissions.py` (M1
-  four + M4 one + M9 uses M4's +
-  M10.1 one —
+  `dealer_ai/permissions.py`
+  (M1 four + M4 one + M9 uses
+  M4's + M10.1 one —
   `IsFinanceManagerOrOwnerAtActiveDealership`,
-  reused unchanged at M10.2 and
-  M10.3).
+  reused unchanged at M10.2 /
+  M10.3 / M10.4).
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** unchanged.
 - **Deterministic rules:**
   unchanged.
-- **M10.3 substrate (shipped):**
-  `LenderProgram` per-dealership
-  catalog (unique
-  `(dealership, name)`;
-  `is_active` soft-delete pattern)
-  + `LenderSubmission` linking a
-  `DealStructure` to a
-  `LenderProgram` (CASCADE +
-  PROTECT respectively) with
-  fixed 4-value status vocabulary
-  (`pending` / `approved` /
-  `counter` / `declined`) and
-  free-form JSON `counter_terms`
-  + `approval_terms`. Any-to-any
-  status transition allowed at
-  M10.3.
-- **Milestone 10 next:** M10.4
-  `Stipulation` model + lifecycle
-  verbs, attached to
-  `LenderSubmission`. Fixed
-  5-value vocabulary per §5.b
-  Option A. Verify §5-equivalent
-  decisions at session open. ~20
-  tests. Baseline 3,586 →
-  ~3,606.
+- **M10.4 substrate (shipped):**
+  `Stipulation` entity attached
+  to `LenderSubmission` (CASCADE)
+  with fixed 5-value
+  `stip_type` vocabulary (M10.1
+  §5.b Option A) and fixed
+  3-value `state` vocabulary
+  (`open` default / `cleared` /
+  `waived`). `documented_by`
+  FK to User (nullable,
+  SET_NULL) for audit trail.
+  `cleared_at` auto-populated by
+  the service on first
+  transition to
+  cleared/waived; reset to
+  NULL on transition back to
+  open. Any-to-any state
+  transition allowed. Two
+  endpoints; PATCH sources
+  `documented_by` from
+  `request.user` server-side.
+- **Milestone 10 next:** M10.5
+  `Contract` + `FundingPacket` +
+  `FundingStatus` entities (or
+  subset per §5-equivalent
+  decisions surfacing at
+  session open). Verify design
+  questions at session open
+  (5 expected — contract split,
+  packet vs status entity
+  boundary, state machine,
+  attach point, product-
+  agreement vocabulary
+  structure). ~25 tests.
+  Baseline 3,621 → ~3,646.

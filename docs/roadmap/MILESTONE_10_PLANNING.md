@@ -305,6 +305,94 @@ option, and the affected sections.
     them (the `list_active_lender_programs`
     verb filters on this).
 
+### SESSION_109 (M10.4 open) — four §1.4 decisions resolved (all Option A)
+
+- **Amendment.** Four load-bearing
+  decisions surfaced at SESSION_109
+  open. All four confirmed by the
+  user at session open (all four
+  as-recommended). §5.b (stipulation
+  vocabulary) already resolved at
+  SESSION_106 (Option A — small
+  fixed set); this amendment
+  resolves the remaining four M10.4
+  design questions.
+- **§1.4.a — Stipulation attach
+  point: Option A.** Mandatory FK
+  to `LenderSubmission` (CASCADE).
+  Stips are lender-specific per
+  FINANCE §1.9 — every stip
+  belongs to exactly one
+  submission. Deal-level pre-
+  delivery items (insurance,
+  odometer statement) belong to
+  M9.2 `Delivery`'s checklist, not
+  to the F&I stip tracker.
+- **§1.4.b — State vocabulary:
+  Option A.** Fixed three-value
+  set: `open` (default) /
+  `cleared` / `waived`. Matches
+  FINANCE §1.9 workflow. "Stip
+  creep" (FINANCE §1.9) manifests
+  as *additional stip rows opened
+  after previous ones cleared*,
+  not as a state transition —
+  no fourth state needed.
+- **§1.4.c — `documented_by`
+  field: Option A.** FK to
+  `settings.AUTH_USER_MODEL`
+  nullable, `SET_NULL` on user
+  delete. Audit-trail rigor — the
+  F&I manager who cleared the
+  stip is traceable. Every M10
+  endpoint requires an
+  authenticated user (role-gated
+  on
+  `IsFinanceManagerOrOwnerAtActiveDealership`),
+  so `request.user` is always
+  populated at record/update time.
+  `SET_NULL` preserves historical
+  stip rows when a user leaves.
+- **§1.4.d — Photo / document
+  evidence capture: Option A.**
+  Defer to M10.7 compliance
+  layer. M10.4 ships state
+  tracking only; operators
+  record "photo emailed to
+  lender"-style evidence in the
+  free-text `notes` field until
+  the M10.7 layer adds
+  structured storage plumbing
+  (Cloudinary / S3 wiring,
+  presigned URLs, MIME
+  validation, retention
+  discipline). Keeps M10.4
+  scope at ~20 tests.
+- **Effect on §7 M10.4 scope.**
+  - Ships (unchanged):
+    `Stipulation` model +
+    migration `0028` + tenancy
+    carrier extension 28 → 29
+    + new
+    `services/f_and_i/stipulation.py`
+    module (lifecycle verbs) +
+    two new endpoints
+    (`POST /admin/stipulations/`,
+    `PATCH /admin/stipulations/<pk>/`)
+    + ~20 focused tests.
+  - `cleared_at` DateTimeField
+    nullable — populated
+    automatically by the service
+    verb when state transitions
+    to `cleared` or `waived`.
+    Reset to NULL if the state
+    transitions back to `open`
+    (any-to-any allowed, mirrors
+    M10.3 `update_lender_submission_status`).
+  - No photo/document file
+    fields on `Stipulation` at
+    M10.4 — those land at M10.7.
+
 ---
 
 ## 1. Design memo

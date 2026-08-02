@@ -8,7 +8,7 @@ milestone: 10
 milestone_status: in_progress
 increment: 3
 increment_status: shipped
-commit: TBD
+commit: 19c5519
 ---
 
 # SESSION_108 — Milestone 10 · Increment 3 (M10.3 — LenderProgram + LenderSubmission entities)
