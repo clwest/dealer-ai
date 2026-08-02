@@ -48,8 +48,17 @@ from .journal import (
     post_journal_entry,
     reverse_journal_entry,
 )
+from .vehicle_cost import (
+    AP_TRADE_ACCOUNT_CODE,
+    RECON_WIP_ACCOUNT_CODE,
+    MissingDefaultAccountError,
+    detect_unposted_costs,
+    post_all_unposted_costs_for_dealership,
+    post_vehicle_cost_journal,
+)
 
 __all__ = [
+    "AP_TRADE_ACCOUNT_CODE",
     "DEFAULT_COA",
     "CrossTenantGLAccountError",
     "CrossTenantJournalEntryError",
@@ -57,9 +66,14 @@ __all__ = [
     "ImmutableJournalEntryError",
     "InvalidJournalLineError",
     "JournalLineInput",
+    "MissingDefaultAccountError",
+    "RECON_WIP_ACCOUNT_CODE",
     "UnbalancedJournalEntryError",
+    "detect_unposted_costs",
     "get_journal_entry",
+    "post_all_unposted_costs_for_dealership",
     "post_journal_entry",
+    "post_vehicle_cost_journal",
     "reverse_journal_entry",
     "seed_default_coa",
 ]

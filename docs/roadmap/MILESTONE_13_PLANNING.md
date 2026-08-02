@@ -112,6 +112,23 @@ recommended M5.1 → M13.0**
 | §5.e | Substrate location | **Option A** — new `services/accounting/` package inside `dealer_ai/`. Mirrors every M2-M12 service-package posture. |
 | §5.f | Operator UI scope at M13 | **Option C** — no UI at M13 (backend-only). Operator UI defers to M14 once substrate is stable. |
 
+**SESSION_130 open (M13.2) — six
+implementation-time micro-decisions
+confirmed as-recommended by the
+user.** Per M10/M11/M12 §0.a
+precedent, these do not count against
+the planning-time streak (which
+stands at 47 M5.1 → M13.0).
+
+| # | Decision | Resolution |
+|---|---|---|
+| M13.2 · 1 | `VehicleCost.posted_at` posture | Denormalize at write — detector sets `posted_at` after successful GL post (M12 §6 lesson 4 pattern). |
+| M13.2 · 2 | GLAccount mapping strategy | Uniform mapping for M13.2: every eligible VehicleCost → DR `122000` Recon WIP + CR `200000` A/P Trade. Category-group-aware mapping (flooring / admin / photography) defers to a later increment per fixed-vocab posture. |
+| M13.2 · 3 | Detector schedule slot | 10:00 project-time daily (ninth Celery-beat family after M12.4 at 09:00; extends the 02:00–09:00 slot pattern). |
+| M13.2 · 4 | `is_estimate=True` posture | Skip. Estimates are speculative WO allocations that may change; when an estimate flips to committed the still-NULL `posted_at` picks it up on the next detector run. |
+| M13.2 · 5 | Negative-amount correction posture | Post with sides swapped — negative `amount` means DR A/P Trade + CR Recon WIP (reverses typical direction). Preserves accrual accuracy per VehicleCost §1.6 design note. |
+| M13.2 · 6 | Idempotency posture | Per-row `@transaction.atomic` around GL post + `posted_at` update (sibling-service crossing per M12 §6 lesson 11). Filter `posted_at__isnull=True, is_estimate=False` gives cross-run idempotency. |
+
 *(Per-increment §0.a amendments
 appended below as implementation
 sessions surface micro-decisions.)*

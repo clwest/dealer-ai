@@ -1251,6 +1251,16 @@ class VehicleCost(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Milestone 13 · Increment 2 (SESSION_130) — GL-posting bookmark.
+    # Denormalized at write time by the M13.2 detector
+    # (:func:`services.accounting.vehicle_cost.post_vehicle_cost_journal`)
+    # after a successful atomic sibling-service GL post. NULL means
+    # "unposted" — the M13.2 detector's next run will pick it up
+    # (per §0.a M13.2 decision 1 denormalize-at-write pattern).
+    # Estimates (``is_estimate=True``) never get posted per §0.a M13.2
+    # decision 4; when an estimate flips to committed the still-NULL
+    # ``posted_at`` triggers a fresh post on the next detector run.
+    posted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("-incurred_at", "-created_at")

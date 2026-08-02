@@ -481,6 +481,29 @@ CELERY_BEAT_SCHEDULE: dict = {
         # No positional args; the orchestrator takes no kwargs.
         "kwargs": {},
     },
+    "accounting-vehicle-cost-post-daily-10-00": {
+        "task": (
+            "dealer_ai.services.accounting.tasks"
+            ".post_vehicle_cost_journals_for_all_tenants"
+        ),
+        # 10:00 project-time daily — one hour after the M12.4 broken-
+        # PTP detector. Continues the non-overlapping window pattern
+        # (M7.2 02:00, M7.3 03:00, M7.4 04:00, M7.5 05:00, M11.4
+        # 06:00, M11.5 07:00, M12.3 08:00, M12.4 09:00, M13.2
+        # 10:00). Per §0.a M13.2 decision 3 confirmed at SESSION_130
+        # open. State-transitioning per M11 §6 lesson 17 — a
+        # successful GL post populates VehicleCost.posted_at as
+        # derived state (§0.a M13.2 decision 1 denormalize-at-write
+        # pattern). Uniform mapping DR 122000 Recon WIP / CR 200000
+        # A/P Trade per §0.a M13.2 decision 2. Estimates skipped per
+        # §0.a M13.2 decision 4. Negative-amount corrections handled
+        # with swapped sides per §0.a M13.2 decision 5. Idempotency
+        # via posted_at__isnull=True filter per §0.a M13.2 decision
+        # 6.
+        "schedule": crontab(hour=10, minute=0),
+        # No positional args; the orchestrator takes no kwargs.
+        "kwargs": {},
+    },
 }
 
 # ---- Milestone 12 · Increment 4 (SESSION_124) — broken-PTP grace period.
