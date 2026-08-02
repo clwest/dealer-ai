@@ -8,7 +8,7 @@ milestone: 8
 milestone_status: in_progress
 increment: 2
 increment_status: shipped
-commit: <pending-user-authorization>
+commit: 34352ed
 ---
 
 # SESSION_095 — Milestone 8 · Increment 2 (M8.2 — vendor performance aggregation)

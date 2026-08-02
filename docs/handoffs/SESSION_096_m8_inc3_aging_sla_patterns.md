@@ -8,7 +8,7 @@ milestone: 8
 milestone_status: in_progress
 increment: 3
 increment_status: shipped
-commit: <pending-user-authorization>
+commit: 34352ed
 ---
 
 # SESSION_096 — Milestone 8 · Increment 3 (M8.3 — aging + SLA-breach pattern aggregations)

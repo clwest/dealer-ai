@@ -8,7 +8,7 @@ milestone: 8
 milestone_status: in_progress
 increment: 4
 increment_status: shipped
-commit: <pending-user-authorization>
+commit: 34352ed
 ---
 
 # SESSION_097 — Milestone 8 · Increment 4 (M8.4 — vehicle-type recon cost + days-at-frontline proxy)

@@ -8,7 +8,7 @@ milestone: 8
 milestone_status: in_progress
 increment: 1
 increment_status: shipped
-commit: <pending-user-authorization>
+commit: 34352ed
 ---
 
 # SESSION_094 — Milestone 8 · Increment 1 (M8.1 — analytics infra + first aggregation)

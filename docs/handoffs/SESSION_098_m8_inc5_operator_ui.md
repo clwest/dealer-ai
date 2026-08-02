@@ -8,7 +8,7 @@ milestone: 8
 milestone_status: in_progress
 increment: 5
 increment_status: shipped
-commit: <pending-user-authorization>
+commit: 34352ed
 ---
 
 # SESSION_098 — Milestone 8 · Increment 5 (M8.5 — operator UI + recharts + Vitest infra)
