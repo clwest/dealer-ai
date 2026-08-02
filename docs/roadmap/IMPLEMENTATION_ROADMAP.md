@@ -1109,7 +1109,45 @@ plumbing.
 
 ---
 
-### Milestone 11 — Sales-side non-chat channels + customer-journey completeness
+### Milestone 11 — Sales-side non-chat channels + customer-journey completeness — SHIPPED at SESSION_120
+
+*Full delivery record: `docs/roadmap/MILESTONE_11_PLANNING.md`
+§7 (annotated SHIPPED per increment; five §0.a change-log
+amendments recorded — M11.1 open plus per-session amendments at
+M11.3 / M11.4 / M11.5 / M11.6 open) and
+`docs/roadmap/MILESTONE_11_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7l. Backend test
+baseline delta: 3,730 → 3,895 (+165 tests, zero regressions).
+Frontend Vitest baseline: 51 → 67 (+16). Sessions 114 → 120.
+Five new entities (TestDrive, DealWriteup, FollowUpCadence,
+FollowUpTask, BeBack) plus one additive extension (CustomerLead
+gains `channel` CharField with 5+1 vocab + backfill + `referrer`
+self-FK at M11.1 via migration `0032`). Five new services
+packages (`services/leads/` M11.1 — with adapter-registry sub-
+package; `services/test_drives/` M11.2; `services/deal_writeups/`
+M11.3; `services/follow_ups/` M11.4 — with Celery-beat surfacer;
+`services/be_backs/` M11.5 — with Celery-beat detector).
+**Zero new permission classes** — every M11 endpoint reused
+`IsSalesManagerOrOwnerAtActiveDealership` (M4). Sixteen new DRF
+admin endpoints (M11.1 +4 lead intake; M11.2 +1 test-drive create;
+M11.3 +3 deal writeup; M11.4 +5 cadence / task; M11.5 +3 be-back;
+M11.6 +2 list endpoints for the operator UI). One new frontend
+route family (`/dealer-ai-sales/*`) with four MVP pages at M11.6
+per §5.f Option C (extended UI at follow-on; DealWriteup UI
+deferred to M12+). Migrations `0032`–`0036`. Tenancy carriers
+34 → 39. Celery-beat task families 4 → 6 (M11.4 06:00 surfacer +
+M11.5 07:00 detector). **Six planning-time §5 decisions
+confirmed as-recommended at M11.1 open** (streak stands at 35
+planning-time as-recommended M5.1 → M11.1). **Twelve
+implementation-time micro-decisions** recorded in §0.a across
+M11.3-M11.6 opens per M11.3 / M11.4 / M11.5 / M11.6 amendments
+(not counted against the streak per M10 §9). DealWriteup + F&I
+handoff UI + delivery adapters (SMS/email) + operator-configurable
+cadence templates + auto-skip on stale tasks + auto-cadence-on-
+BeBack integration + `reopen_task` verb + named-platform webhook
+adapters all deferred pending operator evidence. No modification
+of M1-M10 business logic; M1 chat funnel + M10.1 CreditApplication
+retention lock both preserved byte-for-byte.*
 
 **Business objective.** Extend the leads pipeline beyond
 chat-originated leads to cover the walk-in, phone, listing-

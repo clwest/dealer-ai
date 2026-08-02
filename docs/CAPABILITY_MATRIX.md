@@ -838,6 +838,106 @@ for what shipped vs. deferred.
 
 ---
 
+## 7l. Sales-side non-chat channels + customer journey (Milestone 11, shipped)
+
+Milestone 11 (SESSION_114 → SESSION_120)
+shipped the sales-side non-chat channel
+substrate + customer-journey completeness
+layer: walk-in / phone / listing-form /
+referral intake → test-drive → deal writeup
++ F&I handoff → follow-up cadence
+orchestration → be-back tracking + no-show
+detection → sales operator UI. **Five new
+`services/` packages** (`leads`,
+`test_drives`, `deal_writeups`,
+`follow_ups`, `be_backs`). **No new runtime
+dependencies added.** **No M1-M10 business
+logic touched** — M11.1's `CustomerLead`
+extension is additive (two new columns with
+default backfill); the M1 chat funnel and
+the M10.1 CreditApplication retention lock
+are unchanged. M11.3's F&I handoff verb
+wraps the existing
+`services.f_and_i.record_credit_application`
+in a `@transaction.atomic`; the CA is a
+peer row (retention clock is the M10.1
+record of record), not a child of the
+DealWriteup. One new `/dealer-ai-sales/`
+route family with four MVP pages
+(DealWriteup UI deferred per §5.f MVP
+scoping — handoff flow spans two personas,
+needs distinct UX pass). Deferrals
+cataloged in `MILESTONE_11_RETROSPECTIVE.md`
+§3.
+See `docs/roadmap/MILESTONE_11_PLANNING.md`
++ `docs/roadmap/MILESTONE_11_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface (M11.1 – M11.6) | Notes |
+| --- | --- | --- |
+| Channel intake + CustomerLead extension (M11.1) | Additive `CustomerLead.channel` CharField with 5+1 vocab (`chat` default / `walk_in` / `phone` / `listing_form` / `referral` / `other`) + data-migration backfill to `chat` for historical rows (via AddField default) + `CustomerLead.referrer` self-FK (SET_NULL) + migration `0032_m111_lead_channel_and_referrer`. New `services/leads/` package with `channel_intake.py` (four verbs: `record_walk_in_lead` / `record_phone_lead` / `record_referral_lead` + cross-tenant referrer guard / `record_webhook_lead` dispatching to adapter registry) + two domain errors (`CrossTenantReferrerError` / `UnknownWebhookPlatformError`). New `services/leads/webhook_adapters/` sub-package with adapter registry + first shipped adapter `generic` (documented dealer-owned envelope; not a fabricated proprietary shape). Four DRF admin endpoints under `admin/leads/` (walk-in / phone / referral / webhook). All gated on `IsSalesManagerOrOwnerAtActiveDealership` (M4 permission class reused unchanged across every M11 endpoint). 28 focused tests. Tenancy carrier count unchanged (34; `CustomerLead` was already a carrier). | §5.a Option A (additive channel + backfill) preserves M1 chat funnel byte-for-byte; historical rows land at `chat`. §5.b Option A (generic webhook + adapter dispatch) — the adapter registry pattern is the first substrate expansion beyond single-module service packages in this project. Named-platform adapters (Autotrader / Cars.com / Facebook Marketplace) plug in as sibling modules when operator evidence surfaces platform-specific envelope shapes. **First-adapter-is-generic** is a deliberate research-before-design choice: no operator evidence exists for named-platform envelopes (invented dealer), and fabricating proprietary shapes would violate project rule 3. |
+| TestDrive entity (M11.2) | New `TestDrive` model + migration `0033_m112_test_drive_entity`. Mandatory FKs to `CustomerLead` + `Vehicle` (both CASCADE) per §5.c Option A. Optional `driven_by_user` FK to `settings.AUTH_USER_MODEL` (SET_NULL — preserves historical drive record). Fields per §1.2: `driven_at` DateTime + `duration_minutes` PositiveInteger nullable + `route_notes` / `customer_reaction` / `next_action` TextField (blank OK) + `objections_captured` JSONField default `[]`. Cross-tenant `clean()` guard on both `lead` + `vehicle`. New `services/test_drives/` package with `record_test_drive` verb + `CrossTenantTestDriveError`. `POST /admin/test-drives/` endpoint. Tenancy carrier 34 → 35. 23 focused tests. | §5.c Option A (mandatory both FKs) matches the SALES §step 6 documented reality — salesperson creates a lead at handshake before the drive. `objections_captured` is a free-list at M11.2; a structured vocabulary lookup table is a M12+ candidate once analytics need it. |
+| DealWriteup + F&I handoff (M11.3) | New `DealWriteup` model (four-square worksheet) + migration `0034_m113_deal_writeup_entity`. Mandatory FKs to `CustomerLead` + `Vehicle` (both CASCADE). Four-square nullable DecimalFields (`vehicle_price` / `trade_allowance` / `down_payment` / `monthly_payment_target` / `apr_target`) + `term_months_target` + `write_up_at` DateTime + `written_up_by_user` FK SET_NULL + `sales_manager_approved_at` + `sales_manager_approved_by_user` (both nullable — unapproved writeups are legit drafts) + `handed_off_to_fandi_at` nullable. Cross-tenant `clean()` on both `lead` + `vehicle`. New `services/deal_writeups/` package with three verbs: `record_deal_writeup` (mandatory both FKs) + `approve_deal_writeup` (idempotent re-approval overwrites) + `hand_off_to_fandi` (`@transaction.atomic` wraps timestamp update + M10.1 `record_credit_application` call per §5.e Option A; auto-CA `source_format` defaults to `tablet` per §0.a M11.3 amendment; auto-CA `notes` carries structured four-square summary). Three domain errors: `CrossTenantDealWriteupError` / `WriteupNotApprovedError` (409 — handoff requires prior approval) / `WriteupAlreadyHandedOffError` (409 — idempotency guard prevents duplicate M10.1 CA rows with active retention clocks). Three DRF endpoints under `admin/deal-writeups/`. Tenancy carrier 35 → 36. 33 focused tests. | The auto-created CA is not FK-linked from the writeup — it's linked via the shared `lead` FK. Rationale: the CA outlives the writeup per M10.1 retention lock; a cascading FK would let a writeup delete short-circuit the retention clock. The idempotency guard on re-handoff is the safer default — silent duplicate would create two M10.1 CA rows each starting its own 7-year retention window. |
+| Follow-up cadence orchestration + Celery-beat surfacer (M11.4) | Two-entity model per §5.d Option A. `FollowUpCadence` header (one per lead per template) + `FollowUpTask` rows (scheduled contact points). Six fixed template constants + `FOLLOW_UP_TEMPLATE_OFFSETS` dict with per-template day-offset schedules (`24hr`: [1] / `1wk`: [1,3,7] / `30day`: [1,3,7,14,30] / `90day`: [1,7,30,60,90] / `6mo`: [7,30,90,180] / `1yr`: [30,90,180,365]). Three-state task machine (`pending` default → `completed` / `skipped`; terminal states final). New `services/follow_ups/` package with four verbs (`start_cadence` `@transaction.atomic` seeds tasks + refuses duplicate active per (lead, template); `complete_task` + `skip_task` pending → terminal; `pause_cadence` idempotent flip). Five domain errors including `TaskAlreadyTerminalError` (409) + `DuplicateActiveCadenceError` (409) + `UnknownTemplateError` (400). Two-task Celery orchestrator (`surface_due_follow_up_tasks_for_tenant` + `_for_all_tenants`) wired into Beat at 06:00 project-time daily. **Beat surfacer is read-only** — counts + logs due pending tasks per tenant but never mutates state (operator intent required for every transition per §0.a M11.4 decision 3). Five DRF admin endpoints under `admin/follow-up-cadences/` + `admin/follow-up-tasks/`. Migration `0035_m114_follow_up_cadence_and_task`. Tenancy carriers 36 → 38. Celery-beat task families 4 → 5. 44 focused tests. | Split scheduling from delivery — SMS/email adapters are deferred, keeps the M11.4 test surface tight (no external I/O mocks). Cadence templates are fixed constants at M11.4 per §0.a decision 1; operator-configurable rows would be a larger planning decision (would require a `CadenceTemplate` entity + admin CRUD). |
+| BeBack tracking + no-show detector (M11.5) | New `BeBack` model per §5.g Options A/A/B (recorded in §0.a at M11.5 open; §1.5 was outlined at M11.1 planning but not put to a §5 vote). Mandatory FK to `CustomerLead` CASCADE; **no `Vehicle` FK** (be-backs are about returning to the store, not necessarily the same unit). Fixed 4+1 reason vocab (`test_drive` / `bring_co_signer` / `bring_trade_in` / `other`). Three-state machine (`promised` default → `returned` / `no_show`; terminal states final). `actual_return_at` nullable DateTime (populated on returned; leaves null on no_show by definition). Cross-tenant `clean()` on `lead`. New `services/be_backs/` package with three verbs (`record_be_back` / `mark_returned` sets timestamp default now / `mark_no_show` leaves return null). Three domain errors including `BeBackAlreadyTerminalError` (409). Two-task Celery detector (`detect_no_show_be_backs_for_tenant` + `_for_all_tenants`) wired into Beat at 07:00 project-time daily. **Detector transitions state** — first M11 Celery task that mutates state (deliberate contrast with M11.4 read-only surfacer; the promise is the customer's, task completion is the operator's). Grace period configurable via `BE_BACK_NO_SHOW_GRACE_HOURS` env (default 4). Manual `mark_no_show` endpoint also exposed for operator override (customer called to cancel before grace elapses). Three DRF endpoints under `admin/be-backs/`. Migration `0036_m115_be_back_entity`. Tenancy carrier 38 → 39. Celery-beat task families 5 → 6. 29 focused tests. | The **read-only surfacer vs state-transitioning detector** contrast is a project convention going forward: pick the shape that matches whether the trigger is elapsed condition (detector) or operator intent (surfacer). §5.g.3 Option B (dedicated detector) was chosen over Option A (auto-start M11.4 FollowUpCadence on BeBack create) to keep the no-show state machine narrow to BeBack itself; a follow-on can wire BeBack → cadence integration when operator evidence names the specific cadence template to attach. |
+| Sales operator UI (M11.6) | First M11 frontend increment. New `/dealer-ai-sales/` route family with four MVP pages: `DealerAiSalesLeads.tsx` (channel-filtered lead list) + `DealerAiSalesTestDrives.tsx` (drive log) + `DealerAiSalesFollowUps.tsx` (work-queue with optimistic complete/skip inline) + `DealerAiSalesBeBacks.tsx` (list with optimistic mark-returned / mark-no-show). New `frontend/src/lib/salesApi.ts` wrapping every M11.1-M11.5 admin verb (DealWriteup verbs typed but no UI at M11.6 per §5.f MVP scoping — handoff flow spans two personas + needs distinct UX pass; deferred to M12+). Existing `AdminLeadListSerializer` extended with `channel` + `referrer` fields (additive). `fetchAdminLeads` extended with `channel?: string[]` param. **§5.f.4 substrate addendum**: three read-only backend list endpoints added at M11.6 to make the UI operator-useful (`?channel=` filter on existing `admin/leads/`; new `GET /admin/test-drives/list/`; new `GET /admin/be-backs/list/`); all three gated on the same M4 permission class; no service-layer changes; no new permission class. 16 Vitest tests (target ~15) + 8 backend tests. No migrations. Tenancy carriers unchanged. Frontend baseline 51 → 67. DRF admin surface 80 → 82. Frontend operator routes 11 → 15. | Optimistic transitions on complete/skip + returned/no-show; on error, page refetches to re-sync. Matches M10.7 F&I compliance-audit interaction posture. DealWriteup UI deferred deliberately (spans two personas — sales manager approves, F&I manager receives) — verbs typed in `salesApi.ts` for the follow-on so no re-declaration. |
+| Test baseline | +165 backend + 16 frontend (M10 close **3,730 + 51** → M11 close **3,895 + 67**). Zero regressions. Migrations `0032`–`0036` shipped at M11.1–M11.5 (one per increment); M11.6 shipped no schema; M11.7 shipped no schema. `tsc --noEmit` + `vite build` clean at every M11 close. | Distribution: M11.1 +28, M11.2 +23, M11.3 +33, M11.4 +44, M11.5 +29, M11.6 +8 backend + 16 frontend, M11.7 +0 (docs-only). Every M11 test that touches tenant-carrier / permission-class / endpoint counts uses `>=N` (M9/M10 lesson 14/12). Every M11 vocab test uses exact-set equality (channel 5+1, template 6, reason 4+1, state 3) because those are planning-locked. |
+
+**What is NOT shipped in Milestone 11**
+(deferred per
+`MILESTONE_11_RETROSPECTIVE.md` §3):
+
+- **DealWriteup + F&I handoff UI** —
+  M11.3 shipped the backend substrate;
+  M11.6 UI deferred because handoff
+  spans two personas and needs
+  distinct UX pass. M12 candidate.
+- **Delivery adapters for follow-up +
+  be-back notifications** — M11.4
+  surfacer counts due tasks + M11.5
+  detector transitions no-show; neither
+  dispatches SMS/email. Task-list
+  endpoint exposes the operator work-
+  queue for consumption.
+- **Operator-configurable cadence
+  templates** — M11.4 shipped six
+  fixed template constants; a
+  `CadenceTemplate` entity + admin
+  CRUD is deferred until operator
+  evidence surfaces need.
+- **Auto-skip of stale follow-up
+  tasks** — M11.4 shipped operator-
+  triggered state transitions only.
+- **Auto-cadence-on-BeBack
+  integration** — M11.5 shipped a
+  dedicated no-show detector; wiring
+  BeBack → M11.4 cadence deferred
+  until operator evidence names the
+  specific cadence template.
+- **`reopen_task` verb for terminal
+  follow-up tasks / be-backs** —
+  terminal states final at M11;
+  un-do path deferred until operator
+  UI surfaces need.
+- **Named-platform webhook adapters**
+  (Autotrader / Cars.com / Facebook
+  Marketplace / CarGurus) — M11.1
+  shipped the `generic` adapter + the
+  registry substrate; named adapters
+  plug in as sibling modules when
+  operator evidence surfaces
+  platform-specific envelope shapes.
+- **Advisor-role write scope on
+  test-drive** — M11.2 endpoint
+  gated on sales-manager / owner
+  only; salespeople enter drives
+  via the sales-manager surface.
+- **Server-side pagination on M11
+  admin lists** — 100-row server
+  cap; matches M10.7 posture.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full
