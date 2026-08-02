@@ -47,6 +47,27 @@ def make_dealership(slug: str = "test-dealership", name: str | None = None) -> D
     return dealership
 
 
+def make_demo_dealership(
+    archetype: str, slug: str = "demo-dealership", name: str | None = None
+) -> Dealership:
+    """Milestone 18 · Increment 1 — companion to :func:`make_dealership`.
+
+    Creates a demo dealership with ``is_demo=True`` and the requested
+    archetype set. Delegates to :func:`make_dealership` so the default
+    COA gets seeded (M17+ scenario builders exercising the accounting
+    surface need the accounts present).
+
+    ``archetype`` must be one of the values in
+    :data:`dealer_ai.models.DEMO_ARCHETYPE_CHOICES` (validated at the
+    model layer via the CharField choices constraint).
+    """
+    dealership = make_dealership(slug=slug, name=name)
+    dealership.is_demo = True
+    dealership.demo_archetype = archetype
+    dealership.save(update_fields=["is_demo", "demo_archetype"])
+    return dealership
+
+
 def make_user(username: str = "testuser", password: str = "x") -> "User":
     """Create an auth user with a predictable username/password.
 

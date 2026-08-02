@@ -35,6 +35,42 @@ ROLE_CHOICES = (
 )
 
 
+# Milestone 18 · Increment 1 (SESSION_147) — demo-store archetype vocab.
+# Per MILESTONE_18_PLANNING.md §5.b Option A (user-confirmed at SESSION_146
+# open) fixed vocab for ``Dealership.demo_archetype``. Growth-only-list
+# discipline (per M9-M17 lesson) — new archetypes append; exact-set
+# equality asserted at test time.
+DEMO_ARCHETYPE_RETAIL_SUBPRIME = "retail_subprime"
+DEMO_ARCHETYPE_FLOOR_PLANNED = "floor_planned"
+DEMO_ARCHETYPE_BHPH = "bhph"
+
+DEMO_ARCHETYPE_CHOICES = (
+    (DEMO_ARCHETYPE_RETAIL_SUBPRIME, "Retail / Subprime"),
+    (DEMO_ARCHETYPE_FLOOR_PLANNED, "Floor-planned / Recon-heavy"),
+    (DEMO_ARCHETYPE_BHPH, "BHPH portfolio"),
+)
+
+
+# Milestone 18 · Increment 1 (SESSION_147) — tester-feedback category vocab.
+# Per MILESTONE_18_PLANNING.md §5.e Option A. Fixed vocab; exact-set
+# equality at test time. Categories chosen to distinguish operator
+# signal (willingness_to_pay, value_statement) from UX signal
+# (confusion, bug) from product-priority signal (feature_request).
+TESTER_FEEDBACK_CATEGORY_CONFUSION = "confusion"
+TESTER_FEEDBACK_CATEGORY_BUG = "bug"
+TESTER_FEEDBACK_CATEGORY_FEATURE_REQUEST = "feature_request"
+TESTER_FEEDBACK_CATEGORY_VALUE_STATEMENT = "value_statement"
+TESTER_FEEDBACK_CATEGORY_WILLINGNESS_TO_PAY = "willingness_to_pay"
+
+TESTER_FEEDBACK_CATEGORY_CHOICES = (
+    (TESTER_FEEDBACK_CATEGORY_CONFUSION, "Confusion"),
+    (TESTER_FEEDBACK_CATEGORY_BUG, "Bug"),
+    (TESTER_FEEDBACK_CATEGORY_FEATURE_REQUEST, "Feature request"),
+    (TESTER_FEEDBACK_CATEGORY_VALUE_STATEMENT, "Value statement"),
+    (TESTER_FEEDBACK_CATEGORY_WILLINGNESS_TO_PAY, "Willingness to pay"),
+)
+
+
 class Dealership(models.Model):
     """Tenancy root introduced in Milestone 1.
 
@@ -48,10 +84,37 @@ class Dealership(models.Model):
     ``slug`` is the stable identifier used by request-context resolution
     (subsequent increments will resolve tenant from an incoming header
     or the authenticated user's dealership). Kept unique.
+
+    **Milestone 18 · Increment 1 — demo-store flags** (per
+    ``MILESTONE_18_PLANNING.md`` §5.b Option A, user-confirmed at
+    SESSION_146 open, recorded in §0.a). Two additive columns:
+
+    - ``is_demo`` — Boolean, default False. When True, this dealership
+      is a controlled simulation dealership used for founder-led pilot
+      validation. Gates ``services/demo_store/`` reset paths per §5.c
+      Option A belt-and-suspenders (``NonDemoResetError`` +
+      ``assert dealership.is_demo`` at write-verb top).
+    - ``demo_archetype`` — CharField, choices from
+      :data:`DEMO_ARCHETYPE_CHOICES`, blank when ``is_demo=False``.
+      Selects which archetype builder in
+      ``services/demo_store/archetypes/`` populates the store per
+      §5.d Option A.
+
+    Every other tenancy path continues to work unchanged — a demo
+    dealership is a Dealership with the flag set, not a parallel
+    model. Preserves the "one authoritative tenancy model" invariant.
     """
 
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=64, unique=True)
+    # Milestone 18 · Increment 1 — demo-store flags (§5.b Option A).
+    is_demo = models.BooleanField(default=False)
+    demo_archetype = models.CharField(
+        max_length=32,
+        choices=DEMO_ARCHETYPE_CHOICES,
+        blank=True,
+        default="",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -7437,4 +7500,63 @@ class TrialBalanceSnapshotRow(models.Model):
         return (
             f"TrialBalanceSnapshotRow #{self.pk} — "
             f"{self.account_code} on snapshot #{self.snapshot_id}"
+        )
+
+
+class TesterFeedback(models.Model):
+    """Milestone 18 · Increment 1 — one tester observation on a demo store.
+
+    Per ``MILESTONE_18_PLANNING.md`` §5.e Option A (user-confirmed at
+    SESSION_146 open, recorded in §0.a). One row per structured
+    observation captured during founder-led pilot validation. Categories
+    distinguish operator signal (``willingness_to_pay``,
+    ``value_statement``) from UX signal (``confusion``, ``bug``) from
+    product-priority signal (``feature_request``).
+
+    **Tenancy posture.** ``dealership`` FK CASCADE — feedback is scoped
+    to the demo store it was captured against. Resetting the demo store
+    deletes the feedback rows (or the caller exports via
+    ``python manage.py demo_store export_feedback`` first). No cross-
+    tenant reads; the M18.5 POST endpoint uses the request's tenant
+    context.
+
+    **Guardrail — demo-store-only.** The M18.1 service-layer create
+    path (M18.5 ships the POST endpoint) asserts
+    ``dealership.is_demo=True`` before write per the belt-and-suspenders
+    pattern from §5.c Option A. A ``TesterFeedback`` row on a non-demo
+    dealership is architecturally impossible.
+
+    **Immutability posture.** Written once; never mutated. Corrections
+    happen via a follow-up row (with an explanatory note). Matches the
+    M13.1 JournalEntry / M17.1 TrialBalanceSnapshot immutability
+    invariant.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="tester_feedback",
+    )
+    tester_name = models.CharField(max_length=64)
+    # Slug of the scenario brief the tester was executing when the
+    # observation surfaced. Free-form to allow archetype builders to
+    # name scenarios without requiring a schema change.
+    scenario_slug = models.CharField(max_length=64)
+    category = models.CharField(
+        max_length=32, choices=TESTER_FEEDBACK_CATEGORY_CHOICES
+    )
+    note = models.TextField()
+    # Optional — the frontend or admin route where the observation was
+    # captured, e.g. "/dealer-ai-accounting/trial-balance". Empty when
+    # the observation is off-route (verbal feedback during a session).
+    referenced_route = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return (
+            f"TesterFeedback #{self.pk} — {self.category} "
+            f"from {self.tester_name} at {self.created_at.isoformat()}"
         )

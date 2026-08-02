@@ -550,6 +550,14 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # is the safety net for callers that bypass the service.
     "TrialBalanceSnapshot",
     "TrialBalanceSnapshotRow",
+    # Milestone 18 · Increment 1 (SESSION_147) — tester feedback capture
+    # per MILESTONE_18_PLANNING.md §5.e Option A (user-confirmed at
+    # SESSION_146 open, recorded in §0.a) (49 → 50). ``dealership`` FK
+    # CASCADE. The M18.5 POST endpoint + M18.1 service-layer write path
+    # both assert ``dealership.is_demo=True`` before writing per §5.c
+    # Option A belt-and-suspenders guard. Autofill signal is the safety
+    # net for callers that bypass the service.
+    "TesterFeedback",
 )
 
 
