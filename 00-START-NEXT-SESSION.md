@@ -18,62 +18,181 @@ milestone_13_status: shipped
 milestone_14_status: shipped
 milestone_15_status: shipped
 milestone_16_status: shipped
-milestone_17_status: in-progress
+milestone_17_status: shipped
+milestone_18_status: planning
 next_session: SESSION_146
-next_milestone: 17
-next_milestone_name: "Trial-balance materialization + as_of picker (monthly-close v1)"
-next_increment: 3
-next_increment_name: "M17.3 — Close-out (retrospective + capability matrix + roadmap flip + M18 skeleton)"
+next_milestone: 18
+next_milestone_name: "TBD — user names target at SESSION_146 open"
+next_increment: 0
+next_increment_name: "M18.0 — Planning refinement + target selection"
 ---
 
-# Next session — SESSION_146 · Milestone 17 · Increment 3 (M17.3 — Close-out)
+# Next session — SESSION_146 · Milestone 18 · Increment 0 (M18.0 — Planning refinement + target selection)
 
-> **SESSION_145 shipped THREE code
-> increments** (M17.0 planning + M17.1 backend
-> + M17.2 frontend) per user direction
-> "continue" after each landed. Commits:
-> `404605e` M17.0 planning + `f217e0d` M17.1
-> backend + `bedc615` M17.1 docs + `4235137`
-> M17.2 frontend. **M17.3 close-out remains
-> for SESSION_146.**
+> **SESSION_145 shipped all four M17
+> increments —** M17.0 planning + M17.1
+> backend + M17.2 frontend + **M17.3
+> close-out**. Six close-out docs
+> (retrospective + capability matrix §7r
+> + roadmap flip + planning frontmatter
+> flip + M18 skeleton + session-start
+> refresh) + coordinated commit landing
+> all M17.3 docs. **Milestone 17 — Trial-
+> balance materialization + `as_of`
+> picker (monthly-close v1) — SHIPPED.**
 >
-> **Backend baseline: 4,363 pass**, 1
-> skipped, 0 fail (+37 tests at M17.1).
-> **Frontend Vitest baseline: 140 pass**
-> (+18 tests at M17.2). Migrations
-> `0043`–`0046` (+1 at M17.1). Tenancy
-> carriers 47 → **49**. DRF admin surface
-> 104 → **107**. Frontend operator routes
-> 20 (unchanged — extended M14.2 page in
-> place). Permission classes 7 (unchanged
-> — **zero-drift streak nine consecutive
-> milestones**: M10 + M11 + M12 + M13 +
-> M14 + M15 + M16 + M17.1 + M17.2 no
-> class change). Celery-beat task
-> families 10 (unchanged — no beat entry
-> per §5.c Option A).
+> **M17 close totals:** two new tenant-
+> carrier models (`TrialBalanceSnapshot`
+> header + `TrialBalanceSnapshotRow`
+> child; count 47 → 49). One additive
+> migration (`0046` — two `CreateModel` +
+> two `AddConstraint`). One new module
+> in `services/accounting/`
+> (`trial_balance_close.py`) with three
+> verbs + `DuplicateTrialBalanceSnapshotError`.
+> Three new endpoints (POST freeze +
+> GET list + GET detail; DRF admin
+> surface 104 → 107). Frontend: new
+> `TrialBalanceDatePicker` component +
+> extended `AccountingTrialBalancePage`
+> in place (Query controls card + Prior
+> closes card + inline detail card).
+> 37 focused backend tests + 18
+> frontend tests. Zero frontend-route
+> additions (page extended in place per
+> §4 test binding). Zero Celery-beat
+> additions (no beat entry per §5.c
+> Option A sync-sibling shape). **Six
+> §5 decisions confirmed as-recommended
+> at M17.0 open** — streak extends to
+> **70 planning-time as-recommended
+> M5.1 → M17.0 across eight
+> consecutive milestones** now (M10 +
+> M11 + M12 + M13 + M14 + M15 + M16 +
+> M17). Four §0.a implementation-time
+> micro-decisions across M17.1 + M17.2
+> (dataclass rename, detail URL shape,
+> picker default deferral, native
+> `<input type="date">` over shadcn
+> `Calendar`) do not count against the
+> streak per M10 §9. **Permission-
+> class count corrected** at M17.1 —
+> 7 actual (6 `Is*` + `ReadOnly`), not
+> the "8" the M16 retrospective doc
+> stated. Zero-drift streak now nine
+> consecutive milestones (M10 → M17).
 >
-> **SESSION_146 opens M17.3 — close-out
-> docs.** Per `MILESTONE_17_PLANNING.md`
-> §7 M17.3. Documentation-only per
-> M10.8 / M11.7 / M12.8 / M13.4 / M14.5 /
-> M15.2 / M16.2 precedent.
+> **Backend baseline: 4,326 → 4,363
+> pass**, 1 skipped, 0 fail (+37 tests
+> at M17.1, zero regressions).
+> **Frontend Vitest baseline: 122 →
+> 140 pass** (+18 tests at M17.2).
+> Migrations `0043`–`0046` (+1 at
+> M17.1). Tenancy carriers 47 → **49**.
+> DRF admin surface 104 → **107**.
+> Frontend operator routes **20**
+> (unchanged). Celery-beat task
+> families **10** (unchanged).
+>
+> **SESSION_146 opens M18.0 — planning
+> refinement + target selection.** Per
+> `MILESTONE_18_PLANNING.md` (draft
+> planning skeleton written at M17.3
+> close per standing user directive).
+> **§5.a is the load-bearing decision**
+> — user names the M18 target at
+> session open, drawing from the M17
+> retrospective §8 unblocked-work list
+> + the still-partly-valid M16 §8
+> items + the standing question from
+> M17 §9 (UI-polish milestone?).
 
 ## First thing SESSION_146 must do
 
-### 1. Verify starting state
+### 1. Name the M18 target milestone
 
-- `git status` — clean (M17.2 commit
-  `4235137` landed at SESSION_145 close).
-- `git log --oneline -6` — top four
-  should be `4235137` (M17.2 frontend),
-  `bedc615` (M17.1 docs), `f217e0d`
-  (M17.1 backend), `404605e` (M17.0
-  planning).
+`IMPLEMENTATION_ROADMAP.md` §Milestone
+sequence ends at Milestone 17. **M18
+target is not predetermined** — user
+names it at session open based on
+operational evidence + business
+priority.
+
+Candidate targets drawn from
+`MILESTONE_17_RETROSPECTIVE.md` §8 +
+`MILESTONE_16_RETROSPECTIVE.md` §8 —
+surfaced without recommendation
+because target selection is a
+business-priority call, not a
+technical recommendation:
+
+- **Option A** — M10 F&I chargeback GL
+  reversal.
+- **Option B** — BhphFee entity +
+  late-fee GL posting.
+- **Option C** — Deposit / bank
+  reconciliation workflow.
+- **Option D** — NSF / payment-
+  reversal workflow.
+- **Option E** — Period-close
+  comparison view / audit. Directly
+  unblocked by M17 materialization.
+- **Option F** — Financial-reports
+  substrate (P&L, balance sheet).
+  Layers on trial-balance
+  materialization.
+- **Option G** — CSV / PDF export of
+  frozen snapshots.
+- **Option H** — Auto-freeze on
+  schedule.
+- **Option I** — Reopen / unfreeze
+  workflow.
+- **Option J** — Category-group-aware
+  GL mapping for M13.2 detector.
+- **Option K** — M14 UX polish (JE
+  filters + sidebar nav; `as_of`
+  picker portion shipped at M17.2).
+- **Option L** — Cost-of-sale
+  variance handling.
+- **Option M** — Sale-reversal
+  workflow.
+- **Option N** — BHPH interest accrual
+  detector (accrual-basis).
+- **Option O** — Non-accounting
+  target user names at open based on
+  operational evidence not visible in
+  M15 / M16 / M17 retrospectives.
+
+**Standing question from M17 §9:**
+should M18 be an intentional UI-polish
+milestone (M14 shape)? M17's
+recommendation was to carry the
+question forward but not preemptively
+lock M18. If operator evidence +
+backlog density name UI polish as the
+highest-value slot, M18 becomes the UX
+polish milestone (Option K); otherwise
+the remaining polish (JE filters +
+sidebar nav) can layer as a sub-
+increment on a backend milestone that
+touches the M14.3 page.
+
+Once the target is confirmed, expand
+`MILESTONE_18_PLANNING.md` §1
+(business questions) + §5 (load-
+bearing decisions) + §7 (sequencing)
+into a full memo.
+
+### 2. Verify starting state
+
+- `git status` — clean.
+- `git log --oneline -10` — top
+  should be the M17.3 close-out
+  commit.
 - `python3 manage.py test dealer_ai`
   → **4,363 pass, 1 skipped, 0 fail**.
-- `cd frontend && npm test` → **140
-  pass**.
+- `cd frontend && npm test` →
+  **140 pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
@@ -82,159 +201,96 @@ next_increment_name: "M17.3 — Close-out (retrospective + capability matrix + r
   clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. Read first (in order)
+## What M18.0 delivers
 
-- `docs/roadmap/MILESTONE_17_PLANNING.md`
-  (frontmatter about to flip to
-  shipped; §7 M17.3 scope).
-- `docs/handoffs/SESSION_145_m17_inc0_planning.md`
-- `docs/handoffs/SESSION_145_m17_inc1_backend.md`
-- `docs/handoffs/SESSION_145_m17_inc2_frontend.md`
-- `docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`
-  (structure template for the M17
-  retrospective).
-- `docs/CAPABILITY_MATRIX.md` (add
-  §7r for the M17 shipped surface).
-- `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-  §Milestone 17 (add SHIPPED entry).
+Per `MILESTONE_18_PLANNING.md` §5
+M18.0:
 
-## What M17.3 delivers
+- Full expansion of the planning
+  skeleton written at M17.3.
+- User names the M18 target milestone
+  (§5.a).
+- Additional §5 decisions surface once
+  target is confirmed (§5.b-§5.f
+  expected — historical §5 counts have
+  been 6 for M10 / M11 / M12 / M13 /
+  M14 / M15 / M16 / M17).
+- §7 sequencing lands after §5
+  decisions are locked.
+- §0.a change log records the target
+  selection + all §5 confirmations.
 
-Per `MILESTONE_17_PLANNING.md` §7
-M17.3:
+**No code at M18.0.** Planning-only
+session. Backend baseline stays at
+4,363 pass. Frontend Vitest stays at
+140.
 
-### Retrospective
+## What SESSION_146 should do
 
-Write
-`docs/roadmap/MILESTONE_17_RETROSPECTIVE.md`
-following the M16 retrospective
-structure:
+### Recommended step sequence
 
-- §1 Planned scope (§5.a Option E + §5.b-
-  §5.f + 4-increment sequencing).
-- §2 What actually shipped (M17.0 +
-  M17.1 + M17.2 + M17.3 with commit
-  hashes).
-- §3 Deferrals (12 M17-specific + 5
-  universal = 17 per planning §3;
-  verify each has a clear re-entry
-  path).
-- §4 Deviations (any?) — one to record:
-  M14.2 empty-state copy tweak ("No
-  postings yet" → "No postings through
-  this date"). Also the permission-
-  class miscount correction (7 actual,
-  not 8) from M17.1 handoff.
-- §5 Compatibility with existing
-  surface (M1-M16 endpoints returning
-  same shape; enumerate).
-- §6 Lessons — expect ~6 per pattern:
-  monthly-close v1 shape, bundled
-  entity+picker, native date input over
-  shadcn Calendar as a §0.a pattern,
-  IntegrityError → DomainError re-raise
-  pattern in freeze verb, per-account
-  frozen row shape as immutable audit,
-  in-place page extension avoiding
-  route bloat.
-- §7 Streak update — 70 planning-time
-  as-recommended M5.1 → M17.0
-  (unchanged; §5-decision streak). Four
-  §0.a implementation-time micro-
-  decisions across M17.1 + M17.2
-  (dataclass rename, detail URL shape,
-  picker default deferral, native date
-  input) do NOT count against streak
-  per M10 §9.
-- §8 What M17 unblocks for M18+ —
-  standing question about UI-polish
-  milestone at M18 or M19 per M17
-  planning §M16.2-close refinement.
+1. **Confirm the M18 target with the
+   user** (§1 above).
 
-### Capability matrix
+2. **Read first (in order):**
+   - `docs/roadmap/MILESTONE_18_PLANNING.md`
+     (this session's expansion
+     target).
+   - `docs/roadmap/MILESTONE_17_RETROSPECTIVE.md`
+     §6 (six lessons carry into M18)
+     + §8 (unblocked work) + §9
+     (standing question).
+   - `docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`
+     §8 (partly still valid).
+   - `docs/handoffs/SESSION_145_m17_inc3_close.md`
+     (previous session's close).
+   - `docs/CAPABILITY_MATRIX.md` §7r
+     (M17 shipped surface).
+   - Target-specific research doc
+     (per the confirmed §5.a option).
 
-Add `docs/CAPABILITY_MATRIX.md` §7r
-describing the M17 trial-balance
-materialization + `as_of` picker
-surface. Follow §7q (M16) as template.
+3. **Verify starting state** (§2
+   above).
 
-### Implementation roadmap
+4. **Draft §1 (business questions) +
+   §5 (load-bearing decisions) + §7
+   (sequencing)** in
+   `MILESTONE_18_PLANNING.md`.
 
-Add
-`docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-§Milestone 17 SHIPPED entry. Bump the
-sequence to end at Milestone 17.
+5. **Ship handoff at
+   `docs/handoffs/SESSION_146_m18_inc0_planning.md`.**
 
-### Planning doc flip
-
-Frontmatter update on
-`docs/roadmap/MILESTONE_17_PLANNING.md`:
-`status: active` → `status: shipped`.
-
-### M18 skeleton
-
-Write
-`docs/roadmap/MILESTONE_18_PLANNING.md`
-skeleton from the M17 §8 unblocked-
-work list per M10.8 / M11.7 / M12.8 /
-M13.4 / M14.5 / M15.2 / M16.2
-precedent. Include:
-
-- §0 engineering practices to preserve.
-- §1 candidate targets — include
-  Options A / B / C / D / F / G / H /
-  I / J from the M17 planning §1
-  (still-valid unblocked work).
-- **§1 Option G — M14 UX polish**
-  becomes a stronger candidate at
-  M18 per the M17-close standing
-  question (M14 shape milestone to
-  batch-consume UI polish +
-  operator-evidence gaps from M15 +
-  M16 + M17 surfaces).
-- §5 skeleton with `[NEEDS-DECISION-
-  BEFORE-M18.0]` §5.a target-selection
-  placeholder.
-- §7 4-increment sequencing template.
-
-### Session start refresh
-
-Overwrite `00-START-NEXT-SESSION.md`
-with M18.0 priority.
-
-### Coordinated commit
-
-Land all M17.3 docs together in one
-coordinated commit per M10.8 / M11.7
-/ M12.8 / M13.4 / M14.5 / M15.2 /
-M16.2 precedent.
+6. **Overwrite
+   `00-START-NEXT-SESSION.md`** with
+   M18.1 priority (first implementation
+   increment for the confirmed target).
 
 ## Explicit non-goals for SESSION_146
 
-- ❌ Do NOT ship M18.0 planning
-  expansion (skeleton only).
-- ❌ Do NOT modify M17.1 backend or
-  M17.2 frontend code.
+- ❌ Do NOT ship M18.1+ code.
+- ❌ Do NOT modify M1-M17 business
+  logic.
 - ❌ Do NOT force-push or amend any
   earlier commits.
 
 ## NEXT TASK
 
-Start SESSION_146 with (a) starting-
-state verification, (b) reading M17
-planning + all three M17 handoffs +
-M16 retrospective structure, (c)
-writing the six close-out docs
-(retrospective + capability matrix
-§7r + roadmap flip + planning
-frontmatter flip + M18 skeleton +
-session-start refresh) + coordinated
-commit landing all M17.3 docs.
+Start SESSION_146 with (a) naming the
+M18 target with the user (candidates
+in §1 above; user picks based on
+operational evidence + business
+priority + the M17 §9 UI-polish
+standing question), (b) the read-
+first list, (c) starting-state
+verification, then (d) expanding
+`MILESTONE_18_PLANNING.md` §1 + §5 +
+§7 into a full memo. Ship the M18.0
+handoff.
 
 Backend baseline at SESSION_146
 close: **4,363 pass** (unchanged —
-docs-only). Frontend Vitest: **140
-pass** (unchanged).
+planning-only). Frontend baseline:
+**140 pass** (unchanged).
 
 ---
 
@@ -244,102 +300,92 @@ pass** (unchanged).
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_17_PLANNING.md`
-   (active memo; about to flip
-   shipped)
-6. `docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`
-   (structure template)
-7. `docs/handoffs/SESSION_145_m17_inc0_planning.md`
-8. `docs/handoffs/SESSION_145_m17_inc1_backend.md`
-9. `docs/handoffs/SESSION_145_m17_inc2_frontend.md`
-10. `docs/CAPABILITY_MATRIX.md` §7q
-    (template for §7r addition)
+5. `docs/roadmap/MILESTONE_18_PLANNING.md`
+6. `docs/roadmap/MILESTONE_17_RETROSPECTIVE.md`
+7. `docs/handoffs/SESSION_145_m17_inc3_close.md`
+   (this session's close)
+8. `docs/CAPABILITY_MATRIX.md` §7r
+9. Target-specific research (per
+   §5.a confirmed at SESSION_146
+   open).
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_145 — M17.2 SHIPPED, M17.3 close next)
+## Operational state (post-SESSION_145 — M17 SHIPPED)
 
 - **Backend (local):** Django on
-  `:8001`. Migrations
-  `0001`–`0046`. Test baseline:
-  **4,363 pass**, 1 skipped, 0
-  fail.
+  `:8001`. Migrations `0001`–`0046`.
+  Test baseline: **4,363 pass**, 1
+  skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
-  `:5173`. `tsc --noEmit` +
-  `vite build` clean. **Vitest
-  baseline: 140 pass**.
+  `:5173`. `tsc --noEmit` + `vite
+  build` clean. **Vitest baseline:
+  140 pass**.
 - **Frontend (prod):** NONE.
-- **Async runtime:** Celery
-  5.5.3 + Redis 6.4.0 +
-  `django-celery-beat` 2.8.1
-  DatabaseScheduler. **10
+- **Async runtime:** Celery 5.5.3 +
+  Redis 6.4.0 + `django-celery-beat`
+  2.8.1 DatabaseScheduler. **10
   scheduled task families
-  registered** (unchanged at
-  M17). Next open slot for a
-  future detector is 12:00.
+  registered** (unchanged at M17 —
+  no beat entry per §5.c Option A).
+  Next open slot for a future
+  detector is 12:00.
 - **Milestones shipped:** M1 →
-  M16. M17 in progress: M17.0
-  planning + M17.1 backend +
-  M17.2 frontend shipped at
-  SESSION_145. **M17.3 close-out
-  remaining.**
+  **M17** (SESSION_145 close). M18
+  planning drafted.
 - **DRF admin surface:** **107**
-  endpoints (104 → 107 at M17.1:
-  POST freeze + GET list + GET
-  detail).
+  endpoints.
 - **Frontend operator routes:**
-  **20** (unchanged — M14.2 page
-  extended in place at M17.2 per
-  §4 test binding).
+  **20**.
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** complete
-  `services/f_and_i/` (M10) +
-  five M11 packages + seven M12
-  packages + `services/
-  accounting/` (**seven modules
-  now** including new
-  `trial_balance_close.py`).
-- **Frontend accounting
-  surface:** `frontend/src/lib/
-  accountingApi.ts` — **8
-  fetchers + 2 mutators** (4 GET
-  + 1 POST from M13/M14 plus 3
-  new GET + 1 new POST at M17.2)
-  + four page components
-  (M14.2/3/4 + M17.2 extended
-  trial-balance page) +
-  `TrialBalanceDatePicker`
+  `services/f_and_i/` (M10) + five
+  M11 packages + seven M12 packages
+  + **`services/accounting/` (seven
+  modules: `default_coa.py` +
+  `journal.py` + `snapshot.py` +
+  `vehicle_cost.py` + `sale_booking.py`
+  + `bhph_payment.py` +
+  `trial_balance_close.py`)**.
+- **Frontend accounting surface:**
+  `frontend/src/lib/accountingApi.ts`
+  with 8 fetchers + 2 mutators (M13
+  + M14 + M17 combined) + four page
+  components + `TrialBalanceDatePicker`
   component.
 - **Tenancy carriers:** **49**
   (unchanged since M17.1).
 - **Permission classes:** **7
-  actual** — `IsAdvisorForSlug`,
+  actual** (`IsAdvisorForSlug`,
   `IsDealerOwnerForAdvisorSlug`,
   `IsSalesManagerOrOwnerAtActiveDealership`,
   `IsReconManagerSalesManagerOrOwnerAtActiveDealership`,
   `IsDealerOwnerAtActiveDealership`,
   `IsFinanceManagerOrOwnerAtActiveDealership`,
-  `ReadOnly`. **Zero-drift
-  streak: nine consecutive
-  milestones** (M10 → M17.2).
-  Prior narrative doc "8" was a
-  miscount — corrected at
-  M17.1 handoff.
+  `ReadOnly`). **Zero-drift streak:
+  nine consecutive milestones**
+  (M10 → M17). Prior narrative doc
+  "8" was a miscount — corrected at
+  M17.1 handoff + M17
+  retrospective §4.
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17 scrub
-  stages (unchanged — M17 has
-  no LLM path).
+  stages (unchanged — M17 has no
+  LLM path).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 17 status:**
-  M17.0 planning + M17.1
-  backend + M17.2 frontend
-  SHIPPED at SESSION_145.
-  **M17.3 close-out next**
-  (SESSION_146).
+- **Milestone 18 next:** M18.0
+  planning refinement + target
+  selection. User names target at
+  session open from the M17 §8 +
+  M16 §8 unblocked-work lists +
+  the M17 §9 UI-polish standing
+  question. M18.1 implementation
+  deferred to post-planning
+  session.

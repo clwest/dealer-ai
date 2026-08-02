@@ -1710,6 +1710,156 @@ Milestone 16 close:**
 
 ---
 
+## 7r. Trial-balance materialization + as_of picker (monthly-close v1) (Milestone 17, shipped)
+
+Milestone 17 (SESSION_145) delivered
+the smallest complete operator-usable
+slice of monthly-close workflow — a
+durable materialization of the M13.3
+trial-balance aggregate + operator UI
+to pick historical `as_of` moments +
+freeze durable snapshots. **Bundled
+backend+frontend** per §5.a Option E
+(entity + picker ship together; neither
+half stands alone). **Two new tenant-
+carrier entities** (`TrialBalanceSnapshot`
+header + `TrialBalanceSnapshotRow`
+child; count 47 → 49). **One additive
+migration** (`0046` — two `CreateModel`
++ two `AddConstraint`; zero data
+migration). **One new service module**
+in `services/accounting/`
+(`trial_balance_close.py` — seventh
+module alongside `default_coa.py`,
+`journal.py`, `snapshot.py`,
+`vehicle_cost.py`, `sale_booking.py`,
+`bhph_payment.py`). **Three new
+endpoints** (POST freeze / GET list /
+GET detail; endpoint count 104 →
+107). **Zero permission-class drift**
+— streak extends to nine consecutive
+milestones (M10 + M11 + M12 + M13 +
+M14 + M15 + M16 + M17.1 + M17.2). **No
+LLM path introduced.** **No new
+frontend route** — the M14.2 trial-
+balance page extends in place with
+new picker + freeze button + Prior
+closes card + inline detail. **Zero
+Celery-beat task-family additions** —
+freeze is sync-sibling (operator
+intent), not detector (elapsed
+condition). Deferrals cataloged in
+`MILESTONE_17_RETROSPECTIVE.md` §3.
+See `docs/roadmap/MILESTONE_17_PLANNING.md`
++ `docs/roadmap/MILESTONE_17_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface (M17.1 backend + M17.2 frontend) | Notes |
+| --- | --- | --- |
+| Backend: Materialization entity + freeze verb (M17.1) | Two new Django models in `models.py`: `TrialBalanceSnapshot` (header: `dealership`, `as_of` DateTimeField, `total_debits` / `total_credits` DecimalField(14, 2), `is_balanced` BooleanField, `created_by` FK to User nullable, `created_at` auto_now_add; `Meta.unique_together=(('dealership', 'as_of'),)` per §5.d Option A) + `TrialBalanceSnapshotRow` (child: `dealership`, `snapshot` FK CASCADE, `account_code`, `account_name`, `account_type` using `GL_ACCOUNT_TYPE_CHOICES`, `debit_total` / `credit_total` / `natural_balance` DecimalField(14, 2); `Meta.unique_together=(('snapshot', 'account_code'),)`). New module `services/accounting/trial_balance_close.py` with three verbs: `freeze_trial_balance(*, dealership, as_of, actor) -> TrialBalanceSnapshot` atomic sync-sibling verb per §5.c Option A (calls `compute_trial_balance` internally + materializes header + child rows via `bulk_create` in one transaction; catches `IntegrityError` on `unique_together` violation + re-raises as `DuplicateTrialBalanceSnapshotError` per §5.d Option A); `list_trial_balance_snapshots(*, dealership, page=1, page_size=25) -> TrialBalanceSnapshotListPage` paginated per M14.1 pattern; `get_trial_balance_snapshot(*, dealership, snapshot_id) -> TrialBalanceSnapshot | None` tenant-scoped retrieve. Dataclass rename `TrialBalanceSnapshot` → `TrialBalanceComputation` (transient computation) + `TrialBalanceRow` → `TrialBalanceComputationRow` in `snapshot.py` frees the "snapshot" name for the durable model. `TrialBalanceSnapshotListPage` frozen dataclass matches `JournalEntryListPage` shape. Extended `services/accounting/__init__.py` `__all__` for the new verbs, models, error class, and page dataclass. | Atomic sync-sibling — either header + every child commits or nothing does. Cross-tenant snapshot pk returns None from `get_trial_balance_snapshot` (endpoint layer maps to 404 per fail-closed posture). `DuplicateTrialBalanceSnapshotError` maps to 409 at the endpoint layer. Frozen row values (account_code / account_name / account_type) captured at freeze time — later COA rename does not touch frozen rows per §3 item 12 immutability posture. Backdated `posted_at` on a JournalEntry with `posted_at <= snapshot.as_of` affects the live aggregate but NOT the frozen rows per §5.f Option A (asserted in tests). |
+| Backend: DRF endpoints (M17.1) | Three new endpoints in `views_accounting.py`, all reusing `IsSalesManagerOrOwnerAtActiveDealership` (permission-class count 7 unchanged; zero-drift streak extends to nine consecutive milestones): `POST /admin/accounting/trial-balance/snapshots/` (freeze; body `{"as_of": "<ISO8601>"}`; 201 with full snapshot projection; 400 on missing/invalid; 409 on duplicate; 403 non-permitted role); `GET /admin/accounting/trial-balance/snapshots/list/` (paginated snapshot list; `?page=&page_size=`; compact summaries via `_project_snapshot_summary`; empty list for zero-portfolio tenants — not 404); `GET /admin/accounting/trial-balance/snapshots/<int:pk>/` (detail retrieve; full frozen rows via `_project_snapshot_detail`; 404 on cross-tenant per fail-closed posture). URL pattern uses `<int:pk>` per §0.a M17.1 decision 3 (pk is canonical identifier; `as_of` is a queryable attribute). Money on the wire is Decimal-as-string per M9-M16 convention. | Read-then-write for POST; read-only for GET list + detail. Operator intent per §5.c Option A — freeze is a POST because it's declaring "this is the close for period X." Detail projection includes frozen rows via reverse-FK manager. |
+| Migration (M17.1) | Migration `0046_m171_trial_balance_snapshot.py` — two `CreateModel` operations + two `AddConstraint` operations (`UniqueConstraint` on `(dealership, as_of)` for the header + `(snapshot, account_code)` for the row). Zero data migration. Applied cleanly on top of `0045`. | Additive-only. Zero existing rows to migrate. Zero impact on any prior model. |
+| Frontend: Trial-balance API client (M17.2) | `frontend/src/lib/accountingApi.ts` extended: `fetchTrialBalance(asOf?: string)` — backward-compatible signature that includes `?as_of=<value>` when supplied; `freezeTrialBalance(asOf: string): Promise<FrozenTrialBalanceSnapshot>`; `listTrialBalanceSnapshots({page?, pageSize?})`; `fetchTrialBalanceSnapshot(pk: number)`. New TypeScript types: `TrialBalanceSnapshotSummary` (list projection), `FrozenSnapshotRow`, `FrozenTrialBalanceSnapshot` (detail projection), `TrialBalanceSnapshotListPage`. | Backward-compatible with the M14.2 caller (existing `fetchTrialBalance()` continues to work without arg). Wire matches M17.1 backend projections. |
+| Frontend: TrialBalanceDatePicker (M17.2) | New `frontend/src/components/accounting/TrialBalanceDatePicker.tsx` (~85 lines): controlled `<input type="date">` wrapped in the shadcn `Input` primitive per §0.a M17.2 micro-decision (native browser primitive over shadcn `Calendar` install — no new dep, fully accessible, trivially testable). Pure helpers `todayIsoDate()` returns `YYYY-MM-DD` for browser today; `dateToEndOfDayIso(dateIso)` converts to full ISO timestamp at 23:59:59 local per operational "close of business" convention per §5.e Option B. | Server accepts full ISO on the wire; UI constrains to date-only per §5.e Option B. Emitted value is `YYYY-MM-DD`; caller converts to end-of-day ISO before hitting backend. Future time-of-day picker layers on the same component. |
+| Frontend: Extended trial-balance page (M17.2) | `frontend/src/pages/AccountingTrialBalancePage.tsx` extended in place per §4 test binding (no new operator route; count stays at 20). Four cards: (a) new "Query controls" card with date picker + "Freeze this view" button + inline success/409/generic error banners (banners clear on next picker change); (b) live trial-balance card refetches on picker change via `useEffect` `asOfDate` dependency (unchanged shape from M14.2); (c) new "Prior closes" card with paginated snapshot list (empty-state UI when total_count === 0; each row shows as_of + who froze + when + is_balanced chip; click loads detail); (d) new `FrozenSnapshotDetailCard` rendered inline on row click with Close button and frozen row values from `fetchTrialBalanceSnapshot(pk)` — renders frozen data, not live aggregator. Preserves all existing M14.2 functionality (cost-posting failures card, dealership-slug title, balanced/unbalanced chip, loading/error states). | In-place extension pattern per §7 M17.2. Zero new operator route. All new UI serves the monthly-close v1 workflow: pick a date → optionally freeze → browse prior closes → drill into one. |
+| Test-fixture reuse (M17.1) | `_auth_helpers.make_dealership` continues to seed default COA per M15.1 §0.a decision 8. All M17.1 tests using the helper have the required accounts for the underlying `compute_trial_balance` calls. Zero test-fixture changes needed at M17. | Zero test regressions. `make_dealership`'s COA seeding remains transparent infrastructure. |
+| Test baseline | +37 backend at M17.1 (M16 close **4,326** → M17 close **4,363**) — all from M17.1 (M17.0 planning + M17.3 close-out are docs-only). +18 frontend Vitest at M17.2 (M16 close **122** → M17 close **140**). Zero regressions. One migration shipped at M17.1. `manage.py check` + `makemigrations --check` clean at every M17 close. `tsc --noEmit` + `vite build` clean at M17.2. | 37 focused backend tests across 12 TestCase classes in `tests/test_m171_trial_balance_materialization.py`: freeze happy path (6) + zero-portfolio (1) + uniqueness/409 (3) + atomicity (1) + immutability (2 — COA rename + backdated entry) + list pagination + isolation (4) + detail retrieve + 404 (3) + POST endpoint 201/400/409/403 (6) + GET list (3) + GET detail (3) + tenancy carriers (3) + permission-class set equality (1) + endpoint count (1). 18 frontend tests across two files: 12 new page tests (picker default, refetch on change, freeze success/409/generic error, list refetch, empty state, list renders, detail load/close, frozen row values, banner clear) + 6 picker-helpers tests (todayIsoDate, dateToEndOfDayIso, component surface). |
+
+**What is NOT shipped in Milestone 17**
+(deferred per
+`MILESTONE_17_RETROSPECTIVE.md` §3):
+
+- **Backdated-entry discrepancy surface.**
+  Frozen rows immutable per §5.f Option A;
+  "your frozen close no longer matches
+  live" comparison view defers to period-
+  close audit milestone.
+- **Auto-freeze on schedule.** Sync-
+  sibling shape per §5.c Option A; Celery-
+  beat auto-freeze defers pending
+  operational contract on timezone +
+  finalization semantics.
+- **Reopen / unfreeze workflow.**
+  Immutable snapshots at M17; unfreeze
+  path defers pending audit-log
+  semantics.
+- **Period comparison view.** List +
+  detail endpoints ship at M17.1;
+  side-by-side variance view layers on
+  top at a later financial-reports
+  milestone.
+- **CSV / PDF export.** Detail endpoint
+  returns JSON; export layers on top at
+  a reporting milestone.
+- **Time-of-day picker.** Date-only per
+  §5.e Option B; time picker defers.
+- **Tenant timezone configuration.**
+  Assumes Django `TIME_ZONE`; per-
+  dealership defers to a tenancy
+  milestone.
+- **Freezing arbitrary future dates.**
+  Accepted at M17; guard defers pending
+  evidence.
+- **Snapshot-source FK on downstream
+  audit entities.** No downstream
+  entities yet.
+- **DB-level immutability enforcement.**
+  Service-layer discipline is sufficient
+  at M17; DB triggers defer pending
+  evidence.
+- **Materialized aggregate reports (P&L,
+  balance sheet).** Trial balance is the
+  substrate; reports layer at a
+  financial-reports milestone.
+- **Snapshot detail versioning.** COA
+  rename after freeze — frozen row
+  stores the historical name; a "rename
+  history" reconciliation view defers.
+- **Payroll / W-2 / 1099** — external-
+  service scope boundary.
+- **GAAP-compliant audited financial
+  reporting** — out of scope for
+  platform v1.
+- **Direct DMS integration** — belongs to
+  a future vendor-integration
+  milestone.
+
+**What operators experienced at Milestone
+17 close:**
+
+- **The M14.2 trial-balance page grew a
+  date picker.** Operators select any
+  historical date; the live aggregate
+  refetches as of that moment (via M13.3
+  endpoint's existing `?as_of=` param
+  that the frontend now sends).
+- **A "Freeze this view" button.**
+  Clicking POST-freezes the current
+  `as_of` moment as a durable snapshot;
+  inline success banner names the
+  snapshot pk. Duplicate freeze at the
+  same instant → 409 → inline error
+  banner ("A snapshot for this exact
+  moment already exists…").
+- **A "Prior closes" card lists frozen
+  snapshots** (recent-first; who froze +
+  when + is_balanced chip). Empty-state
+  UI when zero — "No period closes
+  have been frozen yet."
+- **Click a prior close → inline detail
+  card** renders the frozen per-account
+  rows (not the live aggregator).
+  Historical values are preserved even
+  if underlying journal entries change
+  afterwards. Close button dismisses.
+- **Zero new operator routes.** The
+  monthly-close v1 workflow is served by
+  the same M14.2 page — pick a date, see
+  the balance, freeze it, browse prior
+  closes, drill into one.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

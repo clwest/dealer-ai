@@ -1,9 +1,11 @@
 ---
 title: "Milestone 17 — Trial-balance materialization + as_of picker (monthly-close v1)"
-status: active
+status: shipped
 type: planning-memo
 generated: 2026-08-02
 generated_at_session: SESSION_144 (skeleton), SESSION_145 (expansion)
+shipped_at_session: SESSION_145
+retrospective: docs/roadmap/MILESTONE_17_RETROSPECTIVE.md
 milestone: 17
 milestone_name: "Trial-balance materialization + as_of picker (monthly-close v1)"
 sources:

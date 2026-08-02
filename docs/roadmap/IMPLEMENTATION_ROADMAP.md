@@ -1851,6 +1851,192 @@ the GL.
 
 ---
 
+### Milestone 17 — Trial-balance materialization + as_of picker (monthly-close v1) — SHIPPED at SESSION_145
+
+*Full delivery record: `docs/roadmap/MILESTONE_17_PLANNING.md`
+§7 (annotated SHIPPED per increment; four §0.a change-log
+amendments recorded across M17.1 + M17.2 implementation
+sessions) and
+`docs/roadmap/MILESTONE_17_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7r. Backend test
+baseline delta: 4,326 → 4,363 (+37 tests, zero regressions —
+in the 30-40 planning target range). Frontend Vitest baseline
+delta: 122 → 140 (+18 tests, exceeded 8-16 target by 2 due to
+the picker-helpers test file). Sessions: 145 (all four
+increments collapsed to one calendar session per user
+direction "continue" after each landed; commits `404605e`
+M17.0 + `f217e0d` M17.1 backend + `bedc615` M17.1 docs +
+`4235137` M17.2 frontend + `dc064cf` M17.2 docs + this
+close-out commit). Two new backend entities
+(`TrialBalanceSnapshot` header + `TrialBalanceSnapshotRow`
+child; tenancy carriers 47 → 49). One additive migration
+(`0046` — two `CreateModel` + two `AddConstraint`; zero data
+migration). One new module in `services/accounting/`
+(`trial_balance_close.py` — seventh module alongside
+`default_coa.py`, `journal.py`, `snapshot.py`,
+`vehicle_cost.py`, `sale_booking.py`, `bhph_payment.py`) with
+three verbs (`freeze_trial_balance` atomic sync-sibling +
+`list_trial_balance_snapshots` paginated per M14.1 pattern +
+`get_trial_balance_snapshot` tenant-scoped retrieve) + new
+`DuplicateTrialBalanceSnapshotError` domain exception (409
+mapping) + `TrialBalanceSnapshotListPage` frozen dataclass.
+Internal rename `TrialBalanceSnapshot` → `TrialBalanceComputation`
++ `TrialBalanceRow` → `TrialBalanceComputationRow` in
+`snapshot.py` frees the "snapshot" name for the durable
+Django model (§0.a M17.1 decision 1). Three new endpoints in
+`views_accounting.py` (POST freeze + GET list at
+`/snapshots/list/` + GET detail at `/snapshots/<int:pk>/`) —
+DRF admin surface 104 → 107. All three reuse
+`IsSalesManagerOrOwnerAtActiveDealership` — zero-drift streak
+extends to nine consecutive milestones (M10 + M11 + M12 +
+M13 + M14 + M15 + M16 + M17.1 + M17.2). Frontend: `frontend/
+src/lib/accountingApi.ts` extended with `fetchTrialBalance(asOf?)`
++ three new fetchers/mutators + four TypeScript types.
+`frontend/src/components/accounting/TrialBalanceDatePicker.tsx`
+— new component wrapping `<input type="date">` in the shadcn
+`Input` primitive (§0.a M17.2 micro-decision: native browser
+primitive over shadcn `Calendar` install). `frontend/src/
+pages/AccountingTrialBalancePage.tsx` extended in place with
+Query controls card (picker + Freeze button + inline banners)
++ Prior closes card (paginated snapshot list) + inline
+`FrozenSnapshotDetailCard` on row click. Frontend operator
+routes 20 (unchanged — page extends in place per §4 test
+binding). Celery-beat task families 10 (unchanged — no beat
+entry at M17 per §5.c Option A sync-sibling shape). Zero new
+post-LLM scrub stages (M17 has no LLM path). AI safety stack
+17 scrub stages (unchanged). **Six §5 decisions confirmed
+as-recommended at M17.0 open** — streak extends to 70
+planning-time as-recommended M5.1 → M17.0 across eight
+consecutive milestones (M10 + M11 + M12 + M13 + M14 + M15 +
+M16 + M17). Four §0.a implementation-time micro-decisions
+across M17.1 + M17.2 — do not count against the streak per
+M10 §9.*
+
+**Business objective.** Wire a durable materialization layer
+on top of the M13.3 live trial-balance aggregator + give
+operators the UI to query historical dates and freeze
+period-close snapshots. **The smallest complete operator-
+usable slice of monthly-close workflow** per §5.a Option E
+bundling: without the picker, the materialization has no
+operator consumer; without the materialization, the picker
+has nothing durable to record. Together they answer "what
+did the trial balance look like on May 31, and can I ensure
+that answer stays stable even if backdated corrections land
+later?"
+
+**Related research.**
+- `ACCOUNTING_DEPARTMENT_MAPPING.md` §1.1 (chart of accounts
+  — no additions at M17; all M17 activity is over the
+  M13.1-seeded default COA), §2.4 (period-close operational
+  rhythm) — motivates the "close of business" end-of-day
+  semantics for the picker per §5.e Option B.
+- `MILESTONE_13_PLANNING.md` §5 M13.3 — the pure recompute
+  aggregator that M17 preserves + materialization layer bolts
+  on top of.
+- `MILESTONE_14_PLANNING.md` §3 deferral 2 (M14.2 `as_of`
+  picker deferred to a monthly-close slice) — that slice is
+  M17.
+- `MILESTONE_15_RETROSPECTIVE.md` §6 (M15.1 sync-sibling
+  template) + §8 — M17.1's freeze verb mirrors the sync-
+  sibling posture verbatim.
+- `MILESTONE_16_RETROSPECTIVE.md` §6 (six lessons carry into
+  M17) + §8 — flagged trial-balance materialization as an
+  unblocked M17 candidate. M17 picks it up.
+
+**Operational pain resolved.**
+- Before M17, `compute_trial_balance(as_of=X)` recomputed
+  every call. A backdated JournalEntry with `posted_at <= X`
+  silently changed the historical trial balance. The
+  reported May close on June 1 was not the same as the
+  reported May close on June 15 if any backdated entry
+  landed in between.
+- Before M17, the frontend `fetchTrialBalance()` sent no
+  `as_of` param — the M13.3 endpoint's `?as_of=` query
+  parameter was on the wire but had no operator UI. Operators
+  could only query "now."
+- Before M17, no entity recorded prior period closes; no
+  endpoint listed them. Operators wanting to compare "May
+  close" against "June close" had no durable record of
+  either.
+
+**Existing reusable primitives.**
+- M13.3 `services/accounting/compute_trial_balance` — pure
+  recompute aggregator, unchanged. The new freeze verb
+  calls it internally.
+- M13.3 GET `/admin/accounting/trial-balance/[?as_of=]`
+  endpoint — the query parameter was on the wire since M13.3
+  §0.a decision 4; M17.2 starts sending it from the picker.
+- M15.1 `services/accounting/sale_booking` — pattern
+  template for the M17.1 sync-sibling freeze verb (atomic
+  posture, module shape, verb signature).
+- M14.1 `list_journal_entries` paginated verb — pattern
+  template for M17.1 `list_trial_balance_snapshots`
+  (frozen dataclass return shape, pagination bounds, tenancy
+  isolation).
+- M13.1 `IsSalesManagerOrOwnerAtActiveDealership` — reused
+  for all three M17.1 endpoints (zero-drift streak nine
+  consecutive milestones).
+- M14.2 `AccountingTrialBalancePage.tsx` — extended in place
+  at M17.2 with new picker + freeze button + Prior closes
+  card + inline detail.
+- shadcn `Input` primitive — wrapped as the picker's
+  underlying `<input type="date">` per §0.a M17.2 (native
+  browser primitive over shadcn `Calendar`).
+- `_auth_helpers.make_dealership` already seeds default COA
+  per M15.1 §0.a decision 8 — all M17.1 tests using the
+  helper have the required substrate.
+
+**Gap.**
+- Durable persistence layer for period-close snapshots
+  (M17.1 fills this — `TrialBalanceSnapshot` header +
+  `TrialBalanceSnapshotRow` child).
+- Operator UI to pick historical `as_of` moments + freeze
+  snapshots + browse prior closes (M17.2 fills this — date
+  picker + Freeze button + Prior closes card + inline
+  detail).
+- Uniqueness guard against double-freeze (M17.1 fills this
+  — `unique_together=(dealership, as_of)` + `IntegrityError`
+  → `DuplicateTrialBalanceSnapshotError` → 409).
+- Immutability of frozen rows against backdated JournalEntry
+  changes (M17.1 fills this — per-account rows materialized
+  via `bulk_create` at freeze time; live aggregator + frozen
+  rows are independent per §5.f Option A).
+
+**Scope (four increments — first mixed backend+frontend
+milestone since M14; all four collapsed to SESSION_145 per
+user direction).**
+- **M17.0** — planning refinement + target selection.
+- **M17.1** — backend TrialBalanceSnapshot entity + freeze
+  verb + three endpoints.
+- **M17.2** — frontend as_of picker + Freeze button + Prior
+  closes list + inline detail.
+- **M17.3** — close-out docs.
+
+**Out of scope for M17** (deferrals cataloged in
+`MILESTONE_17_RETROSPECTIVE.md` §3):
+- Backdated-entry discrepancy surface; auto-freeze on
+  schedule; reopen / unfreeze workflow; period comparison
+  view; CSV / PDF export; time-of-day picker; tenant timezone
+  configuration; future-date freezing guard; snapshot-source
+  FK on downstream audit entities; DB-level immutability
+  enforcement; materialized aggregate reports (P&L, balance
+  sheet); snapshot detail versioning through COA renames.
+- M10 F&I chargeback GL reversal + category-group-aware GL
+  mapping for M13.2 detector + M14 UX polish (JE filters +
+  sidebar nav; `as_of` picker portion now shipped at M17.2)
+  + cost-of-sale variance handling + sale-reversal workflow
+  + NSF / payment-reversal workflow + BhphFee entity +
+  BHPH interest accrual detector + deposit / bank
+  reconciliation workflow + method-aware fund-flow routing
+  — all remain unblocked as M18+ candidates; substrate ready
+  for each.
+- Payroll / W-2 / 1099 (external services). GAAP-audited
+  financial reporting (out of scope for platform v1).
+  Direct DMS integration (belongs to a future vendor-
+  integration milestone).
+
+---
+
 ## 5. Explicit non-goals and deferrals
 
 The following are documented in research but explicitly out of
