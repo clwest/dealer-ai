@@ -753,6 +753,91 @@ per `MILESTONE_9_RETROSPECTIVE.md` §4):
 
 ---
 
+## 7k. F&I deal desk (Milestone 10, shipped)
+
+Milestone 10 (SESSION_106 → SESSION_113)
+shipped the full F&I workflow substrate:
+credit-app intake → deal desking → lender
+submission → stipulation tracking → contract
+signing → funding → chargeback reconciliation
+→ compliance-audit record. **Complete
+`services/f_and_i/` package** with seven
+submodules covering every phase of the F&I
+workflow per `FINANCE_DEPARTMENT_MAPPING.md`.
+**No new runtime dependencies added.** **No
+M1–M9 business logic touched** — every M10
+write path is a new service module; M9.1
+`Sale.gross_realized` remains the source of
+truth (M10.6's `net_realized` verb is
+additive per §5.c Option B). One new
+frontend surface (`/dealer-ai-f-and-i/` two-
+tab MVP per §1.8.d Option A). Deferrals
+cataloged in §4 with re-entry paths; most
+notable — photo/document upload plumbing
+deferred through M10.4/M10.5/M10.7,
+addressable as a discrete post-M10
+initiative if operator evidence demands.
+See `docs/roadmap/MILESTONE_10_PLANNING.md`
++ `docs/roadmap/MILESTONE_10_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface (M10.1 – M10.7) | Notes |
+| --- | --- | --- |
+| CreditApplication entity (M10.1) | New `CreditApplication` model + migration `0025_credit_application_entity`. Nullable FKs to both `CustomerLead` (SET_NULL) and `Sale` (SET_NULL) per §5.a Option C — `clean()` requires at least one. Fields: `applicant_full_name` + optional `applicant_ssn_last4` + `source_format` from 3-value vocab + `status` from 3-value vocab + `captured_at` DateTime + `retention_expires_at` DateTime denormalized at write from `captured_at + 7 years` (FINANCE §6.9) + `notes`. **Retention clock locked at the model layer per §5.e** — `.delete()` refuses unexpired records with `CreditApplicationRetentionActiveError`. No `force=` escape hatch. New `services/f_and_i/` package + first submodule `credit_application.py` (three verbs: `compute_retention_expires_at` pure + `record_credit_application` transactional + `get_credit_application` tenant-scoped). New `IsFinanceManagerOrOwnerAtActiveDealership` permission class — reused unchanged at M10.2-M10.7 (zero permission-class drift). First endpoint `POST /api/dealer-ai/admin/credit-applications/`. Tenancy carrier 24 → 25. | §5.a Option C (nullable both parents) matches FINANCE §1.1 workflow (credit apps intake at lead time; gain Sale ref at close). §5.b Option A ratified for M10.4 use. Retention at 7 years (FINANCE §6.9 conservative). Full SSN / DOB deferred until Safeguards Rule technical-controls layer per §6.4 — the schema is intentionally narrow so M10.1 can't become a compliance-debt substrate. |
+| DealStructure entity + LTV/PTI/DTI (M10.2) | New `DealStructure` model + additive M10.1 CA extension (`gross_monthly_income` + `existing_monthly_debt` nullable Decimal) + migration `0026_deal_structure_entity`. Mandatory FKs to CreditApplication + Vehicle (both CASCADE). Fields per §1.2: `sale_price` / `down_payment` / `trade_allowance` / `trade_payoff` / `taxes` / `fees` / `amount_financed` / `apr` (percent units matching `payment_engine`) / `term_months` / `monthly_payment` / `back_end_products` JSONField + three denormalized ratio outputs (`ltv_pct` / `pti_pct` / `dti_pct` Decimal(6,2) nullable). New `services/f_and_i/deal_structure.py` with six verbs: three pure ratio verbs (LTV always computable; PTI returns `None` when income NULL; DTI returns `None` when income or existing_debt NULL) + `record_deal_structure` transactional (computes ratios pre-save) + `get_deal_structure` + `recompute_ratios`. Endpoint `POST /admin/deal-structures/`. Tenancy carrier 25 → 26. | §1.2.a Option A (income + debt on CA additive extension) preserves M10.1 business logic — old CA rows survive NULL. §1.9.a Option A (flat URL pattern) matches M10.1 shipped shape. PTI / DTI defensive against zero income (division-by-zero guard). Ratios `Decimal(6,2)` — supports up to 9999.99% LTV (subprime negative-equity roll-in territory). |
+| LenderProgram + LenderSubmission (M10.3) | New `LenderProgram` model (per-dealership catalog per §1.3.c Option A; unique `(dealership, name)`; `is_active` soft-delete pattern) + new `LenderSubmission` model (mandatory FK to `DealStructure` CASCADE per §1.3.a; FK to `LenderProgram` **PROTECT** — new pattern) + migration `0027_lender_entities`. Fixed 4-value `status` vocab per §1.3.b Option A. Free-form JSON `counter_terms` + `approval_terms` per §1.3.d Option A. New `services/f_and_i/lender.py` — six verbs including typed `DuplicateLenderProgramError` (409 on unique-constraint violation). Three endpoints (POST program + POST submission + PATCH submission for status). Tenancy carriers 26 → 28. | `PROTECT` on LenderSubmission.lender_program is a first for this project — the deactivate-not-delete pattern (`is_active` boolean) coexists. Free-form JSON terms matches M10.2 `back_end_products` shape; vocabulary emerges at M10.7 compliance layer if evidence surfaces. Coexists with existing free-text `DealerOnboardingProfile.subprime_lenders` per §5.d Option C (SESSION_106) — no data migration; operators re-populate the structured catalog manually. |
+| Stipulation tracking (M10.4) | New `Stipulation` model + migration `0028_stipulation_entity`. Mandatory FK to `LenderSubmission` CASCADE per §1.4.a Option A. FK to `settings.AUTH_USER_MODEL` `documented_by` nullable SET_NULL per §1.4.c Option A. Fixed 5-value `stip_type` vocab per §5.b (SESSION_106) — `proof_of_income` / `_of_insurance` / `_of_residence` / `references` / `other`. Fixed 3-value `state` vocab per §1.4.b Option A — `open` default / `cleared` / `waived`. `cleared_at` auto-populated on first cleared/waived transition; reset to NULL on transition back to open. Photo/document evidence deferred to M10.7 per §1.4.d Option A (URL field only). New `services/f_and_i/stipulation.py` with four verbs including `update_stipulation_state` any-to-any transition. Two endpoints (POST + PATCH). **PATCH sources `documented_by` from `request.user` server-side** — new audit-trail pattern that removes a class of "wrong user" bugs. Tenancy carrier 28 → 29. | The `documented_by=request.user` server-side pattern was preserved for M10.6 `recorded_by` on Chargeback. Any future audit-trail FK should use the same shape. Stip creep per FINANCE §7.3 manifests as new stip rows opened after previous ones cleared, not as a state transition — the three-value vocab is sufficient. |
+| Contract + BEPA + Funding (M10.5) | Three new entities in one increment: `Contract` (FK to DealStructure CASCADE per §1.5.c Option A; three-state machine `unsigned` default → `signed` → optional `voided` per §1.5.b Option A; Reg Z disclosure fields per FINANCE §6.1) + `BackEndProductAgreement` (FK to Contract per §1.5.a Option B; fixed 6-value `product_type` vocab per §1.5.d Option A — `vsc` / `gap` / `t_and_w` / `prepaid_maint` / `appearance` / `other`; optional per-product structural fields per FINANCE §4.3-§4.5) + `Funding` (OneToOne to Contract per §1.6.a Option C — single Funding entity, no persisted FundingPacket; state machine `pending_funding` default → `funded` → `chargedback` vocab shipped for M10.6). Migration `0029_contract_funding`. Two new service modules: `services/f_and_i/contract.py` (six verbs) + `services/f_and_i/funding.py` (three verbs). **Two-verb transition pattern** (`sign_contract` / `void_contract`, `record_funding` / `mark_funded`) — auto-populated timestamps are business facts. Sign-after-void refused (409 per `ContractAlreadyVoidedError`) — per FINANCE §5.8 unwind pattern, voided contracts require a new Contract row. Five endpoints. Tenancy carriers 29 → 32. | §1.5.a Option B (separate BEPA entity) unlocked M10.6 per-product chargeback attribution without a schema migration + backfill at M10.6. §1.6.a Option C (no persisted Packet) — packet is a computable view over Contract + Stipulation + related rows per FINANCE §5.1; M10.7 compliance layer can materialize a packet report if operators need one. Funding OneToOne — unwinds/re-signs require a new Contract row (preserves audit trail). |
+| Chargeback + net_realized (M10.6) | New `Chargeback` model + additive M10.5 BEPA extension (`cancelled_at` + `cancellation_amount` nullable per §1.7.c Option A) + migration `0030_chargeback_and_bepa_cancellation`. Nullable FKs to both `Contract` and `BackEndProductAgreement` (both CASCADE) per §1.7.a Option A. Fixed 5+1 `chargeback_type` vocab per §1.7.b Option B — FINANCE §5.7 five triggers (`first_payment_default` / `early_payoff` / `product_cancellation` / `repossession` / `deal_unwind`) + `other` fallback. Audit trail via `recorded_by` FK to User SET_NULL sourced from `request.user`. New `services/f_and_i/chargeback.py` — three verbs. **`record_chargeback` introduces atomic cross-model side effects** — one transaction, one Chargeback insert + one Funding auto-transition (deal-level types only per §1.7.f Option A) + one BEPA auto-populate (product_cancellation only). `skip_funding_transition=True` kwarg for edge cases. `net_realized(sale)` additive verb per §5.c Option B (SESSION_106) — attribution via Contract → DealStructure → Vehicle unioned with BEPA-only chargebacks; distinct pk set prevents double-counting. One endpoint. Tenancy carrier 32 → 33. | The atomic cross-model side-effects pattern is a new shape for this project; prior service verbs had at most single-row side effects. Design goal: "one operator action = one atomic write" from the operator's mental model. `net_realized` colocated with chargeback aggregation logic in `services/f_and_i/` per §1.7.d Option A — avoids cross-service import from `services/analytics/`. |
+| ComplianceRecord + operator UI (M10.7) | New `ComplianceRecord` model (OneToOne to Contract CASCADE per §1.8.a Option A — matches FINANCE §6.9 deal-jacket alignment) + additive URL extensions on Stipulation (`evidence_url`) + BEPA (`product_agreement_url`) per §1.8.c Option C + migration `0031_compliance_record_and_evidence_urls`. Single-entity typed-columns model per §1.8.b Option A — seven typed columns covering FINANCE §6.1-§6.9 concerns (Reg Z `disclosed_at` / OFAC `checked_at` + `ofac_hit` bool / Red Flags `reviewed_at` + `notes` / Privacy `delivered_at` / Safeguards `audit_at` / Adverse Action `sent_at` + `reason` / Retention `expires_at` denormalized from parent CA) + `deal_jacket_url` external document reference. **No upload plumbing at M10.7** per §1.8.c Option C — URL fields only. New `services/f_and_i/compliance.py` with four verbs: `record_compliance` (auto-populates retention from parent CA) + `update_compliance` (targeted save with **field-whitelist**, new pattern via `_UPDATABLE_FIELDS` frozenset) + `get_compliance` + `deal_jacket_summary(contract)` (pure aggregate bundling all related entities for the operator UI). Four backend endpoints. **First F&I operator UI** at `/dealer-ai-f-and-i/` per §1.8.e Option A. Two-tab MVP per §1.8.d Option A: `DealerFandIDeals.tsx` (filterable list) + `DealerFandICompliance.tsx` (seven mark-timestamp actions + related stipulations + chargebacks + funding state). New `fAndIApi.ts` client + `ClipboardCheck` nav entry. Tenancy carrier 33 → 34. | Full 7-step operator workflow deferred per §1.8.d Option C — the two-tab MVP serves FINANCE §7.6 pain-point directly. Upload plumbing (Cloudinary/S3, presigned URLs, MIME validation) is a discrete post-M10 initiative. Retention denorm on ComplianceRecord — CA is source-of-truth; add `resync_retention` verb post-M10 if evidence demands. |
+| Test baseline | +304 backend + 17 frontend (M9 close **3,426 + 34** → M10 close **3,730 + 51**). Zero regressions. Migrations `0025`–`0031` shipped at M10.1–M10.7 (one per implementation session); M10.8 shipped no schema changes. `tsc --noEmit` + `vite build` clean at every M10 close. **Frontend Vitest 34 → 51** (+17 exactly per M10.7 plan). | Distribution: M10.1 +52, M10.2 +55, M10.3 +53, M10.4 +35, M10.5 +42, M10.6 +36, M10.7 +31 backend + 17 frontend, M10.8 +0 (docs-only). Every M10.2-M10.7 test used `>=N` for its tenant-carrier count assertion (M10.1's `==25` was corrected at M10.2 close — see M9 lesson 14 / M10 lesson 12). |
+
+**What is NOT shipped in Milestone 10**
+(deferred per
+`MILESTONE_10_RETROSPECTIVE.md` §4):
+
+- **Photo / document upload plumbing** —
+  deferred through M10.4 / M10.5 / M10.7.
+  Full Cloudinary/S3 wiring + presigned
+  URLs + MIME validation + retention
+  discipline. Candidate for M11.
+- **Full F&I operator UI (7-step
+  workflow)** — M10.7 shipped a two-tab
+  MVP. Dedicated frontend surfaces for
+  credit-apps / deal structures / lender
+  submissions / stips / chargebacks land
+  later if operator evidence surfaces
+  need. Full CRUD operates via admin API
+  endpoints today.
+- **Server-side pagination on deals
+  list** — 100-row server cap; client-
+  side pagination.
+- **Compliance-record close-out
+  automation for voided contracts** —
+  voided contracts keep their compliance
+  rows as historical records.
+- **`resync_retention` verb** — if CA
+  retention is extended (legal hold,
+  rule change), the ComplianceRecord
+  denorm becomes stale.
+- **Bureau-response integration** —
+  `existing_monthly_debt` is operator-
+  entered from the bureau report at
+  M10.2; direct bureau-portal
+  integration deferred beyond M10.
+- **Lender-portal integrations** — same.
+- **DMS write-back integrations** —
+  planning §scope-boundary explicit
+  non-goal.
+- **BHPH portfolio + collections** —
+  Milestone 12 substrate.
+- **Accounting integration** — future
+  milestone.
+- **`AnalyticsCache` materialization
+  layer** — carry-forward from M8.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

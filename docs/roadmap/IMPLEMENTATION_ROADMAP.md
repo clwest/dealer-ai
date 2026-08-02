@@ -1002,7 +1002,46 @@ the natural bridge into Milestones 10 and 12.
 
 ---
 
-### Milestone 10 — Finance (F&I) deal desk
+### Milestone 10 — Finance (F&I) deal desk — SHIPPED at SESSION_113
+
+*Full delivery record: `docs/roadmap/MILESTONE_10_PLANNING.md`
+§7 (annotated SHIPPED per increment; seven §0.a change-log
+amendments recorded — one per implementation session
+SESSION_106 → SESSION_112, each capturing the decisions
+resolved at that session's open) and
+`docs/roadmap/MILESTONE_10_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7k. Backend test
+baseline delta: 3,426 → 3,730 (+304 tests, zero regressions).
+Frontend Vitest baseline: 34 → 51 (+17). Sessions 106 → 113.
+Ten new entities (CreditApplication, DealStructure,
+LenderProgram, LenderSubmission, Stipulation, Contract,
+BackEndProductAgreement, Funding, Chargeback, ComplianceRecord)
+plus three additive extensions (CA gross_monthly_income +
+existing_monthly_debt at M10.2; BEPA cancelled_at +
+cancellation_amount at M10.6; Stipulation evidence_url + BEPA
+product_agreement_url at M10.7). One complete new services
+package (`services/f_and_i/` with seven submodules —
+credit_application, deal_structure, lender, stipulation,
+contract, funding, chargeback, compliance). One new
+permission class
+(`IsFinanceManagerOrOwnerAtActiveDealership` at M10.1 —
+reused unchanged M10.2-M10.7; zero permission-class drift
+across the F&I surface). Seventeen new DRF admin endpoints
+(one M10.1, one M10.2, three M10.3, two M10.4, five M10.5,
+one M10.6, four M10.7). Migrations `0025`–`0031`. Tenancy
+carriers 24 → 34 (+10). First F&I frontend surface at M10.7
+— `/dealer-ai-f-and-i/` two-tab MVP per §1.8.d Option A
+(deals-in-progress list + per-deal compliance-audit view).
+Twenty-nine load-bearing decisions resolved across seven
+implementation sessions, **all confirmed as-recommended by
+the user** (streak-pattern signal per retrospective §6
+lesson 16). Photo/document upload plumbing deferred through
+M10.4/M10.5/M10.7 as a discrete post-M10 initiative if
+operator evidence demands. Full 7-step F&I operator UI +
+server-side pagination on deals list + `resync_retention`
+verb + bureau-response integration all deferred pending
+operator evidence. No DMS / lender-portal / BHPH / accounting
+work per planning §scope-boundary non-goals.*
 
 **Business objective.** Support F&I workflow from customer
 commit through funding. Reduce stip-chase pain, chargeback

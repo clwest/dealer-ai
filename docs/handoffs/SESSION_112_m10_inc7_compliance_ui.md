@@ -8,7 +8,7 @@ milestone: 10
 milestone_status: in_progress
 increment: 7
 increment_status: shipped
-commit: TBD
+commit: 5d91e22
 ---
 
 # SESSION_112 — Milestone 10 · Increment 7 (M10.7 — ComplianceRecord + operator UI)

@@ -1,6 +1,7 @@
 ---
 title: "Milestone 10 — Implementation-Planning Pass"
-status: draft
+status: shipped
+shipped_at_session: SESSION_113
 type: planning-artifact
 generated: 2026-08-02
 generated_at_session: SESSION_105 (post-M9-closeout)
