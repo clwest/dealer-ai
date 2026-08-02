@@ -1084,6 +1084,163 @@ Milestone 12 close:**
 
 ---
 
+## 7n. Accounting reconciliation core (v1) (Milestone 13, shipped)
+
+Milestone 13 (SESSION_129 → SESSION_132)
+shipped the accounting reconciliation
+substrate: platform-shipped default chart
+of accounts + immutable double-entry
+journal entries with reversal chain + M2
+vehicle-cost auto-posting detector + pure
+recompute trial-balance snapshot. **Three
+new backend entities** (GLAccount +
+JournalEntry + JournalEntryLine) + **one
+additive column extension** to
+`VehicleCost` (`posted_at`) + **one new
+`services/` package** with four modules
+(default_coa, journal, vehicle_cost,
+snapshot) + **one new Celery-beat task
+family** (M13.2 vehicle-cost posting at
+10:00 project-time) + **four new admin
+endpoints** (three journal-entry + one
+trial-balance) + **one new default-COA
+data-migration RunPython** seeding 24
+accounts per Dealership. **No new
+runtime dependencies added.** **No
+LLM path introduced** — the entire
+substrate is deterministic double-entry
+math. **No M1-M12 business logic
+touched** — M13.2's `VehicleCost.posted_at`
+is additive nullable; every other M1-M12
+model/service/endpoint returns the same
+shape it did at M12 close. Deferrals
+cataloged in
+`MILESTONE_13_RETROSPECTIVE.md` §3.
+See `docs/roadmap/MILESTONE_13_PLANNING.md`
++ `docs/roadmap/MILESTONE_13_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface (M13.1 – M13.3) | Notes |
+| --- | --- | --- |
+| GL substrate: chart of accounts + immutable journal entries (M13.1) | Three new models + migration `0043_m131_accounting_substrate`. `GLAccount` per-dealership COA row (six-digit `code` + `name` + `account_type` from 5-value fixed vocab {asset, liability, equity, revenue, expense} + `is_active` soft-hide flag). Unique constraint `(dealership, code)` namespaces codes per tenant. `JournalEntry` atomic double-entry posting: `description` + `posted_at` (business-effective moment, distinct from `created_at` row-insertion) + `posted_by_user` (SET_NULL) + `reverses` self-FK (PROTECT to preserve audit trail) + `reason` (required on reversing entries at service layer). Immutable per §5.c Option A — no `update_journal_entry` verb exists; absence is the enforcement mechanism. `JournalEntryLine` one debit/credit row (`entry` CASCADE + `account` PROTECT to preserve schedule integrity + `debit` / `credit` Decimal(14,2) with MinValueValidator(0) + `memo`). Line-level cross-tenant `clean()` guards on both `entry` and `account`. **Platform-shipped default COA per §5.b Option A**: 24 accounts per Dealership organized as ACCOUNTING §1.1 NADA-style chart (1-series assets 8 including Contracts in Transit, Used Vehicle Inventory, Recon WIP, BHPH Notes Receivable, A/R Reserve Receivable, A/R Warranty Commission; 2-series liabilities 4 including A/P Trade, Floor Plan Payable, Sales Tax Payable, Customer Deposits; 3-series equity 2; 4-series revenue 4 including Vehicle Sales Retail/Wholesale, F&I Reserve Income, BHPH Interest Income; 5-series cost of sales 2 including Cost of Vehicle Sales and Recon Expense; 6-9-series expense 4). Migration RunPython seeds every existing Dealership at apply time. `seed_default_coa(dealership)` verb is idempotent for future dealership creation (no `pre_save` signal wiring — explicit call defers to M14+). New `services/accounting/` package: `default_coa.py` + `journal.py` + `__init__.py`. Three verbs: `post_journal_entry(dealership, description, lines, posted_at=None, posted_by_user=None)` `@transaction.atomic` — refuses empty (`EmptyJournalEntryError` 400), both-sided or both-zero or negative lines (`InvalidJournalLineError` 400), unbalanced entries (`UnbalancedJournalEntryError` 400), cross-tenant accounts (`CrossTenantGLAccountError` 404); `reverse_journal_entry(dealership, entry, reason, posted_at=None, posted_by_user=None)` `@transaction.atomic` — creates new JournalEntry with `reverses=entry` and lines swapped debits/credits; refuses cross-tenant (`CrossTenantJournalEntryError` 404) or empty-reason (`ImmutableJournalEntryError` 409). Reversal of reversal is legal (double reversal restores original economic effect); both reversals stay in audit trail; `get_journal_entry(pk, dealership)` — tenant-scoped read (fail-closed None). `JournalLineInput` frozen dataclass for typed line input. Three DRF admin endpoints under `admin/accounting/journal-entries/` (POST create + POST `<pk>/reverse` + GET `<pk>`). Gated on `IsSalesManagerOrOwnerAtActiveDealership`. Tenancy carrier 44 → 47 (+3). 44 focused tests. | Immutability enforced by absence-of-verb (§5.c Option A) — no `update_journal_entry`; a future maintainer would need to justify why the absence was wrong, not merely why an update is convenient. Balance invariant checked at service layer (`_validate_lines`) not DB — a raw `objects.create` bypass can produce unbalanced entries; production paths must go through the service verb. `MissingDefaultAccountError` signals broken invariant (default COA account absent/inactive for a tenant). Belt (model `clean()`) + suspenders (service verb) cross-tenant guards. |
+| M2 cost reconciliation detector (M13.2) | Additive `VehicleCost.posted_at` nullable DateTimeField + migration `0044_m132_vehicle_cost_posted_at`. Ninth Celery-beat task family at 10:00 project-time daily (next slot after M12.4 09:00; extends the 02:00-09:00 non-overlapping pattern by one hour). New `services/accounting/vehicle_cost.py` module: three verbs. `detect_unposted_costs(dealership)` pure query filtering `posted_at__isnull=True AND is_estimate=False`; `post_vehicle_cost_journal(dealership, vehicle_cost, posted_at=None)` `@transaction.atomic` sibling-service verb (per M12 §6 lesson 11 atomic sibling-crossing pattern); `post_all_unposted_costs_for_dealership(dealership, now=None)` orchestrator (per-row atomic — a failure on row N does not roll back rows 1..N-1). **Uniform GL mapping per §0.a M13.2 decision 2**: every eligible VehicleCost → DR `122000` Recon WIP + CR `200000` A/P Trade for positive amounts; sides swapped for negative-amount correction rows (DR A/P + CR Recon WIP with `abs(amount)` on both lines per §0.a M13.2 decision 5). Category-group-aware mapping (flooring → floor-plan accounts, admin → rent/ad, etc.) defers per fixed-vocab posture. New `services/accounting/tasks.py`: `post_vehicle_cost_journals_for_dealership` per-tenant task + `post_vehicle_cost_journals_for_all_tenants` orchestrator matching M11.5 / M12.3 / M12.4 shape. Beat entry `accounting-vehicle-cost-post-daily-10-00` in `dealer_kit/settings.py`. Estimates skipped per §0.a M13.2 decision 4 — flip to committed triggers next-run posting via still-NULL `posted_at`. Zero-amount rows rejected inside atomic block by M13.1 `InvalidJournalLineError` (no partial state). `MissingDefaultAccountError` catches broken-invariant cases (deactivated required account) and orchestrator logs + counts as `failed_count` without halting the batch. Idempotency via `posted_at__isnull=True AND is_estimate=False` filter — re-runs on same day produce zero writes per §0.a M13.2 decision 6. Tenancy carrier 47 (unchanged — additive extension only). Celery-beat task families 8 → 9. 26 focused tests. | **Sibling-service atomic crossing** — first cross-milestone service-package invocation in the codebase; the M12 §6 lesson 11 pattern held. Per-row atomic preserves progress across partial-failure runs (one bad row doesn't rewrite N-1 previous rows). Uniform mapping is MVP posture — category-specific mapping is easy to add later once operator evidence names the reporting need; adding it prematurely burns modeling capacity. Negative-amount correction rows exercise the sign-based swap (accrual accuracy preserved per VehicleCost §1.6 design note). |
+| Trial-balance snapshot (M13.3) | New `services/accounting/snapshot.py` module. Two frozen dataclasses per M12 §6 lesson 15: `TrialBalanceRow` (per-account: `account_code` + `account_name` + `account_type` + `debit_total` + `credit_total` + `natural_balance`) + `TrialBalanceSnapshot` (`dealership_id` + `dealership_slug` + `as_of` + tuple of rows + grand totals + `is_balanced` flag). `compute_trial_balance(dealership, as_of=None)` pure verb aggregates `JournalEntryLine` rows where parent `JournalEntry.posted_at <= as_of` (default `timezone.now()`), groups by account via single SELECT with GROUP BY (no N+1), computes per-account totals + grand totals. Natural-balance signs use fixed-set membership from `GL_NORMAL_BALANCE_DEBIT_TYPES = frozenset({asset, expense})` — debit-normal returns `debit_total - credit_total`; credit-normal returns `credit_total - debit_total`. **Pure recompute per §0.a M13.3 decision 2** — no `TrialBalanceSnapshot` entity at M13.3; materialization defers to M14+ close-workflow. **Zero-portfolio semantics per §0.a M13.3 decision 5**: fresh dealership post-M13.1 seed returns empty balanced snapshot (`rows=()`, totals `0.00`, `is_balanced=True`) — not 404. GET endpoint `admin-trial-balance` at `admin/accounting/trial-balance/` with optional `?as_of=<ISO8601>` query. Reuses `IsSalesManagerOrOwnerAtActiveDealership` per §0.a M13.3 decision 3 (zero-drift permission-class posture for a fifth consecutive milestone). No migration. Tenancy carrier 47 (unchanged). DRF admin surface 101 → 102. 20 focused tests. | Frozen dataclass output with `tuple` on collection field reinforces immutability (callers project into serialized shape). Single SELECT GROUP BY performance posture — no N+1. `is_balanced=True` is an invariant, not a runtime discovery — every posting through `post_journal_entry` is balanced by the M13.1 guard, so `False` in production signals data-integrity break. Locked by `test_is_balanced_true_for_all_valid_postings`. |
+| Test baseline | +90 backend (M12 close **4,150** → M13 close **4,240**). Zero regressions. Migrations `0043` (M13.1) + `0044` (M13.2) shipped; M13.3 shipped no schema; M13.4 shipped no schema. `tsc --noEmit` + `vite build` clean at every M13 close. Frontend Vitest baseline **78 pass** (unchanged — no frontend at M13 per §5.f Option C). | Distribution: M13.1 +44, M13.2 +26, M13.3 +20, M13.4 +0 (docs-only). Every M13 tenant-carrier / permission-class / endpoint count test uses `>=N` (growth-only posture). Every M13 vocab test uses exact-set equality (GL account type 5). |
+
+**What is NOT shipped in Milestone
+13** (deferred per
+`MILESTONE_13_RETROSPECTIVE.md` §3):
+
+- **Category-group-aware GL mapping**
+  — M13.2 uniform DR Recon WIP / CR
+  A/P Trade for every VehicleCost.
+  Flooring / admin / photography-
+  specific account routing defers.
+- **Trial-balance snapshot
+  materialization** — M13.3 is pure
+  recompute; `TrialBalanceSnapshot`
+  entity + M14+ monthly-close verb
+  is the natural substrate for
+  period-over-period comparisons.
+- **Per-dealer COA overrides** —
+  M13.1 ships platform-default;
+  operator-configured overrides
+  defer to M14+ per §5.b Option A.
+  `is_active` field supports soft-
+  hide as partial workaround.
+- **Operator UI for M13 substrate**
+  — journal-entry browser, trial-
+  balance render, reversal-with-
+  reason dialog. Admin endpoints
+  ready; React work defers per
+  §5.f Option C.
+- **`post_save` signal auto-
+  seeding new dealerships** —
+  `seed_default_coa` is idempotent
+  and callable but not signal-
+  wired.
+- **M9 sale-booking GL post** —
+  deferred per §5.a Option A. §5.d
+  Option C hybrid locks sync GL
+  post inside `record_sale` as
+  target shape.
+- **M10 F&I chargeback GL
+  reversal** — substrate ready;
+  slice defers.
+- **M12 BHPH payment GL post** —
+  substrate ready; per §5.d Option
+  C the trigger shape is a detector.
+- **M4 vendor invoice → A/P
+  reconciliation** — deferred.
+- **Title-arrival tracking** —
+  deferred.
+- **Floor-plan reconciliation vs
+  lender statements** — deferred.
+  Requires vendor statement
+  ingestion.
+- **Bank reconciliation surface**
+  — deferred.
+- **Contracts-in-transit
+  schedule** — deferred.
+- **Monthly close workflow +
+  adjusting entries + P&L /
+  balance sheet derivatives** —
+  deferred. Trial balance is the
+  raw substrate; higher-level
+  reports layer at M14+.
+- **CSV / spreadsheet export for
+  trial-balance snapshots** —
+  JSON payload only at MVP.
+- **Period-comparison verbs**
+  (delta between two `as_of`
+  snapshots) — defers alongside
+  M14+ close-workflow slice.
+- **Payroll / W-2 / 1099** —
+  external-service scope boundary.
+- **GAAP-compliant audited
+  financial reporting** — out of
+  scope for platform v1.
+- **Direct DMS integration** —
+  belongs to a future vendor-
+  integration milestone.
+
+**What operators experienced at
+Milestone 13 close:**
+
+- **No new frontend surface** per
+  §5.f Option C. Every M13 change is
+  backend-only. Existing operator
+  routes (17) unchanged; existing
+  frontend build clean.
+- **Automatic M2 cost posting
+  nightly at 10:00** — every
+  unposted, non-estimate VehicleCost
+  produces a matching GL journal
+  entry via the M13.2 detector.
+  Positive amounts DR Recon WIP /
+  CR A/P Trade; correction rows
+  swap sides. `posted_at` populated
+  on success; `posted_at IS NULL`
+  means "still to post" (either
+  never seen or previous run
+  failed).
+- **Three admin endpoints for
+  journal-entry management** —
+  operators can POST balanced
+  entries, POST reversals with
+  audit reason, GET individual
+  entries with all lines. Every
+  operation is atomic and
+  tenant-scoped.
+- **One admin endpoint for
+  trial-balance snapshot** —
+  operators can GET the current
+  or historical trial balance
+  showing per-account totals +
+  grand totals + is-balanced flag.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

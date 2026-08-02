@@ -1318,7 +1318,43 @@ the dealer is the lender).
 
 ---
 
-### Milestone 13 — Accounting reconciliation core
+### Milestone 13 — Accounting reconciliation core (v1) — SHIPPED at SESSION_132
+
+*Full delivery record: `docs/roadmap/MILESTONE_13_PLANNING.md`
+§7 (annotated SHIPPED per increment; two §0.a change-log
+amendments recorded — M13.0 open plus per-session amendments at
+M13.2 / M13.3 open) and
+`docs/roadmap/MILESTONE_13_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7n. Backend test
+baseline delta: 4,150 → 4,240 (+90 tests, zero regressions).
+Frontend Vitest baseline: 78 (unchanged — no frontend at M13
+per §5.f Option C). Sessions 129 → 132. Three new entities
+(GLAccount, JournalEntry, JournalEntryLine) plus one additive
+extension (VehicleCost gains `posted_at` at M13.2 via migration
+`0044`). One new services package (`accounting`) with four
+modules (`default_coa` + `journal` + `vehicle_cost` +
+`snapshot`). One new Celery-beat task family (M13.2 vehicle-
+cost posting at 10:00). Zero new post-LLM scrub stages (M13
+substrate is entirely deterministic double-entry math; no LLM
+path introduced). Zero new frontend routes (backend-only per
+§5.f Option C). Migrations `0043`–`0044`. Tenancy carrier 44 →
+47 (+3). DRF admin surface 98 → 102 (+4 endpoints: three
+journal-entry + one trial-balance). Frontend operator routes
+17 (unchanged). Permission classes unchanged at 8 across three
+M13 implementation increments — extends zero-drift posture to
+five consecutive milestones (M10 + M11 + M12 + M13).
+**Milestone deliberately incremental** per this section's
+scope-boundary note: M13 ships substrate + Q1 (M2 cost
+reconciliation) + trial-balance aggregator; remaining eight
+business questions (M9 sale-booking GL post, M10 F&I
+chargeback GL reversal, M12 BHPH payment GL post, M4 vendor
+invoice → A/P reconciliation, title-arrival tracking, floor-
+plan reconciliation, contracts-in-transit, monthly close +
+adjusting entries) layer onto M14+ or into ongoing
+operational milestones as those surfaces ship. **Six §5
+decisions confirmed as-recommended at M13.0 open** — streak
+extends to 47 planning-time as-recommended M5.1 → M13.0 across
+four consecutive milestones (M10 + M11 + M12 + M13).*
 
 **Business objective.** Establish the ledger truth layer.
 Every operational event on the platform → matching accounting

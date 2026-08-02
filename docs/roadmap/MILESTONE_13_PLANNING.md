@@ -1,11 +1,13 @@
 ---
 title: "Milestone 13 — Implementation-Planning Pass"
-status: draft
+status: shipped
 type: planning-artifact
 generated: 2026-08-02
 generated_at_session: SESSION_128 (post-M12-closeout)
 milestone: 13
-milestone_name: "Accounting reconciliation core"
+milestone_name: "Accounting reconciliation core (v1)"
+shipped_at_session: SESSION_132
+retrospective: docs/roadmap/MILESTONE_13_RETROSPECTIVE.md
 sources:
   - docs/PROJECT_RULES.md
   - docs/DOC_GOVERNANCE.md
