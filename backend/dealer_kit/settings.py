@@ -504,6 +504,30 @@ CELERY_BEAT_SCHEDULE: dict = {
         # No positional args; the orchestrator takes no kwargs.
         "kwargs": {},
     },
+    "accounting-bhph-payment-post-daily-11-00": {
+        "task": (
+            "dealer_ai.services.accounting.tasks"
+            ".post_bhph_payment_journals_for_all_tenants"
+        ),
+        # 11:00 project-time daily — one hour after the M13.2 cost
+        # detector. Continues the non-overlapping window pattern
+        # (M7.2 02:00, M7.3 03:00, M7.4 04:00, M7.5 05:00, M11.4
+        # 06:00, M11.5 07:00, M12.3 08:00, M12.4 09:00, M13.2
+        # 10:00, M16.1 11:00). Per §5.b Option A confirmed at
+        # SESSION_142 M16.0 open. State-transitioning per M11 §6
+        # lesson 17 — a successful GL post populates
+        # BhphPayment.posted_at as derived state (§5.d Option A
+        # denormalize-at-write pattern). Uniform DR 100000 Cash on
+        # Hand per §5.c Option A (method-aware routing defers to a
+        # future deposit-workflow milestone). Line composition per
+        # §5.e Option A: 2- or 3-line entry depending on whether
+        # applied_to_principal / applied_to_interest are zero.
+        # Idempotency via posted_at__isnull=True filter per §5.d
+        # Option A (matches M13.2 template verbatim).
+        "schedule": crontab(hour=11, minute=0),
+        # No positional args; the orchestrator takes no kwargs.
+        "kwargs": {},
+    },
 }
 
 # ---- Milestone 12 · Increment 4 (SESSION_124) — broken-PTP grace period.

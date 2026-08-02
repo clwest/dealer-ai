@@ -35,6 +35,13 @@ Domain-error → HTTP mapping (consumed by ``views_accounting.py``):
 
 from __future__ import annotations
 
+from .bhph_payment import (
+    BHPH_INTEREST_INCOME_ACCOUNT_CODE,
+    UnexpectedBhphPaymentFeesError,
+    detect_unposted_bhph_payments,
+    post_all_unposted_bhph_payments_for_dealership,
+    post_bhph_payment_journal,
+)
 from .default_coa import DEFAULT_COA, seed_default_coa
 from .journal import (
     CrossTenantGLAccountError,
@@ -76,6 +83,7 @@ from .vehicle_cost import (
 
 __all__ = [
     "AP_TRADE_ACCOUNT_CODE",
+    "BHPH_INTEREST_INCOME_ACCOUNT_CODE",
     "BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE",
     "CASH_ACCOUNT_CODE",
     "CONTRACTS_IN_TRANSIT_ACCOUNT_CODE",
@@ -93,14 +101,18 @@ __all__ = [
     "TrialBalanceRow",
     "TrialBalanceSnapshot",
     "UnbalancedJournalEntryError",
+    "UnexpectedBhphPaymentFeesError",
     "UnmappedFinanceTypeError",
     "VEHICLE_SALES_RETAIL_ACCOUNT_CODE",
     "compute_trial_balance",
     "detect_cost_posting_failures",
+    "detect_unposted_bhph_payments",
     "detect_unposted_costs",
     "get_journal_entry",
     "list_journal_entries",
+    "post_all_unposted_bhph_payments_for_dealership",
     "post_all_unposted_costs_for_dealership",
+    "post_bhph_payment_journal",
     "post_journal_entry",
     "post_sale_booking_journal",
     "post_vehicle_cost_journal",

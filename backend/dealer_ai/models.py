@@ -6665,6 +6665,13 @@ class BhphPayment(models.Model):
     applied_to_fees = models.DecimalField(max_digits=8, decimal_places=2)
     applied_to_interest = models.DecimalField(max_digits=8, decimal_places=2)
     applied_to_principal = models.DecimalField(max_digits=8, decimal_places=2)
+    # Milestone 16 · Increment 1 (SESSION_143) — GL-post denormalization.
+    # Populated by ``services.accounting.post_bhph_payment_journal`` when
+    # the M16.1 daily detector (11:00 project-time) posts this row to the
+    # GL. ``posted_at__isnull=True`` is the detector's idempotency filter
+    # per §5.d Option A (mirrors :class:`VehicleCost.posted_at` M13.2
+    # template verbatim).
+    posted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

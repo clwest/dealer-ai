@@ -229,6 +229,77 @@ and per-increment as §0.a amendments.*
   + M16). All six §5 decisions at
   M16.0 open confirmed as-recommended.
 
+**SESSION_143 M16.1 close (2026-08-02):**
+
+*Five implementation-time micro-
+decisions. All as-recommended per
+M10 §9 (do not count against
+planning-time streak).*
+
+1. **`db_index` dropped on
+   `BhphPayment.posted_at`** —
+   matches M13.2's
+   `VehicleCost.posted_at` shape
+   verbatim; existing
+   `dealership_id` FK index
+   scopes the detector query at
+   expected daily volumes and
+   the write-side index cost is
+   not justified by evidence.
+2. **`_lookup_required_account`
+   duplicated verbatim** in the
+   BHPH-payment module — mirrors
+   M15.1 §0.a decision 3 posture
+   (evidence gate for a shared-
+   helper refactor not tripped).
+3. **`CrossTenantGLAccountError`
+   reused for cross-tenant
+   BhphPayment check** — matches
+   M13.2 + M15.1 cross-tenant
+   posture; same fail-closed 404.
+4. **`UnexpectedBhphPaymentFeesError`
+   as `RuntimeError` subclass**
+   — broken-invariant signal, not
+   user-input error. Matches
+   `MissingDefaultAccountError`
+   + `UnmappedFinanceTypeError`
+   posture; fires when a future
+   BhphFee milestone populates
+   `applied_to_fees` without
+   extending this verb first.
+5. **Local account-code
+   constants** in the BHPH-
+   payment module — duplicates
+   `CASH_ACCOUNT_CODE` +
+   `BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE`
+   from `sale_booking.py`
+   (accepted per M15.1 posture);
+   declares new
+   `BHPH_INTEREST_INCOME_ACCOUNT_CODE`.
+   `__init__.py` re-exports the
+   new constant only (avoids
+   name collision with
+   `sale_booking`'s existing
+   exports).
+
+**M16.1 delta:** 4,296 → **4,326
+pass** (+30 tests, 0 regressions).
+Frontend Vitest: 122 (unchanged).
+Migrations 0043-0044 → **0043-
+0045** (+1). Tenancy carriers 47
+(unchanged — BhphPayment gained a
+column, not a new model). DRF
+admin surface 104 (unchanged).
+Frontend operator routes 20
+(unchanged). Permission classes 8
+(unchanged — zero-drift streak
+extends to **eight consecutive
+milestones** now: M10 + M11 + M12
++ M13 + M14 + M15 + M16). Celery-
+beat task families 9 → **10**
+(new bhph-payment daily entry at
+11:00).
+
 ## 1. Business questions this milestone answers
 
 Four operator-workflow questions,
@@ -984,8 +1055,14 @@ path work lands here.
   payment_posted_at.py` adding
   `BhphPayment.posted_at
   DateTimeField(null=True,
-  blank=True, db_index=True)`
-  per §5.d Option A.
+  blank=True)` per §5.d Option A.
+  No `db_index` — matches M13.2's
+  `VehicleCost.posted_at` shape
+  verbatim; the existing
+  `dealership_id` FK index scopes
+  the detector query and expected
+  daily volume doesn't justify the
+  write-side index cost.
 - New `services/accounting/bhph_
   payment.py` module mirroring
   `vehicle_cost.py` shape:
