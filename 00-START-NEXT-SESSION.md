@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_144
+last_session_shipped: SESSION_145
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -18,177 +18,117 @@ milestone_13_status: shipped
 milestone_14_status: shipped
 milestone_15_status: shipped
 milestone_16_status: shipped
-milestone_17_status: planning
-next_session: SESSION_145
+milestone_17_status: in-progress
+next_session: SESSION_146
 next_milestone: 17
-next_milestone_name: "TBD — user names target at SESSION_145 open"
-next_increment: 0
-next_increment_name: "M17.0 — Planning refinement + target selection"
+next_milestone_name: "Trial-balance materialization + as_of picker (monthly-close v1)"
+next_increment: 1
+next_increment_name: "M17.1 — Backend: TrialBalanceSnapshot entity + freeze verb + endpoints"
 ---
 
-# Next session — SESSION_145 · Milestone 17 · Increment 0 (M17.0 — Planning refinement + target selection)
+# Next session — SESSION_146 · Milestone 17 · Increment 1 (M17.1 — Backend: TrialBalanceSnapshot entity + freeze verb + endpoints)
 
-> **SESSION_144 shipped M16.2 —**
-> six close-out docs (retrospective +
-> capability matrix §7q + roadmap
-> §Milestone 16 SHIPPED entry added +
-> planning frontmatter flip +
-> session-start refresh + M17
-> planning skeleton) + one coordinated
-> commit. **Milestone 16 — M12 BHPH
-> payment GL post — SHIPPED.**
->
-> **M16 close totals:** one new
-> module in `services/accounting/`
-> (`bhph_payment.py`) with three
-> verbs. Extended `services/
-> accounting/tasks.py` + `__init__.py`
-> + `settings.py` beat schedule. One
-> additive migration
-> (`0045_m161_bhph_payment_posted_at`
-> — one AddField). One model
-> field addition. 30 focused tests.
-> Zero new endpoints. Zero permission-
-> class drift (eight consecutive
-> milestones now). Zero frontend
-> changes. **Six planning-time §5
-> decisions confirmed as-recommended
-> at M16.0 open** — streak extends
-> to **64 planning-time as-
-> recommended M5.1 → M16.0** across
-> **seven consecutive milestones now**
+> **SESSION_145 shipped M17.0 —**
+> full memo expansion for
+> `MILESTONE_17_PLANNING.md` (draft
+> skeleton → active memo, 4-
+> increment sequencing, six §5
+> decisions resolved). **§5.a
+> Option E confirmed** — Trial-
+> balance materialization + `as_of`
+> picker (monthly-close v1),
+> bundled per M16.2-close
+> directive. **§5.b–§5.f all
+> confirmed as-recommended.**
+> Streak extends to **70 planning-
+> time as-recommended M5.1 →
+> M17.0** across **eight
+> consecutive milestones now**
 > (M10 + M11 + M12 + M13 + M14 +
-> M15 + M16). Five §0.a
-> implementation-time micro-decisions
-> at M16.1 also all as-recommended
-> (do not count against streak per
+> M15 + M16 + M17). Three §0.a
+> M17.1 micro-decision
+> recommendations surfaced for
+> resolution at M17.1 open (do
+> not count against streak per
 > M10 §9).
 >
-> **Backend baseline: 4,326 pass, 1
-> skipped, 0 fail** (+30 tests
-> across M16, 0 regressions).
+> **Backend baseline: 4,326 pass,
+> 1 skipped, 0 fail** (unchanged
+> — planning-only session).
 > **Frontend Vitest baseline: 122
-> pass** (unchanged — no frontend at
-> M16). Migrations `0043`–`0045`
-> (+1 at M16.1). Tenancy carriers
-> 47 (unchanged). DRF admin surface
-> 104 (unchanged). Frontend operator
-> routes 20 (unchanged). Celery-beat
-> task families 9 → **10** (new
-> bhph-payment daily entry at 11:00).
+> pass** (unchanged). Migrations
+> `0043`–`0045` (unchanged).
+> Tenancy carriers 47 (unchanged).
+> DRF admin surface 104
+> (unchanged). Frontend operator
+> routes 20 (unchanged).
+> Permission classes 8
+> (unchanged — zero-drift streak
+> holds at eight consecutive
+> milestones). Celery-beat task
+> families 10 (unchanged — M17
+> does not introduce a beat
+> entry per §5.c Option A sync-
+> sibling shape).
 >
-> **SESSION_145 opens M17.0 —
-> planning refinement + target
-> selection.** Per
-> `MILESTONE_17_PLANNING.md` (draft
-> planning skeleton written at M16.2
-> close per standing user directive).
-> **§5.a is the load-bearing
-> decision** — user names the M17
-> target at session open, drawing
-> from the M16 retrospective §8
-> unblocked-work list + the still-
-> valid M15 §8 items.
+> **SESSION_146 opens M17.1 —
+> backend entity + freeze verb
+> + three endpoints.** Per
+> `MILESTONE_17_PLANNING.md` §7
+> M17.1. Single backend
+> increment covering all M17
+> write-path + read-path work.
 
-## First thing SESSION_145 must do
+## First thing SESSION_146 must do
 
-### 1. Name the M17 target milestone
+### 1. Confirm the three §0.a M17.1 micro-decision recommendations
 
-`IMPLEMENTATION_ROADMAP.md`
-§Milestone sequence ends at
-Milestone 16. **M17 target is not
-predetermined** — user names it at
-session open based on operational
-evidence + business priority.
+Recorded at M17.0 close:
 
-Candidate targets drawn from
-`MILESTONE_16_RETROSPECTIVE.md` §8
-+ `MILESTONE_15_RETROSPECTIVE.md`
-§8 — surfaced without recommendation
-because target selection is a
-business-priority call, not a
-technical recommendation:
-
-- **Option A** — M10 F&I chargeback
-  GL reversal. Both patterns proven
-  now (M15 sync-sibling + M16
-  detector). Chargeback is likely
-  sync-sibling per M15 pattern.
-  `reverse_journal_entry` ready.
-- **Option B** — BhphFee entity +
-  late-fee GL posting. M16.1's
-  `UnexpectedBhphPaymentFeesError`
-  guard makes the contract explicit;
-  BhphFee milestone extends
-  `post_bhph_payment_journal` with
-  a fee-income line + removes the
-  guard.
-- **Option C** — Deposit / bank
-  reconciliation workflow. M16's
-  phantom 100000 Cash on Hand
-  balance surfaces the operator
-  need. Method-aware fund-flow
-  routing is the substrate half.
-- **Option D** — NSF / payment-
-  reversal workflow. ACH failures
-  + returned payments need
-  operational contract + GL wiring
-  via `reverse_journal_entry`.
-- **Option E** — Trial-balance
-  materialization + `as_of`
-  picker (monthly-close v1).
-  **Bundled at M16.2 close** —
-  entity + picker ship together
-  as the smallest complete
-  operator-usable slice of
-  monthly close. M16's BHPH
-  activity now makes period-
-  over-period reports meaningful.
-  Likely 4-5 increments given
-  mixed backend+frontend scope.
-- **Option F** — Category-group-
-  aware GL mapping for the M13.2
-  detector. Miscoding evidence
-  now accumulates across three
-  daily-posting streams.
-- **Option G** — M14 UX polish
-  (JE filters + sidebar nav;
-  `as_of` picker moved to E per
-  M16.2-close bundling). Operator
-  evidence accumulates faster
-  post-M16.
-- **Option H** — Cost-of-sale
-  variance handling. Post-sale
-  VehicleCost phantom balances
-  more visible now.
-- **Option I** — Sale-reversal
-  workflow. Operational contract
-  needed.
-- **Option J** — BHPH interest
-  accrual detector (accrual-
-  basis). Cash-basis at M16;
-  accrual for month-end close.
-- **Option K** — Non-accounting
-  target user names at open
-  based on operational evidence
-  not visible in M15 / M16
-  retrospectives.
-
-Once the target is confirmed,
-expand `MILESTONE_17_PLANNING.md`
-§1 (business questions) + §5
-(load-bearing decisions) + §7
-(sequencing) into a full memo.
+1. **Naming collision resolution.**
+   The new `TrialBalanceSnapshot`
+   Django model collides with the
+   existing `TrialBalanceSnapshot`
+   frozen dataclass in
+   `services/accounting/snapshot.py`.
+   **Recommendation: rename the
+   dataclass to
+   `TrialBalanceComputation`** +
+   the child dataclass
+   `TrialBalanceRow` →
+   `TrialBalanceComputationRow`
+   in the same M17.1 commit that
+   introduces the model. Update
+   every call site
+   (`views_accounting.py`,
+   `tests/test_m133_trial_balance_*`,
+   `services/accounting/__init__.py`
+   `__all__`). Rationale: the
+   durable persisted entity
+   earns the "snapshot" name;
+   the transient computation
+   gets clearly labeled as such.
+2. **Frontend picker default
+   value** (for M17.2 sequencing
+   reference).
+   **Recommendation: today**
+   — matches current live-view
+   behavior; least surprising.
+3. **Snapshot detail endpoint
+   URL shape.**
+   **Recommendation: `/admin/
+   accounting/trial-balance/
+   snapshots/<int:pk>/`** —
+   pk is the canonical
+   identifier; `as_of` is a
+   queryable attribute.
 
 ### 2. Verify starting state
 
-- `git status` — clean (M16.2
-  commit landed at SESSION_144
-  close; user authorization on
-  push).
+- `git status` — clean.
 - `git log --oneline -5` — top
-  should be a coordinated M16.2
-  docs commit.
+  should be the M17.0 planning
+  commit.
 - `python3 manage.py test dealer_ai`
   → **4,326 pass, 1 skipped, 0
   fail**.
@@ -196,84 +136,174 @@ expand `MILESTONE_17_PLANNING.md`
   **122 pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
-  --check --dry-run` → "No changes
-  detected."
+  --check --dry-run` → "No
+  changes detected."
 - `cd frontend && npx tsc --noEmit`
   clean.
 - `redis-cli ping` → `PONG`.
 
-## What M17.0 delivers
+## What M17.1 delivers
 
-Per `MILESTONE_17_PLANNING.md` §5
-M17.0:
+Per `MILESTONE_17_PLANNING.md` §7
+M17.1:
 
-- Full expansion of the planning
-  skeleton written at M16.2.
-- User names the M17 target
-  milestone (§5.a).
-- Additional §5 decisions surface
-  once target is confirmed (§5.b-
-  §5.f expected — historical §5
-  counts have been 6 for M10 /
-  M11 / M12 / M13 / M14 / M15 /
-  M16).
-- §7 sequencing lands after §5
-  decisions are locked.
-- §0.a change log records the
-  target selection + all §5
-  confirmations.
+### Backend
 
-**No code at M17.0.** Planning-
-only session. Backend baseline
-stays at 4,326 pass. Frontend
-Vitest stays at 122.
+- **Migration `0046_m171_trial_
+  balance_snapshot.py`** adding
+  two new models:
+  - `TrialBalanceSnapshot`
+    (header): `dealership` FK,
+    `as_of` DateTimeField,
+    `total_debits` /
+    `total_credits`
+    DecimalField(14, 2),
+    `is_balanced` BooleanField,
+    `created_by` FK to User
+    (nullable), `created_at`
+    auto_now_add.
+    `Meta.unique_together =
+    (('dealership', 'as_of'),)`
+    per §5.d Option A.
+  - `TrialBalanceSnapshotRow`
+    (child): `snapshot` FK
+    (CASCADE), `account_code`,
+    `account_name`,
+    `account_type` (using
+    `GL_ACCOUNT_TYPE_*` vocab),
+    `debit_total`,
+    `credit_total`,
+    `natural_balance`.
+    `Meta.unique_together =
+    (('snapshot',
+    'account_code'),)` +
+    `Meta.ordering =
+    ('account_code',)`.
+- **Rename existing
+  `TrialBalanceSnapshot` frozen
+  dataclass** in
+  `snapshot.py` →
+  `TrialBalanceComputation`
+  (per §0.a M17.1 decision 1).
+  Rename `TrialBalanceRow` →
+  `TrialBalanceComputationRow`.
+  Update every call site.
+- **New
+  `services/accounting/trial_
+  balance_close.py` module:**
+  - `freeze_trial_balance(*,
+    dealership, as_of, actor)
+    -> TrialBalanceSnapshot`
+    — atomic sync-sibling
+    verb per §5.c Option A.
+    Calls
+    `compute_trial_balance`;
+    materializes header + rows
+    in one transaction. Raises
+    `DuplicateTrialBalanceSnapshotError`
+    (409) or
+    `CrossTenantGLAccountError`
+    (404).
+  - `list_trial_balance_snapshots(*,
+    dealership, page=1,
+    page_size=25) -> dict` —
+    paginated per M14.1
+    pattern.
+  - `get_trial_balance_snapshot(*,
+    dealership, snapshot_id)
+    -> TrialBalanceSnapshot |
+    None` — tenant-scoped
+    retrieve.
+- **New
+  `DuplicateTrialBalanceSnapshotError`**
+  domain exception → 409
+  mapping.
+- **Extend `__init__.py`
+  `__all__`** with new verbs,
+  models, error class.
+- **Three new DRF admin
+  endpoints in
+  `views_accounting.py`:**
+  - `POST /admin/accounting/
+    trial-balance/snapshots/`
+    — freeze. Body: `{
+    "as_of": "<ISO8601>" }`.
+    201 with projection.
+  - `GET /admin/accounting/
+    trial-balance/snapshots/`
+    — paginated list.
+  - `GET /admin/accounting/
+    trial-balance/snapshots/
+    <int:pk>/` — detail
+    (per §0.a M17.1 decision
+    3).
+  - All reuse
+    `IsSalesManagerOrOwnerAtActiveDealership`
+    (zero-drift streak
+    extends to nine
+    consecutive milestones).
 
-## What SESSION_145 should do
+### Tests
 
-### Recommended step sequence
+**~30-40 focused tests** in new
+`tests/test_m171_trial_balance_
+materialization.py` per §7 M17.1:
 
-1. **Confirm the M17 target with
-   the user** (§1 above).
+- Freeze happy path (header +
+  child rows).
+- Zero-portfolio freeze (empty
+  rows, balanced totals, valid
+  record).
+- `unique_together` violation
+  raises
+  `DuplicateTrialBalanceSnapshotError`.
+- Cross-tenant raises
+  `CrossTenantGLAccountError`.
+- Atomic: partial write
+  impossible.
+- Frozen rows snapshot the
+  account name (COA rename
+  post-freeze doesn't affect
+  the frozen row).
+- Backdated entry does NOT
+  change frozen rows (asserts
+  §5.f Option A).
+- List pagination + tenancy
+  isolation.
+- Detail retrieve + 404 on
+  cross-tenant.
+- POST endpoint: 201, 409, 400,
+  403.
+- GET list + detail endpoint
+  contracts.
+- Tenancy carrier count 47 →
+  49 (`>=`).
+- Permission class count
+  unchanged at 8 (vocab-set
+  equality).
+- Endpoint count 104 → 107
+  (`>=`).
 
-2. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_17_PLANNING.md`
-     (this session's expansion
-     target).
-   - `docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`
-     §6 (six lessons carry into
-     M17) + §8 (unblocked work).
-   - `docs/roadmap/MILESTONE_15_RETROSPECTIVE.md`
-     §8 (M15 unblocked work —
-     still mostly valid after
-     M16).
-   - `docs/handoffs/SESSION_144_m16_close.md`
-     (previous session).
-   - `docs/CAPABILITY_MATRIX.md`
-     §7q (M16 shipped surface).
-   - Target-specific research doc
-     (per the confirmed §5.a
-     option).
+### Non-goals for M17.1
 
-3. **Verify starting state** (§2
-   above).
+- ❌ No frontend changes.
+- ❌ No Celery-beat entries
+  (§5.c Option A sync-sibling).
+- ❌ No new account codes.
+- ❌ No new post-LLM scrub
+  stages.
 
-4. **Draft §1 (business
-   questions) + §5 (load-bearing
-   decisions) + §7 (sequencing)**
-   in `MILESTONE_17_PLANNING.md`.
+## Backend baseline target
 
-5. **Ship handoff at
-   `docs/handoffs/SESSION_145_m17_inc0_planning.md`.**
+**4,326 → ~4,356-4,366 pass**
+(+30-40 tests, 0 regressions).
+Frontend Vitest: 122 (unchanged
+— M17.2 delta).
 
-6. **Overwrite
-   `00-START-NEXT-SESSION.md`**
-   with M17.1 priority (first
-   implementation increment for
-   the confirmed target).
+## Explicit non-goals for SESSION_146
 
-## Explicit non-goals for SESSION_145
-
-- ❌ Do NOT ship M17.1+ code.
+- ❌ Do NOT ship M17.2 frontend
+  code.
 - ❌ Do NOT modify M1-M16
   business logic.
 - ❌ Do NOT force-push or amend
@@ -281,23 +311,14 @@ Vitest stays at 122.
 
 ## NEXT TASK
 
-Start SESSION_145 with (a) naming
-the M17 target with the user
-(candidates in §1 above; user
-picks based on operational
-evidence + business priority),
-(b) the read-first list, (c)
-starting-state verification, then
-(d) expanding
-`MILESTONE_17_PLANNING.md` §1 +
-§5 + §7 into a full memo. Ship
-the M17.0 handoff.
-
-Backend baseline at SESSION_145
-close: **4,326 pass** (unchanged
-— planning-only). Frontend
-baseline: **122 pass**
-(unchanged).
+Start SESSION_146 with (a)
+confirming the three §0.a M17.1
+micro-decision recommendations,
+(b) starting-state verification,
+(c) building migration + models
++ verbs + endpoints + tests
+per §7 M17.1. Ship the M17.1
+handoff.
 
 ---
 
@@ -308,21 +329,21 @@ baseline: **122 pass**
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_17_PLANNING.md`
+   (active memo)
 6. `docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_144_m16_close.md`
-   (this session's close)
-8. `docs/handoffs/SESSION_143_m16_inc1_backend.md`
+7. `docs/roadmap/MILESTONE_15_RETROSPECTIVE.md`
+   §6 (M15.1 sync-sibling
+   template that M17.1 mirrors)
+8. `docs/handoffs/SESSION_145_m17_inc0_planning.md`
+   (this session's handoff)
 9. `docs/CAPABILITY_MATRIX.md` §7q
-10. Target-specific research
-    (per §5.a confirmed at
-    SESSION_145 open).
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_144 — M16 SHIPPED)
+## Operational state (post-SESSION_145 — M17.0 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
@@ -340,55 +361,66 @@ research + code are facts.
   `django-celery-beat` 2.8.1
   DatabaseScheduler. **10
   scheduled task families
-  registered** (M16.1 added the
-  11:00 BHPH-payment entry;
-  next open slot: 12:00 for a
-  future M17+ detector if
-  picked).
+  registered** (unchanged at
+  M17.0 — no beat entry per
+  §5.c Option A). Next open
+  slot for a future detector
+  is 12:00.
 - **Milestones shipped:** M1 →
-  **M16** (SESSION_144 close).
-  M17 planning drafted.
+  M16 (SESSION_144 close). M17
+  planning shipped at
+  SESSION_145 M17.0.
 - **DRF admin surface:** **104**
-  endpoints.
+  endpoints (three new POST/GET
+  land at M17.1 → 107).
 - **Frontend operator routes:**
-  **20**.
+  **20** (unchanged at M17 —
+  M14.2 page extends in place).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** complete
   `services/f_and_i/` (M10) +
   five M11 packages + seven M12
-  packages + **`services/
-  accounting/` (six modules:
-  `default_coa.py` + `journal.py`
-  + `snapshot.py` + `vehicle_
-  cost.py` + `sale_booking.py`
-  + `bhph_payment.py`)**.
+  packages + `services/
+  accounting/` (six modules
+  today: `default_coa.py` +
+  `journal.py` + `snapshot.py`
+  + `vehicle_cost.py` +
+  `sale_booking.py` +
+  `bhph_payment.py`; **seventh
+  module `trial_balance_close.py`
+  lands at M17.1**).
 - **Frontend accounting
   surface:** `frontend/src/lib/
   accountingApi.ts` with 4
   fetchers + 1 mutator + three
-  page components (unchanged at
-  M16 — backend-only per §5.f
-  Option A).
+  page components. **Extended
+  at M17.2** with
+  `freezeTrialBalance` +
+  `listTrialBalanceSnapshots` +
+  `fetchTrialBalanceSnapshot`
+  + new types +
+  `TrialBalanceDatePicker`
+  component.
 - **Tenancy carriers:** **47**
-  (unchanged at M16).
+  (unchanged at M17.0 — moves
+  to 49 at M17.1).
 - **Permission classes:** **8**
-  (unchanged — zero-drift
-  streak extends to **eight
-  consecutive milestones** now:
-  M10 + M11 + M12 + M13 + M14
-  + M15 + M16).
+  (unchanged — zero-drift streak
+  extends to **eight consecutive
+  milestones** now; ninth after
+  M17.1 as no new class ships).
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17 scrub
-  stages (unchanged — M16 has
+  stages (unchanged — M17 has
   no LLM path).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 17 next:** M17.0
-  planning refinement + target
-  selection. User names target
-  at session open from the M16
-  §8 unblocked-work list. M17.1
-  implementation deferred to
-  post-planning session.
+- **Milestone 17 status:** M17.0
+  planning SHIPPED (SESSION_145).
+  M17.1 backend implementation
+  next (SESSION_146). M17.2
+  frontend picker + snapshot
+  history at SESSION_147. M17.3
+  close-out at SESSION_148.
