@@ -402,16 +402,16 @@ class OutboundEgressScannerTests(TestCase):
 class CreateDemoStoreTests(TestCase):
     def test_create_fails_when_archetype_still_a_stub(self) -> None:
         # At M18.1 all three archetypes were stubs; M18.2 shipped
-        # retail_subprime; M18.3 + M18.4 ship floor_planned + bhph.
-        # Until then, those two archetypes still raise
-        # NotImplementedError. The atomic ``create_demo_store``
-        # wraps the Dealership.create + the builder.build in one
-        # transaction, so a stub raising NotImplementedError rolls
-        # back the whole thing — the Dealership is NOT persisted.
+        # retail_subprime; M18.3 shipped floor_planned; M18.4 ships
+        # bhph. Until then, ``bhph`` is the only archetype still
+        # raising NotImplementedError. The atomic ``create_demo_store``
+        # wraps Dealership.create + builder.build in one transaction,
+        # so a stub raising NotImplementedError rolls back the whole
+        # thing — the Dealership is NOT persisted.
         with self.assertRaises(NotImplementedError):
             create_demo_store(
                 slug="m181-create-stub-attempt",
-                archetype=DEMO_ARCHETYPE_FLOOR_PLANNED,
+                archetype=DEMO_ARCHETYPE_BHPH,
             )
         self.assertFalse(
             Dealership.objects.filter(
@@ -549,14 +549,14 @@ class DemoStoreCommandTests(TestCase):
 
     def test_create_subcommand_surfaces_stub_error(self) -> None:
         # Archetype stubs raise NotImplementedError; the command
-        # surfaces via CommandError. Uses floor_planned (still a
-        # stub at M18.2; ships at M18.3).
+        # surfaces via CommandError. Uses bhph (still a stub at
+        # M18.3; ships at M18.4).
         with self.assertRaises(CommandError):
             call_command(
                 "demo_store",
                 "create",
                 "--slug=m181-cmd-create-stub",
-                "--archetype=floor_planned",
+                "--archetype=bhph",
                 stdout=StringIO(),
             )
 
