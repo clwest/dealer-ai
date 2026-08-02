@@ -1210,7 +1210,34 @@ front-line inventory to attach the leads to.
 
 ---
 
-### Milestone 12 — BHPH portfolio operations (v1)
+### Milestone 12 — BHPH portfolio operations (v1) — SHIPPED at SESSION_128
+
+*Full delivery record: `docs/roadmap/MILESTONE_12_PLANNING.md`
+§7 (annotated SHIPPED per increment; five §0.a change-log
+amendments recorded — M12.1 open plus per-session amendments at
+M12.3 / M12.4 / M12.5 / M12.6 / M12.7 open) and
+`docs/roadmap/MILESTONE_12_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7m. Backend test
+baseline delta: 3,895 → 4,150 (+255 tests, zero regressions).
+Frontend Vitest baseline: 67 → 78 (+11). Sessions 121 → 128.
+Five new entities (BhphNote, BhphPayment, BhphPromiseToPay,
+CollectionContact, Repossession) plus one additive extension
+(BhphNote gains `current_bucket` + `days_past_due` at M12.3 via
+migration `0039`). Seven new services packages (`bhph_notes` /
+`bhph_payments` / `bhph_delinquency` / `bhph_promises` /
+`collection_contacts` / `repossessions` / `bhph_analytics`).
+Two new Celery-beat task families (M12.3 aging detector at 08:00
++ M12.4 broken-PTP detector at 09:00). One new post-LLM scrub
+stage (`collection_language` under `kind="collection_contact"`).
+One new `/dealer-ai-bhph/` frontend route family with two MVP
+pages (portfolio dashboard + per-note detail); collection-contact
+create UI + repo-order create UI deferred per §5.f Option C.
+Migrations `0037`–`0042`. Tenancy carrier 39 → 44 (+5). DRF
+admin surface 82 → 98 (+16 endpoints). Frontend operator routes
+15 → 17. Permission classes unchanged at 8 across seven M12
+implementation increments. **Six §5 decisions confirmed as-
+recommended at M12.1 open** — streak stands at 41 planning-time
+as-recommended M5.1 → M12.1 across three consecutive milestones.*
 
 **Business objective.** For dealers with `bhph_enabled=True`,
 manage the in-house lending business after the deal funds —

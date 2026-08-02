@@ -1,11 +1,13 @@
 ---
 title: "Milestone 12 — Implementation-Planning Pass"
-status: draft
+status: shipped
 type: planning-artifact
 generated: 2026-08-02
 generated_at_session: SESSION_120 (post-M11-closeout)
 milestone: 12
 milestone_name: "BHPH portfolio operations (v1)"
+shipped_at_session: SESSION_128
+retrospective: docs/roadmap/MILESTONE_12_RETROSPECTIVE.md
 sources:
   - docs/PROJECT_RULES.md
   - docs/DOC_GOVERNANCE.md

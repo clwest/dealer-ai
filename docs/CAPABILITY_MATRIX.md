@@ -938,6 +938,152 @@ for what shipped vs. deferred.
 
 ---
 
+## 7m. BHPH portfolio operations (v1) (Milestone 12, shipped)
+
+Milestone 12 (SESSION_121 → SESSION_128)
+shipped the BHPH portfolio operations
+substrate: for dealers with
+`bhph_enabled=True`, manage the in-house
+lending business after the deal funds —
+note origination + payment schedule
+generation + payment intake + application
+(fees → interest → principal) + delinquency
+detection + aging buckets + PTP tracking +
+collection contact logging + FDCPA-adjacent
+post-LLM scrub + repossession record + post-
+repo handoff + portfolio analytics + operator
+UI MVP. **Five new backend entities** +
+**one additive column extension** to
+`BhphNote` + **seven new `services/`
+packages** + **one extended scrub stack layer**
++ **two new Celery-beat task families** +
+**one new frontend route family**. **No new
+runtime dependencies added.** **No M1-M11
+business logic touched** — M12.1's BhphNote
+attaches via a new OneToOne FK on M9's Sale
+(no Sale changes); M12.6's Repossession
+attaches via a new SET_NULL FK on M3's
+ConditionReport (no ConditionReport changes);
+the post-LLM scrub stack gains a new
+`kind="collection_contact"` gate (existing
+16 stages unchanged). Deferrals cataloged in
+`MILESTONE_12_RETROSPECTIVE.md` §3.
+See `docs/roadmap/MILESTONE_12_PLANNING.md`
++ `docs/roadmap/MILESTONE_12_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface (M12.1 – M12.7) | Notes |
+| --- | --- | --- |
+| BhphNote origination + payment schedule (M12.1) | New `BhphNote` model + migration `0037_m121_bhph_note_entity`. OneToOne FK to `Sale` (CASCADE) where `Sale.finance_type == "bhph"` per §5.a Option A. Fields: `principal_financed` Decimal(10,2) + `apr` Decimal(5,2) + `term_weeks` PositiveInteger + `payment_frequency` CharField (3-value vocab: `weekly` / `biweekly` / `semi_monthly`) + `payment_amount` Decimal(8,2) denormalized at write + `first_payment_due` Date + `default_grace_days` PositiveInteger default 5. Cross-tenant `clean()` + non-BHPH sale rejection. **Three new pure verbs added to `services/payment_engine.py`** — `bhph_note_periodic_payment` / `bhph_note_schedule` / `bhph_note_number_of_periods` — adding `semi_monthly` cadence to the M2 cadence set. Customer-shopping `estimate_bhph_payment` untouched. New `services/bhph_notes/` package with three verbs: `record_bhph_note` (computes payment_amount via pure verb) + `get_bhph_note` (tenant-scoped read) + `get_payment_schedule` (pure verb). Three domain errors: `CrossTenantBhphNoteError` (404) / `NonBhphSaleError` (400) / `DuplicateBhphNoteError` (409). Two DRF admin endpoints under `admin/bhph-notes/`. Tenancy carrier 39 → 40. 49 focused tests. | Preserves M10.5 Contract byte-for-byte — no new `contract_type` vocab member (§5.a Option A). `Sale.finance_type == "bhph"` is the load-bearing signal that this is dealer-carried paper. Two payment engines coexist: `estimate_bhph_payment` (M2 customer-shopping estimator; sticker price + taxes + fees inputs; weekly/biweekly only) and `bhph_note_periodic_payment` (M12.1 dealer-as-lender note math; net principal + APR + term_weeks + freq inputs; adds semi_monthly). Distinct verbs because inputs differ. |
+| BhphPayment intake + application (M12.2) | New `BhphPayment` model + migration `0038_m122_bhph_payment_entity`. Mandatory FK to `BhphNote` (CASCADE). Fields: `paid_at` DateTime + `amount` Decimal(8,2) + `method` CharField (5-value vocab: `cash` / `check` / `debit` / `ach` / `other`) + `applied_to_fees` / `applied_to_interest` / `applied_to_principal` (all Decimal(8,2) denormalized at write). Cross-tenant `clean()` on `note`. New `services/bhph_payments/` package split into two files: `apply.py` (pure allocation — no DB access) + `bhph_payment.py` (DB-facing write + list). Pure verbs: `allocate_payment(amount, outstanding_balance_now, interest_owed, outstanding_fees=Decimal("0"))` → `PaymentAllocation(fees, interest, principal)` NamedTuple; `interest_owed_for_period(balance, apr, freq)`; `outstanding_balance(principal_financed, principal_paid)`. Write verbs: `record_payment` `@transaction.atomic` (reads prior payments + computes balance + calls allocation verb + persists); `list_payments`. **Application order per §5.b Option A: platform-wide constant fees → interest → principal.** Fees always zero at M12.2 (no fee-charging entity); column preserved for future M12.5+ late-fee entity. Two domain errors: `CrossTenantBhphPaymentError` (404) / `OverpaymentError` (400). Two DRF endpoints nested under `admin/bhph-notes/<pk>/payments/`. Tenancy carrier 40 → 41. 42 focused tests. | Split-pure-verb-from-write-verb pattern: `allocate_payment` is truly pure (SimpleTestCase-testable); `record_payment` handles DB-facing balance recomputation independently. Overpayment refuses rather than absorbs (silent absorption would corrupt payoff math). Interest computed from live balance every intake (not from schedule) — real intake often diverges from schedule (partial / prepayment / timing drift). |
+| Delinquency detection + aging buckets (M12.3) | Additive column extension to `BhphNote` (no new entity) + migration `0039_m123_bhph_note_aging_columns`. Two new columns: `current_bucket` CharField (7-value aging vocab default `current`) + `days_past_due` PositiveInteger default 0. Fixed 7-value aging vocab per §5.c Option A with 120-day charge-off threshold (`current` / `1_15` / `16_30` / `31_60` / `61_90` / `over_90` / `charge_off_candidate`). New `services/bhph_delinquency/` package: `compute.py` (three pure verbs: `bucket_for_days` / `next_expected_due` / `days_past_due_for`) + `tasks.py` (Celery detector + orchestrator). **State-transitioning Celery detector** at 08:00 project-time daily. Per-tenant task recomputes `current_bucket` + `days_past_due` on every active BhphNote; only writes when derived value differs from stored value (idempotent within run). Fully-paid short-circuit — `outstanding_balance == 0` OR `payments_made >= term_periods` → `current`, 0. Cadence-aware next-due projection using M12.1's `_BHPH_NOTE_PERIOD_DAYS` mapping. Grace-respecting days-past-due arithmetic (aging measured from scheduled due date after grace expires per §0.a M12.3 decision 1). Celery-beat task families 6 → 7. 38 focused tests. | **Additive-column extension over new entity** — aging state is inherent to the note itself, not a separate lifecycle record. Denormalizing at the row is faster for reads (no join) and simpler for downstream analytics. A future `BhphAgingSnapshot` history entity could layer on without breaking this if M12+ time-series analytics need historical bucket trends. **State-transitioning per M11 §6 lesson 17** — aging is objectively-elapsed calendar math. Charge-off transition itself is M12.5+ operator scope; the bucket is a flag, not an automatic state change. |
+| PTP promise-to-pay tracking (M12.4) | New `BhphPromiseToPay` model + migration `0040_m124_bhph_promise_to_pay`. Mandatory FK to `BhphNote` (CASCADE). Fields: `promised_at` DateTime + `promised_amount` Decimal(8,2) + `promised_reason` CharField (3+1 vocab: `paycheck` / `tax_refund` / `family_help` / `other`) + `actual_payment` FK to `BhphPayment` SET_NULL (populated on reconcile) + `state` CharField (3-value machine: `promised` / `kept` / `broken`) + `notes` TextField. Cross-tenant `clean()` on `note` + `actual_payment`. State machine mirrors M11.5 BeBack (promised → kept / broken; terminal states final). New `services/bhph_promises/` package with three verbs: `record_promise` / `mark_kept(promise, payment)` (**operator-triggered per §5.d Option A** — requires BhphPayment reference; verb enforces same-tenant + same-note) / `mark_broken(promise)`. **State-transitioning Celery detector** at 09:00 project-time daily. Grace period `BHPH_PTP_BROKEN_GRACE_HOURS` env default 24. Four domain errors: `CrossTenantBhphPromiseError` (404) / `UnknownReasonError` (400) / `CrossPromisePaymentError` (400) / `PromiseAlreadyTerminalError` (409). Four DRF endpoints (2 nested + 2 top-level for state transitions). Tenancy carrier 41 → 42. Celery-beat task families 7 → 8. 34 focused tests. | `mark_kept` requires the operator to identify the fulfilling BhphPayment — no auto-linking (§5.d Option A). Preserves audit clarity: a kept promise always points to the specific payment. Cross-checks are belt+suspenders (payment.dealership == promise.dealership + payment.note == promise.note). PTP-specific reason vocab (distinct from M11.5 BeBack reasons) — tailored to what BHPH customers actually cite for delayed payment. |
+| Collection contact log + FDCPA scrub (M12.5) | New `CollectionContact` model + migration `0041_m125_collection_contact`. Mandatory FK to `BhphNote` (CASCADE). Fields: `contacted_at` DateTime + `contacted_by_user` FK User SET_NULL + `channel` CharField (5-value vocab: `phone` / `letter` / `sms` / `email` / `in_person`) + `outcome` CharField (4-value vocab: `contact_made` / `left_message` / `no_answer` / `refused_to_speak`) + `notes` TextField. Cross-tenant `clean()` on `note`. New `services/collection_contacts/` package with `record_contact` + `list_contacts` verbs. Three domain errors: `CrossTenantContactError` (404) / `UnknownChannelError` (400) / `UnknownOutcomeError` (400). Endpoint auto-populates `contacted_by_user` with `request.user` — operators don't identify manually. **Extended `services/llm_safety.py`** with new `_scrub_collection_language` stage under `kind="collection_contact"` per §5.e Option A. Three-category pattern list: (1) **deficiency threats** (credit-bureau leverage / lawsuit / wage garnishment softened; jail / arrest threats removed); (2) **harassment-adjacent** (employer / workplace / neighbor / family contact threats removed; repeated-contact pressure softened); (3) **false-representation** (attorney / police / court / credit-bureau impersonation removed). Log-and-replace posture matches M2 partial-scrub pattern. No dealer-type gating — FDCPA applies equally at independent and franchise BHPH portfolios. Two DRF endpoints nested under `admin/bhph-notes/<pk>/contacts/`. Tenancy carrier 42 → 43. Post-LLM scrub layers 16 → 17. 38 focused tests. | **Extension over parallel package** (§5.e Option A) — one entry point (`apply_post_llm_scrubs`), one kind dispatch. Nine `kind` values now (`chat`, `vehicle_ask`, `ad`, `follow_up`, `vendor_comm`, `parts_order`, `vehicle_listing`, `collection_contact`). Pattern list intentionally narrow — full FDCPA classifier defers beyond M12 (false-positive risk on neutral collection copy would be worse than uncaught edge cases). Neutral collection copy passes through unchanged — locked by `test_neutral_reminder_passes_through_unchanged`. |
+| Repossession record + post-repo handoff (M12.6) | New `Repossession` model + migration `0042_m126_repossession`. Mandatory FK to `BhphNote` (CASCADE). Fields: `ordered_at` DateTime + `ordered_by_user` FK User SET_NULL + `agent_name` CharField (free text at MVP — RepoAgent entity deferred until operator evidence) + `recovered_at` nullable DateTime + `recovery_location` CharField + `intake_condition_report` FK to `ConditionReport` (SET_NULL — historical evidence survives report deletion) + `state` CharField (**3-value linear machine**: `ordered` / `recovered` / `re_intaked`). Cross-tenant `clean()` on `note` + `intake_condition_report`. **Three-state linear machine** (not branching like M11.5 / M12.4) — vehicle must be recovered before it can be re-intaked. Skip-transition `ordered → re_intaked` refused with `InvalidStateTransitionError` (409). New `services/repossessions/` package with three verbs: `record_repossession` / `mark_recovered(pk, recovered_at, location)` (defaults `recovered_at` to now) / `mark_re_intaked(pk, condition_report)` (**requires ConditionReport reference** — vehicle re-entering M4 recon substrate as fresh inspection). Four domain errors: `CrossTenantRepossessionError` (404) / `CrossTenantConditionReportError` (400) / `RepossessionAlreadyTerminalError` (409) / `InvalidStateTransitionError` (409). Four DRF endpoints (2 nested + 2 top-level). **No M4 recon-lifecycle modifications** — post-repo handoff writes fresh ConditionReport via existing M3/M4/M5 pipeline. Tenancy carrier 43 → 44. 30 focused tests. | Linear vs branching state-machine classification (see M12 §6 lesson 5). `mark_re_intaked` requires ConditionReport reference — mirrors M12.4 `mark_kept` payment-reference pattern (terminal transitions carry a link to downstream artifact). Operator triggers M3 inspection workflow explicitly; no auto-creation. |
+| Portfolio analytics + operator UI MVP (M12.7) | First cross-stack M12 increment. **Five pure aggregate verbs** in new `services/bhph_analytics/` package (`compute.py`): `bucket_histogram(dealership)` → fixed-order 7-row tuple of `BucketHistogramRow(bucket, note_count, principal_total)` (zeros for empty buckets); `cure_rate(dealership)` → snapshot MVP `current_bucket_count / total_notes` (time-windowed cure rate defers until M12+ time-series storage per §0.a decision 1); `weighted_average_apr(dealership)` → `sum(principal * apr) / sum(principal)`; `weighted_average_days_past_due(dealership)` → `sum(principal * days_past_due) / sum(principal)`; `ptp_kept_ratio(dealership)` → `kept / (kept + broken)` (open promises excluded from denominator). All verbs return `None` for empty portfolios / undefined denominators. Bundled via `portfolio_summary(dealership)` → `BhphAnalyticsSummary` frozen dataclass. **Single summary endpoint** at `GET /admin/bhph/analytics/summary/` per §0.a decision 2. **M12.7 addendum: new `GET /admin/bhph-notes/list/`** — companion list endpoint (100-row cap; matches M11.6 admin list convention). **New `/dealer-ai-bhph/` frontend route family** with two MVP pages: `DealerAiBhphPortfolio.tsx` (dashboard: four metric cards + aging histogram + notes table) + `DealerAiBhphNoteDetail.tsx` (composes M12.1-M12.6 read endpoints via `Promise.all`; renders loan terms + payments + promises + contacts + repossessions in cards with empty states). New `frontend/src/lib/bhphApi.ts` wrapping every M12.1-M12.7 read verb. **Contact-create + repo-order UI deferred** per §5.f Option C. 24 backend + 11 Vitest tests. DRF admin surface 96 → 98. Frontend operator routes 15 → 17. Zero migrations. Zero tenancy carrier changes. | **Compose, don't bundle** (§0.a decision 4) — detail page fetches five endpoints via `Promise.all` rather than a single bundle endpoint. Zero-portfolio semantics: `None` (not zero) when portfolio has zero notes; frontend renders em-dash. Frozen dataclass output (matches M8 analytics pattern). |
+| Test baseline | +255 backend + 11 frontend (M11 close **3,895 + 67** → M12 close **4,150 + 78**). Zero regressions. Migrations `0037`–`0042` shipped at M12.1–M12.6 (one per increment; M12.3 is column-extension only); M12.7 shipped no schema; M12.8 shipped no schema. `tsc --noEmit` + `vite build` clean at every M12 close. | Distribution: M12.1 +49, M12.2 +42, M12.3 +38, M12.4 +34, M12.5 +38, M12.6 +30, M12.7 +24 backend + 11 frontend, M12.8 +0 (docs-only). Every M12 test that touches tenant-carrier / permission-class / endpoint counts uses `>=N` (M9/M10 lesson 14/12 held). Every M12 vocab test uses exact-set equality (payment-frequency 3, aging 7, method 5, reason 3+1, state 3, channel 5, outcome 4, repo state 3). |
+
+**What is NOT shipped in Milestone 12**
+(deferred per
+`MILESTONE_12_RETROSPECTIVE.md` §3):
+
+- **Collection-contact create UI** —
+  M12.5 shipped the backend substrate;
+  M12.7 UI omitted per §5.f Option C
+  MVP scoping. `bhphApi.ts` includes
+  `listCollectionContacts` for the
+  detail read path; create-verb typing
+  in follow-on.
+- **Repo-order create UI** — M12.6
+  shipped the backend substrate; M12.7
+  UI omitted per §5.f Option C.
+- **Time-series snapshot storage for
+  portfolio analytics** — every M12.7
+  metric is currently a live snapshot.
+  True cure-rate, aging-trend charts,
+  static-pool analysis all require
+  historical bucket state. Natural
+  substrate: `BhphAgingSnapshot`
+  entity + M12+ nightly write from
+  the M12.3 detector.
+- **Full FDCPA classifier** —
+  pattern-based scrub ships at M12.5;
+  LLM classifier defers beyond M12.
+- **Per-metric analytics endpoints
+  + CSV export** — single summary
+  endpoint at MVP per §0.a decision
+  2. Per-metric endpoints defer
+  until operator evidence.
+- **GPS / starter-interrupt device
+  integration** — deferred to
+  M12+ v2.
+- **Skip-tracing service
+  integration** (TLO / LocatePlus) —
+  deferred to M12+ v2.
+- **Credit-bureau reporting
+  (Metro 2 furnisher)** — deferred.
+- **Static-pool cohort analysis** —
+  deferred (blocked on time-series
+  storage).
+- **Automated deficiency-judgment
+  paperwork** — deferred.
+- **Repo agent dispatch
+  integration** — M12.6
+  `agent_name` free text; a
+  first-class `RepoAgent` entity +
+  dispatch substrate defers.
+- **`reopen` verb for terminal
+  PTPs / repossessions** — terminal
+  states final at M12; un-do path
+  defers to operator evidence.
+- **Auto-charge-off on 120+ day
+  bucket** — `charge_off_candidate`
+  is a flag surfaced by the M12.3
+  detector; the actual state
+  transition is M12+ operator
+  scope.
+- **DealWriteup UI (M11 deferral
+  carried forward)** — not touched
+  at M12.
+- **Delivery adapters for follow-up
+  / be-back / PTP notifications** —
+  M11 + M12 tasks count / log /
+  transition state; none dispatch
+  SMS / email / phone.
+
+**What operators experienced at
+Milestone 12 close:**
+
+- **`/dealer-ai-bhph/portfolio/`** —
+  dashboard with four metric cards
+  (notes, cure rate, weighted APR,
+  weighted DPD) + aging histogram
+  (all 7 buckets, counts +
+  principal totals) + notes table
+  (up to 100 rows).
+- **`/dealer-ai-bhph/notes/:pk/`** —
+  per-note detail composing M12.1-
+  M12.6 endpoints (loan terms +
+  payments + promises + contacts +
+  repossessions).
+- **Two Celery detectors** run
+  nightly (M12.3 aging at 08:00 +
+  M12.4 broken-PTP at 09:00),
+  automatically transitioning
+  BhphNote aging state and PTP
+  broken state without operator
+  intervention.
+- **Post-LLM `collection_contact`
+  scrub** neutralizes FDCPA-adjacent
+  phrasing in any collection copy
+  that flows through
+  `apply_post_llm_scrubs(kind="collection_contact")`
+  — belt-and-suspenders against
+  operator-drafted or LLM-drafted
+  language.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

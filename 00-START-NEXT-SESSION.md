@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_120
+last_session_shipped: SESSION_128
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -13,129 +13,156 @@ milestone_8_status: shipped
 milestone_9_status: shipped
 milestone_10_status: shipped
 milestone_11_status: shipped
-milestone_12_status: planning
-next_session: SESSION_121
-next_milestone: 12
-next_milestone_name: "BHPH portfolio operations (v1)"
-next_increment: 1
-next_increment_name: "M12.1 — BhphNote origination + payment schedule"
+milestone_12_status: shipped
+milestone_13_status: planning
+next_session: SESSION_129
+next_milestone: 13
+next_milestone_name: "Accounting reconciliation core"
+next_increment: 0
+next_increment_name: "M13.0 — Planning refinement + first-decision review"
 ---
 
-# Next session — SESSION_121 · Milestone 12 · Increment 1 (M12.1 — BhphNote origination + payment schedule)
+# Next session — SESSION_129 · Milestone 13 · Increment 0 (M13.0 — Planning refinement)
 
-> **SESSION_120 shipped M11.7 —**
-> six close-out docs (retrospective +
-> capability matrix §7l + roadmap flip +
-> planning frontmatter flip + session-
-> start refresh + M12 planning skeleton)
-> + one coordinated commit. **Milestone
-> 11 — Sales-side non-chat channels +
-> customer-journey completeness — SHIPPED.**
+> **SESSION_128 shipped M12.8 —** six
+> close-out docs (retrospective +
+> capability matrix §7m + roadmap
+> flip + planning frontmatter flip +
+> session-start refresh + M13
+> planning skeleton) + one
+> coordinated commit. **Milestone
+> 12 — BHPH portfolio operations
+> (v1) — SHIPPED.**
 >
-> **M11 close totals:** five new entities
-> across five implementation sessions
-> (TestDrive + DealWriteup +
-> FollowUpCadence + FollowUpTask +
-> BeBack) + one additive `CustomerLead`
-> extension + five new `services/`
-> packages + one new frontend route
-> family + two new Celery-beat task
-> families (M11.4 06:00 surfacer + M11.5
-> 07:00 detector). **Six planning-time
-> §5 decisions confirmed as-recommended
-> at M11.1 open** — streak stands at
-> **35 planning-time as-recommended
-> M5.1 → M11.1**.
+> **M12 close totals:** five new
+> entities across seven
+> implementation sessions (BhphNote
+> + BhphPayment + BhphPromiseToPay +
+> CollectionContact + Repossession)
+> + one additive BhphNote extension
+> (M12.3 aging columns) + seven new
+> `services/` packages + one new
+> `/dealer-ai-bhph/` route family
+> + two new Celery-beat task
+> families (M12.3 08:00 aging
+> detector + M12.4 09:00 broken-
+> PTP detector) + one new post-LLM
+> scrub stage (`collection_language`).
+> **Six planning-time §5 decisions
+> confirmed as-recommended at M12.1
+> open** — streak stands at **41
+> planning-time as-recommended
+> M5.1 → M12.1** across three
+> consecutive milestones now.
 >
-> **Backend baseline: 3,895 pass, 1
-> skipped, 0 fail** (was 3,730 at M10
-> close — +165 tests, 0 regressions).
-> **Frontend Vitest baseline: 67 pass**
-> (was 51 — +16 at M11.6). Migrations
-> `0032`–`0036`. Tenancy carriers 39.
-> DRF admin surface 82. Frontend
-> operator routes 15. Celery-beat task
-> families 6. Permission classes 8
+> **Backend baseline: 4,150 pass,
+> 1 skipped, 0 fail** (was 3,895
+> at M11 close — +255 tests, 0
+> regressions). **Frontend Vitest
+> baseline: 78 pass** (was 67 —
+> +11 at M12.7). Migrations
+> `0037`–`0042`. Tenancy carriers
+> 44. DRF admin surface 98.
+> Frontend operator routes 17.
+> Celery-beat task families 8.
+> Permission classes 8
 > (unchanged — zero drift).
 >
-> **Push authorization:** eight local
-> commits (M113 hash fixup + M11.1
-> through M11.7) queued for user
-> authorization at SESSION_120 close.
+> **Push authorization:** eight
+> local commits (M12.1 through
+> M12.8) queued for user
+> authorization at SESSION_128
+> close.
 >
-> **SESSION_121 opens M12.1 — BhphNote
-> origination + payment schedule.** Per
-> `MILESTONE_12_PLANNING.md` (draft
-> planning skeleton written at M11.7
-> close per standing user directive).
-> **Six §5 decisions to confirm at
-> session open.**
+> **SESSION_129 opens M13.0 —
+> planning refinement + first-
+> decision review.** Per
+> `MILESTONE_13_PLANNING.md`
+> (draft planning skeleton
+> written at M12.8 close per
+> standing user directive).
+> **Six §5 decisions to confirm
+> at session open.**
 
-## First thing SESSION_121 must do
+## First thing SESSION_129 must do
 
-### 1. Confirm the six §5 decisions in `MILESTONE_12_PLANNING.md`
+### 1. Confirm the six §5 decisions in `MILESTONE_13_PLANNING.md`
 
-The M12 planning skeleton drafted at
-M11.7 close carries six load-bearing
+The M13 planning skeleton drafted at
+M12.8 close carries six load-bearing
 decisions. All six recommendations
-follow the M11 pattern (35 consecutive
+follow the M12 pattern (41 consecutive
 as-recommended planning-time
 resolutions).
 
 Recommendations (drawn from
-`MILESTONE_12_PLANNING.md` §9):
+`MILESTONE_13_PLANNING.md` §4):
 
-1. **§5.a — Contract type vocab
-   extension.** Option A (no M10.5
-   vocab change; use M9
-   `Sale.finance_type == "bhph"` as
-   the BHPH signal).
-2. **§5.b — Payment application
-   order.** Option A (platform-wide
-   constant: fees → interest →
-   principal).
-3. **§5.c — Aging bucket
-   vocabulary.** Option A (fixed 7-
-   value vocab).
-4. **§5.d — PTP reconciliation
-   shape.** Option A (operator-
-   triggered link).
-5. **§5.e — Collection contact
-   scrub scope.** Option A (extend
-   existing `services/llm_safety.py`
-   scrub stack).
+1. **§5.a — Milestone slice
+   selection.** Option A —
+   substrate (GL account +
+   journal entry models) + Q1
+   (M2 cost reconciliation) as
+   first slice. **THIS IS THE
+   LOAD-BEARING DECISION.**
+   Per IMPLEMENTATION_ROADMAP
+   §Milestone 13, a monolithic
+   accounting milestone violates
+   Project Rule 4 (Scope
+   Discipline) — multiple
+   slices layer onto M14+ or
+   into ongoing operational
+   milestones.
+2. **§5.b — GL chart-of-accounts
+   source.** Option B —
+   platform-shipped default
+   chart (industry-standard
+   auto-dealer COA); per-dealer
+   overrides at M14+.
+3. **§5.c — Journal entry
+   immutability.** Option A —
+   immutable + reversing
+   entries.
+4. **§5.d — GL-posting trigger
+   shape.** Option C — hybrid
+   (sync for M9 sale-booking;
+   detector for M2 cost accrual
+   + M12 payment posting).
+5. **§5.e — Substrate location.**
+   Option A — new `services/
+   accounting/` package inside
+   `dealer_ai/`.
 6. **§5.f — Operator UI scope.**
-   Option C (MVP — portfolio
-   dashboard + per-note detail;
-   collection contact + repo-order
-   UI defer to follow-on).
+   Option C — no UI at M13
+   (backend-only); UI defers
+   to M14.
 
-**Do not write M12.1 code until
-every `[NEEDS-DECISION-BEFORE-M12.N]`
+**Do not write M13.1 code until
+every `[NEEDS-DECISION-BEFORE-M13.N]`
 item is resolved.** Any user override
-→ amend `MILESTONE_12_PLANNING.md`
+→ amend `MILESTONE_13_PLANNING.md`
 §0.a narrowly at session top (per
-M5-M11 §0.a precedent) before
+M5-M12 §0.a precedent) before
 implementation.
 
 ### 2. Verify starting state
 
-- `git status` — clean (M11.7 commit
-  landed at SESSION_120 close;
-  batch push authorized + executed).
+- `git status` — clean (M12.8
+  commit landed at SESSION_128
+  close; batch push authorized +
+  executed).
 - `git log --oneline -3` — top
-  should be `Milestone 11 shipped —
-  Sales-side channels + customer
-  journey (SESSION_114-120)` or
-  similar.
+  should be `Milestone 12 shipped
+  — BHPH portfolio operations
+  (SESSION_121-128)` or similar.
 - `git log origin/main..HEAD
-  --oneline` — **empty** (all M11
+  --oneline` — **empty** (all M12
   commits pushed).
 - `python3 manage.py test dealer_ai`
-  → **3,895 pass, 1 skipped, 0
+  → **4,150 pass, 1 skipped, 0
   fail**.
 - `cd frontend && npm test` →
-  **67 pass**.
+  **78 pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
@@ -144,109 +171,84 @@ implementation.
   build` both clean.
 - `redis-cli ping` → `PONG`.
 
-## What M12.1 delivers
+## What M13.1 delivers (assuming §5.a Option A confirmed)
 
-Per `MILESTONE_12_PLANNING.md` §7
-M12.1 (assuming §5.a Option A
-confirmed):
+Per `MILESTONE_13_PLANNING.md` §5
+M13.1:
 
-- **New `BhphNote` model.**
-  - `dealership` FK CASCADE
-    (tenancy carrier; extend 39
-    → 40).
-  - `sale` OneToOne FK to
-    `Sale` CASCADE (mandatory —
-    BhphNote exists per-sale-that-
-    financed-BHPH).
-  - `principal_financed`
-    Decimal(10, 2).
-  - `apr` Decimal(5, 2)
-    (percent units matching
-    M2 payment_engine
-    convention).
-  - `term_weeks`
-    PositiveIntegerField.
-  - `payment_frequency`
-    CharField vocab (`weekly`
-    / `biweekly` / `semi_monthly`).
-  - `payment_amount`
-    Decimal(8, 2)
-    (denormalized at write from
-    payment_engine BHPH math).
-  - `first_payment_due` DateField.
-  - `default_grace_days`
-    PositiveIntegerField default 5.
-  - Model `clean()`: sale must
-    have `finance_type=="bhph"`
-    per §5.a; cross-tenant
-    guard on `sale`.
-- **New `services/bhph_notes/`
-  package** (mirrors M11
-  package layout).
-- **Verbs (three):**
-  - `record_bhph_note(sale,
-    principal_financed, apr,
-    term_weeks,
-    payment_frequency,
-    first_payment_due,
-    default_grace_days=5)`
-    — computes
-    `payment_amount` via
-    `payment_engine.bhph_payment`;
-    refuses non-BHPH sale
-    (`NonBhphSaleError`);
-    refuses cross-tenant sale
-    (`CrossTenantBhphNoteError`);
-    refuses duplicate note
-    per sale
-    (`DuplicateBhphNoteError`
-    409).
-  - `get_bhph_note(pk,
+- **New `services/accounting/`
+  package.**
+- **New `GLAccount` model** —
+  chart-of-accounts entity +
+  fixed default COA fixture per
+  §5.b Option A (auto-dealer
+  industry-standard chart).
+- **New `JournalEntry` +
+  `JournalEntryLine` models** —
+  immutable per §5.c Option A.
+  Journal entries are the atomic
+  unit of GL posting; lines are
+  the debit/credit rows.
+- **Three verbs:**
+  - `post_journal_entry(dealership,
+    lines, description)` —
+    atomic write. Refuses
+    unbalanced entries (debits
+    != credits).
+  - `reverse_journal_entry(pk,
+    reason)` — atomic write of
+    the reversal entry with
+    inverted debits/credits.
+  - `get_journal_entry(pk,
     dealership)` — tenant-
     scoped read.
-  - `get_payment_schedule(note)`
-    — pure verb returning
-    computed schedule (list of
-    `(due_date, amount)`
-    tuples) without persisting
-    per-payment rows (M12.2
-    lands the payment intake
-    entity).
-- **Endpoints (two):**
-  - `POST /admin/bhph-notes/`.
-  - `GET /admin/bhph-notes/<pk>/`.
-- **Migration `0037`**.
-- **Tenancy carrier extension**
-  (39 → 40).
-- **~30 focused tests** across
+- **Domain errors:**
+  - `UnbalancedJournalEntryError`
+    (400).
+  - `CrossTenantJournalEntryError`
+    (404).
+  - `CrossTenantGLAccountError`
+    (404).
+  - `ImmutableJournalEntryError`
+    (409) — attempted edit
+    after post.
+- **Endpoints (three):**
+  - `POST /admin/accounting/journal-entries/`
+    — post.
+  - `POST /admin/accounting/journal-entries/<pk>/reverse/`
+    — reverse.
+  - `GET /admin/accounting/journal-entries/<pk>/`
+    — retrieve.
+- **Migration `0043`.**
+- **Tenancy carriers 44 → 47**
+  (GLAccount + JournalEntry +
+  JournalEntryLine).
+- **~40 focused tests** across
   model / service / endpoint
-  files (BHPH payment math
-  surface warrants larger
-  coverage than M11 increments).
-- **Baseline target 3,895 →
-  ~3,925.**
+  files (larger — GL substrate
+  is the load-bearing shared
+  layer for M13.2+).
+- **Baseline target 4,150 →
+  ~4,190.**
 
-### Non-goals for M12.1
+### Non-goals for M13.1
 
-- ❌ No `BhphPayment` entity
-  (M12.2).
-- ❌ No delinquency detection
-  (M12.3).
-- ❌ No PTP tracking (M12.4).
-- ❌ No collections (M12.5).
-- ❌ No repossession (M12.6).
-- ❌ No portfolio analytics or
-  UI (M12.7).
-- ❌ No M10.5 Contract
-  modification.
-- ❌ No new `contract_type`
-  vocab member.
-- ❌ No M11 follow-ups
-  (DealWriteup UI, delivery
-  adapters, etc. — separate
-  M11.x track).
+- ❌ No M2 cost reconciliation
+  (M13.2).
+- ❌ No trial-balance snapshot
+  (M13.3).
+- ❌ No M9 sale-booking flow
+  (M13+ deferred slice).
+- ❌ No M10 F&I chargeback
+  reversal (deferred slice).
+- ❌ No M12 BHPH payment
+  reconciliation (deferred
+  slice).
+- ❌ No operator UI (M14).
+- ❌ No CSV export /
+  spreadsheet integration.
 
-## What SESSION_121 should do
+## What SESSION_129 should do
 
 ### Recommended step sequence
 
@@ -254,80 +256,89 @@ confirmed):
    with the user** (§1 above).
 
 2. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_12_PLANNING.md`
-     §1.1 + §1.2 + §5.a + §5.b +
-     §7 M12.1.
-   - `docs/handoffs/SESSION_120_m11_close.md`
+   - `docs/roadmap/MILESTONE_13_PLANNING.md`
+     §1 + §2 + §5 (all).
+   - `docs/handoffs/SESSION_128_m12_close.md`
      (previous session).
-   - `docs/roadmap/MILESTONE_11_RETROSPECTIVE.md`
+   - `docs/roadmap/MILESTONE_12_RETROSPECTIVE.md`
      §6 (nineteen lessons carry
-     into M12).
-   - `docs/research/BHPH_OPERATIONS_MAPPING.md`
-     §origination + §payment
-     cadence.
-   - `backend/dealer_ai/services/payment_engine.py`
-     BHPH math functions (already
-     shipped; M12.1 consumes
-     them).
-   - `backend/dealer_ai/models.py::Sale`
-     + `Contract` (attach
-     targets).
+     into M13).
+   - `docs/research/ACCOUNTING_DEPARTMENT_MAPPING.md`
+     §"Accounting is the
+     reconciliation layer that
+     validates every operational
+     event" + §"When the DMS is
+     right, accounting is right"
+     + pain #1.
+   - `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+     §Milestone 13 (incremental-
+     structure note is load-
+     bearing).
    - `backend/dealer_ai/services/f_and_i/`
-     (M10 service package pattern
-     to mirror).
+     (M10 service-package
+     pattern to mirror).
+   - `backend/dealer_ai/services/bhph_notes/`
+     (M12.1 service-package
+     pattern to mirror).
 
 3. **Verify starting state** (§2
    above).
 
-4. **Draft (in order):**
-   - `BhphNote` model + tenancy
-     carrier extension (39 → 40).
-   - Migration `0037`.
-   - `services/bhph_notes/` package
-     + three verbs.
-   - `views_bhph_notes.py` +
+4. **Draft (in order — assuming
+   §5.a Option A confirmed):**
+   - `GLAccount` + `JournalEntry`
+     + `JournalEntryLine` models
+     + tenancy carrier extension
+     (44 → 47).
+   - Default COA fixture.
+   - Migration `0043`.
+   - `services/accounting/`
+     package with three verbs.
+   - `views_accounting.py` +
      endpoints.
    - URL routes.
-   - ~30 focused tests.
+   - ~40 focused tests.
 
 5. **Full-suite verification.**
-   Target 3,895 → ~3,925.
+   Target 4,150 → ~4,190.
 
 6. **Ship handoff at
-   `docs/handoffs/SESSION_121_m12_inc1_bhph_note.md`.**
+   `docs/handoffs/SESSION_129_m13_inc1_gl_substrate.md`.**
 
 7. **Overwrite
    `00-START-NEXT-SESSION.md`** with
-   M12.2 priority (BhphPayment
-   intake + application).
+   M13.2 priority (M2 cost
+   reconciliation).
 
-## Explicit non-goals for SESSION_121
+## Explicit non-goals for SESSION_129
 
-- ❌ Do NOT ship M12.2-M12.8 scope.
-- ❌ Do NOT modify M1-M11 business
+- ❌ Do NOT ship M13.2-M13.4 scope.
+- ❌ Do NOT modify M1-M12 business
   logic.
 - ❌ Do NOT force-push or amend
-  any M10/M11 commits.
+  any M11/M12 commits.
 
 ## NEXT TASK
 
-Start SESSION_121 with (a)
+Start SESSION_129 with (a)
 confirming the six §5 decisions
 with the user (all recommendations
-per M11 pattern), (b) the read-
+per M12 pattern), (b) the read-
 first list, (c) starting-state
-verification, then (d) `BhphNote`
-model + tenancy carrier extension
-(39 → 40) + migration + service
-package with three verbs + endpoints
-+ ~30 tests. Target baseline
-3,895 → ~3,925. Ship the M12.1
-handoff.
+verification, then (d) `GLAccount`
++ `JournalEntry` + `JournalEntryLine`
+models + tenancy carrier extension
+(44 → 47) + default COA fixture +
+migration + `services/accounting/`
+package with three verbs +
+endpoints + ~40 tests. Target
+baseline 4,150 → ~4,190. Ship the
+M13.1 handoff.
 
-Backend baseline at SESSION_121
-close: **~3,925 pass**. Frontend
+Backend baseline at SESSION_129
+close: **~4,190 pass**. Frontend
 baseline: unchanged (no frontend
-at M12.1).
+at M13.1).
 
 ---
 
@@ -335,81 +346,97 @@ at M12.1).
 
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
-3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 12
+3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+   §Milestone 13
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_12_PLANNING.md`
-6. `docs/roadmap/MILESTONE_11_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_120_m11_close.md`
+5. `docs/roadmap/MILESTONE_13_PLANNING.md`
+6. `docs/roadmap/MILESTONE_12_RETROSPECTIVE.md`
+7. `docs/handoffs/SESSION_128_m12_close.md`
    (this session's close)
-8. `docs/handoffs/SESSION_119_m11_inc6_operator_ui.md`
-9. `docs/handoffs/SESSION_118_m11_inc5_be_back.md`
-10. `docs/handoffs/SESSION_117_m11_inc4_follow_up_cadence.md`
-11. `docs/handoffs/SESSION_116_m11_inc3_deal_writeup.md`
-12. `docs/handoffs/SESSION_115_m11_inc2_test_drive.md`
-13. `docs/handoffs/SESSION_114_m11_inc1_channel_intake.md`
-14. `docs/CAPABILITY_MATRIX.md` §7l
-15. `docs/research/BHPH_OPERATIONS_MAPPING.md`
-16. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
+8. `docs/handoffs/SESSION_127_m12_inc7_analytics_ui.md`
+9. `docs/CAPABILITY_MATRIX.md` §7m
+10. `docs/research/ACCOUNTING_DEPARTMENT_MAPPING.md`
+11. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_120 — M11 SHIPPED)
+## Operational state (post-SESSION_128 — M12 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
-  `0001`–`0036`. Test baseline:
-  **3,895 pass**, 1 skipped, 0
+  `0001`–`0042`. Test baseline:
+  **4,150 pass**, 1 skipped, 0
   fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
   `:5173`. `tsc --noEmit` +
   `vite build` clean. **Vitest
-  baseline: 67 pass**.
+  baseline: 78 pass**.
 - **Frontend (prod):** NONE.
 - **Async runtime:** Celery
   5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1
-  DatabaseScheduler. **6
+  DatabaseScheduler. **8
   scheduled task families
   registered** (M7.2-M7.5 +
-  M11.4 06:00 read-only surfacer
-  + M11.5 07:00 state-
-  transitioning detector).
+  M11.4 06:00 + M11.5 07:00 +
+  M12.3 08:00 + M12.4 09:00).
 - **Milestones shipped:** M1 →
-  **M11** (SESSION_120 close).
-  M12 planning drafted.
-- **DRF admin surface:** **82**
+  **M12** (SESSION_128 close).
+  M13 planning drafted.
+- **DRF admin surface:** **98**
   endpoints.
 - **Frontend operator routes:**
-  **15** (11 pre-M11 + 4 M11.6
-  sales route family).
+  **17** (15 pre-M12.7 + 2 M12.7
+  `/dealer-ai-bhph/` routes).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** complete
   `services/f_and_i/` (M10) +
-  five M11 packages (`leads` /
-  `test_drives` / `deal_writeups`
-  / `follow_ups` / `be_backs`).
-- **Tenancy carriers:** **39**
-  (34 at M10 close → 39 at M11
-  close via M11.2 + M11.3 +
-  M11.4×2 + M11.5).
+  five M11 packages + seven M12
+  packages
+  (`bhph_notes` /
+  `bhph_payments` /
+  `bhph_delinquency` /
+  `bhph_promises` /
+  `collection_contacts` /
+  `repossessions` /
+  `bhph_analytics`).
+- **Tenancy carriers:** **44**
+  (39 at M11 close → 44 at M12
+  close via M12.1 + M12.2 +
+  M12.4 + M12.5 + M12.6).
 - **Permission classes:** **8**
-  (unchanged — every M11
+  (unchanged — every M12
   endpoint reused M4
   `IsSalesManagerOrOwnerAtActiveDealership`;
   zero drift).
 - **`Vehicle.is_available`:**
   unchanged.
-- **AI safety stack:** unchanged.
+- **AI safety stack:** 17 scrub
+  stages (16 → 17 via M12.5
+  `collection_language`).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 12 next:** M12.1
-  BhphNote origination + payment
-  schedule. Verify six §5
-  decisions at session open.
-  ~30 tests. Baseline 3,895 →
-  ~3,925.
+- **BHPH portfolio math:** three
+  M12 pure-verb families in
+  `services/payment_engine.py`
+  (M12.1) + `services/
+  bhph_payments/apply.py`
+  (M12.2) + `services/
+  bhph_delinquency/compute.py`
+  (M12.3) + `services/
+  bhph_analytics/compute.py`
+  (M12.7).
+- **Milestone 13 next:** M13.0
+  planning refinement +
+  first-decision review. Verify
+  six §5 decisions at session
+  open — §5.a is the load-
+  bearing scope-slice decision.
+  M13.1 substrate + Q1 slice
+  target: ~40 tests, baseline
+  4,150 → ~4,190.
