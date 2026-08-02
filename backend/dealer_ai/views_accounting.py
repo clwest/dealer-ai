@@ -43,7 +43,9 @@ from .services.accounting import (
     ImmutableJournalEntryError,
     InvalidJournalLineError,
     JournalLineInput,
+    TrialBalanceSnapshot,
     UnbalancedJournalEntryError,
+    compute_trial_balance,
     get_journal_entry,
     post_journal_entry,
     reverse_journal_entry,
@@ -240,5 +242,58 @@ def admin_journal_entry_retrieve(request, pk: int):
         )
     return Response(
         {"journal_entry": _project_entry(entry)},
+        status=status.HTTP_200_OK,
+    )
+
+
+# --- Milestone 13 · Increment 3 (SESSION_131) — trial-balance snapshot -------
+
+
+class TrialBalanceQuerySerializer(serializers.Serializer):
+    as_of = serializers.DateTimeField(required=False, allow_null=True)
+
+
+def _project_trial_balance(snapshot: TrialBalanceSnapshot) -> dict:
+    return {
+        "dealership_id": snapshot.dealership_id,
+        "dealership_slug": snapshot.dealership_slug,
+        "as_of": snapshot.as_of.isoformat(),
+        "total_debits": str(snapshot.total_debits),
+        "total_credits": str(snapshot.total_credits),
+        "is_balanced": snapshot.is_balanced,
+        "rows": [
+            {
+                "account_code": row.account_code,
+                "account_name": row.account_name,
+                "account_type": row.account_type,
+                "debit_total": str(row.debit_total),
+                "credit_total": str(row.credit_total),
+                "natural_balance": str(row.natural_balance),
+            }
+            for row in snapshot.rows
+        ],
+    }
+
+
+@api_view(["GET"])
+@permission_classes(_M131_PERMS)
+def admin_trial_balance(request):
+    """GET /admin/accounting/trial-balance/[?as_of=<ISO8601>]
+
+    Returns the tenant's trial-balance snapshot at ``as_of`` (default
+    now). Empty balanced snapshot for a fresh dealership with no
+    postings per §0.a M13.3 decision 5 zero-portfolio semantics.
+    Reuses ``IsSalesManagerOrOwnerAtActiveDealership`` per §0.a
+    M13.3 decision 3 zero-drift posture.
+    """
+    dealership = get_current_dealership(request)
+    query = TrialBalanceQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    snapshot = compute_trial_balance(
+        dealership=dealership,
+        as_of=query.validated_data.get("as_of"),
+    )
+    return Response(
+        {"trial_balance": _project_trial_balance(snapshot)},
         status=status.HTTP_200_OK,
     )

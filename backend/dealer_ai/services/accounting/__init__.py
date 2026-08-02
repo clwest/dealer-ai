@@ -48,6 +48,11 @@ from .journal import (
     post_journal_entry,
     reverse_journal_entry,
 )
+from .snapshot import (
+    TrialBalanceRow,
+    TrialBalanceSnapshot,
+    compute_trial_balance,
+)
 from .vehicle_cost import (
     AP_TRADE_ACCOUNT_CODE,
     RECON_WIP_ACCOUNT_CODE,
@@ -68,7 +73,10 @@ __all__ = [
     "JournalLineInput",
     "MissingDefaultAccountError",
     "RECON_WIP_ACCOUNT_CODE",
+    "TrialBalanceRow",
+    "TrialBalanceSnapshot",
     "UnbalancedJournalEntryError",
+    "compute_trial_balance",
     "detect_unposted_costs",
     "get_journal_entry",
     "post_all_unposted_costs_for_dealership",

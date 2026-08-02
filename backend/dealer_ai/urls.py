@@ -962,4 +962,14 @@ urlpatterns = [
         views_accounting.admin_journal_entry_retrieve,
         name="admin-journal-entry-retrieve",
     ),
+    # Milestone 13 · Increment 3 (SESSION_131) — trial-balance snapshot.
+    # Pure recompute per §0.a M13.3 decision 2 (no snapshot entity at
+    # M13.3; materialization defers to M14+ close workflow). Optional
+    # ?as_of=<ISO8601> query parameter per §0.a M13.3 decision 4.
+    # Same permission class as the other M13.1 endpoints.
+    path(
+        "admin/accounting/trial-balance/",
+        views_accounting.admin_trial_balance,
+        name="admin-trial-balance",
+    ),
 ]

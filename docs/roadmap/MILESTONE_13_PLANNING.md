@@ -129,6 +129,22 @@ stands at 47 M5.1 → M13.0).
 | M13.2 · 5 | Negative-amount correction posture | Post with sides swapped — negative `amount` means DR A/P Trade + CR Recon WIP (reverses typical direction). Preserves accrual accuracy per VehicleCost §1.6 design note. |
 | M13.2 · 6 | Idempotency posture | Per-row `@transaction.atomic` around GL post + `posted_at` update (sibling-service crossing per M12 §6 lesson 11). Filter `posted_at__isnull=True, is_estimate=False` gives cross-run idempotency. |
 
+**SESSION_131 open (M13.3) — five
+implementation-time micro-decisions
+confirmed as-recommended by the
+user.** Per M10-M13.2 §0.a precedent
+these do not count against the
+planning-time streak (still 47 M5.1
+→ M13.0).
+
+| # | Decision | Resolution |
+|---|---|---|
+| M13.3 · 1 | Snapshot verb output shape | Frozen dataclass (`TrialBalanceRow` + `TrialBalanceSnapshot`) per M12 §6 lesson 15 pattern. Matches every M8 / M12.7 aggregate return shape. |
+| M13.3 · 2 | Caching posture | Pure recompute at M13.3; no `TrialBalanceSnapshot` entity. Materialization defers until M14+ operator evidence names the close-workflow need. |
+| M13.3 · 3 | Endpoint gating | Reuse `IsSalesManagerOrOwnerAtActiveDealership` — zero-drift posture (permission classes stay at 8 across four consecutive milestones). |
+| M13.3 · 4 | `as_of` parameter | Optional (default `timezone.now()`). Includes JournalEntry rows whose `posted_at <= as_of`. Matches M12.7 analytics posture. |
+| M13.3 · 5 | Zero-portfolio semantics | Empty balanced snapshot (`rows=[]`, `total_debits=0`, `total_credits=0`, `is_balanced=True`) — not 404. A fresh dealership post-M13.1 seed is a valid trial-balance state, not an error. |
+
 *(Per-increment §0.a amendments
 appended below as implementation
 sessions surface micro-decisions.)*

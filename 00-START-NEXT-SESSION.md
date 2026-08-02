@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_130
+last_session_shipped: SESSION_131
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -15,108 +15,80 @@ milestone_10_status: shipped
 milestone_11_status: shipped
 milestone_12_status: shipped
 milestone_13_status: in_progress
-next_session: SESSION_131
+next_session: SESSION_132
 next_milestone: 13
 next_milestone_name: "Accounting reconciliation core"
-next_increment: 3
-next_increment_name: "M13.3 — Trial-balance snapshot"
+next_increment: 4
+next_increment_name: "M13.4 — Milestone 13 close-out"
 ---
 
-# Next session — SESSION_131 · Milestone 13 · Increment 3 (M13.3 — Trial-balance snapshot)
+# Next session — SESSION_132 · Milestone 13 · Increment 4 (M13.4 — Milestone 13 close-out)
 
-> **SESSION_130 shipped M13.2 —** M2
-> cost reconciliation detector.
-> `VehicleCost.posted_at` additive
-> extension, `services/accounting/
-> vehicle_cost.py` + Celery-beat
-> orchestrator at 10:00 project-time
-> (ninth task family), uniform-mapping
-> GL post per §0.a M13.2 decisions.
-> **Six implementation-time §0.a
-> micro-decisions confirmed as-
-> recommended at SESSION_130 open**
-> — per M10-M12 precedent these do
-> not count against the planning-time
-> streak (still **47 M5.1 → M13.0**).
+> **SESSION_131 shipped M13.3 —**
+> trial-balance snapshot substrate.
+> Pure recompute `compute_trial_balance`
+> pure verb + `TrialBalanceRow` /
+> `TrialBalanceSnapshot` frozen
+> dataclasses + `admin-trial-balance`
+> GET endpoint. **Five implementation-
+> time §0.a M13.3 micro-decisions
+> confirmed as-recommended at
+> SESSION_131 open** — per M10-M13.2
+> precedent these do not count against
+> the planning-time streak (still **47
+> M5.1 → M13.0**).
 >
-> **Backend baseline: 4,220 pass, 1
-> skipped, 0 fail** (was 4,194 at
-> M13.1 close — **+26 tests, 0
+> **Backend baseline: 4,240 pass, 1
+> skipped, 0 fail** (was 4,220 at
+> M13.2 close — **+20 tests, 0
 > regressions**). **Frontend Vitest
 > baseline: 78 pass** (unchanged —
-> no frontend at M13.2). Migration
-> `0044`. Tenancy carriers 47
-> (unchanged). DRF admin surface
-> 101 (unchanged — detector runs
-> via Celery). Frontend operator
-> routes 17 (unchanged). Celery-
-> beat task families **8 → 9**.
-> Permission classes 8 (unchanged
-> — no new endpoint).
+> no frontend at M13.3). No new
+> migration (M13.3 is read-only).
+> Tenancy carriers 47 (unchanged).
+> DRF admin surface **101 → 102**
+> (`admin-trial-balance`). Frontend
+> operator routes 17 (unchanged).
+> Celery-beat task families 9
+> (unchanged). Permission classes 8
+> (unchanged — reused
+> `IsSalesManagerOrOwnerAtActiveDealership`;
+> zero drift across five consecutive
+> milestones now).
 >
-> **Push authorization:** one local
-> M13.2 commit queued for user
-> authorization at SESSION_130
+> **Push authorization:** three
+> local M13 commits (M13.1 + M13.2
+> + M13.3) queued for user
+> authorization at SESSION_131
 > close.
 
-## First thing SESSION_131 must do
+## First thing SESSION_132 must do
 
-### 1. Surface any implementation-time micro-decisions
+### 1. This is a documentation-only close-out session
 
-Per M10-M13.2 §0.a precedent —
-M13.3 planning is expected to surface
-3–5 implementation-time micro-decisions
-at session open.
-
-Anticipated micro-decisions for M13.3:
-
-1. **Snapshot verb output shape.**
-   Frozen dataclass per M12 §6 lesson
-   15 (`BhphAnalyticsSummary` /
-   `GrossProfitPoint` pattern) vs
-   plain dict. **Recommendation:**
-   frozen dataclass — matches every
-   M8/M12 aggregate return shape.
-2. **Snapshot verb caching posture.**
-   Recompute per read vs materialize
-   into a new `TrialBalanceSnapshot`
-   entity. **Recommendation:** pure
-   recompute at M13.3 (no snapshot
-   entity); materialization defers
-   until operator evidence surfaces
-   need (M14+ close workflow).
-3. **Endpoint gating.** Reuse
-   `IsSalesManagerOrOwnerAtActiveDealership`
-   per zero-drift posture.
-4. **`as_of` parameter shape.**
-   Required datetime vs optional
-   (default `timezone.now()`).
-   **Recommendation:** optional —
-   most operator reads want "now"
-   (matches M12.7 analytics posture).
-5. **Zero-portfolio semantics.**
-   Return balanced empty snapshot
-   (all zeros) vs 404. **Recommendation:**
-   empty balanced snapshot — 404
-   would surprise operators who
-   have not yet posted any journals
-   (fresh dealership starting from
-   the M13.1 seed COA).
+Per M10.8 / M11.7 / M12.8 precedent
+M13.4 ships six close-out documents
+and one coordinated commit. **No new
+code, no new tests, no new
+migrations.** The full-suite backend
+baseline stays at **4,240 pass**.
 
 ### 2. Verify starting state
 
-- `git status` — clean (M13.2
-  commit landed at SESSION_130
-  close; batch push authorized +
-  executed).
+- `git status` — clean (M13.1 +
+  M13.2 + M13.3 commits landed at
+  their respective session close;
+  batch push authorized).
 - `git log --oneline -3` — top
-  should reference SESSION_130 /
-  M13.2.
+  should reference SESSION_131 /
+  M13.3.
 - `git log origin/main..HEAD
-  --oneline` — **empty** (all
-  M13.2 commits pushed).
+  --oneline` — should show M13.1
+  + M13.2 + M13.3 (three commits
+  unpushed, pending SESSION_132
+  bundled close-out push).
 - `python3 manage.py test dealer_ai`
-  → **4,220 pass, 1 skipped, 0
+  → **4,240 pass, 1 skipped, 0
   fail**.
 - `cd frontend && npm test` →
   **78 pass**.
@@ -124,142 +96,127 @@ Anticipated micro-decisions for M13.3:
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
   detected."
-- `npx tsc --noEmit` + `npx vite
-  build` both clean.
-- `redis-cli ping` → `PONG`.
 
-## What M13.3 delivers
+## What M13.4 delivers (docs-only close-out)
 
-Per `MILESTONE_13_PLANNING.md` §5
-M13.3:
+Six close-out documents per M12.8
+pattern:
 
-- **New `services/accounting/
-  snapshot.py` module** with pure
-  aggregate verbs computing account
-  balances at a point in time.
-- **`compute_trial_balance(dealership,
-  as_of=None)`** pure verb — returns
-  a frozen dataclass with per-
-  account rows (code + name + type +
-  debit total + credit total +
-  natural-sign balance) and grand
-  totals (sum debits + sum credits
-  — must equal for a valid trial
-  balance).
-- **`GET /admin/accounting/trial-
-  balance/`** endpoint — returns the
-  computed snapshot JSON. Optional
-  `?as_of=<ISO8601>` query parameter.
-- **~20 focused tests** across
-  service / endpoint files.
-- **Baseline target 4,220 →
-  ~4,240.**
-- **DRF admin surface:** 101 →
-  102.
-- **Tenancy carriers:** unchanged
-  (no new entity — pure aggregate
-  reads only).
-- **Celery-beat task families:**
-  unchanged (M13.3 is on-demand
-  reads only).
+1. **New:
+   `docs/roadmap/MILESTONE_13_RETROSPECTIVE.md`**
+   — full retrospective, §6 lessons
+   list, §7 streak update.
+2. **New:
+   `docs/roadmap/MILESTONE_14_PLANNING.md`**
+   — planning skeleton per standing
+   user directive (M10.8 / M11.7 /
+   M12.8 pattern). M14 is currently
+   TBD — draft from
+   `IMPLEMENTATION_ROADMAP.md`
+   §Milestone 14 (or whatever is
+   next per current roadmap
+   sequencing).
+3. **Modified:
+   `docs/CAPABILITY_MATRIX.md`** —
+   add new §7n subsection for M13
+   accounting reconciliation
+   capabilities.
+4. **Modified:
+   `docs/roadmap/IMPLEMENTATION_ROADMAP.md`**
+   — flip M13 heading to "SHIPPED
+   at SESSION_132" + delivery-
+   record summary block at the top
+   of the M13 section.
+5. **Modified:
+   `docs/roadmap/MILESTONE_13_PLANNING.md`**
+   — frontmatter status flipped
+   `draft` → `shipped`; add
+   `shipped_at_session` +
+   `retrospective` keys.
+6. **Modified:
+   `00-START-NEXT-SESSION.md`** —
+   flipped to SESSION_133 · M14.0
+   planning refinement.
 
-### Non-goals for M13.3
+### Non-goals for M13.4
 
-- ❌ No trial-balance
-  materialization / snapshot entity
-  (defers to M14+ close workflow).
-- ❌ No M9 sale-booking GL post
-  (deferred).
-- ❌ No M12 BHPH payment GL post
-  (deferred).
-- ❌ No operator UI (§5.f Option
-  C — defers to M14).
-- ❌ No PDF / spreadsheet export.
-- ❌ No period-comparison verbs
-  (delta between two `as_of`
-  snapshots).
-- ❌ No balance-sheet / P&L
-  derivatives (trial balance is
-  the raw substrate; higher-level
-  reports layer at M14+).
+- ❌ No new business logic.
+- ❌ No new tests.
+- ❌ No new migrations.
+- ❌ No M14 code.
+- ❌ No frontend changes.
 
-## What SESSION_131 should do
+## What SESSION_132 should do
 
 ### Recommended step sequence
 
-1. **Surface M13.3 micro-decisions
-   with the user** and amend
-   `MILESTONE_13_PLANNING.md` §0.a
-   per M5-M13.2 precedent.
-
-2. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_13_PLANNING.md`
-     §5 M13.3.
-   - `docs/handoffs/SESSION_130_m13_inc2_m2_cost_reconciliation.md`
-     (previous session).
-   - `docs/research/ACCOUNTING_DEPARTMENT_MAPPING.md`
-     §1.3 (schedule concept) + §1.6
-     (trial balance + close).
-   - `backend/dealer_ai/services/bhph_analytics/compute.py`
-     (M12.7 aggregate-verb + frozen-
-     dataclass pattern to mirror).
-   - `backend/dealer_ai/models.py::JournalEntry`
-     + `JournalEntryLine` (M13.1
-     substrate).
-
-3. **Verify starting state** (§2
+1. **Verify starting state** (§2
    above).
 
-4. **Draft (in order):**
-   - `services/accounting/snapshot.py`
-     with `TrialBalanceRow` +
-     `TrialBalanceSnapshot` frozen
-     dataclasses + `compute_trial_balance`
-     verb.
-   - Endpoint in
-     `views_accounting.py` +
-     URL route.
-   - ~20 focused tests distributed
-     across service / endpoint files.
+2. **Read first (in order):**
+   - `docs/roadmap/MILESTONE_12_RETROSPECTIVE.md`
+     (structural template).
+   - `docs/handoffs/SESSION_131_m13_inc3_trial_balance.md`
+     (this session's predecessor).
+   - `docs/handoffs/SESSION_130_m13_inc2_m2_cost_reconciliation.md`.
+   - `docs/handoffs/SESSION_129_m13_inc1_gl_substrate.md`.
+   - `docs/roadmap/MILESTONE_13_PLANNING.md`
+     (§5 M13.1-M13.3 + §0.a table).
+   - `docs/CAPABILITY_MATRIX.md`
+     (§7m for the M12 subsection to
+     mirror).
+   - `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+     §Milestone 13 (flip target)
+     + §Milestone 14 (skeleton
+     source).
 
-5. **Full-suite verification.**
-   Target 4,220 → ~4,240.
+3. **Draft the six close-out
+   documents** — order and shape
+   per M12.8 handoff.
 
-6. **Ship handoff at
-   `docs/handoffs/SESSION_131_m13_inc3_trial_balance.md`.**
+4. **Full-suite verification** —
+   should stay at 4,240 pass
+   (documentation-only change).
 
-7. **Overwrite
+5. **Ship handoff at
+   `docs/handoffs/SESSION_132_m13_close.md`.**
+
+6. **Overwrite
    `00-START-NEXT-SESSION.md`** with
-   M13.4 priority (closeout).
+   SESSION_133 · M14.0 priority.
 
-## Explicit non-goals for SESSION_131
+7. **Single coordinated commit**
+   per M10.8 / M11.7 / M12.8
+   pattern:
+   `Milestone 13 shipped — Accounting
+   reconciliation core (SESSION_129-132)`.
 
-- ❌ Do NOT ship M13.4 scope.
-- ❌ Do NOT modify M1-M12 or
-  M13.1-M13.2 business logic.
+## Explicit non-goals for SESSION_132
+
+- ❌ Do NOT ship M14 code.
+- ❌ Do NOT modify M1-M13.3
+  business logic.
 - ❌ Do NOT force-push or amend
-  any earlier commits.
-- ❌ Do NOT introduce a snapshot
-  entity — M13.3 is pure recompute
-  per §5.a Option A slice
-  discipline.
+  earlier commits.
+- ❌ Do NOT add new tests.
 
 ## NEXT TASK
 
-Start SESSION_131 with (a) surfacing
-M13.3 micro-decisions, (b) the read-
-first list, (c) starting-state
-verification, then (d) new
-`services/accounting/snapshot.py`
-module + `compute_trial_balance` pure
-verb + GET endpoint + URL route +
-~20 tests. Target baseline 4,220
-→ ~4,240. Ship the M13.3 handoff.
+Start SESSION_132 with (a) verifying
+starting state, (b) the read-first
+list, then (c) drafting the six
+close-out documents (M13 retrospective
++ M14 planning skeleton + capability
+matrix §7n + roadmap flip + planning
+frontmatter flip + session-start
+refresh). Ship the M13.4 handoff
+and the coordinated M13 close-out
+commit.
 
-Backend baseline at SESSION_131
-close: **~4,240 pass**. Frontend
-baseline: unchanged (no frontend at
-M13.3).
+Backend baseline at SESSION_132
+close: **4,240 pass** (unchanged —
+docs-only). Frontend baseline:
+unchanged.
 
 ---
 
@@ -268,28 +225,30 @@ M13.3).
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-   §Milestone 13
+   §Milestone 13 + §Milestone 14
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_13_PLANNING.md`
 6. `docs/roadmap/MILESTONE_12_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_130_m13_inc2_m2_cost_reconciliation.md`
+   (structural template)
+7. `docs/handoffs/SESSION_131_m13_inc3_trial_balance.md`
    (this session's close)
-8. `docs/handoffs/SESSION_129_m13_inc1_gl_substrate.md`
-9. `docs/CAPABILITY_MATRIX.md` §7m
-10. `docs/research/ACCOUNTING_DEPARTMENT_MAPPING.md`
-11. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
+8. `docs/handoffs/SESSION_130_m13_inc2_m2_cost_reconciliation.md`
+9. `docs/handoffs/SESSION_129_m13_inc1_gl_substrate.md`
+10. `docs/CAPABILITY_MATRIX.md` §7m
+    (M12 subsection to mirror)
+11. `docs/research/ACCOUNTING_DEPARTMENT_MAPPING.md`
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_130 — M13.2 SHIPPED)
+## Operational state (post-SESSION_131 — M13.3 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
   `0001`–`0044`. Test baseline:
-  **4,220 pass**, 1 skipped, 0
+  **4,240 pass**, 1 skipped, 0
   fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
@@ -302,50 +261,47 @@ research + code are facts.
   `django-celery-beat` 2.8.1
   DatabaseScheduler. **9
   scheduled task families
-  registered** (M7.2 02:00, M7.3
-  03:00, M7.4 04:00, M7.5 05:00,
-  M11.4 06:00, M11.5 07:00,
-  M12.3 08:00, M12.4 09:00,
-  M13.2 10:00). Next slot
-  available: 11:00.
+  registered** (unchanged — M13.3
+  is on-demand read only). Next
+  available slot: 11:00.
 - **Milestones shipped:** M1 →
-  **M12** + M13.1 + M13.2 (of
-  M13). M13.3 next.
-- **DRF admin surface:** **101**
-  endpoints (unchanged since
-  M13.1 close — detector-only
-  M13.2).
+  **M12** + M13.1 + M13.2 + M13.3
+  (of M13). **M13.4 close-out
+  next**; M13 fully shipped at
+  SESSION_132 close.
+- **DRF admin surface:** **102**
+  endpoints (101 at M13.2 close;
+  +1 M13.3 `admin-trial-balance`).
 - **Frontend operator routes:**
   **17** (unchanged — no UI at
-  M13.1/M13.2 per §5.f Option C).
+  M13 per §5.f Option C).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** complete
   `services/f_and_i/` (M10) +
   five M11 packages + seven M12
   packages +
-  `services/accounting/` (M13.1
-  + M13.2 — GL substrate + M2
-  cost reconciliation).
+  `services/accounting/` (M13 —
+  four modules: `default_coa` +
+  `journal` + `vehicle_cost` +
+  `snapshot`).
 - **Tenancy carriers:** **47**
   (unchanged since M13.1 —
-  M13.2 was additive VehicleCost
-  extension only).
+  M13.2 was additive extension,
+  M13.3 was aggregate-only).
 - **Permission classes:** **8**
   (unchanged — zero drift across
-  four consecutive milestones
-  now).
+  five consecutive milestones).
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17 scrub
   stages (unchanged).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 13 next:** M13.3
-  trial-balance snapshot (pure
-  aggregate reads over the M13.1
-  substrate). New
-  `services/accounting/snapshot.py`
-  module + GET endpoint + ~20
-  tests, baseline 4,220 →
-  ~4,240.
+- **Milestone 13 next:** M13.4
+  docs-only close-out. Six close-
+  out documents + one coordinated
+  commit. Baseline stays at
+  4,240 pass. **Milestone 13
+  fully shipped at SESSION_132
+  close.**
