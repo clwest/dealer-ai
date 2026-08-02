@@ -595,4 +595,31 @@ urlpatterns = [
         views_f_and_i.admin_chargeback_create,
         name="admin-chargeback-create",
     ),
+    # ---- Milestone 10 · Increment 7 — Compliance + deal-jacket API ----
+    # Role-gated on the same permission class as M10.1-M10.6
+    # (``_M101_PERMS``). Flat URL shape per §1.9.a.
+    # Domain-error mapping in ``views_f_and_i.py``:
+    #   CrossTenantComplianceError → 404;
+    #   ComplianceAlreadyExistsError → 409;
+    #   ValueError → 400.
+    path(
+        "admin/compliance-records/",
+        views_f_and_i.admin_compliance_create,
+        name="admin-compliance-create",
+    ),
+    path(
+        "admin/compliance-records/<int:pk>/",
+        views_f_and_i.admin_compliance_update,
+        name="admin-compliance-update",
+    ),
+    path(
+        "admin/deal-jackets/<int:contract_pk>/",
+        views_f_and_i.admin_deal_jacket_read,
+        name="admin-deal-jacket-read",
+    ),
+    path(
+        "admin/f-and-i/deals/",
+        views_f_and_i.admin_f_and_i_deals_list,
+        name="admin-f-and-i-deals-list",
+    ),
 ]

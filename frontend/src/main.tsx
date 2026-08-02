@@ -8,6 +8,8 @@ import AdvisorWorkspacePage from "@/pages/AdvisorWorkspacePage";
 import DealerAnalyticsPage from "@/pages/DealerAnalyticsPage";
 import DealerAIDemo from "@/pages/DealerAIDemo";
 import DealerAdmin from "@/pages/DealerAdmin";
+import DealerFandICompliance from "@/pages/DealerFandICompliance";
+import DealerFandIDeals from "@/pages/DealerFandIDeals";
 import DealershipHomePage from "@/pages/DealershipHomePage";
 import DealerOnboardingPage from "@/pages/DealerOnboardingPage";
 import DealerOverviewPage from "@/pages/DealerOverviewPage";
@@ -118,6 +120,16 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route
                 path="dealer-ai-advisor/:slug"
                 element={<AdvisorWorkspacePage />}
+              />
+              {/* Milestone 10 · Increment 7 — F&I operator UI (two-
+                  tab MVP per §1.8.d Option A). */}
+              <Route
+                path="dealer-ai-f-and-i"
+                element={<DealerFandIDeals />}
+              />
+              <Route
+                path="dealer-ai-f-and-i/:contract_id/compliance"
+                element={<DealerFandICompliance />}
               />
             </Route>
           </Route>

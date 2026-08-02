@@ -8,7 +8,7 @@ milestone: 10
 milestone_status: in_progress
 increment: 6
 increment_status: shipped
-commit: TBD
+commit: bd68548
 ---
 
 # SESSION_111 — Milestone 10 · Increment 6 (M10.6 — Chargeback + net_realized)

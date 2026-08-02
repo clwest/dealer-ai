@@ -48,6 +48,7 @@ from .models import (
     STIPULATION_TYPE_CHOICES,
     BackEndProductAgreement,
     Chargeback,
+    ComplianceRecord,
     Contract,
     CreditApplication,
     CustomerLead,
@@ -62,8 +63,10 @@ from .models import (
 from .permissions import IsFinanceManagerOrOwnerAtActiveDealership
 from .services import f_and_i as f_and_i_service
 from .services.f_and_i import (
+    ComplianceAlreadyExistsError,
     ContractAlreadyVoidedError,
     CrossTenantChargebackError,
+    CrossTenantComplianceError,
     CrossTenantContractError,
     CrossTenantCreditApplicationError,
     CrossTenantDealStructureError,
@@ -1390,3 +1393,278 @@ def admin_chargeback_create(request):
         {"chargeback": _project_chargeback(chargeback)},
         status=status.HTTP_201_CREATED,
     )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 7 (SESSION_112) — Compliance + deal-jacket API.
+# ---------------------------------------------------------------------------
+#
+# Four endpoints:
+#   - GET  /admin/f-and-i/deals/             — deals-in-progress list (M10.7 UI tab 1)
+#   - POST /admin/compliance-records/        — create (OneToOne per contract)
+#   - PATCH /admin/compliance-records/<pk>/  — update any typed columns
+#   - GET  /admin/deal-jackets/<int:contract_pk>/  — aggregated compliance-audit view
+#
+# `/dealer-ai-f-and-i/` frontend consumes these four.
+
+
+def _lookup_compliance_or_404(dealership, pk):
+    try:
+        return ComplianceRecord.objects.filter(dealership=dealership).get(pk=pk)
+    except ComplianceRecord.DoesNotExist:
+        return None
+
+
+def _project_compliance(compliance: ComplianceRecord) -> dict:
+    def _iso(dt_value):
+        return dt_value.isoformat() if dt_value is not None else None
+
+    return {
+        "id": compliance.pk,
+        "contract_id": compliance.contract_id,
+        "reg_z_disclosed_at": _iso(compliance.reg_z_disclosed_at),
+        "ofac_checked_at": _iso(compliance.ofac_checked_at),
+        "ofac_hit": compliance.ofac_hit,
+        "red_flags_reviewed_at": _iso(compliance.red_flags_reviewed_at),
+        "red_flags_notes": compliance.red_flags_notes,
+        "privacy_notice_delivered_at": _iso(
+            compliance.privacy_notice_delivered_at
+        ),
+        "safeguards_audit_at": _iso(compliance.safeguards_audit_at),
+        "adverse_action_sent_at": _iso(compliance.adverse_action_sent_at),
+        "adverse_action_reason": compliance.adverse_action_reason,
+        "retention_expires_at": _iso(compliance.retention_expires_at),
+        "deal_jacket_url": compliance.deal_jacket_url,
+        "notes": compliance.notes,
+        "created_at": compliance.created_at.isoformat(),
+        "updated_at": compliance.updated_at.isoformat(),
+    }
+
+
+class ComplianceCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/compliance-records/``."""
+
+    contract_id = serializers.IntegerField()
+    deal_jacket_url = serializers.URLField(
+        required=False, allow_blank=True, default=""
+    )
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class ComplianceUpdateRequestSerializer(serializers.Serializer):
+    """Request shape for ``PATCH /admin/compliance-records/<pk>/``.
+
+    Every field optional — the operator PATCHes just the columns
+    they're updating. Unspecified fields are preserved.
+    """
+
+    reg_z_disclosed_at = serializers.DateTimeField(
+        required=False, allow_null=True
+    )
+    ofac_checked_at = serializers.DateTimeField(
+        required=False, allow_null=True
+    )
+    ofac_hit = serializers.BooleanField(required=False)
+    red_flags_reviewed_at = serializers.DateTimeField(
+        required=False, allow_null=True
+    )
+    red_flags_notes = serializers.CharField(
+        required=False, allow_blank=True
+    )
+    privacy_notice_delivered_at = serializers.DateTimeField(
+        required=False, allow_null=True
+    )
+    safeguards_audit_at = serializers.DateTimeField(
+        required=False, allow_null=True
+    )
+    adverse_action_sent_at = serializers.DateTimeField(
+        required=False, allow_null=True
+    )
+    adverse_action_reason = serializers.CharField(
+        required=False, allow_blank=True
+    )
+    deal_jacket_url = serializers.URLField(
+        required=False, allow_blank=True
+    )
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_compliance_create(request):
+    """POST: create a ComplianceRecord for a contract.
+
+    Duplicate (contract already has a ComplianceRecord via
+    OneToOne) → 409 Conflict per
+    :class:`ComplianceAlreadyExistsError`. Cross-tenant
+    contract → 404 (never leak).
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = ComplianceCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    contract = _lookup_contract_or_404(dealership, data["contract_id"])
+    if contract is None:
+        return Response(
+            {"detail": "Contract not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        compliance = f_and_i_service.record_compliance(
+            dealership=dealership,
+            contract=contract,
+            deal_jacket_url=data.get("deal_jacket_url", ""),
+            notes=data.get("notes", ""),
+        )
+    except CrossTenantComplianceError:
+        return Response(
+            {"detail": "Parent resource not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except ComplianceAlreadyExistsError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    return Response(
+        {"compliance": _project_compliance(compliance)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["PATCH"])
+@permission_classes(_M101_PERMS)
+def admin_compliance_update(request, pk):
+    """PATCH: update any subset of compliance columns.
+
+    Unknown / cross-tenant pk → 404. Unknown field → 400 via
+    the service verb's field-whitelist enforcement.
+    """
+    dealership = get_current_dealership(request)
+
+    compliance = _lookup_compliance_or_404(dealership, pk)
+    if compliance is None:
+        return Response(
+            {"detail": "Compliance record not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = ComplianceUpdateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    # Only pass fields the client actually supplied — the
+    # service verb preserves unspecified fields.
+    field_kwargs = {
+        name: value
+        for name, value in serializer.validated_data.items()
+    }
+
+    try:
+        compliance = f_and_i_service.update_compliance(
+            compliance, **field_kwargs
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"compliance": _project_compliance(compliance)},
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["GET"])
+@permission_classes(_M101_PERMS)
+def admin_deal_jacket_read(request, contract_pk):
+    """GET: aggregated deal-jacket summary for a contract.
+
+    Powers the operator UI's per-deal compliance-audit view.
+    Cross-tenant contract → 404.
+    """
+    dealership = get_current_dealership(request)
+
+    contract = _lookup_contract_or_404(dealership, contract_pk)
+    if contract is None:
+        return Response(
+            {"detail": "Contract not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    summary = f_and_i_service.deal_jacket_summary(contract)
+    return Response({"deal_jacket": summary})
+
+
+@api_view(["GET"])
+@permission_classes(_M101_PERMS)
+def admin_f_and_i_deals_list(request):
+    """GET: deals-in-progress list for the F&I operator dashboard.
+
+    Returns contracts scoped to the caller's dealership with a
+    projection suitable for the deals list view. Supports basic
+    filtering via query params:
+
+    - ``state`` — Contract.state (unsigned / signed / voided).
+    - ``funding_state`` — Funding.state (pending_funding / funded / chargedback).
+    - ``has_chargebacks`` — "true" filters to contracts with
+      at least one Chargeback.
+
+    Ordering is ``-created_at``. No pagination at M10.7 — the
+    operator UI paginates client-side. Add server-side
+    pagination in M11+ if operator evidence surfaces need.
+    """
+    dealership = get_current_dealership(request)
+
+    qs = Contract.objects.filter(dealership=dealership).select_related(
+        "deal_structure__vehicle", "funding"
+    )
+
+    state_filter = request.query_params.get("state")
+    if state_filter:
+        qs = qs.filter(state=state_filter)
+
+    funding_filter = request.query_params.get("funding_state")
+    if funding_filter:
+        qs = qs.filter(funding__state=funding_filter)
+
+    has_chargebacks = request.query_params.get("has_chargebacks", "").lower()
+    if has_chargebacks == "true":
+        qs = qs.filter(chargebacks__isnull=False).distinct()
+
+    deals = []
+    for contract in qs.order_by("-created_at")[:100]:
+        funding = getattr(contract, "funding", None)
+        deals.append(
+            {
+                "contract_id": contract.pk,
+                "contract_state": contract.state,
+                "contract_type": contract.contract_type,
+                "signed_at": (
+                    contract.signed_at.isoformat()
+                    if contract.signed_at is not None
+                    else None
+                ),
+                "voided_at": (
+                    contract.voided_at.isoformat()
+                    if contract.voided_at is not None
+                    else None
+                ),
+                "vehicle_stock": contract.deal_structure.vehicle.stock_number,
+                "funding_state": funding.state if funding is not None else None,
+                "funding_amount": (
+                    str(funding.funding_amount)
+                    if funding is not None
+                    and funding.funding_amount is not None
+                    else None
+                ),
+                "chargeback_count": contract.chargebacks.count(),
+            }
+        )
+
+    return Response({"deals": deals})

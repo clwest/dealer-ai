@@ -646,6 +646,133 @@ option, and the affected sections.
     chargebacks explicitly do
     not touch Funding state.
 
+### SESSION_112 (M10.7 open) — six §1.8 decisions resolved
+
+- **Amendment.** Six load-bearing
+  decisions surfaced at SESSION_112
+  open (largest decision surface
+  in M10, matching the M10 close
+  scope). All six confirmed by
+  the user at session open (all
+  as-recommended).
+- **§1.8.a — ComplianceRecord
+  attach shape: Option A.** Per-
+  Contract `OneToOne` (CASCADE).
+  Matches FINANCE §6.9 "deal
+  jacket is the operational
+  record of retention" mental
+  model. Pre-contract compliance
+  events (OFAC on CreditApplication,
+  adverse-action on
+  LenderSubmission) surface via
+  the operator UI without
+  requiring their own
+  ComplianceRecord.
+- **§1.8.b — Per-concern vs
+  single-entity: Option A.**
+  Single `ComplianceRecord` with
+  typed timestamp/boolean/text
+  columns per FINANCE §6.1-§6.9
+  concern. Reg Z / OFAC / Red
+  Flags / Privacy / Safeguards /
+  Adverse Action / Retention
+  each get named columns.
+  Flat, queryable, cheap.
+  Per-concern history can be
+  added additively later if
+  operator evidence surfaces
+  need.
+- **§1.8.c — Photo / document
+  storage plumbing: Option C.**
+  Add nullable URL fields for
+  external document references
+  (Google Drive / DMS links) on
+  `ComplianceRecord`
+  (`deal_jacket_url`),
+  `Stipulation` (`evidence_url`),
+  `BackEndProductAgreement`
+  (`product_agreement_url`).
+  Zero storage plumbing; captures
+  the real operational workflow
+  (most indies store deal-
+  jacket docs in existing shared
+  systems). Full upload plumbing
+  (Cloudinary/S3, presigned URLs,
+  MIME validation) becomes a
+  discrete post-M10 initiative
+  if operator evidence demands
+  it.
+- **§1.8.d — Operator UI scope:
+  Option C.** Two-tab MVP:
+  (1) F&I deals-in-progress
+  list (filterable by contract
+  state, funding state,
+  chargeback status) +
+  (2) per-deal compliance-audit
+  view. Serves FINANCE §7.6
+  ("deal jacket completion")
+  pain point directly. Full 7-
+  step workflow (credit-app →
+  chargeback reconciliation)
+  operates via per-vehicle
+  drill-downs from M9.5.
+- **§1.8.e — Frontend route
+  family: Option A.** New
+  `/dealer-ai-f-and-i/` route
+  family (sibling to
+  `/dealer-ai-analytics/`).
+  Two routes:
+  `/dealer-ai-f-and-i/` (deals
+  list) +
+  `/dealer-ai-f-and-i/:contract_id/compliance/`
+  (per-deal compliance audit).
+  Matches planning §1.9 URL
+  grouping.
+- **§1.8.f — M10.7 vs M10.8
+  ordering: Option A.** Split.
+  M10.7 (this session) ships
+  implementation only. M10.8
+  (SESSION_113) is doc close-
+  out (retrospective, capability
+  matrix §7k, roadmap flip,
+  M11 planning skeleton per
+  standing user directive).
+  Matches proven M9-close
+  SESSION_105 pattern.
+- **Effect on §7 M10.7 scope.**
+  - Ships: `ComplianceRecord`
+    model + additive URL fields
+    on Stipulation + BEPA +
+    migration `0031` + tenancy
+    carrier extension 33 → 34
+    + new
+    `services/f_and_i/compliance.py`
+    module (record + update +
+    get + deal_jacket_summary
+    verbs) + backend endpoints
+    (POST + PATCH
+    compliance-records +
+    deal-jacket read) + two
+    frontend pages
+    (`DealerFandIDeals.tsx`
+    + `DealerFandICompliance.tsx`)
+    + ~20 backend + ~25
+    frontend focused tests.
+  - `deal_jacket_summary(contract)`
+    pure verb aggregates
+    ComplianceRecord fields +
+    Stipulation list +
+    Chargeback list + Funding
+    state for the operator UI.
+  - No photo/document upload
+    plumbing per §1.8.c
+    Option C. URL fields only.
+  - No M10.8 close-out in
+    this session per §1.8.f
+    Option A. SESSION_113 will
+    handle retrospective +
+    M11 planning.
+
 ---
 
 ## 1. Design memo

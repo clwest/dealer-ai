@@ -92,6 +92,14 @@ from .chargeback import (
     net_realized,
     record_chargeback,
 )
+from .compliance import (
+    ComplianceAlreadyExistsError,
+    CrossTenantComplianceError,
+    deal_jacket_summary,
+    get_compliance,
+    record_compliance,
+    update_compliance,
+)
 
 __all__ = [
     # M10.1 — credit application
@@ -141,4 +149,11 @@ __all__ = [
     "get_chargeback",
     "net_realized",
     "record_chargeback",
+    # M10.7 — compliance + deal-jacket summary
+    "ComplianceAlreadyExistsError",
+    "CrossTenantComplianceError",
+    "deal_jacket_summary",
+    "get_compliance",
+    "record_compliance",
+    "update_compliance",
 ]

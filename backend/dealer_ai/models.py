@@ -4952,6 +4952,15 @@ class Stipulation(models.Model):
     # the state transitions back to ``open`` (operator error
     # correction path).
     cleared_at = models.DateTimeField(null=True, blank=True)
+    # Milestone 10 · Increment 7 (SESSION_112) — external document
+    # reference per §1.8.c Option C (user-confirmed at SESSION_112
+    # open, recorded in §0.a). URL to the evidence document
+    # (paystub scan, insurance card image, POR photo, etc.) in
+    # the dealer's existing document system (Google Drive, DMS,
+    # etc.). No storage plumbing at M10.7 — the URL field
+    # captures operator reality without adding upload
+    # infrastructure.
+    evidence_url = models.URLField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -5292,6 +5301,14 @@ class BackEndProductAgreement(models.Model):
     cancellation_amount = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )
+    # Milestone 10 · Increment 7 (SESSION_112) — external document
+    # reference per §1.8.c Option C (user-confirmed at SESSION_112
+    # open, recorded in §0.a). URL to the customer-signed product
+    # agreement in the dealer's existing document system (Google
+    # Drive, DMS, etc.). No storage plumbing at M10.7 — the URL
+    # field captures operator reality (docs live in existing
+    # systems) without adding upload infrastructure.
+    product_agreement_url = models.URLField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -5632,6 +5649,132 @@ class Chargeback(models.Model):
                         "dealership as the Chargeback. Cross-tenant "
                         "contamination guard (see AUTHENTICATION_MODEL.md "
                         "§1 layer 4)."
+                    )
+                }
+            )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 7 (SESSION_112) — ComplianceRecord.
+# ---------------------------------------------------------------------------
+
+
+class ComplianceRecord(models.Model):
+    """Milestone 10 · Increment 7 — deal-jacket compliance record.
+
+    Persists the compliance-audit state for a signed
+    :class:`Contract`. Per FINANCE §6.9 the deal jacket is the
+    operational record of retention; per ``MILESTONE_10_PLANNING.md``
+    §1.8.a Option A (user-confirmed at SESSION_112 open, recorded
+    in §0.a) the ComplianceRecord is a per-Contract OneToOne row
+    that memorializes which regulatory events happened, when, and
+    by whom.
+
+    **Attach shape — OneToOne to Contract (CASCADE)** per §1.8.a.
+    Matches FINANCE §6.9 deal-jacket mental model. Pre-contract
+    compliance events (OFAC check on CreditApplication, adverse-
+    action notice on LenderSubmission) surface via the operator
+    UI without requiring their own ComplianceRecord — the
+    operator UI aggregates across those entities in the deal-
+    jacket summary view.
+
+    **Single-entity typed-columns model** per §1.8.b Option A.
+    FINANCE §6.1-§6.9 defines seven regulatory concerns; each
+    gets a small set of named columns:
+
+    - **Reg Z (§6.1)**: ``reg_z_disclosed_at`` — timestamp when
+      Reg Z disclosures were reviewed with the customer.
+    - **OFAC (§6.2)**: ``ofac_checked_at`` +
+      ``ofac_hit`` (bool) — SDN screen result.
+    - **Red Flags (§6.3)**: ``red_flags_reviewed_at`` +
+      ``red_flags_notes`` (text) — ITPP review outcome.
+    - **Privacy notice (§6.4)**: ``privacy_notice_delivered_at``.
+    - **Safeguards audit (§6.4/§6.7)**:
+      ``safeguards_audit_at`` — WISP review timestamp.
+    - **Adverse action (§6.5)**: ``adverse_action_sent_at`` +
+      ``adverse_action_reason`` (text). NULL when the deal
+      closed on the approved terms (no adverse action taken).
+    - **Retention (§6.9)**: ``retention_expires_at`` —
+      denormalized from the parent CreditApplication for
+      query-ability at the deal-jacket layer. The
+      CreditApplication's own retention clock remains the model-
+      layer invariant per M10.1 §5.e.
+
+    **External deal-jacket URL** per §1.8.c Option C:
+    ``deal_jacket_url`` for the operator's shared document
+    system (Google Drive folder, DMS deal jacket, etc.). No
+    upload plumbing at M10.7 — full storage infrastructure
+    (Cloudinary/S3 + presigned URLs + MIME validation) is a
+    discrete post-M10 initiative.
+
+    **Cross-tenant guard.** ``clean()`` enforces ``dealership``
+    matches ``contract.dealership``. Belt + suspenders per
+    project pattern.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="compliance_records",
+    )
+    contract = models.OneToOneField(
+        "Contract",
+        on_delete=models.CASCADE,
+        related_name="compliance_record",
+    )
+    # Reg Z (§6.1)
+    reg_z_disclosed_at = models.DateTimeField(null=True, blank=True)
+    # OFAC (§6.2)
+    ofac_checked_at = models.DateTimeField(null=True, blank=True)
+    ofac_hit = models.BooleanField(default=False)
+    # Red Flags (§6.3)
+    red_flags_reviewed_at = models.DateTimeField(null=True, blank=True)
+    red_flags_notes = models.TextField(blank=True, default="")
+    # Privacy notice (§6.4)
+    privacy_notice_delivered_at = models.DateTimeField(null=True, blank=True)
+    # Safeguards audit (§6.4 / §6.7)
+    safeguards_audit_at = models.DateTimeField(null=True, blank=True)
+    # Adverse action (§6.5). NULL when no adverse action was taken
+    # (deal closed on approved terms). Populated when a decline /
+    # counter-offer / co-signer requirement triggered the notice.
+    adverse_action_sent_at = models.DateTimeField(null=True, blank=True)
+    adverse_action_reason = models.TextField(blank=True, default="")
+    # Retention (§6.9). Denormalized from CreditApplication for
+    # deal-jacket query-ability. Populated by the service verb.
+    retention_expires_at = models.DateTimeField(null=True, blank=True)
+    # External document reference per §1.8.c Option C.
+    deal_jacket_url = models.URLField(blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Compliance record"
+        verbose_name_plural = "Compliance records"
+
+    def __str__(self) -> str:
+        return (
+            f"ComplianceRecord #{self.pk} — Contract "
+            f"#{self.contract_id}"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guard at the model layer."""
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.contract_id is not None
+            and self.contract.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "contract": (
+                        "ComplianceRecord.contract must belong to the "
+                        "same dealership as the ComplianceRecord. "
+                        "Cross-tenant contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
                     )
                 }
             )

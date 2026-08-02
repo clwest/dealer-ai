@@ -419,6 +419,18 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # autofill signal is the safety net for callers that bypass
     # the service.
     "Chargeback",
+    # Milestone 10 · Increment 7 (SESSION_112) — ComplianceRecord
+    # entity per MILESTONE_10_PLANNING.md §1.8 (six §1.8.a-f
+    # decisions confirmed at SESSION_112 open, recorded in §0.a)
+    # (33 → 34). OneToOne with Contract per §1.8.a Option A —
+    # matches FINANCE §6.9 deal-jacket mental model. Single-
+    # entity typed-columns model per §1.8.b Option A covering
+    # FINANCE §6.1-§6.9 concerns. The M10.7
+    # :mod:`services.f_and_i.compliance` verbs write
+    # ``dealership`` explicitly on every row; the autofill
+    # signal is the safety net for callers that bypass the
+    # service.
+    "ComplianceRecord",
 )
 
 
