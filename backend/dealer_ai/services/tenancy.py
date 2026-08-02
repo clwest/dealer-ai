@@ -390,6 +390,22 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # ``cleared_at`` on state transitions; the autofill signal
     # is the safety net for callers that bypass the service.
     "Stipulation",
+    # Milestone 10 · Increment 5 (SESSION_110) — Contract +
+    # BackEndProductAgreement + Funding entities per
+    # MILESTONE_10_PLANNING.md §1.5 + §1.6 (five §1.5.a-d +
+    # §1.6.a decisions confirmed at SESSION_110 open,
+    # recorded in §0.a) (29 → 32). Contract FKs to
+    # DealStructure (CASCADE); BackEndProductAgreement FKs to
+    # Contract (CASCADE); Funding OneToOne to Contract
+    # (CASCADE). The M10.5 :mod:`services.f_and_i.contract`
+    # and :mod:`services.f_and_i.funding` verbs write
+    # ``dealership`` explicitly on every row and auto-populate
+    # ``signed_at`` / ``voided_at`` / ``funded_at`` on state
+    # transitions; the autofill signal is the safety net for
+    # callers that bypass the service.
+    "Contract",
+    "BackEndProductAgreement",
+    "Funding",
 )
 
 

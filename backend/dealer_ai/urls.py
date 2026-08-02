@@ -550,4 +550,38 @@ urlpatterns = [
         views_f_and_i.admin_stipulation_update,
         name="admin-stipulation-update",
     ),
+    # ---- Milestone 10 · Increment 5 — Contract + BEPA + Funding API ---
+    # Role-gated on the same permission class as M10.1-M10.4
+    # (``_M101_PERMS``). Flat URL shape per §1.9.a.
+    # Domain-error mapping in ``views_f_and_i.py``:
+    #   CrossTenantContractError → 404;
+    #   CrossTenantFundingError → 404;
+    #   ContractAlreadyVoidedError → 409;
+    #   FundingAlreadyExistsError → 409;
+    #   ValueError → 400.
+    path(
+        "admin/contracts/",
+        views_f_and_i.admin_contract_create,
+        name="admin-contract-create",
+    ),
+    path(
+        "admin/contracts/<int:pk>/",
+        views_f_and_i.admin_contract_update,
+        name="admin-contract-update",
+    ),
+    path(
+        "admin/back-end-products/",
+        views_f_and_i.admin_back_end_product_create,
+        name="admin-back-end-product-create",
+    ),
+    path(
+        "admin/funding/",
+        views_f_and_i.admin_funding_create,
+        name="admin-funding-create",
+    ),
+    path(
+        "admin/funding/<int:pk>/",
+        views_f_and_i.admin_funding_update,
+        name="admin-funding-update",
+    ),
 ]

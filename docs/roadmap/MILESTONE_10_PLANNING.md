@@ -393,6 +393,121 @@ option, and the affected sections.
     fields on `Stipulation` at
     M10.4 — those land at M10.7.
 
+### SESSION_110 (M10.5 open) — five §1.5+§1.6 decisions resolved
+
+- **Amendment.** Five load-bearing
+  decisions surfaced at SESSION_110
+  open. All five confirmed by the
+  user at session open (all as-
+  recommended). M10.5 is the
+  largest single M10 increment
+  sketch — three entities in one
+  session.
+- **§1.5.a — Contract entity split:
+  Option B.** Two entities:
+  `Contract` + separate
+  `BackEndProductAgreement` per
+  product row. Per-product rows
+  unlock M10.6 per-product
+  chargeback attribution (FINANCE
+  §5.7). Doing per-product rows
+  now avoids a schema migration
+  + backfill at M10.6.
+- **§1.6.a — FundingPacket vs
+  FundingStatus entity boundary:
+  Option C.** Single `Funding`
+  entity with state machine only.
+  Skip a persisted
+  `FundingPacket` entity — per
+  FINANCE §5.1 the packet is a
+  *list of documents assembled
+  per submission*, computable
+  from Contract + cleared
+  Stipulations + related rows.
+  M10.7 compliance layer can
+  materialize a packet report if
+  operators need one.
+- **§1.5.b — Contract state
+  machine: Option A.** Three
+  states: `unsigned` (default)
+  → `signed` → optional
+  `voided`. `voided` preserves
+  audit trail for FINANCE §5.8
+  deal unwinds (contract errors,
+  customer bail, lender bounce).
+  Two distinct action verbs
+  (`sign_contract`,
+  `void_contract`) rather than a
+  generic state updater — makes
+  auto-population of
+  `signed_at` / `voided_at`
+  timestamps explicit.
+- **§1.5.c — Contract attach
+  point: Option A.** Mandatory
+  FK to `DealStructure` (CASCADE)
+  only. Cash contracts have a
+  DealStructure but no
+  LenderSubmission; operators
+  navigate
+  `DealStructure.lender_submissions`
+  to find the approved lender
+  submission for financed deals.
+  Matches planning-time intent
+  and avoids the clean()
+  complexity of enforcing
+  contract_type vs
+  LenderSubmission-presence
+  consistency.
+- **§1.5.d — Product-agreement
+  vocabulary: Option A.**
+  Structured
+  `BackEndProductAgreement`
+  entity with fixed
+  `product_type` vocabulary
+  (`vsc` / `gap` / `t_and_w` /
+  `prepaid_maint` /
+  `appearance` / `other`) per
+  the M10.1 §5.b + M10.3 §1.3.b
+  + M10.4 §5.b fixed-vocab
+  precedent. `other` fallback
+  covers the long tail (credit
+  insurance, key replacement,
+  windshield replacement, etc.)
+  until operator evidence
+  surfaces need for subtypes.
+- **Effect on §7 M10.5 scope.**
+  - Ships (adjusted): three
+    entities per §5-equivalent
+    resolutions — `Contract`
+    + `BackEndProductAgreement`
+    + `Funding` + tenancy
+    carrier extensions 29 → 32
+    + two new service modules
+    (`services/f_and_i/contract.py`
+    + `services/f_and_i/funding.py`)
+    + five new endpoints
+    (Contract POST + PATCH for
+    sign/void; BEPA POST;
+    Funding POST + PATCH for
+    mark-funded) + ~30-35
+    focused tests.
+  - Funding uses `OneToOne` to
+    Contract (business invariant:
+    one funding per contract;
+    unwinds/re-signs require a
+    new Contract row, per
+    FINANCE §5.8 pattern).
+  - BackEndProductAgreement
+    fields limited to at-write
+    economics (cost / retail /
+    term / mileage /
+    deductible / provider);
+    cancellation
+    fields (`cancelled_at`,
+    `cancellation_amount`) belong
+    to M10.6 Chargeback
+    attribution and land there.
+
 ---
 
 ## 1. Design memo

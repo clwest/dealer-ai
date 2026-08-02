@@ -38,14 +38,19 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
+    BEPA_TYPE_CHOICES,
+    CONTRACT_TYPE_CHOICES,
     CREDIT_APP_FORMAT_CHOICES,
     CREDIT_APP_STATUS_CHOICES,
     LENDER_SUBMISSION_STATUS_CHOICES,
     STIPULATION_STATE_CHOICES,
     STIPULATION_TYPE_CHOICES,
+    BackEndProductAgreement,
+    Contract,
     CreditApplication,
     CustomerLead,
     DealStructure,
+    Funding,
     LenderProgram,
     LenderSubmission,
     Sale,
@@ -55,11 +60,15 @@ from .models import (
 from .permissions import IsFinanceManagerOrOwnerAtActiveDealership
 from .services import f_and_i as f_and_i_service
 from .services.f_and_i import (
+    ContractAlreadyVoidedError,
+    CrossTenantContractError,
     CrossTenantCreditApplicationError,
     CrossTenantDealStructureError,
+    CrossTenantFundingError,
     CrossTenantLenderSubmissionError,
     CrossTenantStipulationError,
     DuplicateLenderProgramError,
+    FundingAlreadyExistsError,
 )
 from .services.tenancy import get_current_dealership
 
@@ -777,5 +786,452 @@ def admin_stipulation_update(request, pk):
 
     return Response(
         {"stipulation": _project_stipulation(stip)},
+        status=status.HTTP_200_OK,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 5 (SESSION_110) — Contract + BEPA + Funding.
+# ---------------------------------------------------------------------------
+#
+# Five endpoints:
+#   - POST /admin/contracts/           — create (state=unsigned)
+#   - PATCH /admin/contracts/<pk>/     — sign OR void via ``action`` field
+#   - POST /admin/back-end-products/   — attach product to contract
+#   - POST /admin/funding/             — create funding (state=pending)
+#   - PATCH /admin/funding/<pk>/       — mark_funded (transitions + amount)
+
+
+def _lookup_contract_or_404(dealership, pk):
+    try:
+        return Contract.objects.filter(dealership=dealership).get(pk=pk)
+    except Contract.DoesNotExist:
+        return None
+
+
+def _lookup_funding_or_404(dealership, pk):
+    try:
+        return Funding.objects.filter(dealership=dealership).get(pk=pk)
+    except Funding.DoesNotExist:
+        return None
+
+
+def _project_contract(contract: Contract) -> dict:
+    return {
+        "id": contract.pk,
+        "deal_structure_id": contract.deal_structure_id,
+        "contract_type": contract.contract_type,
+        "state": contract.state,
+        "signer_name": contract.signer_name,
+        "signed_at": (
+            contract.signed_at.isoformat()
+            if contract.signed_at is not None
+            else None
+        ),
+        "financed_amount": str(contract.financed_amount),
+        "total_of_payments": str(contract.total_of_payments),
+        "finance_charge": str(contract.finance_charge),
+        "apr_disclosure": str(contract.apr_disclosure),
+        "first_payment_date": (
+            contract.first_payment_date.isoformat()
+            if contract.first_payment_date is not None
+            else None
+        ),
+        "voided_at": (
+            contract.voided_at.isoformat()
+            if contract.voided_at is not None
+            else None
+        ),
+        "voided_reason": contract.voided_reason,
+        "notes": contract.notes,
+        "created_at": contract.created_at.isoformat(),
+        "updated_at": contract.updated_at.isoformat(),
+    }
+
+
+def _project_back_end_product(bepa: BackEndProductAgreement) -> dict:
+    return {
+        "id": bepa.pk,
+        "contract_id": bepa.contract_id,
+        "product_type": bepa.product_type,
+        "provider": bepa.provider,
+        "cost": str(bepa.cost),
+        "retail_price": str(bepa.retail_price),
+        "term_months": bepa.term_months,
+        "mileage_limit": bepa.mileage_limit,
+        "deductible": (
+            str(bepa.deductible) if bepa.deductible is not None else None
+        ),
+        "notes": bepa.notes,
+        "created_at": bepa.created_at.isoformat(),
+        "updated_at": bepa.updated_at.isoformat(),
+    }
+
+
+def _project_funding(funding: Funding) -> dict:
+    return {
+        "id": funding.pk,
+        "contract_id": funding.contract_id,
+        "state": funding.state,
+        "submitted_to_lender_at": (
+            funding.submitted_to_lender_at.isoformat()
+            if funding.submitted_to_lender_at is not None
+            else None
+        ),
+        "funded_at": (
+            funding.funded_at.isoformat()
+            if funding.funded_at is not None
+            else None
+        ),
+        "funding_amount": (
+            str(funding.funding_amount)
+            if funding.funding_amount is not None
+            else None
+        ),
+        "notes": funding.notes,
+        "created_at": funding.created_at.isoformat(),
+        "updated_at": funding.updated_at.isoformat(),
+    }
+
+
+class ContractCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/contracts/``."""
+
+    deal_structure_id = serializers.IntegerField()
+    contract_type = serializers.ChoiceField(
+        choices=[key for key, _ in CONTRACT_TYPE_CHOICES]
+    )
+    signer_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=255, default=""
+    )
+    financed_amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default="0.00"
+    )
+    total_of_payments = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default="0.00"
+    )
+    finance_charge = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default="0.00"
+    )
+    apr_disclosure = serializers.DecimalField(
+        max_digits=6, decimal_places=4, required=False, default="0.0000"
+    )
+    first_payment_date = serializers.DateField(
+        required=False, allow_null=True
+    )
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class ContractUpdateRequestSerializer(serializers.Serializer):
+    """Request shape for ``PATCH /admin/contracts/<pk>/``.
+
+    ``action`` selects the transition — ``sign`` or ``void``.
+    Distinct action verbs rather than a generic state updater
+    to mirror the service-layer :func:`sign_contract` /
+    :func:`void_contract` split.
+    """
+
+    action = serializers.ChoiceField(choices=("sign", "void"))
+    signer_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=255
+    )
+    voided_reason = serializers.CharField(
+        required=False, allow_blank=True
+    )
+
+
+class BackEndProductCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/back-end-products/``."""
+
+    contract_id = serializers.IntegerField()
+    product_type = serializers.ChoiceField(
+        choices=[key for key, _ in BEPA_TYPE_CHOICES]
+    )
+    cost = serializers.DecimalField(max_digits=10, decimal_places=2)
+    retail_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    provider = serializers.CharField(
+        required=False, allow_blank=True, max_length=255, default=""
+    )
+    term_months = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1
+    )
+    mileage_limit = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1
+    )
+    deductible = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True
+    )
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class FundingCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/funding/``."""
+
+    contract_id = serializers.IntegerField()
+    submitted_to_lender_at = serializers.DateTimeField(
+        required=False, allow_null=True
+    )
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class FundingUpdateRequestSerializer(serializers.Serializer):
+    """Request shape for ``PATCH /admin/funding/<pk>/`` — mark funded.
+
+    Only supports the mark-funded transition at M10.5 (M10.6 will
+    add a chargedback transition).
+    """
+
+    action = serializers.ChoiceField(choices=("mark_funded",))
+    funding_amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2
+    )
+    funded_at = serializers.DateTimeField(required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_contract_create(request):
+    """POST: create a Contract (initial state ``unsigned``).
+
+    Cross-tenant deal_structure → 404. Unknown contract_type → 400.
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = ContractCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    deal_structure = _lookup_deal_structure_or_404(
+        dealership, data["deal_structure_id"]
+    )
+    if deal_structure is None:
+        return Response(
+            {"detail": "Deal structure not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        contract = f_and_i_service.record_contract(
+            dealership=dealership,
+            deal_structure=deal_structure,
+            contract_type=data["contract_type"],
+            signer_name=data.get("signer_name", ""),
+            financed_amount=data.get("financed_amount"),
+            total_of_payments=data.get("total_of_payments"),
+            finance_charge=data.get("finance_charge"),
+            apr_disclosure=data.get("apr_disclosure"),
+            first_payment_date=data.get("first_payment_date"),
+            notes=data.get("notes", ""),
+        )
+    except CrossTenantContractError:
+        return Response(
+            {"detail": "Parent resource not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"contract": _project_contract(contract)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["PATCH"])
+@permission_classes(_M101_PERMS)
+def admin_contract_update(request, pk):
+    """PATCH: sign or void a Contract.
+
+    ``action=sign`` transitions to signed + auto-populates
+    ``signed_at``. ``action=void`` transitions to voided +
+    auto-populates ``voided_at`` + records
+    ``voided_reason``. Signing an already-voided contract →
+    409 Conflict per
+    :class:`ContractAlreadyVoidedError`.
+    """
+    dealership = get_current_dealership(request)
+
+    contract = _lookup_contract_or_404(dealership, pk)
+    if contract is None:
+        return Response(
+            {"detail": "Contract not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = ContractUpdateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    try:
+        if data["action"] == "sign":
+            contract = f_and_i_service.sign_contract(
+                contract,
+                signer_name=data.get("signer_name"),
+            )
+        else:  # action == "void"
+            contract = f_and_i_service.void_contract(
+                contract,
+                voided_reason=data.get("voided_reason", ""),
+            )
+    except ContractAlreadyVoidedError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_409_CONFLICT,
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"contract": _project_contract(contract)},
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_back_end_product_create(request):
+    """POST: attach a BackEndProductAgreement to a Contract.
+
+    Cross-tenant contract → 404. Unknown product_type → 400.
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = BackEndProductCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    contract = _lookup_contract_or_404(dealership, data["contract_id"])
+    if contract is None:
+        return Response(
+            {"detail": "Contract not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        bepa = f_and_i_service.record_back_end_product(
+            dealership=dealership,
+            contract=contract,
+            product_type=data["product_type"],
+            cost=data["cost"],
+            retail_price=data["retail_price"],
+            provider=data.get("provider", ""),
+            term_months=data.get("term_months"),
+            mileage_limit=data.get("mileage_limit"),
+            deductible=data.get("deductible"),
+            notes=data.get("notes", ""),
+        )
+    except CrossTenantContractError:
+        return Response(
+            {"detail": "Parent resource not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"back_end_product": _project_back_end_product(bepa)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_funding_create(request):
+    """POST: create a Funding row for a Contract (initial state
+    ``pending_funding``).
+
+    Cross-tenant contract → 404. Duplicate Funding for the same
+    contract → 409 Conflict per
+    :class:`FundingAlreadyExistsError`.
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = FundingCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    contract = _lookup_contract_or_404(dealership, data["contract_id"])
+    if contract is None:
+        return Response(
+            {"detail": "Contract not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        funding = f_and_i_service.record_funding(
+            dealership=dealership,
+            contract=contract,
+            submitted_to_lender_at=data.get("submitted_to_lender_at"),
+            notes=data.get("notes", ""),
+        )
+    except CrossTenantFundingError:
+        return Response(
+            {"detail": "Parent resource not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except FundingAlreadyExistsError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    return Response(
+        {"funding": _project_funding(funding)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["PATCH"])
+@permission_classes(_M101_PERMS)
+def admin_funding_update(request, pk):
+    """PATCH: mark_funded (only transition supported at M10.5).
+
+    Requires ``funding_amount`` in the body. Unknown /
+    cross-tenant pk → 404.
+    """
+    dealership = get_current_dealership(request)
+
+    funding = _lookup_funding_or_404(dealership, pk)
+    if funding is None:
+        return Response(
+            {"detail": "Funding not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = FundingUpdateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    try:
+        funding = f_and_i_service.mark_funded(
+            funding,
+            funding_amount=data["funding_amount"],
+            funded_at=data.get("funded_at"),
+            notes=data.get("notes"),
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"funding": _project_funding(funding)},
         status=status.HTTP_200_OK,
     )

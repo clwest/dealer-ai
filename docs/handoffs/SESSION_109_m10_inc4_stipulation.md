@@ -8,7 +8,7 @@ milestone: 10
 milestone_status: in_progress
 increment: 4
 increment_status: shipped
-commit: TBD
+commit: e9d311f
 ---
 
 # SESSION_109 — Milestone 10 · Increment 4 (M10.4 — Stipulation tracking)

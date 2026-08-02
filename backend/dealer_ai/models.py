@@ -4992,3 +4992,422 @@ class Stipulation(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 5 (SESSION_110) — Contract + BackEndProductAgreement
+#                                             + Funding vocabulary.
+# ---------------------------------------------------------------------------
+
+# Contract type vocabulary per MILESTONE_10_PLANNING.md §1.5 Option
+# A + planning-time intent. Three values covering the RISC / lease /
+# cash split. Extensions (`wholesale`, `internal_transfer`) land
+# when operator evidence surfaces need.
+CONTRACT_TYPE_RISC = "risc"
+CONTRACT_TYPE_LEASE = "lease"
+CONTRACT_TYPE_CASH = "cash"
+
+CONTRACT_TYPE_CHOICES = (
+    (CONTRACT_TYPE_RISC, "Retail Installment Sale Contract"),
+    (CONTRACT_TYPE_LEASE, "Lease"),
+    (CONTRACT_TYPE_CASH, "Cash"),
+)
+
+# Contract state vocabulary per MILESTONE_10_PLANNING.md §1.5.b
+# Option A (user-confirmed at SESSION_110 open, recorded in §0.a).
+# Three states: unsigned (default) → signed → optional voided.
+# ``voided`` preserves the audit trail for FINANCE §5.8 deal
+# unwinds — never delete a signed contract row.
+CONTRACT_STATE_UNSIGNED = "unsigned"
+CONTRACT_STATE_SIGNED = "signed"
+CONTRACT_STATE_VOIDED = "voided"
+
+CONTRACT_STATE_CHOICES = (
+    (CONTRACT_STATE_UNSIGNED, "Unsigned (drafted)"),
+    (CONTRACT_STATE_SIGNED, "Signed"),
+    (CONTRACT_STATE_VOIDED, "Voided"),
+)
+
+# BackEndProductAgreement product-type vocabulary per
+# MILESTONE_10_PLANNING.md §1.5.d Option A (user-confirmed at
+# SESSION_110 open, recorded in §0.a). Fixed 6-value set covering
+# the FINANCE §4.3-§4.5 catalog with an ``other`` fallback for the
+# long tail (credit insurance, key replacement, windshield
+# replacement, VIN etch, etc.). Extensions land when operator
+# evidence surfaces need for structured subtypes.
+BEPA_TYPE_VSC = "vsc"
+BEPA_TYPE_GAP = "gap"
+BEPA_TYPE_T_AND_W = "t_and_w"
+BEPA_TYPE_PREPAID_MAINT = "prepaid_maint"
+BEPA_TYPE_APPEARANCE = "appearance"
+BEPA_TYPE_OTHER = "other"
+
+BEPA_TYPE_CHOICES = (
+    (BEPA_TYPE_VSC, "Vehicle Service Contract"),
+    (BEPA_TYPE_GAP, "GAP (Guaranteed Asset Protection)"),
+    (BEPA_TYPE_T_AND_W, "Tire & Wheel"),
+    (BEPA_TYPE_PREPAID_MAINT, "Prepaid maintenance"),
+    (BEPA_TYPE_APPEARANCE, "Appearance / paintless dent repair"),
+    (BEPA_TYPE_OTHER, "Other"),
+)
+
+# Funding state vocabulary per MILESTONE_10_PLANNING.md §1.6.a
+# Option C. Three states: pending_funding (default) → funded →
+# optional chargedback (transition wired at M10.6 when Chargeback
+# entity lands). ``chargedback`` shipped in the vocabulary at
+# M10.5 so M10.6 needs no data migration — the M10.6 verb just
+# adds the transition rule.
+FUNDING_STATE_PENDING = "pending_funding"
+FUNDING_STATE_FUNDED = "funded"
+FUNDING_STATE_CHARGEDBACK = "chargedback"
+
+FUNDING_STATE_CHOICES = (
+    (FUNDING_STATE_PENDING, "Pending funding"),
+    (FUNDING_STATE_FUNDED, "Funded"),
+    (FUNDING_STATE_CHARGEDBACK, "Chargedback (M10.6)"),
+)
+
+
+class Contract(models.Model):
+    """Milestone 10 · Increment 5 — signed contract row.
+
+    Memorializes the signed retail installment / lease / cash
+    contract for a :class:`DealStructure`. Per
+    ``MILESTONE_10_PLANNING.md`` §1.5 + §1.5.b Option A + §1.5.c
+    Option A (user-confirmed at SESSION_110 open, recorded in
+    §0.a). The contract row is the persistent record of the
+    Reg Z-disclosed financial terms as they appeared on the
+    signed paper — distinct from the DealStructure's operator-
+    entered pre-signing math (which may vary as F&I iterates).
+
+    **Attach shape — mandatory FK to DealStructure (CASCADE)**
+    per §1.5.c Option A. Cash contracts have a DealStructure but
+    no LenderSubmission; operators navigate
+    ``DealStructure.lender_submissions`` to find the approved
+    lender submission for financed deals.
+
+    **State machine.** ``unsigned`` (default) → ``signed`` →
+    optional ``voided``. Two distinct service verbs handle the
+    transitions:
+    :func:`services.f_and_i.contract.sign_contract` populates
+    ``signed_at``;
+    :func:`services.f_and_i.contract.void_contract` populates
+    ``voided_at`` + ``voided_reason``. Voided contracts preserve
+    the audit trail for FINANCE §5.8 deal unwinds.
+
+    **Reg Z-disclosed fields.** ``financed_amount``,
+    ``total_of_payments``, ``finance_charge``, ``apr_disclosure``
+    are the four Truth in Lending Act mandatory disclosures per
+    FINANCE §6.1. Stored as-entered from the signed paper —
+    the platform memorializes the disclosure, it does not
+    recompute (finance_charge may differ slightly from a
+    computed value due to fee amortization).
+
+    **Cross-tenant guard.** ``clean()`` enforces ``dealership``
+    matches ``deal_structure.dealership``. Belt (model) +
+    suspenders (service layer's
+    :class:`services.f_and_i.CrossTenantContractError`).
+
+    **Cash contracts.** ``contract_type=cash`` typically has
+    ``financed_amount=0``, ``finance_charge=0``, and no
+    ``first_payment_date``. The service verb doesn't enforce
+    cross-field consistency at M10.5 — it trusts the operator to
+    match the paper contract. If M10.7 compliance evidence
+    surfaces need, transition rules can be added.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="contracts",
+    )
+    deal_structure = models.ForeignKey(
+        "DealStructure",
+        on_delete=models.CASCADE,
+        related_name="contracts",
+    )
+    contract_type = models.CharField(
+        max_length=16,
+        choices=CONTRACT_TYPE_CHOICES,
+    )
+    state = models.CharField(
+        max_length=16,
+        choices=CONTRACT_STATE_CHOICES,
+        default=CONTRACT_STATE_UNSIGNED,
+    )
+    # Printed name of the customer / co-buyer who signed. Free-text
+    # because a contract may be co-signed and the printed names on
+    # paper may differ from the CreditApplication's applicant_full_name
+    # (nicknames, married-name variations, etc.).
+    signer_name = models.CharField(max_length=255, blank=True, default="")
+    signed_at = models.DateTimeField(null=True, blank=True)
+    # Reg Z Truth in Lending Act mandatory disclosures. Stored as-
+    # entered from the signed paper; the platform memorializes
+    # disclosure, it does not recompute.
+    financed_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    total_of_payments = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    finance_charge = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    # Percent units (matches ``payment_engine`` and
+    # ``DealStructure.apr`` conventions). Default 0.0000 handles
+    # cash contracts (no APR disclosure required).
+    apr_disclosure = models.DecimalField(
+        max_digits=6, decimal_places=4, default=Decimal("0.0000")
+    )
+    first_payment_date = models.DateField(null=True, blank=True)
+    # Voided-state fields — populated only when state transitions
+    # to ``voided``. ``voided_at`` auto-populated by the service
+    # verb; ``voided_reason`` operator-provided (deal unwind
+    # rationale per FINANCE §5.8).
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_reason = models.TextField(blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Contract"
+        verbose_name_plural = "Contracts"
+
+    def __str__(self) -> str:
+        return (
+            f"Contract #{self.pk} — {self.get_contract_type_display()} "
+            f"for DS #{self.deal_structure_id} ({self.get_state_display()})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guard at the model layer.
+
+        The denormalized ``dealership`` FK must match the parent
+        DealStructure's tenant. Mirrors :meth:`Sale.clean` /
+        :meth:`Delivery.clean` / :meth:`CreditApplication.clean`.
+        Data-scoping is layer 4 in ``AUTHENTICATION_MODEL.md`` §1.
+        """
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.deal_structure_id is not None
+            and self.deal_structure.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "deal_structure": (
+                        "Contract.deal_structure must belong to the same "
+                        "dealership as the Contract. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )
+
+
+class BackEndProductAgreement(models.Model):
+    """Milestone 10 · Increment 5 — per-product agreement row on a Contract.
+
+    Persists a single back-end product (VSC / GAP / T&W /
+    prepaid maintenance / appearance / other) sold on a
+    :class:`Contract`. Per
+    ``MILESTONE_10_PLANNING.md`` §1.5.a Option B + §1.5.d
+    Option A (both user-confirmed at SESSION_110 open, recorded
+    in §0.a). Per-product rows enable per-product chargeback
+    attribution at M10.6 per FINANCE §5.7.
+
+    **Attach shape — FK to Contract (CASCADE).** Deleting a
+    contract cascades to its product agreements. Multiple
+    products per contract expected (typical F&I upsell menu
+    per FINANCE §4.8).
+
+    **Fixed product_type vocabulary** per §1.5.d Option A. Small
+    fixed set covering the FINANCE §4.3-§4.5 catalog with
+    ``other`` fallback for the long tail (credit insurance, key
+    replacement, windshield replacement, VIN etch, etc.).
+
+    **Economics fields.** ``cost`` (store's cost from provider) +
+    ``retail_price`` (customer-paid price) are the base at-write
+    economics. Optional structural fields (``term_months``,
+    ``mileage_limit``, ``deductible``) apply per-product per
+    FINANCE §4.3-§4.5 (VSCs have term + mileage + deductible;
+    GAP is flat; T&W is term-only; etc.). ``provider`` (third-
+    party administrator name — Zurich / JM&A / etc.) is free-
+    text since provider catalogs are per-dealership and would
+    duplicate the M10.3 LenderProgram pattern without
+    proportionate benefit at M10.5.
+
+    **Cancellation fields deferred to M10.6.** Per §0.a
+    resolution — ``cancelled_at`` + ``cancellation_amount`` are
+    M10.6 Chargeback concerns and land there. M10.5 ships the
+    at-write economics only.
+
+    **Cross-tenant guard.** ``clean()`` enforces ``dealership``
+    matches ``contract.dealership``. Belt + suspenders per
+    project pattern.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="back_end_product_agreements",
+    )
+    contract = models.ForeignKey(
+        "Contract",
+        on_delete=models.CASCADE,
+        related_name="back_end_products",
+    )
+    product_type = models.CharField(
+        max_length=32,
+        choices=BEPA_TYPE_CHOICES,
+    )
+    # Third-party administrator name (Zurich / JM&A / etc.). Free-
+    # text at M10.5 — per-dealership provider catalogs deferred
+    # until operator evidence surfaces need.
+    provider = models.CharField(max_length=255, blank=True, default="")
+    # Store's cost from the provider.
+    cost = models.DecimalField(max_digits=10, decimal_places=2)
+    # Customer-paid retail price.
+    retail_price = models.DecimalField(max_digits=10, decimal_places=2)
+    # Optional per-product structural fields. VSCs have all three;
+    # GAP typically has none; T&W has term_months only.
+    term_months = models.PositiveIntegerField(null=True, blank=True)
+    mileage_limit = models.PositiveIntegerField(null=True, blank=True)
+    deductible = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Back-end product agreement"
+        verbose_name_plural = "Back-end product agreements"
+
+    def __str__(self) -> str:
+        return (
+            f"BackEndProductAgreement #{self.pk} — "
+            f"{self.get_product_type_display()} on Contract "
+            f"#{self.contract_id} (retail ${self.retail_price})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guard at the model layer."""
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.contract_id is not None
+            and self.contract.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "contract": (
+                        "BackEndProductAgreement.contract must belong "
+                        "to the same dealership as the agreement. "
+                        "Cross-tenant contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+
+
+class Funding(models.Model):
+    """Milestone 10 · Increment 5 — funding lifecycle row.
+
+    Persists the funding lifecycle for a :class:`Contract` per
+    ``MILESTONE_10_PLANNING.md`` §1.6.a Option C (user-confirmed
+    at SESSION_110 open, recorded in §0.a). Single entity — no
+    persisted FundingPacket per §1.6.a resolution (the packet
+    is a per-submission view computable from Contract +
+    Stipulation + related rows; M10.7 compliance layer can
+    materialize a packet report if operators need one).
+
+    **Attach shape — OneToOne to Contract (CASCADE).** Business
+    invariant: one funding record per contract. Unwinds / re-
+    signs (FINANCE §5.8) require a new Contract row rather than
+    a fresh Funding attached to the same Contract — this keeps
+    the audit trail clean and prevents ambiguity about which
+    funding "belongs" to which signed contract.
+
+    **State machine.** ``pending_funding`` (default) →
+    ``funded`` → optional ``chargedback`` (transition wired at
+    M10.6 when Chargeback entity lands). ``chargedback`` is
+    included in the vocabulary at M10.5 so M10.6 needs no data
+    migration; only the M10.6 verb adds the transition rule.
+
+    **Auto-populated timestamps.** ``funded_at`` populated by
+    :func:`services.f_and_i.funding.mark_funded` on transition
+    to ``funded``. ``submitted_to_lender_at`` operator-provided
+    at record time (or defaults to now).
+
+    **`funding_amount` nullable.** Populated only when state
+    transitions to ``funded`` — before that, the amount is
+    unknown (may differ from ``Contract.financed_amount`` due to
+    lender discount fees per FINANCE §2.4).
+
+    **Cross-tenant guard.** ``clean()`` enforces ``dealership``
+    matches ``contract.dealership``. Belt + suspenders.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="fundings",
+    )
+    contract = models.OneToOneField(
+        "Contract",
+        on_delete=models.CASCADE,
+        related_name="funding",
+    )
+    state = models.CharField(
+        max_length=32,
+        choices=FUNDING_STATE_CHOICES,
+        default=FUNDING_STATE_PENDING,
+    )
+    submitted_to_lender_at = models.DateTimeField(null=True, blank=True)
+    funded_at = models.DateTimeField(null=True, blank=True)
+    # Actual amount funded — may differ from Contract.financed_amount
+    # due to lender discount fees (per FINANCE §2.4). NULL until
+    # the state transitions to ``funded``.
+    funding_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Funding"
+        verbose_name_plural = "Fundings"
+
+    def __str__(self) -> str:
+        return (
+            f"Funding #{self.pk} — Contract #{self.contract_id} "
+            f"({self.get_state_display()})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guard at the model layer."""
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.contract_id is not None
+            and self.contract.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "contract": (
+                        "Funding.contract must belong to the same "
+                        "dealership as the Funding. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )

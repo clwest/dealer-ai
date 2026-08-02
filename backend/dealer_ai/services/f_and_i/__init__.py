@@ -69,6 +69,23 @@ from .stipulation import (
     record_stipulation,
     update_stipulation_state,
 )
+from .contract import (
+    ContractAlreadyVoidedError,
+    CrossTenantContractError,
+    get_contract,
+    list_products_for_contract,
+    record_back_end_product,
+    record_contract,
+    sign_contract,
+    void_contract,
+)
+from .funding import (
+    CrossTenantFundingError,
+    FundingAlreadyExistsError,
+    get_funding,
+    mark_funded,
+    record_funding,
+)
 
 __all__ = [
     # M10.1 — credit application
@@ -99,4 +116,18 @@ __all__ = [
     "list_stipulations_for_submission",
     "record_stipulation",
     "update_stipulation_state",
+    # M10.5 — contract + back-end products + funding
+    "ContractAlreadyVoidedError",
+    "CrossTenantContractError",
+    "CrossTenantFundingError",
+    "FundingAlreadyExistsError",
+    "get_contract",
+    "get_funding",
+    "list_products_for_contract",
+    "mark_funded",
+    "record_back_end_product",
+    "record_contract",
+    "record_funding",
+    "sign_contract",
+    "void_contract",
 ]
