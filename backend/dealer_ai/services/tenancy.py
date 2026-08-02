@@ -465,6 +465,16 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # bypass the service.
     "FollowUpCadence",
     "FollowUpTask",
+    # Milestone 11 · Increment 5 (SESSION_118) — BeBack entity per
+    # MILESTONE_11_PLANNING.md §1.5 + §5.g.1 Option A (recorded in
+    # §0.a at SESSION_118 open) (38 → 39). Mandatory FK to
+    # CustomerLead (CASCADE); no FK to Vehicle. The M11.5
+    # :mod:`services.be_backs` verbs write ``dealership`` explicitly
+    # on every row + the M11.5 Celery detector
+    # (:mod:`services.be_backs.tasks`) also passes ``dealership_id``
+    # kwarg per the M7.2 / M11.4 pattern. Autofill signal is the
+    # safety net for callers that bypass the service.
+    "BeBack",
 )
 
 

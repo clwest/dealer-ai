@@ -258,6 +258,70 @@ options. Streak stands at 35
 as-recommended (planning-time
 decisions only).
 
+### SESSION_118 · M11.5 open — BeBack §5.g decisions recorded
+
+§1.5 (BeBack tracking) shipped the
+outline at M11.1 planning but was
+not put to a §5 vote. Three §5.g
+items surfaced at M11.5 open,
+resolved with the M11.4-style
+implementation-time defaults +
+recorded here per the M11.3 / M11.4
+precedent.
+
+1. **§5.g.1 — BeBack attach shape:
+   Option A.** Mandatory FK to
+   `CustomerLead` (CASCADE). No FK
+   to `Vehicle` — a be-back is
+   about returning to the store,
+   not necessarily the same
+   vehicle (customers often
+   return to negotiate a
+   different unit or to check
+   trade-in valuation on a
+   different candidate). Matches
+   SALES §step 15 documented
+   reality.
+2. **§5.g.2 — Reason vocabulary:
+   Option A.** Fixed 4+1 vocab
+   (`test_drive` /
+   `bring_co_signer` /
+   `bring_trade_in` / `other`),
+   matching the M11.1 vocab-set
+   pattern. Additional reason
+   codes are a planning-time
+   decision, not a code-refactor
+   decision.
+3. **§5.g.3 — No-show integration:
+   Option B.** Dedicated M11.5
+   Celery detector that runs at
+   07:00 project-time daily,
+   transitions `promised` →
+   `no_show` when
+   `promised_at + grace_period`
+   passes without
+   `actual_return_at`. Grace
+   period configurable via
+   `settings.BE_BACK_NO_SHOW_GRACE_HOURS`
+   (default 4). Auto-starting a
+   M11.4 `FollowUpCadence` on
+   BeBack create (Option A) was
+   rejected because it would
+   spill the M11.5 state machine
+   into the M11.4 cadence engine
+   — keeping the no-show rule
+   narrow to BeBack itself
+   preserves clean separation.
+   Manual `mark_no_show` verb is
+   also exposed at the service +
+   endpoint layer for operator
+   overrides.
+
+None close a future option.
+Streak stands at 35
+as-recommended (planning-time
+decisions only).
+
 ---
 
 ## 1. Design memo

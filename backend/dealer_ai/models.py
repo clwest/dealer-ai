@@ -6290,3 +6290,120 @@ class FollowUpTask(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 11 · Increment 5 (SESSION_118) — BeBack tracking.
+# ---------------------------------------------------------------------------
+
+
+# Reason vocabulary per SESSION_118 §0.a M11.5 amendment (decision 2 —
+# Option A). Fixed 4+1 vocab matching the M11.1 vocab-set pattern.
+BE_BACK_REASON_TEST_DRIVE = "test_drive"
+BE_BACK_REASON_BRING_CO_SIGNER = "bring_co_signer"
+BE_BACK_REASON_BRING_TRADE_IN = "bring_trade_in"
+BE_BACK_REASON_OTHER = "other"
+
+BE_BACK_REASON_CHOICES = (
+    (BE_BACK_REASON_TEST_DRIVE, "Test drive"),
+    (BE_BACK_REASON_BRING_CO_SIGNER, "Bring co-signer"),
+    (BE_BACK_REASON_BRING_TRADE_IN, "Bring trade-in"),
+    (BE_BACK_REASON_OTHER, "Other"),
+)
+
+# State machine per SALES §step 15. Two terminal states (returned /
+# no_show) + the initial state (promised). No re-transitions once
+# terminal — see :class:`services.be_backs.BeBackAlreadyTerminalError`.
+BE_BACK_STATE_PROMISED = "promised"
+BE_BACK_STATE_RETURNED = "returned"
+BE_BACK_STATE_NO_SHOW = "no_show"
+
+BE_BACK_STATE_CHOICES = (
+    (BE_BACK_STATE_PROMISED, "Promised"),
+    (BE_BACK_STATE_RETURNED, "Returned"),
+    (BE_BACK_STATE_NO_SHOW, "No-show"),
+)
+
+
+class BeBack(models.Model):
+    """Milestone 11 · Increment 5 — a customer promise-to-return record.
+
+    Per MILESTONE_11_PLANNING.md §1.5 + SESSION_118 §0.a M11.5
+    amendment. SALES §step 15 — customers who visit, don't buy, and
+    promise to return are the largest single-source of eventual sales
+    at mature stores (pain #15).
+
+    **Attach shape (§5.g.1 Option A).** Mandatory FK to
+    :class:`CustomerLead` (CASCADE). No FK to :class:`Vehicle` — a
+    be-back is about returning to the store, not necessarily the same
+    unit. Customers often return to negotiate a different vehicle or
+    check trade-in valuation on a different candidate.
+
+    **State machine.**
+
+    - Initial: ``promised`` (customer said they'd return).
+    - ``promised`` → ``returned`` via
+      :func:`services.be_backs.mark_returned` (populates
+      ``actual_return_at``).
+    - ``promised`` → ``no_show`` via
+      :func:`services.be_backs.mark_no_show` — auto-fired by the
+      M11.5 Celery detector at 07:00 daily when ``promised_at +
+      grace_period`` passes without ``actual_return_at``. Also
+      exposed as an operator-triggered endpoint.
+    - No re-transitions from terminal states.
+
+    **Cross-tenant guard.** ``clean()`` enforces same-tenant `lead`.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="be_backs",
+    )
+    lead = models.ForeignKey(
+        "CustomerLead",
+        on_delete=models.CASCADE,
+        related_name="be_backs",
+    )
+    promised_at = models.DateTimeField(
+        help_text="When the customer said they would return.",
+    )
+    promised_reason = models.CharField(
+        max_length=32, choices=BE_BACK_REASON_CHOICES
+    )
+    actual_return_at = models.DateTimeField(null=True, blank=True)
+    state = models.CharField(
+        max_length=16,
+        choices=BE_BACK_STATE_CHOICES,
+        default=BE_BACK_STATE_PROMISED,
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-promised_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"BeBack #{self.pk} — lead #{self.lead_id} "
+            f"({self.state}, promised {self.promised_at.isoformat()})"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.lead_id is not None
+            and self.lead.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "lead": (
+                        "BeBack.lead must belong to the same dealership "
+                        "as the BeBack. Cross-tenant contamination guard "
+                        "(see AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )

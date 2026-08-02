@@ -3,6 +3,7 @@ from django.urls import path
 from . import (
     views,
     views_analytics,
+    views_be_backs,
     views_deal_writeups,
     views_delivery,
     views_f_and_i,
@@ -739,5 +740,36 @@ urlpatterns = [
         "admin/follow-up-tasks/<int:pk>/skip/",
         views_follow_ups.admin_follow_up_task_skip,
         name="admin-follow-up-task-skip",
+    ),
+    # ---- Milestone 11 · Increment 5 — BeBack admin API ----------------
+    # Three endpoints per MILESTONE_11_PLANNING.md §1.5 + §5.g Options
+    # A / A / B (recorded in §0.a at SESSION_118 open) + §7 M11.5. Gated
+    # on ``IsSalesManagerOrOwnerAtActiveDealership`` (same posture as
+    # M11.1-M11.4 per §1.9).
+    # Domain-error mapping in ``views_be_backs.py``:
+    #   CrossTenantBeBackError → 404;
+    #   UnknownReasonError → 400;
+    #   BeBackAlreadyTerminalError → 409 (state machine);
+    #   missing lookups in-tenant → 404;
+    #   serializer error → 400.
+    # No-show auto-detector registered in
+    # ``dealer_kit/settings.py::CELERY_BEAT_SCHEDULE`` at 07:00
+    # project-time daily (grace period configurable via
+    # ``BE_BACK_NO_SHOW_GRACE_HOURS``, default 4). Manual override
+    # available at the ``mark-no-show`` endpoint.
+    path(
+        "admin/be-backs/",
+        views_be_backs.admin_be_back_create,
+        name="admin-be-back-create",
+    ),
+    path(
+        "admin/be-backs/<int:pk>/mark-returned/",
+        views_be_backs.admin_be_back_mark_returned,
+        name="admin-be-back-mark-returned",
+    ),
+    path(
+        "admin/be-backs/<int:pk>/mark-no-show/",
+        views_be_backs.admin_be_back_mark_no_show,
+        name="admin-be-back-mark-no-show",
     ),
 ]

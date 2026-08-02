@@ -426,7 +426,35 @@ CELERY_BEAT_SCHEDULE: dict = {
         # No positional args; the orchestrator takes no kwargs.
         "kwargs": {},
     },
+    "be-back-no-show-detector-daily-07-00": {
+        "task": (
+            "dealer_ai.services.be_backs.tasks"
+            ".detect_no_show_be_backs_for_all_tenants"
+        ),
+        # 07:00 project-time daily — one hour after the M11.4
+        # follow-up surfacer. Continues the non-overlapping window
+        # pattern (M7.2 at 02:00, M7.3 at 03:00, M7.4 at 04:00,
+        # M7.5 at 05:00, M11.4 at 06:00, M11.5 at 07:00). Distinct
+        # from the M11.4 surfacer in one key way — this task
+        # *does* transition state (per SESSION_118 §0.a M11.5
+        # decision §5.g.3 Option B). The M11.4 surfacer is read-
+        # only because task completion is operator-intent; the M11.5
+        # detector auto-transitions promised → no_show because the
+        # promise is the customer's, not the operator's, and the
+        # detector only reflects an already-elapsed grace period.
+        "schedule": crontab(hour=7, minute=0),
+        # No positional args; the orchestrator takes no kwargs.
+        "kwargs": {},
+    },
 }
+
+# ---- Milestone 11 · Increment 5 (SESSION_118) — BeBack no-show grace.
+# Configurable via env or settings override. Zero → transition on the
+# moment ``promised_at`` passes; higher values give operators more
+# room. Four hours is the default per §0.a M11.5 amendment (§5.g.3
+# Option B recommendation — matches operator reality that a customer
+# a few hours late isn't yet a no-show).
+BE_BACK_NO_SHOW_GRACE_HOURS = int(os.getenv("BE_BACK_NO_SHOW_GRACE_HOURS", "4"))
 
 # DB-backed scheduler (django-celery-beat). PeriodicTask + CrontabSchedule
 # rows shipped by the ``django_celery_beat`` app hold the source of truth
