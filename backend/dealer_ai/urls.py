@@ -5,6 +5,7 @@ from . import (
     views_analytics,
     views_delivery,
     views_f_and_i,
+    views_leads,
     views_lifecycle,
     views_listings,
     views_photos,
@@ -621,5 +622,37 @@ urlpatterns = [
         "admin/f-and-i/deals/",
         views_f_and_i.admin_f_and_i_deals_list,
         name="admin-f-and-i-deals-list",
+    ),
+    # ---- Milestone 11 · Increment 1 — non-chat lead intake ------------
+    # Four write endpoints per MILESTONE_11_PLANNING.md §1.1 + §1.6 + §7
+    # M11.1. All four gate on ``IsSalesManagerOrOwnerAtActiveDealership``
+    # (M4 permission class, reused unchanged per §1.9). Domain-error
+    # mapping in ``views_leads.py``:
+    #   UnknownWebhookPlatformError → 400;
+    #   CrossTenantReferrerError → 404 (fail-closed);
+    #   serializer error → 400.
+    # ``CustomerLead.channel`` is set by each verb from a fixed 5+1
+    # vocabulary; the M1 chat-funnel intake path at
+    # ``POST /leads/`` (line 26) is unchanged and lands with the
+    # default ``channel="chat"``.
+    path(
+        "admin/leads/walk-in/",
+        views_leads.admin_lead_walk_in_create,
+        name="admin-lead-walk-in-create",
+    ),
+    path(
+        "admin/leads/phone/",
+        views_leads.admin_lead_phone_create,
+        name="admin-lead-phone-create",
+    ),
+    path(
+        "admin/leads/referral/",
+        views_leads.admin_lead_referral_create,
+        name="admin-lead-referral-create",
+    ),
+    path(
+        "admin/leads/webhook/",
+        views_leads.admin_lead_webhook_create,
+        name="admin-lead-webhook-create",
     ),
 ]

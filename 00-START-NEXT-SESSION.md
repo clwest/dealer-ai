@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_113
+last_session_shipped: SESSION_114
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -12,266 +12,259 @@ milestone_7_status: shipped
 milestone_8_status: shipped
 milestone_9_status: shipped
 milestone_10_status: shipped
-milestone_11_status: planning
-next_session: SESSION_114
+milestone_11_status: in_progress
+next_session: SESSION_115
 next_milestone: 11
 next_milestone_name: "Sales-side non-chat channels + customer-journey completeness"
-next_increment: 1
-next_increment_name: "M11.1 — Channel intake + CustomerLead extension"
+next_increment: 2
+next_increment_name: "M11.2 — TestDrive entity + service + endpoint"
 ---
 
-# Next session — SESSION_114 · Milestone 11 · Increment 1 (M11.1 — Channel intake + CustomerLead extension)
+# Next session — SESSION_115 · Milestone 11 · Increment 2 (M11.2 — TestDrive entity + service + endpoint)
 
-> **SESSION_113 shipped M10.8 —**
-> six close-out docs (retrospective +
-> capability matrix §7k + roadmap flip +
-> planning frontmatter flip + session-
-> start refresh + M11 planning skeleton)
-> + one coordinated commit landing every
-> M10.1–M10.7 stage. **Milestone 10 —
-> F&I deal desk — SHIPPED.**
+> **SESSION_114 shipped M11.1 —**
+> additive `CustomerLead.channel` +
+> `referrer` FK + data-migration
+> backfill + `services/leads/`
+> package with four write verbs
+> (walk_in / phone / referral /
+> webhook) + `webhook_adapters/`
+> registry with one `generic`
+> adapter + four DRF admin
+> endpoints + 28 focused tests
+> (target ~25). **Six §5 planning
+> decisions confirmed as-recommended
+> at session open — M10 streak → 35
+> consecutive M5.1 → M11.1.**
 >
-> **M10 close totals:** ten new entities
-> across seven implementation sessions
-> (CreditApplication + DealStructure +
-> LenderProgram + LenderSubmission +
-> Stipulation + Contract +
-> BackEndProductAgreement + Funding +
-> Chargeback + ComplianceRecord) + one
-> complete new `services/f_and_i/`
-> package (seven submodules) + one new
-> permission class (reused unchanged
-> M10.2-M10.7) + 17 new DRF admin
-> endpoints + first F&I frontend
-> surface at `/dealer-ai-f-and-i/`.
-> **29 load-bearing decisions resolved
-> across 7 implementation sessions —
-> all as-recommended by the user**
-> (streak-pattern signal per M10 §6
-> lesson 16).
->
-> **Backend baseline: 3,730 pass, 1
-> skipped, 0 fail** (was 3,426 at
-> M9 close — +304 tests, 0
-> regressions). **Frontend Vitest
-> baseline: 51 pass** (was 34 — +17
-> at M10.7). Migrations `0001`–`0031`.
-> Tenancy carriers 34. DRF admin
-> surface 64. Frontend operator
-> routes 11.
->
-> **Push authorization:** M10 close
-> commit + all 7 M10 implementation
-> commits will be pushed as a batch
-> after user authorization at
-> SESSION_113 close.
->
-> **SESSION_114 opens M11.1 —
-> Channel intake + CustomerLead
-> extension.** Per
-> `MILESTONE_11_PLANNING.md` (draft
-> planning skeleton written at
-> M10.8 close per standing user
-> directive). Six §5 decisions to
-> confirm at session open.
+> **Backend baseline: 3,730 → 3,758
+> (+28, zero regressions).**
+> Frontend baseline: **51**
+> (unchanged; M11.1 is backend-
+> only). Migrations `0001`–`0032`.
+> DRF admin surface **64 → 68**.
+> Tenancy carriers **34** (unchanged
+> — `CustomerLead` was already a
+> carrier). Permission classes **8**
+> (unchanged — reused
+> `IsSalesManagerOrOwnerAtActiveDealership`
+> from M4).
 
-## First thing SESSION_114 must do
+## First thing SESSION_115 must do
 
-### 1. Confirm the six §5 decisions in `MILESTONE_11_PLANNING.md`
+### 1. Confirm the §5 decision for M11.2 was already recorded
 
-The M11 planning skeleton drafted at
-M10.8 close carries six load-bearing
-decisions. All six recommendations
-follow the M10 pattern (twenty-nine
-consecutive as-recommended
-resolutions).
+Per `MILESTONE_11_PLANNING.md`
+§0.a (M11.1 amendment), **§5.c
+Option A** (TestDrive mandatory
+FK to both `CustomerLead` +
+`Vehicle`) was confirmed at
+SESSION_114 open. No new
+decisions block M11.2.
 
-Recommendations (drawn from
-`MILESTONE_11_PLANNING.md` §9):
-
-1. **§5.a — CustomerLead.channel field
-   + vocabulary.** Option A (additive
-   with historical-row backfill to
-   `chat`).
-2. **§5.b — Listing-platform webhook
-   shape.** Option A (one generic
-   webhook + adapter dispatch).
-3. **§5.c — TestDrive attach shape.**
-   Option A (mandatory FK to both
-   CustomerLead + Vehicle).
-4. **§5.d — FollowUpCadence + Task
-   shape.** Option A (two entities;
-   task rows queryable).
-5. **§5.e — DealWriteup →
-   CreditApplication flow.** Option A
-   (auto-create CA from handoff
-   action).
-6. **§5.f — Operator UI scope.**
-   Option C (MVP — ship substrate;
-   extended UI in a follow-on).
-
-**Do not write M11.1 code until every
-`[NEEDS-DECISION-BEFORE-M11.N]` item is
-resolved.** Any user override → amend
-`MILESTONE_11_PLANNING.md` §0.a
-narrowly at session top (per M5-M10
-§0.a precedent) before implementation.
+If any planning-time §5.c re-
+opening is needed at
+implementation time (e.g. the
+"vehicle demonstration without a
+specific lead in hand" edge
+case surfaces as a real
+operational reality), amend
+§0.a narrowly per M5-M10
+precedent before writing M11.2
+code.
 
 ### 2. Verify starting state
 
-- `git status` — clean (M10.8 commit
-  landed at SESSION_113 close;
-  batch push authorized + executed).
+- `git status` — clean (M11.1
+  commit landed at SESSION_114
+  close; push authorization
+  batched).
 - `git log --oneline -3` — top
-  should be `Milestone 10 shipped —
-  F&I deal desk (SESSION_106-113)`
-  or similar.
-- `git log origin/main..HEAD
-  --oneline` — **empty** (all M10
-  commits pushed).
+  should be M11.1 commit or
+  SESSION_113 hash-fixup commit.
 - `python3 manage.py test dealer_ai`
-  → **3,730 pass, 1 skipped, 0
+  → **3,758 pass, 1 skipped, 0
   fail**.
-- `cd frontend && npm test` →
-  **51 pass**.
-- `python3 manage.py check` clean.
+- `python3 manage.py check`
+  clean.
 - `python3 manage.py makemigrations
-  --check --dry-run` → "No changes
-  detected."
-- `npx tsc --noEmit` + `npx vite
-  build` both clean.
+  --check --dry-run` → "No
+  changes detected."
 - `redis-cli ping` → `PONG`.
 
-## What M11.1 delivers
+## What M11.2 delivers
 
-Per `MILESTONE_11_PLANNING.md` §7
-M11.1:
+Per `MILESTONE_11_PLANNING.md`
+§1.2 + §7 M11.2:
 
-- **Additive `CustomerLead.channel`
-  field** — CharField with fixed
-  5+1 vocab (`chat` default /
-  `walk_in` / `phone` /
-  `listing_form` / `referral` /
-  `other`) + data migration
-  backfilling historical rows to
-  `chat`. Per §5.a Option A.
-- **Per-channel POST endpoints:**
-  - `POST /admin/leads/walk-in/`
-  - `POST /admin/leads/phone/`
-  - `POST /admin/leads/referral/`
-    (with `referrer_lead_id` for
-    attribution)
-  - **`POST /admin/leads/webhook/`**
-    generic webhook + adapter
-    dispatch shape per §5.b Option
-    A. First adapter TBD (Autotrader
-    / Cars.com / Facebook
-    Marketplace / etc. — pick the
-    one operator evidence names
-    first).
-- **`CustomerLead.referrer` FK**
-  (nullable, SET_NULL) for referral
-  attribution per §1.6.
-- **New `services/leads/`
-  package** (or extend existing
-  `services/lead_service.py`) with
-  channel-specific write verbs.
-- **~25 focused tests.**
-- **Baseline target 3,730 →
-  ~3,755.**
+- **New `TestDrive` model.**
+  - `dealership` FK CASCADE
+    (tenancy carrier; extend
+    `_TENANT_CARRIER_MODEL_NAMES`
+    34 → 35).
+  - `lead` FK to `CustomerLead`
+    CASCADE (mandatory per §5.c
+    Option A).
+  - `vehicle` FK to `Vehicle`
+    CASCADE (mandatory per §5.c
+    Option A).
+  - `driven_at` DateTimeField.
+  - `driven_by_user` FK to User
+    SET_NULL (salesperson who
+    accompanied).
+  - `duration_minutes`
+    PositiveIntegerField (nullable).
+  - `route_notes` TextField
+    (blank OK).
+  - `customer_reaction` TextField
+    (blank OK).
+  - `objections_captured`
+    JSONField default=list
+    (structured objection
+    vocabulary — vocabulary set
+    emerges from SALES §5).
+  - `next_action` TextField
+    (blank OK).
+  - `created_at` / `updated_at`.
+- **New `services/test_drives/`
+  package** (or a single-module
+  `services/test_drive.py`; the
+  M4 service pattern is
+  per-domain package, so package
+  form is preferred for
+  consistency with the
+  `services/leads/` pattern
+  shipped at M11.1).
+- **`record_test_drive(...)`**
+  write verb. Enforces both FKs
+  (mandatory), writes
+  `dealership` explicitly.
+  Cross-tenant lead / vehicle
+  raises
+  `CrossTenantTestDriveError`
+  (fail-closed → 404 at the
+  endpoint layer).
+- **`POST /admin/test-drives/`**
+  endpoint. Gated on
+  `IsSalesManagerOrOwnerAtActiveDealership`
+  per §1.9. (Consider whether
+  advisors should also write —
+  test-drive attendance is a
+  salesperson activity; if yes,
+  compose with `IsAdvisor*` or
+  introduce
+  `IsSalespersonOrHigherAtActiveDealership`
+  per §1.9 hint.)
+- **~20 focused tests** across
+  model / service / endpoint
+  files (M10 pattern:
+  `test_m112_test_drive_model.py`
+  / `test_m112_test_drive_service.py`
+  / `test_m112_test_drive_endpoint.py`).
+- **Baseline target 3,758 →
+  ~3,778.**
 
-### Non-goals for M11.1
+### Non-goals for M11.2
 
-- ❌ No `TestDrive` (M11.2).
 - ❌ No `DealWriteup` (M11.3).
 - ❌ No cadence orchestration
   (M11.4).
 - ❌ No be-back (M11.5).
-- ❌ No frontend at M11.1 (M11.6).
-- ❌ No modification of M1-M10
+- ❌ No frontend at M11.2
+  (M11.6).
+- ❌ No modification of M1-M11
   business logic.
-- ❌ No listing-platform outbound
-  syndication.
+- ❌ No objection-vocabulary
+  materialization to a separate
+  table (JSON list is fine at
+  M11.2; a lookup table lands
+  when analytics need it —
+  M12 candidate).
 
-## What SESSION_114 should do
+## What SESSION_115 should do
 
 ### Recommended step sequence
 
-1. **Confirm the six §5 decisions
-   with the user** (§1 above).
+1. **Confirm M11.2 §5.c is
+   already resolved** (§1
+   above). If a new
+   `[NEEDS-DECISION]` surfaces
+   at planning time (e.g.
+   permission-class expansion
+   for salespeople), record in
+   §0.a before coding.
 
 2. **Read first (in order):**
    - `docs/roadmap/MILESTONE_11_PLANNING.md`
-     §1.1 + §1.6 + §5.a + §5.b +
-     §7 M11.1.
-   - `docs/handoffs/SESSION_113_m10_close.md`
+     §1.2 + §5.c + §7 M11.2.
+   - `docs/handoffs/SESSION_114_m11_inc1_channel_intake.md`
      (previous session).
-   - `docs/roadmap/MILESTONE_10_RETROSPECTIVE.md`
-     §6 (nineteen lessons carry
-     into M11).
    - `docs/research/SALES_DEPARTMENT_MAPPING.md`
-     §lead acquisition + workflow.
+     §workflow step 6 (test drive)
+     + §5 (objection vocabulary).
    - `backend/dealer_ai/models.py::CustomerLead`
-     (target of additive `channel`
-     + `referrer` extension).
-   - `backend/dealer_ai/services/lead_service.py`
-     (existing lead-service pattern
-     to extend or fork per §5).
+     + `Vehicle`.
+   - `backend/dealer_ai/services/leads/`
+     (M11.1 verb pattern to
+     mirror).
+   - `backend/dealer_ai/services/tenancy.py`
+     (`_TENANT_CARRIER_MODEL_NAMES`
+     extension point).
 
-3. **Verify starting state** (§2
-   above).
+3. **Verify starting state**
+   (§2 above).
 
 4. **Draft (in order):**
-   - `CustomerLead.channel` field +
-     data migration + `referrer` FK.
-   - Per-channel POST endpoints.
-   - Generic webhook endpoint +
-     first adapter module.
-   - `services/leads/` package
-     extensions (or extend existing).
-   - ~25 focused tests.
+   - `TestDrive` model + tenancy
+     carrier registration.
+   - Migration `0033`.
+   - `services/test_drives/`
+     package + `record_test_drive`
+     verb + `CrossTenantTestDriveError`.
+   - `views_test_drives.py` +
+     serializer + endpoint.
+   - URL route
+     `admin/test-drives/`.
+   - ~20 focused tests.
 
 5. **Full-suite verification.**
-   Target 3,730 → ~3,755.
+   Target 3,758 → ~3,778.
 
 6. **Ship handoff at
-   `docs/handoffs/SESSION_114_m11_inc1_channel_intake.md`.**
+   `docs/handoffs/SESSION_115_m11_inc2_test_drive.md`.**
 
 7. **Overwrite
-   `00-START-NEXT-SESSION.md`** with
-   M11.2 priority.
+   `00-START-NEXT-SESSION.md`**
+   with M11.3 priority
+   (DealWriteup + F&I handoff).
 
-## Explicit non-goals for SESSION_114
+## Explicit non-goals for SESSION_115
 
-- ❌ Do NOT ship M11.2-M11.7 scope
-  (TestDrive, DealWriteup,
-  cadence, be-back, UI,
-  closeout).
-- ❌ Do NOT modify M1-M10 business
-  logic.
+- ❌ Do NOT ship M11.3-M11.7
+  scope.
+- ❌ Do NOT modify M1-M11
+  business logic.
 - ❌ Do NOT force-push or amend
-  the M10 commits.
+  the M11.1 commits.
 
 ## NEXT TASK
 
-Start SESSION_114 with (a)
-confirming the six §5 decisions
-with the user (all recommendations
-per M10 pattern), (b) the read-
-first list, (c) starting-state
-verification, then (d)
-`CustomerLead.channel` +
-`referrer` additive extension +
-per-channel endpoints + generic
-webhook + first adapter module +
-~25 tests. Target baseline
-3,730 → ~3,755. Ship the M11.1
-handoff.
+Start SESSION_115 with (a)
+verifying §5.c is already
+resolved (M11.1 recorded it in
+§0.a), (b) the read-first list,
+(c) starting-state verification,
+then (d) `TestDrive` model +
+tenancy carrier extension (34 →
+35) + migration + service
+package + endpoint + ~20 tests.
+Target baseline 3,758 → ~3,778.
+Ship the M11.2 handoff.
 
-Backend baseline at SESSION_114
-close: **~3,755 pass**. Frontend
-baseline: unchanged (no frontend
-at M11.1).
+Backend baseline at SESSION_115
+close: **~3,778 pass**.
+Frontend baseline: unchanged
+(no frontend at M11.2).
 
 ---
 
@@ -282,29 +275,25 @@ at M11.1).
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md` §Milestone 11
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_11_PLANNING.md`
+   (§0.a M11.1 amendment)
 6. `docs/roadmap/MILESTONE_10_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_113_m10_close.md` (this session's close)
-8. `docs/handoffs/SESSION_112_m10_inc7_compliance_ui.md`
-9. `docs/handoffs/SESSION_111_m10_inc6_chargeback.md`
-10. `docs/handoffs/SESSION_110_m10_inc5_contract_funding.md`
-11. `docs/handoffs/SESSION_109_m10_inc4_stipulation.md`
-12. `docs/handoffs/SESSION_108_m10_inc3_lender.md`
-13. `docs/handoffs/SESSION_107_m10_inc2_deal_structure.md`
-14. `docs/handoffs/SESSION_106_m10_inc1_credit_application.md`
-15. `docs/CAPABILITY_MATRIX.md` §7k
-16. `docs/research/SALES_DEPARTMENT_MAPPING.md`
+7. `docs/handoffs/SESSION_114_m11_inc1_channel_intake.md`
+   (this session's close)
+8. `docs/handoffs/SESSION_113_m10_close.md`
+9. `docs/CAPABILITY_MATRIX.md` §7k
+10. `docs/research/SALES_DEPARTMENT_MAPPING.md`
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_113 — M10 SHIPPED)
+## Operational state (post-SESSION_114 — M11.1 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
-  `0001`–`0031`. Test baseline:
-  **3,730 pass**, 1 skipped, 0
+  `0001`–`0032`. Test baseline:
+  **3,758 pass**, 1 skipped, 0
   fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
@@ -319,36 +308,50 @@ research + code are facts.
   task families registered
   (unchanged since M7).
 - **Milestones shipped:** M1 →
-  **M10** (SESSION_113 close).
-  M11 planning drafted.
-- **DRF admin surface:** 64
-  endpoints.
+  **M10**. M11 in progress
+  (M11.1 shipped SESSION_114).
+- **DRF admin surface:** **68**
+  (64 + M11.1's four channel
+  endpoints).
 - **Frontend operator routes:**
-  11.
+  **11** (unchanged; M11.1
+  backend-only).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** complete
   `services/f_and_i/` package
-  with seven submodules
-  (credit_application, deal_structure,
-  lender, stipulation, contract,
-  funding, chargeback, compliance).
-- **Tenancy carriers:** 34.
-- **Permission classes:** 8
-  (M10.1's
-  `IsFinanceManagerOrOwnerAtActiveDealership`
-  reused unchanged M10.2-M10.7).
+  (M10 close) + new
+  `services/leads/` package
+  (M11.1) with two submodules
+  (channel_intake +
+  webhook_adapters).
+- **Tenancy carriers:** **34**
+  (unchanged; M11.1 extended
+  `CustomerLead` in place).
+- **Permission classes:** **8**
+  (unchanged; M11.1 reused
+  `IsSalesManagerOrOwnerAtActiveDealership`
+  from M4).
 - **`Vehicle.is_available`:**
   unchanged.
-- **AI safety stack:** unchanged.
+- **AI safety stack:**
+  unchanged.
 - **Deterministic rules:**
   unchanged.
-- **Milestone 11 next:** M11.1
-  channel intake +
-  `CustomerLead.channel` +
-  `referrer` additive extension +
-  per-channel endpoints +
-  generic webhook. Verify six
-  §5 decisions at session open.
-  ~25 tests. Baseline 3,730 →
-  ~3,755.
+- **`CustomerLead.channel`:** 5+1
+  vocab (chat / walk_in / phone
+  / listing_form / referral /
+  other); historical rows
+  backfilled to `chat` via
+  M11.1 migration.
+- **Webhook adapter registry:**
+  `{"generic": ...}` at
+  M11.1; extensible via sibling
+  modules under
+  `services/leads/webhook_adapters/`.
+- **Milestone 11 next:** M11.2
+  `TestDrive` entity + service +
+  endpoint. Verify §5.c
+  Option A resolution already
+  recorded. ~20 tests. Baseline
+  3,758 → ~3,778.

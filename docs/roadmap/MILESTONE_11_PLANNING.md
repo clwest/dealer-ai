@@ -111,9 +111,46 @@ reality asserts itself. Every amendment
 records the session, option, and the affected
 sections.
 
-*(None yet — planning-time only. Amendments
-recorded at the top of each M11 session that
-requires one.)*
+### SESSION_114 · M11.1 open — all six §5 decisions resolved as-recommended
+
+At SESSION_114 open the user approved all six
+§5 planning decisions as-recommended per §9,
+with no overrides. The M10-established
+recommend-and-approve streak advances to 35
+consecutive as-recommended resolutions
+(M5.1 → M11.1 open).
+
+Confirmed selections:
+
+- **§5.a — `CustomerLead.channel` field +
+  vocabulary.** Option A — additive
+  CharField, fixed 5+1 vocab
+  (`chat`/`walk_in`/`phone`/`listing_form`/`referral`/`other`),
+  data migration backfills historical rows
+  to `chat`.
+- **§5.b — Listing-platform webhook shape.**
+  Option A — one generic
+  `POST /admin/leads/webhook/` + per-platform
+  adapter modules under
+  `services/leads/webhook_adapters/`.
+- **§5.c — TestDrive attach shape.** Option A
+  — mandatory FK to both `CustomerLead` +
+  `Vehicle` (M11.2 scope; recorded here for
+  model-shape stability).
+- **§5.d — FollowUpCadence + Task shape.**
+  Option A — two entities; task rows
+  queryable (M11.4 scope).
+- **§5.e — DealWriteup → CreditApplication
+  flow.** Option A — server-side auto-CA-
+  creation on handoff action (M11.3 scope).
+- **§5.f — Operator UI scope.** Option C —
+  MVP substrate at M11.1; extended UI in a
+  follow-on increment (M10.7 §1.8.d
+  precedent).
+
+No amendments to §1–§8. Implementation may
+proceed against the planning skeleton as
+written.
 
 ---
 

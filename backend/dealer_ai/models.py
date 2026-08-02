@@ -648,6 +648,29 @@ class Salesperson(models.Model):
         return f"{self.name}{suffix}"
 
 
+# Milestone 11 · Increment 1 (SESSION_114) — channel intake vocabulary.
+# Fixed 5+1 set per MILESTONE_11_PLANNING.md §5.a Option A (user-
+# confirmed at SESSION_114 open, recorded in §0.a). ``chat`` is the
+# default so the historical (M1) row shape stays valid and the M11.1
+# data migration backfills existing rows to ``chat`` (they all
+# originated in the chat funnel — M1 is the only pre-M11 intake path).
+LEAD_CHANNEL_CHAT = "chat"
+LEAD_CHANNEL_WALK_IN = "walk_in"
+LEAD_CHANNEL_PHONE = "phone"
+LEAD_CHANNEL_LISTING_FORM = "listing_form"
+LEAD_CHANNEL_REFERRAL = "referral"
+LEAD_CHANNEL_OTHER = "other"
+
+LEAD_CHANNEL_CHOICES = (
+    (LEAD_CHANNEL_CHAT, "Chat"),
+    (LEAD_CHANNEL_WALK_IN, "Walk-in"),
+    (LEAD_CHANNEL_PHONE, "Phone"),
+    (LEAD_CHANNEL_LISTING_FORM, "Listing form"),
+    (LEAD_CHANNEL_REFERRAL, "Referral"),
+    (LEAD_CHANNEL_OTHER, "Other"),
+)
+
+
 class CustomerLead(models.Model):
     URGENCY_CHOICES = [
         ("immediate", "Buying now"),
@@ -704,6 +727,27 @@ class CustomerLead(models.Model):
         related_name="leads",
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
+    # Milestone 11 · Increment 1 (SESSION_114) — additive channel + referrer
+    # extension per MILESTONE_11_PLANNING.md §1.1 + §1.6 (§5.a + §5.b + §5.f
+    # confirmed as-recommended at SESSION_114 open). ``channel`` is
+    # required-not-nullable with a ``chat`` default; the M11.1 data
+    # migration backfills every historical row to ``chat`` (all pre-M11
+    # rows originated in the chat funnel). ``referrer`` self-FK captures
+    # who sent a referral lead; SET_NULL keeps referred rows intact when
+    # the referrer is deleted (referral incentive payout logic is
+    # deferred per §2 non-goals, so soft nulling is fine).
+    channel = models.CharField(
+        max_length=32,
+        choices=LEAD_CHANNEL_CHOICES,
+        default=LEAD_CHANNEL_CHAT,
+    )
+    referrer = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="referred_leads",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
