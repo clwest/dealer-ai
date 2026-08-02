@@ -515,6 +515,15 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # ``dealership`` explicitly on every row. Autofill signal is
     # the safety net for callers that bypass the service.
     "CollectionContact",
+    # Milestone 12 · Increment 6 (SESSION_126) — Repossession entity
+    # per MILESTONE_12_PLANNING.md §1.6 + §0.a M12.6 decisions 1-5
+    # (as-recommended) (43 → 44). Mandatory FK to BhphNote
+    # (CASCADE). Three-state machine (ordered / recovered /
+    # re_intaked) ties into M3 ConditionReport for the post-repo
+    # handoff. The M12.6 :mod:`services.repossessions` verbs
+    # write ``dealership`` explicitly on every row. Autofill signal
+    # is the safety net for callers that bypass the service.
+    "Repossession",
 )
 
 

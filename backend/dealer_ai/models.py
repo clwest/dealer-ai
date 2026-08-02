@@ -6905,3 +6905,112 @@ class CollectionContact(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 12 · Increment 6 (SESSION_126) — Repossession record.
+# ---------------------------------------------------------------------------
+
+
+# State vocab per §0.a M12.6 decisions 1-2 (as-recommended). Three-
+# state machine: ``ordered`` → ``recovered`` → ``re_intaked``. The
+# terminal ``re_intaked`` is final — matches the M11.5 / M12.4
+# posture.
+BHPH_REPO_STATE_ORDERED = "ordered"
+BHPH_REPO_STATE_RECOVERED = "recovered"
+BHPH_REPO_STATE_RE_INTAKED = "re_intaked"
+
+BHPH_REPO_STATE_CHOICES = (
+    (BHPH_REPO_STATE_ORDERED, "Ordered"),
+    (BHPH_REPO_STATE_RECOVERED, "Recovered"),
+    (BHPH_REPO_STATE_RE_INTAKED, "Re-intaked"),
+)
+
+
+class Repossession(models.Model):
+    """Milestone 12 · Increment 6 — a repossession record for a BhphNote.
+
+    Per MILESTONE_12_PLANNING.md §1.6 + §0.a M12.6 decisions 1-5
+    (as-recommended). Records the ordered → recovered → re-intaked
+    lifecycle of a repossession. The post-repo handoff writes a
+    fresh :class:`ConditionReport` via the existing M3/M4/M5
+    substrate; this record ties the two sides together via the
+    ``intake_condition_report`` FK.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="repossessions",
+    )
+    note = models.ForeignKey(
+        "BhphNote",
+        on_delete=models.CASCADE,
+        related_name="repossessions",
+    )
+    ordered_at = models.DateTimeField(
+        help_text="When the repossession order was issued."
+    )
+    ordered_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    agent_name = models.CharField(max_length=255)
+    recovered_at = models.DateTimeField(null=True, blank=True)
+    recovery_location = models.CharField(
+        max_length=255, blank=True, default=""
+    )
+    intake_condition_report = models.ForeignKey(
+        "ConditionReport",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="repossession_intake",
+    )
+    state = models.CharField(
+        max_length=16,
+        choices=BHPH_REPO_STATE_CHOICES,
+        default=BHPH_REPO_STATE_ORDERED,
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-ordered_at", "-created_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"Repossession #{self.pk} — note #{self.note_id} "
+            f"({self.state}, ordered {self.ordered_at.isoformat()})"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        errors: dict[str, str] = {}
+        if (
+            self.note_id is not None
+            and self.note.dealership_id != self.dealership_id
+        ):
+            errors["note"] = (
+                "Repossession.note must belong to the same "
+                "dealership as the Repossession. Cross-tenant "
+                "contamination guard (see AUTHENTICATION_MODEL.md "
+                "§1 layer 4)."
+            )
+        if (
+            self.intake_condition_report_id is not None
+            and self.intake_condition_report.dealership_id
+            != self.dealership_id
+        ):
+            errors["intake_condition_report"] = (
+                "Repossession.intake_condition_report must belong "
+                "to the same dealership as the Repossession."
+            )
+        if errors:
+            raise ValidationError(errors)

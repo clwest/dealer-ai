@@ -17,6 +17,7 @@ from . import (
     views_listings,
     views_photos,
     views_recon,
+    views_repossessions,
     views_sale,
     views_showroom,
     views_test_drives,
@@ -882,5 +883,37 @@ urlpatterns = [
         "admin/bhph-notes/<int:pk>/contacts/list/",
         views_collection_contacts.admin_collection_contact_list,
         name="admin-collection-contact-list",
+    ),
+    # Milestone 12 · Increment 6 (SESSION_126) — Repossession record.
+    # Two nested-under-note routes for creation + listing; two top-
+    # level repossession routes for state transitions
+    # (mark-re-intaked requires a ConditionReport reference).
+    #
+    # Domain-error mapping in ``views_repossessions.py``:
+    #   CrossTenantRepossessionError → 404;
+    #   CrossTenantConditionReportError → 400;
+    #   RepossessionAlreadyTerminalError → 409 (state machine);
+    #   InvalidStateTransitionError → 409 (state machine);
+    #   missing lookups in-tenant → 404;
+    #   serializer error → 400.
+    path(
+        "admin/bhph-notes/<int:pk>/repossessions/",
+        views_repossessions.admin_repossession_create,
+        name="admin-repossession-create",
+    ),
+    path(
+        "admin/bhph-notes/<int:pk>/repossessions/list/",
+        views_repossessions.admin_repossession_list,
+        name="admin-repossession-list",
+    ),
+    path(
+        "admin/bhph-repossessions/<int:pk>/mark-recovered/",
+        views_repossessions.admin_repossession_mark_recovered,
+        name="admin-repossession-mark-recovered",
+    ),
+    path(
+        "admin/bhph-repossessions/<int:pk>/mark-re-intaked/",
+        views_repossessions.admin_repossession_mark_re_intaked,
+        name="admin-repossession-mark-re-intaked",
     ),
 ]
