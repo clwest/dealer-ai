@@ -4,6 +4,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import App from "@/App";
 import RequireAuth from "@/components/RequireAuth";
+import AccountingJournalEntriesPage from "@/pages/AccountingJournalEntriesPage";
+import AccountingJournalEntryDetailPage from "@/pages/AccountingJournalEntryDetailPage";
 import AccountingTrialBalancePage from "@/pages/AccountingTrialBalancePage";
 import AdvisorWorkspacePage from "@/pages/AdvisorWorkspacePage";
 import DealerAnalyticsPage from "@/pages/DealerAnalyticsPage";
@@ -181,6 +183,18 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route
                 path="dealer-ai-accounting/trial-balance"
                 element={<AccountingTrialBalancePage />}
+              />
+              {/* Milestone 14 · Increment 3 (SESSION_136) — journal-
+                  entry browser + detail. Consumes the M14.1 list
+                  endpoint + the M13.1 retrieve endpoint. Reversal
+                  dialog wires at M14.4 per §5.e Option A. */}
+              <Route
+                path="dealer-ai-accounting/journal-entries"
+                element={<AccountingJournalEntriesPage />}
+              />
+              <Route
+                path="dealer-ai-accounting/journal-entries/:pk"
+                element={<AccountingJournalEntryDetailPage />}
               />
             </Route>
           </Route>
