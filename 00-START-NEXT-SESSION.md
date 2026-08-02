@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_148
+last_session_shipped: SESSION_149
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -20,77 +20,78 @@ milestone_15_status: shipped
 milestone_16_status: shipped
 milestone_17_status: shipped
 milestone_18_status: in-progress
-next_session: SESSION_149
+next_session: SESSION_150
 next_milestone: 18
 next_milestone_name: "Demo Store Simulation + Pilot Validation Readiness"
-next_increment: 3
-next_increment_name: "M18.3 — Floor-planned archetype pack"
+next_increment: 4
+next_increment_name: "M18.4 — BHPH archetype pack"
 ---
 
-# Next session — SESSION_149 · Milestone 18 · Increment 3 (M18.3 — Floor-planned archetype pack)
+# Next session — SESSION_150 · Milestone 18 · Increment 4 (M18.4 — BHPH archetype pack)
 
-> **SESSION_148 shipped M18.2 —** the
-> retail/subprime archetype pack.
-> `RetailSubprimeArchetypeBuilder.build()`
-> now atomically constructs a coherent
-> operational story across 20 vehicles, 4
-> salespeople, 15 leads, 5 sales (1 BHPH
-> firing M15 sync-sibling GL post), 3
-> recon-in-progress vehicles with full
-> ConditionReport + WorkOrder + Vendor +
-> VehicleCost + stage progression, 2 sub-
-> prime CreditApplications, and 1 follow-
-> up cadence (auto-creating 3 tasks).
+> **SESSION_149 shipped M18.3 —** the
+> floor-planned archetype pack.
+> `FloorPlannedArchetypeBuilder.build()`
+> now atomically constructs 40 vehicles
+> + 6 salespeople + 25 leads + 10 sales
+> (all firing M15 sync-sibling GL post)
+> + 5 recon-in-progress vehicles
+> including **the documented $825 recon
+> overrun anchor** (WorkOrder
+> authorized_cost=$600 vs actual_cost=
+> $1,425 + VendorCommunication history
+> documenting the escalation) + 4
+> shared Vendors + 3 CreditApplications
+> + 3 FollowUpCadences (7+ tasks) + 3
+> BeBacks.
 >
-> **Three §0.a M18.2 decisions recorded:**
-> (1) Chargeback deferred to M18.5 (~5
-> more entities needed; better home in a
-> dedicated F&I scenario brief). (2)
-> Registry now seeds M13.1 default COA on
-> both create + reset (M15 sale-booking
-> requires it). (3) `_delete_demo_store_children`
-> iterates carriers in reverse order
-> (child-before-parent for PROTECT FKs)
-> and deletes demo-owned Users so the
-> next build doesn't collide on
-> username unique constraint.
+> **§0.a M18.2 decision 1 continues to
+> apply** — Chargeback still deferred
+> to M18.5.
 >
-> **Backend baseline: 4,416 → 4,449
-> pass** (+33 tests, 0 regressions).
+> **Backend baseline: 4,449 → 4,483
+> pass** (+34 tests, 0 regressions).
 > Frontend Vitest 140 (unchanged).
 > Migrations 0043-0047 (unchanged).
 > Tenancy carriers 50 (unchanged). DRF
-> admin surface 107 (unchanged). Frontend
-> operator routes 20 (unchanged).
-> Permission classes 7 — **zero-drift
-> streak eleven consecutive
-> milestones** (M10 → M18.2). Celery-
-> beat task families 10 (unchanged).
+> admin surface 107 (unchanged).
+> Frontend operator routes 20
+> (unchanged). Permission classes 7 —
+> **zero-drift streak twelve
+> consecutive milestones** (M10 →
+> M18.3). Celery-beat task families 10
+> (unchanged).
 >
-> **SESSION_149 opens M18.3 — floor-
-> planned archetype pack.** Replace the
-> stub in
-> `services/demo_store/archetypes/floor_planned.py`
+> **SESSION_150 opens M18.4 — BHPH
+> archetype pack.** Replace the stub
+> in
+> `services/demo_store/archetypes/bhph.py`
 > with an atomic `build()` verb
-> constructing a mid-size independent
-> dealer story with auction floor-plan
-> lender + outside-recon vendor
-> relationships + a **documented
-> recon-overrun scenario** for the recon-
-> lead role.
+> constructing a small BHPH
+> dealership with an active portfolio
+> of ~30 notes, ~150 payment history,
+> promise-to-pay + collection-
+> contact + repossession rows, all
+> synthetic-safe.
 
-## First thing SESSION_149 must do
+## First thing SESSION_150 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean (M18.2 commit
-  `a7eb65e` landed at SESSION_148 close).
-- `git log --oneline -3` — top should be
-  `a7eb65e` (M18.2 retail_subprime).
+- `git status` — clean (M18.3 commit
+  `aa6343f` landed at SESSION_149
+  close).
+- `git log --oneline -3` — top
+  should be `aa6343f` (M18.3
+  floor_planned) preceded by the
+  M18.3 docs (not yet committed —
+  land in the M18.3 handoff
+  commit).
 - `python3 manage.py test dealer_ai`
-  → **4,449 pass, 1 skipped, 0 fail**.
-- `cd frontend && npm test` → **140
-  pass**.
+  → **4,483 pass, 1 skipped, 0
+  fail**.
+- `cd frontend && npm test` →
+  **140 pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
@@ -102,120 +103,126 @@ next_increment_name: "M18.3 — Floor-planned archetype pack"
 ### 2. Read first (in order)
 
 - `docs/roadmap/MILESTONE_18_PLANNING.md`
-  §7 M18.3.
-- `docs/handoffs/SESSION_148_m18_inc2_retail_subprime_archetype.md`.
+  §7 M18.4.
+- `docs/handoffs/SESSION_149_m18_inc3_floor_planned_archetype.md`.
+- `backend/dealer_ai/services/demo_store/archetypes/floor_planned.py`
+  (pattern template).
 - `backend/dealer_ai/services/demo_store/archetypes/retail_subprime.py`
-  (pattern template — floor_planned
-  follows the same shape with different
-  specs).
-- `backend/dealer_ai/tests/test_m182_retail_subprime_archetype.py`
-  (test template).
-- `docs/research/INVENTORY_ACQUISITION_MAPPING.md`
-  §floor-planned patterns.
-- `docs/research/RECON_MAPPING.md`
-  §outside-recon workflows + overrun
-  scenarios.
+  (M12 BhphNote origination reference).
+- `docs/research/BHPH_OPERATIONS_MAPPING.md`
+  §portfolio operations + payment
+  frequency + collection workflow.
 
-## What M18.3 delivers
+## What M18.4 delivers
 
-Per `MILESTONE_18_PLANNING.md` §7 M18.3:
+Per `MILESTONE_18_PLANNING.md` §7 M18.4:
 
-### Floor-planned archetype builder
+### BHPH archetype builder
 
 Replace stub in
-`services/demo_store/archetypes/floor_planned.py`
-with `FloorPlannedArchetypeBuilder`
-whose `build()` verb atomically
-constructs:
+`services/demo_store/archetypes/bhph.py`
+with `BhphArchetypeBuilder` whose
+`build()` verb atomically constructs:
 
-- **~40 vehicles** ($12k-$35k; 2016-2022;
-  Ford / Chevy / RAM / Toyota heavy;
-  used + a few CPO simulations).
-  Synthetic `DEMOFP`-prefixed VINs.
-- **6 salespeople** (owner + sales
-  manager + 4 advisors).
-- **Sales pipeline**: ~25 active leads;
-  ~10 recent Sales (mostly retail-
-  finance; 1-2 cash).
-- **Recon activity**: 5 in-recon
-  vehicles including **1 with a
-  documented $600+ recon overrun** —
-  cost basis vs current recon spend
-  should tell the operational story
-  the recon-lead scenario brief will
-  reference at M18.5 (WorkOrder
-  authorized_cost vs actual_cost
-  divergence).
-- **Vendor relationships**: 4 active
-  Vendors covering distinct
-  categories (mechanical, body, glass,
-  detail). Recent VendorCommunication
-  rows on the vendor with the overrun
-  scenario.
-- **Follow-up cadences**: 3-4
-  cadences with BeBack rows attached
-  to some.
+- **~25 vehicles** ($4k-$12k; used
+  only; 2010-2017; higher mileage,
+  reliable transportation). Synthetic
+  `DEMOBH`-prefixed VINs.
+- **4 salespeople** (owner + sales
+  manager + 2 collectors).
+- **BHPH portfolio (~30 active
+  notes):**
+  - BhphNotes across aging buckets
+    (fresh, current, 30-day past-
+    due, 60-day past-due) using
+    weekly + biweekly payment
+    frequencies.
+  - **~150 BhphPayment rows** —
+    historical + recent. Recent
+    payments (paid within the last
+    24 hours) will be picked up by
+    the M16 detector at 11:00 project-
+    time daily so the trial-balance
+    surface reads correctly.
+  - **3 BhphPromiseToPay** rows in
+    various states (promised /
+    kept / broken).
+  - **5 CollectionContact** records
+    across channels.
+  - **1 Repossession** (recovered
+    state).
+- **Sales pipeline**: ~10 active
+  leads; ~5 recent BHPH Sales
+  (exercising M12.1 note origination
+  + M15 sync-sibling GL post).
+- **Follow-up cadences** on some
+  leads.
 
 ### Coherence contract enforcement
 
-Same as M18.2: cross-domain integrity
-across VehicleCost sums, stage
-progression, credit-app references,
-etc. **No random Faker-style
-population.**
+Same as M18.2 / M18.3: cross-domain
+integrity — every BhphNote origins
+from a BHPH Sale; payment history
+sums reconcile with note balances;
+promise-to-pay states are
+internally consistent. **No random
+Faker-style population.**
 
 ### `ScenarioSummary` return
 
-Populate with the seeded stock numbers
-+ user usernames + scenario brief
-slugs (owner_capacity_check /
-sales_manager_pipeline_review /
-recon_lead_overrun_intervention /
-office_accounting_close /
-floor_plan_curtailment_review /
-etc.).
+Populate with seeded stock numbers +
+user usernames + scenario brief
+slugs (`bhph_collector_daily_book` /
+`bhph_promise_followup` /
+`owner_portfolio_health` /
+`office_accounting_close` /
+`repo_intake_handoff` /
+`nsf_response_workflow`).
 
 ### UI-correction discipline per §5.f
 
-Fix UI defects only when they block a
-scenario brief OR display materially
-incorrect information. Every landed UI
-correction commits with the scenario it
-unblocks in the message.
+Fix UI defects only when they block
+a scenario brief OR display
+materially incorrect information.
+Every landed correction commits
+with the specific scenario in the
+message.
 
 ### Focused tests (~15-20 target)
 
-`tests/test_m183_floor_planned_archetype.py`
-following the M18.2 test template:
+`tests/test_m184_bhph_archetype.py`
+following the M18.3 template:
 
 - Row-count contract per specs.
-- Cross-domain integrity (VehicleCost
-  sums + stage progression +
-  CreditApp references + Vendor reuse
-  across work orders).
-- **Recon overrun scenario visibility**:
-  the target WorkOrder's `authorized_cost`
-  vs `actual_cost` should show the
-  $600+ divergence; the target
-  vehicle's VehicleCost total should
-  exceed its acquisition cost basis
-  by the overrun amount.
-- M15 sync-sibling GL posting fires
-  for each Sale.
-- Reset restores canonical starting
-  state.
-- `ScenarioSummary` shape.
-- Synthetic-only data (VIN prefix,
-  phone, email, name roster).
+- Cross-domain integrity: every
+  BhphNote origins from a BHPH
+  Sale; payment allocation sums
+  reconcile; promise-to-pay states
+  consistent; Repossession
+  references a BhphNote.
+- **M16 detector eligibility**:
+  recent payments (paid_at within
+  last 24h) have `posted_at=NULL`
+  so the M16.1 11:00 detector
+  picks them up on next run;
+  historical payments have
+  `posted_at` populated.
+- M15 sync-sibling GL post fires
+  for each BHPH Sale.
+- Reset restores canonical state.
+- ScenarioSummary shape.
+- Synthetic-only data
+  (`DEMOBH` VIN, `555-01` phones,
+  `.example` emails).
 
-### Non-goals for M18.3
+### Non-goals for M18.4
 
-- ❌ No BHPH archetype (M18.4).
 - ❌ No daily briefs (M18.5).
 - ❌ No TesterFeedback POST endpoint
   (M18.5).
-- ❌ No Chargeback substrate (deferred
-  per §0.a M18.2 decision 1).
+- ❌ No Chargeback substrate (still
+  deferred per §0.a M18.2 decision
+  1).
 - ❌ No frontend changes.
 - ❌ No new Celery-beat entries.
 - ❌ No new permission classes.
@@ -223,29 +230,28 @@ following the M18.2 test template:
 
 ### Backend baseline target
 
-**4,449 → ~4,464-4,484 pass** (+15-20
-tests, 0 regressions). Frontend Vitest:
-140 (unchanged).
+**4,483 → ~4,498-4,518 pass** (+15-
+20 tests, 0 regressions).
 
-## Explicit non-goals for SESSION_149
+## Explicit non-goals for SESSION_150
 
-- ❌ Do NOT ship M18.4+ archetype packs
-  in the same session.
+- ❌ Do NOT ship M18.5+ code in the
+  same session.
 - ❌ Do NOT modify M1-M17 business
-  logic (except UI-correction discipline
-  per §5.f Option A).
+  logic (except UI-correction
+  discipline per §5.f).
 - ❌ Do NOT force-push or amend any
   earlier commits.
 
 ## NEXT TASK
 
-Start SESSION_149 with (a) starting-
-state verification, (b) reading M18
-planning §7 M18.3 + M18.2 handoff +
-retail_subprime.py as pattern
-template, (c) building the floor-
-planned archetype builder + tests.
-Ship the M18.3 handoff.
+Start SESSION_150 with (a) starting-
+state verification, (b) reading
+M18.4 scope + floor_planned pattern
+template + retail_subprime BHPH
+reference, (c) building the BHPH
+archetype builder + tests. Ship the
+M18.4 handoff.
 
 ---
 
@@ -256,26 +262,26 @@ Ship the M18.3 handoff.
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_18_PLANNING.md`
-6. `docs/handoffs/SESSION_148_m18_inc2_retail_subprime_archetype.md`
+6. `docs/handoffs/SESSION_149_m18_inc3_floor_planned_archetype.md`
    (pattern template freshly shipped)
-7. `docs/handoffs/SESSION_147_m18_inc1_backend_substrate.md`
-8. `docs/CAPABILITY_MATRIX.md` §7r
-9. `backend/dealer_ai/services/demo_store/archetypes/retail_subprime.py`
-   (M18.3 mirrors this shape with
-   different specs)
-10. `backend/dealer_ai/tests/test_m182_retail_subprime_archetype.py`
-    (test template)
+7. `docs/handoffs/SESSION_148_m18_inc2_retail_subprime_archetype.md`
+   (BHPH sale reference)
+8. `docs/handoffs/SESSION_147_m18_inc1_backend_substrate.md`
+9. `docs/CAPABILITY_MATRIX.md` §7r
+10. `docs/research/BHPH_OPERATIONS_MAPPING.md`
+    §portfolio operations + payment
+    rhythm
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_148 — M18.2 SHIPPED)
+## Operational state (post-SESSION_149 — M18.3 SHIPPED)
 
 - **Backend (local):** Django on `:8001`.
   Migrations `0001`–`0047`. Test baseline:
-  **4,449 pass**, 1 skipped, 0 fail.
+  **4,483 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`.
   `tsc --noEmit` + `vite build` clean.
@@ -286,41 +292,33 @@ research + code are facts.
   DatabaseScheduler. **10 scheduled task
   families**.
 - **Milestones shipped:** M1 → M17. M18
-  in progress: M18.0 planning + M18.1
-  backend substrate + M18.2 retail/
-  subprime archetype pack shipped. M18.3
-  floor-planned archetype next
-  (SESSION_149).
-- **DRF admin surface:** **107**
-  endpoints. Grows to 108 at M18.5
-  (feedback POST).
-- **Frontend operator routes:** **20**
-  (unchanged through M18).
-- **Public endpoints:** +1 M6.5 showroom
-  (unchanged).
+  in progress: M18.0 + M18.1 + M18.2 +
+  M18.3 shipped. **M18.4 BHPH archetype
+  next** (SESSION_150).
+- **DRF admin surface:** **107**.
+- **Frontend operator routes:** **20**.
+- **Public endpoints:** +1 M6.5 showroom.
 - **Service surface:** complete
-  `services/f_and_i/` (M10) + five M11
-  packages + seven M12 packages +
-  `services/accounting/` (seven modules)
-  + `services/demo_store/` (nine
-  modules) with **RetailSubprimeArchetypeBuilder
-  now fully implemented; two archetype
-  stubs remain** (floor_planned +
-  bhph).
-- **Frontend accounting surface:**
-  unchanged from M17.
+  `services/f_and_i/` (M10) + five M11 +
+  seven M12 + `services/accounting/`
+  (seven) + `services/demo_store/`
+  (nine) with **retail_subprime +
+  floor_planned archetypes fully
+  implemented; bhph is the last
+  remaining stub**.
 - **Tenancy carriers:** **50**.
 - **Permission classes:** **7 actual**
-  — **zero-drift streak eleven
-  consecutive milestones** (M10 → M18.2).
+  — **zero-drift streak twelve
+  consecutive milestones** (M10 →
+  M18.3).
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages
   (unchanged — M18 has no LLM path).
 - **Deterministic rules:** unchanged.
 - **Milestone 18 status:** M18.0
   planning + M18.1 substrate + M18.2
-  retail/subprime archetype SHIPPED.
-  **M18.3 floor-planned archetype next**
-  (SESSION_149). M18.4 BHPH, M18.5
-  briefs + feedback endpoint, M18.6
-  close-out to follow.
+  retail/subprime + M18.3 floor-planned
+  SHIPPED. **M18.4 BHPH next**
+  (SESSION_150). M18.5 briefs +
+  feedback endpoint, M18.6 close-out
+  to follow.
