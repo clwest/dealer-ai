@@ -497,4 +497,19 @@ urlpatterns = [
         views_f_and_i.admin_credit_application_create,
         name="admin-credit-application-create",
     ),
+    # ---- Milestone 10 · Increment 2 — F&I deal-structure API ----------
+    # Role-gated on the same permission class as M10.1 (composed
+    # via ``_M101_PERMS`` in views_f_and_i). Flat URL shape per
+    # MILESTONE_10_PLANNING.md §1.9.a Option A (user-confirmed at
+    # SESSION_107 open, recorded in §0.a) — matches the M10.1
+    # credit-application URL and the platform-wide M1-M9 flat
+    # resource-naming convention.
+    # Domain-error mapping in ``views_f_and_i.py``:
+    #   CrossTenantDealStructureError → 404;
+    #   ValueError → 400.
+    path(
+        "admin/deal-structures/",
+        views_f_and_i.admin_deal_structure_create,
+        name="admin-deal-structure-create",
+    ),
 ]

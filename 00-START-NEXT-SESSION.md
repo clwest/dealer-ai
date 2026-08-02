@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_106
+last_session_shipped: SESSION_107
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -12,238 +12,294 @@ milestone_7_status: shipped
 milestone_8_status: shipped
 milestone_9_status: shipped
 milestone_10_status: in_progress
-next_session: SESSION_107
+next_session: SESSION_108
 next_milestone: 10
 next_milestone_name: "Finance (F&I) deal desk"
-next_increment: 2
-next_increment_name: "M10.2 — DealStructure entity + LTV / PTI / DTI ratio computation"
+next_increment: 3
+next_increment_name: "M10.3 — LenderProgram + LenderSubmission entities"
 ---
 
-# Next session — SESSION_107 · Milestone 10 · Increment 2 (M10.2 — DealStructure entity)
+# Next session — SESSION_108 · Milestone 10 · Increment 3 (M10.3 — Lender catalog + submission)
 
-> **SESSION_106 shipped M10.1 —**
-> `CreditApplication` entity substrate +
-> migration `0025` + `services/f_and_i/`
-> package (three verbs) + new
-> `IsFinanceManagerOrOwnerAtActiveDealership`
-> permission class + first M10 endpoint
-> (`POST /admin/credit-applications/`) +
-> tenancy carrier extension (24 → 25) +
-> 52 focused tests. All four
-> `[NEEDS-DECISION-BEFORE-M10.N]` items
-> resolved at session open (all four as-
-> recommended; §5.a Option C, §5.b
-> Option A, §5.c Option B, §5.d Option C).
-> Retention clock locked at the model
-> layer per §5.e —
-> `CreditApplication.delete()` refuses
-> unexpired records.
+> **SESSION_107 shipped M10.2 —**
+> `DealStructure` entity substrate +
+> M10.2 additive extension of M10.1's
+> `CreditApplication`
+> (`gross_monthly_income` +
+> `existing_monthly_debt` nullable
+> Decimals) + `services/f_and_i/deal_structure.py`
+> module with six verbs (three pure
+> ratio verbs LTV / PTI / DTI + write
+> path + tenant-scoped read +
+> recompute helper) + second M10
+> endpoint (`POST /admin/deal-structures/`)
+> + tenancy carrier extension (25 → 26)
+> + 55 focused tests. Two design
+> questions resolved at session open
+> (both as-recommended): §1.2.a
+> Option A (income + debt on CA),
+> §1.9.a Option A (flat URL pattern).
 >
-> **Backend baseline: 3,478 pass, 1
-> skipped, 0 fail** (was 3,426 at
-> SESSION_105 close). Frontend Vitest
+> **Backend baseline: 3,533 pass, 1
+> skipped, 0 fail** (was 3,478 at
+> SESSION_106 close). Frontend Vitest
 > baseline: 34 pass (unchanged; no
-> frontend at M10.1). Migrations
-> `0001`–`0025`. Tenancy carriers 25.
-> DRF admin surface 48.
+> frontend at M10.2). Migrations
+> `0001`–`0026`. Tenancy carriers 26.
+> DRF admin surface 49.
 >
 > **Push to `origin/main` for the M10.1
-> commit is deferred pending explicit
-> user authorization** per M9-close
-> convention.
+> and M10.2 commits is deferred
+> pending explicit user authorization**
+> per M9-close convention.
 >
-> **SESSION_107 opens M10.2 —
-> DealStructure entity + LTV / PTI /
-> DTI ratio computation.** No `[NEEDS-
-> DECISION-BEFORE-M10.N]` items are
-> flagged for M10.2 in the planning
-> doc today — verify at session open.
+> **SESSION_108 opens M10.3 —
+> LenderProgram + LenderSubmission
+> entities.** Two new tenancy carriers
+> (26 → 28). Attach-shape decisions
+> for `LenderSubmission` surface at
+> session open — likely FK to
+> `DealStructure` (the natural parent
+> — one deal-structure can be
+> submitted to multiple lenders in
+> parallel).
 
-## First thing SESSION_107 must do
+## First thing SESSION_108 must do
 
-### 1. Check push authorization for the M10.1 commit
+### 1. Check push authorization for the M10.1 + M10.2 commits
 
-The M10.1 commit lives locally on `main`
-only. Verify with the user:
+Both M10.1 and M10.2 commits live
+locally on `main` only. Verify with
+the user:
 
-- Is the commit still local? (`git log
-  origin/main..HEAD --oneline` — non-empty
-  means still local.)
-- Should it push now? If yes: `git push
-  origin main` after explicit user "go."
+- Are the commits still local? (`git
+  log origin/main..HEAD --oneline` —
+  should show two commits.)
+- Should they push now? If yes: `git
+  push origin main` after explicit
+  user "go."
 
 Push is a shared-state action; per
-CLAUDE.md safety posture, requires per-
-push confirmation independent of the per-
-increment authorization that landed the
-commit. Matches SESSION_105 M9-close /
-SESSION_100 M8-close push flow.
+CLAUDE.md safety posture, requires
+per-push confirmation independent of
+the per-increment authorization that
+landed each commit.
 
-### 2. Confirm any M10.2 §5 decisions
+### 2. Confirm M10.3 §5-equivalent decisions
 
-Re-read `MILESTONE_10_PLANNING.md` §5 at
-session open. Today no
-`[NEEDS-DECISION-BEFORE-M10.2]` marker is
-present in the planning doc for M10.2,
-but the design memo (§1.2) may surface
-issues on close read (which entity
-DealStructure attaches to — CreditApplication
-or Sale? ratio storage — denormalized
-columns or verb-computed on read?).
+Re-read `MILESTONE_10_PLANNING.md`
+§1.3 + §5.d at session open. §5.d
+already resolved at SESSION_106
+(Option C — leave both). New M10.3
+questions likely to surface:
 
-**If any decision surfaces, do NOT write
-M10.2 code until it's resolved with the
-user.** Amend `MILESTONE_10_PLANNING.md`
-§0.a narrowly at session top per M10.1 /
-M5-M9 §0.a precedent before implementation.
+- **`LenderSubmission` attach point.**
+  FK to `DealStructure` (natural — a
+  submission is *of* a deal structure
+  to a lender) or nullable FKs to both
+  `DealStructure` and `CreditApplication`
+  (mirrors M10.1's §5.a Option C
+  pattern)?
+- **`LenderSubmission.status` vocabulary
+  partition.** Planning §1.3 suggests
+  four values (`pending` / `approved`
+  / `counter` / `declined`). Fixed set
+  (mirrors M10.1 §5.b Option A) or
+  per-dealership extensible?
+- **`LenderProgram` catalog scope.**
+  Per-dealership (each dealership
+  maintains its own lender list —
+  matches §5.d Option C which kept
+  the free-text field as notes) or a
+  global catalog with per-dealership
+  activation flags?
+- **`counter_terms` / `approval_terms`
+  JSONField shape.** Free-form JSON
+  at M10.3 (like M10.2's
+  `back_end_products`)? Or a fixed
+  key set at the schema layer?
+
+**If any decision surfaces, do NOT
+write M10.3 code until it's resolved
+with the user.** Amend
+`MILESTONE_10_PLANNING.md` §0.a
+narrowly per M9 / M10.1 / M10.2 §0.a
+precedent before implementation.
 
 ### 3. Verify starting state
 
-- `git status` — clean (M10.1 commit
-  landed at SESSION_106 close).
-- `git log --oneline -3` — top should be
-  `Milestone 10 · Increment 1 —
-  CreditApplication entity … (SESSION_106)`
+- `git status` — clean (M10.2 commit
+  landed at SESSION_107 close).
+- `git log --oneline -3` — top should
+  be `Milestone 10 · Increment 2 —
+  DealStructure entity … (SESSION_107)`
   or similar.
 - `python3 manage.py test dealer_ai` →
-  **3,478 pass, 1 skipped, 0 fail.**
+  **3,533 pass, 1 skipped, 0 fail.**
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
   detected."
 - `cd frontend && npm test` → **34
   pass**.
-- `npx tsc --noEmit` + `npx vite build`
-  both clean.
+- `npx tsc --noEmit` + `npx vite
+  build` both clean.
 - `redis-cli ping` → `PONG`.
 
-## What M10.2 delivers
+## What M10.3 delivers
 
-Per `MILESTONE_10_PLANNING.md` §7 M10.2:
+Per `MILESTONE_10_PLANNING.md` §7 M10.3
++ §1.3:
 
-- **New `DealStructure` model +
-  migration `0026`.** Attaches to a
-  `CreditApplication` (or `Sale` — TBD
-  at session open) with the deal-desk
-  math: cash-down / trade-in / financed-
-  amount / term / rate / monthly-
-  payment (composed from the existing
-  `services.payment_engine`
-  standard-APR + BHPH math).
-- **New `services/f_and_i/deal_structure.py`**
+- **New `LenderProgram` model +
+  migration `0027`.** Per-dealership
+  catalog of active lender programs
+  (fields: `name`, `contact`,
+  `terms_summary`, `is_active`,
+  timestamps). Additive alongside
+  the M10.1-era free-text
+  `DealerOnboardingProfile.subprime_lenders`
+  per §5.d Option C — the free-text
+  field becomes a notes area.
+- **New `LenderSubmission` model.**
+  FK to `DealStructure` +
+  `LenderProgram`. Fields:
+  `submitted_at`, `status`
+  (`pending` / `approved` /
+  `counter` / `declined`),
+  `counter_terms` (JSON),
+  `approval_terms` (JSON), `notes`.
+- **Tenancy-carrier extensions
+  26 → 28** (both new entities).
+- **New `services/f_and_i/lender.py`**
   module — sibling to
   `services/f_and_i/credit_application.py`
-  from M10.1. Ratio verbs:
-  `loan_to_value(deal)`,
-  `payment_to_income(deal)`,
-  `debt_to_income(deal)`. Reuses
-  `services/payment_engine` for
-  monthly-payment math (deterministic
-  math substrate is unchanged).
-- **Tenancy-carrier extension 25 → 26**
-  (`DealStructure`).
-- **Endpoint** shape TBD at session open
-  (attach path depends on §5-equivalent
-  decision).
-- **~30 focused tests.**
-- **Baseline target 3,478 → ~3,508.**
+  and `deal_structure.py`. Catalog
+  verbs (record/list programs) +
+  submission verbs (record
+  submission, update status, list
+  by deal-structure).
+- **New endpoints** —
+  `POST /admin/lender-programs/`,
+  `POST /admin/lender-submissions/`,
+  and likely `PATCH
+  /admin/lender-submissions/<pk>/`
+  for status updates. Role-gated on
+  the same
+  `IsFinanceManagerOrOwnerAtActiveDealership`
+  permission class from M10.1.
+- **~25 focused tests.**
+- **Baseline target 3,533 → ~3,558.**
 
-### Non-goals for M10.2
+### Non-goals for M10.3
 
-- ❌ No `LenderProgram` /
-  `LenderSubmission` yet (M10.3).
 - ❌ No `Stipulation` / `Contract` /
   `Funding` / `Chargeback` /
   `ComplianceRecord` entities
   (M10.4-M10.7).
 - ❌ No operator UI (M10.7).
-- ❌ No changes to
-  `services/payment_engine` — the M2
-  math substrate stays as-is (M10.2
-  composes with it).
+- ❌ No direct lender-portal
+  integrations (deferred per
+  IMPLEMENTATION_ROADMAP §Milestone 10
+  non-goals).
+- ❌ No data migration from the free-
+  text `subprime_lenders` field
+  (§5.d Option C explicitly left
+  both; operators re-populate the
+  structured catalog manually).
 
-## What SESSION_107 should do
+## What SESSION_108 should do
 
 ### Recommended step sequence
 
 0. **Push authorization check** (§1
    above).
 
-1. **Confirm M10.2 §5 decisions with
-   the user** (§2 above). Do NOT write
-   code until every
-   `[NEEDS-DECISION-BEFORE-M10.N]` item
-   is resolved.
+1. **Confirm M10.3 §5-equivalent
+   decisions with the user** (§2
+   above). Do NOT write code until
+   every open decision is resolved.
 
 2. **Read first (in order):**
    - `docs/roadmap/MILESTONE_10_PLANNING.md`
-     §1.2 + §7 M10.2.
-   - `docs/handoffs/SESSION_106_m10_inc1_credit_application.md`
+     §1.3 + §5.d + §7 M10.3.
+   - `docs/handoffs/SESSION_107_m10_inc2_deal_structure.md`
      (previous session).
+   - `docs/handoffs/SESSION_106_m10_inc1_credit_application.md`
+     (§5.d origin).
    - `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
-     §3 (deal structure math).
-   - `backend/dealer_ai/services/payment_engine.py`
-     (existing standard-APR + BHPH
-     math to compose with).
-   - `backend/dealer_ai/models.py::CreditApplication`
-     (M10.1 substrate — the likely
-     attach target for
-     `DealStructure`).
-   - `backend/dealer_ai/models.py::Sale`
-     (alternate attach target — see
-     §5-equivalent decision at M10.2
-     open).
-   - `backend/dealer_ai/services/f_and_i/credit_application.py`
+     §4 (lender submission workflow).
+   - `backend/dealer_ai/models.py::DealStructure`
+     + `::CreditApplication` (M10.1-
+     M10.2 substrates — attach
+     targets).
+   - `backend/dealer_ai/services/f_and_i/deal_structure.py`
      (pattern to mirror for
-     `deal_structure.py`).
+     `lender.py`).
+   - `backend/dealer_ai/models.py::DealerOnboardingProfile`
+     (find `subprime_lenders` free-
+     text field — additive coexists
+     with new catalog).
 
-3. **Verify starting state** (§3 above).
+3. **Verify starting state** (§3
+   above).
 
 4. **Draft (in order):**
-   - `DealStructure` model +
-     migration `0026` (per §5-
-     equivalent decision).
-   - Ratio verbs
-     (`services/f_and_i/deal_structure.py`).
-   - Tenancy carrier addition.
-   - Endpoint + URL.
-   - ~30 focused tests.
+   - `LenderProgram` +
+     `LenderSubmission` models +
+     migration `0027`.
+   - Tenancy carrier additions
+     (26 → 28).
+   - `services/f_and_i/lender.py`
+     module.
+   - Endpoints + URLs.
+   - ~25 focused tests.
 
 5. **Full-suite verification.** Target
-   3,478 → ~3,508.
+   3,533 → ~3,558.
 
 6. **Ship handoff at
-   `docs/handoffs/SESSION_107_m10_inc2_deal_structure.md`.**
+   `docs/handoffs/SESSION_108_m10_inc3_lender.md`.**
 
 7. **Overwrite `00-START-NEXT-SESSION.md`**
-   with M10.3 priority.
+   with M10.4 priority.
 
-## Explicit non-goals for SESSION_107
+## Explicit non-goals for SESSION_108
 
-- ❌ Do NOT ship LenderProgram /
-  LenderSubmission / Stipulation /
-  Contract / Funding / Chargeback /
-  ComplianceRecord entities (M10.3-M10.7).
+- ❌ Do NOT ship Stipulation / Contract
+  / Funding / Chargeback /
+  ComplianceRecord entities
+  (M10.4-M10.7).
 - ❌ Do NOT ship frontend UI (M10.7).
-- ❌ Do NOT modify M1-M9 business logic.
-- ❌ Do NOT force-push or amend the M10.1
-  commit.
+- ❌ Do NOT modify M1-M9 business
+  logic. Additive extensions to
+  M10.1-M10.2 models are OK per the
+  established pattern; behavior
+  changes are not.
+- ❌ Do NOT force-push or amend the
+  M10.1 / M10.2 commits.
+- ❌ Do NOT migrate the free-text
+  `subprime_lenders` field into the
+  new structured catalog (§5.d
+  Option C explicitly left both).
 
 ## NEXT TASK
 
-Start SESSION_107 with (a) push-
-authorization check for the M10.1 commit,
-(b) confirming any surfaced M10.2 §5
-decisions with the user, (c) the read-
-first list, (d) starting-state
-verification, then (e) `DealStructure`
-model + ratio verbs + endpoint + ~30
-tests. Target baseline 3,478 → ~3,508.
-Ship the M10.2 handoff.
+Start SESSION_108 with (a) push-
+authorization check for M10.1 + M10.2
+commits, (b) confirming M10.3 §5-
+equivalent decisions with the user,
+(c) the read-first list, (d) starting-
+state verification, then (e)
+`LenderProgram` + `LenderSubmission`
+models + `services/f_and_i/lender.py`
++ endpoints + ~25 tests. Target
+baseline 3,533 → ~3,558. Ship the
+M10.3 handoff.
 
-Backend baseline at SESSION_107 close:
-**~3,508 pass**. Frontend baseline:
-unchanged (no frontend at M10.2).
+Backend baseline at SESSION_108 close:
+**~3,558 pass**. Frontend baseline:
+unchanged (no frontend at M10.3).
 
 ---
 
@@ -255,26 +311,27 @@ unchanged (no frontend at M10.2).
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_10_PLANNING.md`
 6. `docs/roadmap/MILESTONE_9_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_106_m10_inc1_credit_application.md`
-8. `docs/handoffs/SESSION_105_m9_closeout.md`
-9. `docs/handoffs/SESSION_104_m9_inc5_operator_ui.md`
-10. `docs/handoffs/SESSION_103_m9_inc4_buyer_accuracy.md`
-11. `docs/handoffs/SESSION_102_m9_inc3_analytics_extensions.md`
-12. `docs/handoffs/SESSION_101_m9_inc2_delivery.md`
-13. `docs/handoffs/SESSION_100_m9_inc1_sale_entity.md`
-14. `docs/CAPABILITY_MATRIX.md` §7j
-15. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
+7. `docs/handoffs/SESSION_107_m10_inc2_deal_structure.md`
+8. `docs/handoffs/SESSION_106_m10_inc1_credit_application.md`
+9. `docs/handoffs/SESSION_105_m9_closeout.md`
+10. `docs/handoffs/SESSION_104_m9_inc5_operator_ui.md`
+11. `docs/handoffs/SESSION_103_m9_inc4_buyer_accuracy.md`
+12. `docs/handoffs/SESSION_102_m9_inc3_analytics_extensions.md`
+13. `docs/handoffs/SESSION_101_m9_inc2_delivery.md`
+14. `docs/handoffs/SESSION_100_m9_inc1_sale_entity.md`
+15. `docs/CAPABILITY_MATRIX.md` §7j
+16. `docs/research/FINANCE_DEPARTMENT_MAPPING.md`
 
 Narrative docs are claims. Rules + research +
 code are facts.
 
 ---
 
-## Operational state (post-SESSION_106 — M10.1 SHIPPED)
+## Operational state (post-SESSION_107 — M10.2 SHIPPED)
 
 - **Backend (local):** Django on `:8001`.
-  Migrations `0001`–`0025`. Test baseline:
-  **3,478 pass**, 1 skipped, 0 fail.
+  Migrations `0001`–`0026`. Test baseline:
+  **3,533 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`.
   `tsc --noEmit` + `vite build` clean.
@@ -287,51 +344,64 @@ code are facts.
   M7).
 - **Milestones shipped:** M1 → **M9**
   (SESSION_105 close); M10 in progress
-  (SESSION_106 shipped M10.1).
-- **DRF admin surface:** 48 endpoints
-  (M9 47 + M10.1 `POST
-  /admin/credit-applications/`).
+  (SESSION_106 shipped M10.1;
+  SESSION_107 shipped M10.2).
+- **DRF admin surface:** 49 endpoints
+  (M9 47 + M10.1 credit-applications +
+  M10.2 deal-structures).
 - **Frontend operator routes:** 9
-  (unchanged; no frontend at M10.1).
+  (unchanged; no frontend at M10.1 /
+  M10.2).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** M8 added
   `services/analytics/` (4 submodules);
   M9.1 `services/sale/`; M9.2
-  `services/delivery/`; M9.3 added
-  `services/analytics/gross_profit.py`;
-  M9.4 extended `services/analytics/recon.py`
-  with Q7 buyer-estimate-accuracy verb;
-  **M10.1 added `services/f_and_i/`
-  (one submodule so far —
-  `credit_application.py`)**.
-- **Tenancy carriers:** 25 (M1 six +
+  `services/delivery/`; M9.3-M9.4
+  extended M8 modules; M10.1 added
+  `services/f_and_i/` (with
+  `credit_application.py`); **M10.2
+  extended `services/f_and_i/` with
+  `deal_structure.py`** — now two
+  submodules in the F&I package.
+- **Tenancy carriers:** 26 (M1 six +
   M3 three + M4 six + M5 two + M6 two
   + M7 two + M8 one + M9.1 one — `Sale`
-  + M9.2 one — `Delivery` + **M10.1
-  one — `CreditApplication`**).
+  + M9.2 one — `Delivery` + M10.1 one —
+  `CreditApplication` + **M10.2 one —
+  `DealStructure`**).
 - **Permission classes:** 8 in
-  `dealer_ai/permissions.py` (M1 four +
-  M4 one + M9 uses M4's + **M10.1 one —
-  `IsFinanceManagerOrOwnerAtActiveDealership`**).
+  `dealer_ai/permissions.py` (M1 four
+  + M4 one + M9 uses M4's + M10.1 one —
+  `IsFinanceManagerOrOwnerAtActiveDealership`,
+  reused unchanged at M10.2).
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** unchanged.
 - **Deterministic rules:** unchanged.
-- **M10.1 substrate (shipped):**
-  `CreditApplication` entity with
-  attach shape (nullable FKs to both
-  `CustomerLead` and `Sale` per §5.a
-  Option C), retention clock at the
-  model layer (`captured_at + 7
-  years`; `.delete()` refuses
-  unexpired records per §5.e),
-  minimal PII surface (full-SSN
-  handling deferred until M10.7
-  Safeguards Rule technical-controls
-  layer).
-- **Milestone 10 next:** M10.2
-  `DealStructure` entity + LTV / PTI /
-  DTI ratio computation. Verify §5-
-  equivalent decisions at session
-  open. ~30 tests. Baseline 3,478 →
-  ~3,508.
+- **M10.2 substrate (shipped):**
+  `DealStructure` entity attaching a
+  `CreditApplication` to a `Vehicle`
+  with deal-desk math (sale_price /
+  down / trade / taxes / fees /
+  amount_financed / apr in percent
+  units matching payment_engine
+  convention / term / monthly_payment
+  / back_end_products JSONField) +
+  three denormalized ratio outputs
+  (LTV / PTI / DTI, all
+  Decimal(6,2) nullable) computed
+  at write time by the M10.2 service
+  verbs. Additive extension to M10.1's
+  CreditApplication (nullable
+  gross_monthly_income +
+  existing_monthly_debt Decimals) so
+  PTI / DTI have parent-side inputs.
+  M10.1-era rows survive NULL and
+  ratio verbs return `None` for them.
+- **Milestone 10 next:** M10.3
+  `LenderProgram` + `LenderSubmission`
+  entities. Verify §5-equivalent
+  decisions at session open (attach
+  shape, status vocabulary, catalog
+  scope, terms-JSON shape). ~25
+  tests. Baseline 3,533 → ~3,558.

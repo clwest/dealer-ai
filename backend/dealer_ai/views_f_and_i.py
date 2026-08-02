@@ -42,11 +42,16 @@ from .models import (
     CREDIT_APP_STATUS_CHOICES,
     CreditApplication,
     CustomerLead,
+    DealStructure,
     Sale,
+    Vehicle,
 )
 from .permissions import IsFinanceManagerOrOwnerAtActiveDealership
 from .services import f_and_i as f_and_i_service
-from .services.f_and_i import CrossTenantCreditApplicationError
+from .services.f_and_i import (
+    CrossTenantCreditApplicationError,
+    CrossTenantDealStructureError,
+)
 from .services.tenancy import get_current_dealership
 
 
@@ -181,5 +186,165 @@ def admin_credit_application_create(request):
 
     return Response(
         {"credit_application": _project_credit_application(app)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 2 (SESSION_107) — DealStructure admin endpoint.
+# ---------------------------------------------------------------------------
+#
+# Same permission composition as the M10.1 credit-application endpoint
+# above (``_M101_PERMS``). Flat URL shape (``/admin/deal-structures/``)
+# per §1.9.a Option A (user-confirmed at SESSION_107 open, recorded
+# in §0.a) — matches the M10.1 credit-application URL pattern and the
+# platform-wide M1-M9 flat resource-naming convention.
+
+
+def _lookup_credit_application_or_404(dealership, credit_application_id):
+    try:
+        return CreditApplication.objects.filter(dealership=dealership).get(
+            pk=credit_application_id
+        )
+    except CreditApplication.DoesNotExist:
+        return None
+
+
+def _lookup_vehicle_by_stock_or_404(dealership, stock_number):
+    try:
+        return Vehicle.objects.filter(dealership=dealership).get(
+            stock_number=stock_number
+        )
+    except Vehicle.DoesNotExist:
+        return None
+
+
+def _project_deal_structure(deal: DealStructure) -> dict:
+    return {
+        "id": deal.pk,
+        "credit_application_id": deal.credit_application_id,
+        "vehicle_stock": deal.vehicle.stock_number,
+        "sale_price": str(deal.sale_price),
+        "down_payment": str(deal.down_payment),
+        "trade_allowance": str(deal.trade_allowance),
+        "trade_payoff": str(deal.trade_payoff),
+        "taxes": str(deal.taxes),
+        "fees": str(deal.fees),
+        "amount_financed": str(deal.amount_financed),
+        "apr": str(deal.apr),
+        "term_months": deal.term_months,
+        "monthly_payment": str(deal.monthly_payment),
+        "back_end_products": deal.back_end_products,
+        # Ratios may be None (M10.1-era CA without income captured).
+        # Serialize as string when present, null when absent — matches
+        # the M9.1 Sale.gross_realized shape (stringified Decimal).
+        "ltv_pct": str(deal.ltv_pct) if deal.ltv_pct is not None else None,
+        "pti_pct": str(deal.pti_pct) if deal.pti_pct is not None else None,
+        "dti_pct": str(deal.dti_pct) if deal.dti_pct is not None else None,
+        "created_at": deal.created_at.isoformat(),
+        "updated_at": deal.updated_at.isoformat(),
+    }
+
+
+class DealStructureCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/deal-structures/``."""
+
+    credit_application_id = serializers.IntegerField()
+    vehicle_stock = serializers.CharField(max_length=64)
+    sale_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    amount_financed = serializers.DecimalField(
+        max_digits=10, decimal_places=2
+    )
+    apr = serializers.DecimalField(max_digits=6, decimal_places=4)
+    term_months = serializers.IntegerField(min_value=1)
+    monthly_payment = serializers.DecimalField(
+        max_digits=10, decimal_places=2
+    )
+    down_payment = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default="0.00"
+    )
+    trade_allowance = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default="0.00"
+    )
+    trade_payoff = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default="0.00"
+    )
+    taxes = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default="0.00"
+    )
+    fees = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, default="0.00"
+    )
+    back_end_products = serializers.ListField(
+        child=serializers.DictField(), required=False, default=list
+    )
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_deal_structure_create(request):
+    """POST: create a DealStructure (M10.2 write path).
+
+    Requires ``credit_application_id`` + ``vehicle_stock`` plus the
+    deal-desk math fields. Cross-tenant references (CA or vehicle
+    belongs to another dealership) surface as 404, same fail-closed
+    shape as M9.1 / M10.1. Ratios (LTV / PTI / DTI) are computed
+    server-side and returned in the response — the client cannot
+    submit them directly (they're always denormalized outputs).
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = DealStructureCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    credit_application = _lookup_credit_application_or_404(
+        dealership, data["credit_application_id"]
+    )
+    if credit_application is None:
+        return Response(
+            {"detail": "Credit application not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    vehicle = _lookup_vehicle_by_stock_or_404(dealership, data["vehicle_stock"])
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        deal = f_and_i_service.record_deal_structure(
+            dealership=dealership,
+            credit_application=credit_application,
+            vehicle=vehicle,
+            sale_price=data["sale_price"],
+            amount_financed=data["amount_financed"],
+            apr=data["apr"],
+            term_months=data["term_months"],
+            monthly_payment=data["monthly_payment"],
+            down_payment=data.get("down_payment"),
+            trade_allowance=data.get("trade_allowance"),
+            trade_payoff=data.get("trade_payoff"),
+            taxes=data.get("taxes"),
+            fees=data.get("fees"),
+            back_end_products=data.get("back_end_products"),
+        )
+    except CrossTenantDealStructureError:
+        # Never leak cross-tenant existence. Same fail-closed shape
+        # as M2.6 / M3.6 / M4.6 / M9.1 / M10.1.
+        return Response(
+            {"detail": "Parent resource not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"deal_structure": _project_deal_structure(deal)},
         status=status.HTTP_201_CREATED,
     )

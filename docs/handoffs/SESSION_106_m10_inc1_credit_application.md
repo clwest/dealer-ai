@@ -8,7 +8,7 @@ milestone: 10
 milestone_status: in_progress
 increment: 1
 increment_status: shipped
-commit: TBD
+commit: 50504eb
 ---
 
 # SESSION_106 — Milestone 10 · Increment 1 (M10.1 — CreditApplication entity + retention discipline)

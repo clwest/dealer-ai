@@ -153,6 +153,76 @@ option, and the affected sections.
   - Non-goals unchanged (M10.2-M10.7
     deferred).
 
+### SESSION_107 (M10.2 open) — income/debt capture + endpoint-shape resolved
+
+- **Amendment.** Two design questions
+  surfaced at SESSION_107 open that the
+  planning-time §1.2 memo did not
+  resolve. Both confirmed by the user
+  at session open (both as-recommended).
+- **§1.2.a — income + existing-debt
+  capture for PTI / DTI ratios:
+  Option A.** Extend M10.1's
+  `CreditApplication` model with two
+  nullable Decimal columns
+  (`gross_monthly_income`,
+  `existing_monthly_debt`). The
+  additive-extension pattern (M8 §6
+  lesson 11) preserves M10.1
+  business logic: old M10.1 rows carry
+  NULL and the PTI / DTI ratio verbs
+  simply return `None` for them.
+  Migration `0026` combines the two
+  new CreditApplication columns +
+  the new `DealStructure` model in
+  one atomic delivery. Income lives
+  on the credit application because
+  FINANCE §1.5 treats it as native
+  credit-app data (captured on the
+  app form itself). Existing debt
+  totals also live on the credit
+  application because they're a
+  bureau-response artifact tied to
+  the applicant, not to any one
+  deal structure.
+- **§1.9.a — endpoint URL shape:
+  Option A.** Continue the flat
+  `/admin/<resource>/` pattern shipped
+  at M10.1
+  (`/admin/credit-applications/`).
+  M10.2 endpoint is
+  `/admin/deal-structures/`, not
+  `/admin/f-and-i/deal-structures/`.
+  Consistency across the M10 admin
+  surface (and with the platform-wide
+  M1-M9 flat pattern of
+  `/admin/leads/`, `/admin/salespeople/`,
+  `/admin/deliveries/…`) beats the
+  planning-doc `/admin/f-and-i/`
+  grouping suggestion which was not
+  followed at M10.1 open. If the
+  `f-and-i/` grouping matters
+  operationally later, that's a
+  rename-with-redirect at M10.7,
+  not now.
+- **Effect on §7 M10.2 scope.**
+  - Ships (unchanged): `DealStructure`
+    model + migration `0026` + ratio
+    verbs (LTV always computable;
+    PTI / DTI return `None` when
+    inputs are NULL) + tenancy
+    carrier 25 → 26 + first M10.2
+    endpoint + ~30 tests.
+  - Adds (from §1.2.a=A):
+    additive `gross_monthly_income`
+    + `existing_monthly_debt`
+    nullable Decimal columns on
+    `CreditApplication`, bundled
+    into migration `0026`. Zero
+    change to M10.1 business logic
+    (all writes / reads keep working
+    against the NULL default).
+
 ---
 
 ## 1. Design memo

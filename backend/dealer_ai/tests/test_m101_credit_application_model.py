@@ -392,9 +392,14 @@ class CreditApplicationParentDeletionTests(TestCase):
 class CreditApplicationTenancyCarrierTests(TestCase):
     """The tenant-carrier registry includes ``CreditApplication``."""
 
-    def test_credit_application_is_25th_tenant_carrier(self) -> None:
-        # M9.2 shipped 24; M10.1 makes it 25.
-        self.assertEqual(len(_TENANT_CARRIER_MODEL_NAMES), 25)
+    def test_credit_application_is_a_tenant_carrier(self) -> None:
+        # M10.1 added ``CreditApplication`` as the 25th carrier
+        # (M9.2 shipped 24). Later increments keep extending the
+        # list — this test locks the M10.1 invariant ("carrier
+        # registered") without an absolute-count assertion, which
+        # would break on every subsequent add. Carriers only grow,
+        # never shrink, so the >= floor is the right shape.
+        self.assertGreaterEqual(len(_TENANT_CARRIER_MODEL_NAMES), 25)
         self.assertIn("CreditApplication", _TENANT_CARRIER_MODEL_NAMES)
 
     def test_autofill_signal_attaches_default_dealership(self) -> None:

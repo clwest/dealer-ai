@@ -355,6 +355,19 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # (Django admin form, ad-hoc management command). Retention
     # clock is enforced at the model layer per §5.e.
     "CreditApplication",
+    # Milestone 10 · Increment 2 (SESSION_107) — DealStructure
+    # entity per MILESTONE_10_PLANNING.md §1.2 (attach shape
+    # confirmed at planning-time; income/debt capture on the
+    # parent CreditApplication per §1.2.a Option A, user-
+    # confirmed at SESSION_107 open, recorded in §0.a)
+    # (25 → 26). FKs to CreditApplication (parent) and
+    # Vehicle (target). The M10.2
+    # :func:`services.f_and_i.deal_structure.record_deal_structure`
+    # writes ``dealership`` explicitly on every row and computes
+    # the LTV / PTI / DTI denormalized columns at write time;
+    # the autofill signal is the safety net for callers that
+    # bypass the service.
+    "DealStructure",
 )
 
 

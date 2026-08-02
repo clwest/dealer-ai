@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from decimal import Decimal
 from functools import cached_property
 from typing import Optional
 
@@ -4290,6 +4291,20 @@ class CreditApplication(models.Model):
     # permitted for pre-qualification apps that haven't collected
     # SSN yet.
     applicant_ssn_last4 = models.CharField(max_length=4, blank=True, default="")
+    # M10.2 additive extension per MILESTONE_10_PLANNING.md §1.2.a
+    # Option A (user-confirmed at SESSION_107 open, recorded in
+    # §0.a). Nullable Decimals so M10.1-era rows survive with
+    # NULL — the M10.2 PTI / DTI ratio verbs return ``None`` when
+    # either column is unset rather than raising, per the "old
+    # rows survive vocabulary extensions" pattern from
+    # ``Delivery.checklist``. Both fields are native credit-app
+    # data per FINANCE §1.5 (income) + §1.10 (bureau debt totals).
+    gross_monthly_income = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    existing_monthly_debt = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
     source_format = models.CharField(
         max_length=32,
         choices=CREDIT_APP_FORMAT_CHOICES,
@@ -4417,3 +4432,178 @@ class CreditApplication(models.Model):
                 f"Refusing delete."
             )
         return super().delete(*args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 2 (SESSION_107) — DealStructure entity.
+# ---------------------------------------------------------------------------
+
+
+class DealStructure(models.Model):
+    """Milestone 10 · Increment 2 — the F&I deal-desk structuring row.
+
+    Links a :class:`CreditApplication` to a specific :class:`Vehicle`
+    with the deal-desk math the F&I manager assembles: sale price,
+    cash down, trade allowance / payoff, taxes, fees, amount financed,
+    APR, term, monthly payment, back-end products, and the three
+    ratio metrics (LTV / PTI / DTI). Per
+    ``MILESTONE_10_PLANNING.md`` §1.2 the model stores the deal
+    inputs *and* the denormalized ratio outputs; the service verbs
+    in :mod:`services.f_and_i.deal_structure` compute the ratios at
+    write time and populate the ``*_pct`` columns for query-ability.
+
+    **Attach shape.** FK to :class:`CreditApplication` (mandatory —
+    the credit app is the operational parent; a deal structure
+    without a credit app is nonsense in the F&I workflow) + FK to
+    :class:`Vehicle` (mandatory — the specific unit being financed;
+    a customer may desk multiple vehicles). Both FKs cascade —
+    deleting either parent invalidates the deal structure. Multiple
+    deal structures per credit application are allowed (F&I
+    iterates: primary lender approval, subprime counter-offer,
+    revised terms after a stip clears, etc.) — standard M-to-1, no
+    unique constraint at M10.2.
+
+    **APR unit convention.** Percent units (e.g. ``9.9900`` for
+    9.99% APR), matching ``services.payment_engine`` — see
+    ``payment_engine.DEFAULT_APR = 7.49`` and the docstring at
+    ``services.payment_engine.py`` line 261. Consistent APR units
+    across the payment-engine and F&I ratio surfaces are critical:
+    every downstream ratio verb expects percent-unit APR.
+
+    **Ratio denormalization.** ``ltv_pct`` / ``pti_pct`` /
+    ``dti_pct`` are populated at write time by
+    :func:`services.f_and_i.deal_structure.record_deal_structure`.
+    Nullable — LTV requires ``sale_price > 0`` (else NULL); PTI
+    and DTI require ``CreditApplication.gross_monthly_income``
+    (and DTI also requires ``existing_monthly_debt``). For M10.1-
+    era CreditApplication rows without income captured, PTI / DTI
+    land as NULL and downstream compliance / dashboard filters
+    treat NULL as "not computable" rather than "not applicable."
+
+    **Cross-tenant guard.** ``clean()`` enforces that
+    ``dealership`` matches both ``credit_application.dealership``
+    and ``vehicle.dealership``. Mirrors :meth:`Sale.clean` /
+    :meth:`Delivery.clean` / :meth:`CreditApplication.clean`. Belt
+    (model) + suspenders (service layer's
+    :class:`services.f_and_i.CrossTenantDealStructureError`).
+
+    **`back_end_products` JSONField.** Free-form array at M10.2
+    for VSC / GAP / paint-and-fabric / theft-etching / etc.
+    Vocabulary partitioning (fixed set vs per-dealership catalog)
+    is deferred until the M10.5 Contract entity lands and operator
+    evidence surfaces the shape. Default empty list, matching
+    ``Delivery.checklist`` empty-default pattern.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="deal_structures",
+    )
+    credit_application = models.ForeignKey(
+        "CreditApplication",
+        on_delete=models.CASCADE,
+        related_name="deal_structures",
+    )
+    vehicle = models.ForeignKey(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="deal_structures",
+    )
+    sale_price = models.DecimalField(max_digits=10, decimal_places=2)
+    down_payment = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    trade_allowance = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    trade_payoff = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    taxes = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    fees = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    amount_financed = models.DecimalField(max_digits=10, decimal_places=2)
+    # Percent units — matches ``services.payment_engine`` convention
+    # (``DEFAULT_APR = 7.49  # %``). Up to 99.9999% precision.
+    apr = models.DecimalField(max_digits=6, decimal_places=4)
+    term_months = models.PositiveIntegerField()
+    monthly_payment = models.DecimalField(max_digits=10, decimal_places=2)
+    # Free-form array at M10.2 — vocabulary partitioning deferred
+    # to M10.5 when Contract lands.
+    back_end_products = models.JSONField(default=list, blank=True)
+    # Denormalized ratio outputs — populated at write time by the
+    # M10.2 service verbs. Nullable so M10.1-era CreditApplications
+    # without income surface as "not computable" rather than 0.
+    ltv_pct = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+    pti_pct = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+    dti_pct = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "Deal structure"
+        verbose_name_plural = "Deal structures"
+
+    def __str__(self) -> str:
+        return (
+            f"DealStructure #{self.pk} — "
+            f"CA #{self.credit_application_id} × "
+            f"Vehicle #{self.vehicle_id} "
+            f"(${self.monthly_payment}/mo, APR {self.apr}%)"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guards at the model layer.
+
+        Two invariants:
+
+        1. ``dealership`` must match ``credit_application.dealership``.
+        2. ``dealership`` must match ``vehicle.dealership``.
+
+        Both raise before the row reaches the DB. Data-scoping is
+        layer 4 in ``AUTHENTICATION_MODEL.md`` §1. Belt (model) +
+        suspenders (service layer's
+        :class:`services.f_and_i.CrossTenantDealStructureError`).
+        """
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.credit_application_id is not None
+            and self.credit_application.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "credit_application": (
+                        "DealStructure.credit_application must belong to "
+                        "the same dealership as the DealStructure. "
+                        "Cross-tenant contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+        if (
+            self.vehicle_id is not None
+            and self.vehicle.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "vehicle": (
+                        "DealStructure.vehicle must belong to the same "
+                        "dealership as the DealStructure. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )

@@ -43,10 +43,28 @@ from .credit_application import (
     get_credit_application,
     record_credit_application,
 )
+from .deal_structure import (
+    CrossTenantDealStructureError,
+    debt_to_income,
+    get_deal_structure,
+    loan_to_value,
+    payment_to_income,
+    record_deal_structure,
+    recompute_ratios,
+)
 
 __all__ = [
+    # M10.1 — credit application
     "CrossTenantCreditApplicationError",
     "compute_retention_expires_at",
     "get_credit_application",
     "record_credit_application",
+    # M10.2 — deal structure + ratio verbs
+    "CrossTenantDealStructureError",
+    "debt_to_income",
+    "get_deal_structure",
+    "loan_to_value",
+    "payment_to_income",
+    "record_deal_structure",
+    "recompute_ratios",
 ]
