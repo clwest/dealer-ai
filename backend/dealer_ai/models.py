@@ -5822,3 +5822,119 @@ class ComplianceRecord(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 11 · Increment 2 (SESSION_115) — TestDrive.
+# ---------------------------------------------------------------------------
+
+
+class TestDrive(models.Model):
+    """Milestone 11 · Increment 2 — the test-drive record.
+
+    Captures the demonstration / test-drive step of the sales workflow
+    per ``SALES_DEPARTMENT_MAPPING.md`` §workflow step 6.
+
+    **Attach shape — mandatory FKs to both `CustomerLead` and `Vehicle`**
+    per ``MILESTONE_11_PLANNING.md`` §5.c Option A (user-confirmed at
+    SESSION_114 open, recorded in §0.a). Rationale: the salesperson
+    creates a lead at the handshake before the drive; there is no
+    "vehicle demonstration without a specific customer" case in the
+    documented workflow. If that case later surfaces from operator
+    evidence, the FKs can be relaxed to nullable in a subsequent
+    milestone.
+
+    **CASCADE on both parents.** The test drive is a subsidiary
+    record of the customer-vehicle interaction; if either parent
+    is deleted the drive record loses its anchor. Neither
+    `CustomerLead` nor `Vehicle` supports normal deletion in
+    the current workflow (soft-null via `is_active` /
+    `is_available`), so CASCADE is defensive.
+
+    **Cross-tenant guard.** `clean()` enforces that both `lead` and
+    `vehicle` belong to the same dealership as the drive. Belt (model)
+    + suspenders (service layer's `CrossTenantTestDriveError`) — same
+    posture as M10.1 credit-application.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="test_drives",
+    )
+    lead = models.ForeignKey(
+        "CustomerLead",
+        on_delete=models.CASCADE,
+        related_name="test_drives",
+    )
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name="test_drives",
+    )
+    # Salesperson who accompanied the customer on the drive. SET_NULL
+    # preserves the historical drive record when a User is deleted /
+    # deactivated (same rationale as `Salesperson.user` at M1.4A).
+    driven_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="test_drives_conducted",
+    )
+    driven_at = models.DateTimeField()
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    route_notes = models.TextField(blank=True, default="")
+    customer_reaction = models.TextField(blank=True, default="")
+    # Structured objection capture. JSON list, e.g. ["price too high",
+    # "want AWD", "waiting for tax refund"]. The vocabulary is not
+    # constrained at M11.2 — operator entries can be free-text list
+    # items. A structured objection vocabulary lookup table is a M12
+    # candidate once analytics need it (SALES §5 discovery vocab).
+    objections_captured = models.JSONField(default=list, blank=True)
+    next_action = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-driven_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"TestDrive #{self.pk} — lead #{self.lead_id} × "
+            f"vehicle #{self.vehicle_id}"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guard at the model layer."""
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.lead_id is not None
+            and self.lead.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "lead": (
+                        "TestDrive.lead must belong to the same "
+                        "dealership as the TestDrive. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )
+        if (
+            self.vehicle_id is not None
+            and self.vehicle.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "vehicle": (
+                        "TestDrive.vehicle must belong to the same "
+                        "dealership as the TestDrive. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )

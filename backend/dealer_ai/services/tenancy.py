@@ -431,6 +431,15 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # signal is the safety net for callers that bypass the
     # service.
     "ComplianceRecord",
+    # Milestone 11 · Increment 2 (SESSION_115) — TestDrive entity
+    # per MILESTONE_11_PLANNING.md §1.2 + §5.c Option A (user-
+    # confirmed at SESSION_114 open, recorded in §0.a) (34 → 35).
+    # Mandatory FKs to CustomerLead + Vehicle (both CASCADE). The
+    # M11.2 :func:`services.test_drives.record_test_drive` writes
+    # ``dealership`` explicitly on every row; the autofill signal
+    # is the safety net for callers that bypass the service (Django
+    # admin, ad-hoc management command).
+    "TestDrive",
 )
 
 

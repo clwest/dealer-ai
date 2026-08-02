@@ -12,6 +12,7 @@ from . import (
     views_recon,
     views_sale,
     views_showroom,
+    views_test_drives,
 )
 
 app_name = "dealer_ai"
@@ -654,5 +655,18 @@ urlpatterns = [
         "admin/leads/webhook/",
         views_leads.admin_lead_webhook_create,
         name="admin-lead-webhook-create",
+    ),
+    # ---- Milestone 11 · Increment 2 — TestDrive admin API -------------
+    # One endpoint per MILESTONE_11_PLANNING.md §1.2 + §7 M11.2. Gated
+    # on ``IsSalesManagerOrOwnerAtActiveDealership`` (M4 permission
+    # class reused, matches M11.1 posture per §1.9).
+    # Domain-error mapping in ``views_test_drives.py``:
+    #   CrossTenantTestDriveError → 404 (fail-closed);
+    #   missing lead / vehicle in tenant → 404;
+    #   serializer error → 400.
+    path(
+        "admin/test-drives/",
+        views_test_drives.admin_test_drive_create,
+        name="admin-test-drive-create",
     ),
 ]
