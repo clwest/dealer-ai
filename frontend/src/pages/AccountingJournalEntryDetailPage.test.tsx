@@ -1,6 +1,8 @@
-// Milestone 14 · Increment 3 (SESSION_136) — journal-entry detail page tests.
+// Milestone 14 · Increment 3 + 4 (SESSION_136 + SESSION_137) —
+// journal-entry detail page tests. Base render + M14.4 reversal dialog.
 
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,10 +13,15 @@ vi.mock("@/lib/accountingApi", async () => {
   return {
     ...actual,
     fetchJournalEntry: vi.fn(),
+    reverseJournalEntry: vi.fn(),
   };
 });
 
-import { fetchJournalEntry, type JournalEntry } from "@/lib/accountingApi";
+import {
+  fetchJournalEntry,
+  reverseJournalEntry,
+  type JournalEntry,
+} from "@/lib/accountingApi";
 import AccountingJournalEntryDetailPage from "@/pages/AccountingJournalEntryDetailPage";
 
 
@@ -75,6 +82,7 @@ describe("AccountingJournalEntryDetailPage", () => {
   beforeEach(() => {
     vi.mocked(fetchJournalEntry).mockReset();
     vi.mocked(fetchJournalEntry).mockResolvedValue(makeEntry());
+    vi.mocked(reverseJournalEntry).mockReset();
   });
 
   it("renders the h1 with the entry ID", async () => {
@@ -91,7 +99,7 @@ describe("AccountingJournalEntryDetailPage", () => {
 
   it("renders every line row with formatted debit/credit", async () => {
     await renderPage();
-    expect(screen.getByText("100000")).toBeInTheDocument();
+    expect(await screen.findByText("100000")).toBeInTheDocument();
     expect(screen.getByText("400000")).toBeInTheDocument();
     expect(screen.getAllByText("$1,000.00").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Cash in")).toBeInTheDocument();
@@ -129,12 +137,122 @@ describe("AccountingJournalEntryDetailPage", () => {
     );
   });
 
-  it("shows the disabled Reverse-entry placeholder button", async () => {
+  it("shows the enabled Reverse-entry trigger button (M14.4)", async () => {
     await renderPage();
     const button = screen.getByRole("button", {
-      name: /Reverse this entry \(M14.4\)/i,
+      name: /^Reverse this entry$/i,
     });
-    expect(button).toBeDisabled();
+    expect(button).toBeEnabled();
+  });
+
+  it("opens the reversal dialog when the trigger is clicked", async () => {
+    await renderPage();
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: /^Reverse this entry$/i }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: /Reverse journal entry #42/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables Confirm when the reason is blank", async () => {
+    await renderPage();
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: /^Reverse this entry$/i }),
+    );
+    const confirm = await screen.findByRole("button", {
+      name: /Confirm reversal/i,
+    });
+    expect(confirm).toBeDisabled();
+  });
+
+  it("enables Confirm once the reason is populated", async () => {
+    await renderPage();
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: /^Reverse this entry$/i }),
+    );
+    const textarea = await screen.findByPlaceholderText(
+      /Why is this entry being reversed/i,
+    );
+    await user.type(textarea, "Wrong amount");
+    expect(
+      screen.getByRole("button", { name: /Confirm reversal/i }),
+    ).toBeEnabled();
+  });
+
+  it("posts the reversal and re-fetches on success", async () => {
+    vi.mocked(reverseJournalEntry).mockResolvedValue(
+      makeEntry({ id: 99, reverses_id: 42, reason: "Wrong amount" }),
+    );
+    await renderPage();
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: /^Reverse this entry$/i }),
+    );
+    await user.type(
+      await screen.findByPlaceholderText(/Why is this entry being reversed/i),
+      "Wrong amount",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Confirm reversal/i }),
+    );
+    await waitFor(() => {
+      expect(reverseJournalEntry).toHaveBeenCalledWith(42, {
+        reason: "Wrong amount",
+        posted_at: undefined,
+      });
+    });
+    // Detail re-fetches — fetchJournalEntry called at least twice
+    // (initial load + post-reversal reload).
+    await waitFor(() => {
+      expect(vi.mocked(fetchJournalEntry).mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it("surfaces backend error inline without closing the dialog", async () => {
+    vi.mocked(reverseJournalEntry).mockRejectedValue(
+      new Error("API request failed (400): reason required"),
+    );
+    await renderPage();
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: /^Reverse this entry$/i }),
+    );
+    await user.type(
+      await screen.findByPlaceholderText(/Why is this entry being reversed/i),
+      "attempt",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Confirm reversal/i }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("alert"),
+      ).toHaveTextContent(/reason required/i);
+    });
+    // Dialog stays open — heading still visible.
+    expect(
+      screen.getByRole("heading", { name: /Reverse journal entry #42/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not post when Cancel is clicked", async () => {
+    await renderPage();
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: /^Reverse this entry$/i }),
+    );
+    await user.type(
+      await screen.findByPlaceholderText(/Why is this entry being reversed/i),
+      "typed but cancelled",
+    );
+    await user.click(screen.getByRole("button", { name: /Cancel/i }));
+    expect(reverseJournalEntry).not.toHaveBeenCalled();
   });
 
   it("renders posted_by_user_id when populated", async () => {

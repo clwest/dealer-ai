@@ -23,7 +23,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  fetchCostPostingFailures,
   fetchTrialBalance,
+  type CostPostingFailure,
   type GLAccountType,
   type TrialBalanceSnapshot,
 } from "@/lib/accountingApi";
@@ -65,6 +67,7 @@ function formatAsOf(iso: string): string {
 
 export default function AccountingTrialBalancePage() {
   const [snapshot, setSnapshot] = useState<TrialBalanceSnapshot | null>(null);
+  const [failures, setFailures] = useState<CostPostingFailure[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -76,9 +79,17 @@ export default function AccountingTrialBalancePage() {
       setLoadState("loading");
       setErrorMessage(null);
       try {
-        const result = await fetchTrialBalance();
+        // Fetch trial balance + failures in parallel so the page
+        // renders in a single paint. Failures endpoint returning an
+        // empty list is a valid state — the card hides itself when
+        // count is 0.
+        const [snap, failuresResult] = await Promise.all([
+          fetchTrialBalance(),
+          fetchCostPostingFailures(),
+        ]);
         if (cancelled) return;
-        setSnapshot(result);
+        setSnapshot(snap);
+        setFailures(failuresResult.failures);
         setLoadState("ready");
       } catch (err) {
         if (cancelled) return;
@@ -113,6 +124,10 @@ export default function AccountingTrialBalancePage() {
       )}
       {loadState === "error" && errorMessage && (
         <p className="text-sm text-destructive">{errorMessage}</p>
+      )}
+
+      {snapshot && failures.length > 0 && (
+        <CostPostingFailuresCard failures={failures} />
       )}
 
       {snapshot && (
@@ -212,5 +227,72 @@ export default function AccountingTrialBalancePage() {
         </Card>
       )}
     </div>
+  );
+}
+
+
+function CostPostingFailuresCard({
+  failures,
+}: {
+  failures: CostPostingFailure[];
+}) {
+  return (
+    <Card className="border-destructive/40">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-destructive">
+              Cost-posting failures ({failures.length})
+            </CardTitle>
+            <CardDescription>
+              VehicleCost rows the M13.2 detector could not post
+              (older than 24 hours; typically a missing / inactive
+              default COA account). Fix the underlying invariant
+              and the next detector run at 10:00 project-time will
+              pick them up.
+            </CardDescription>
+          </div>
+          <Badge variant="destructive" aria-label="Attention required">
+            Attention
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left">
+              <th className="py-2">Vehicle stock</th>
+              <th className="py-2">Category</th>
+              <th className="py-2 text-right">Amount</th>
+              <th className="py-2 text-right">Age (hrs)</th>
+              <th className="py-2">Reference</th>
+            </tr>
+          </thead>
+          <tbody>
+            {failures.map((failure) => (
+              <tr key={failure.id} className="border-b border-border">
+                <td className="py-2 font-medium">
+                  {failure.vehicle_stock ?? (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
+                <td className="py-2">{failure.category_display}</td>
+                <td className="py-2 text-right tabular-nums">
+                  {formatMoney(failure.amount)}
+                </td>
+                <td className="py-2 text-right tabular-nums">
+                  {failure.age_in_hours}
+                </td>
+                <td className="py-2 text-xs text-muted-foreground">
+                  {failure.reference || (
+                    <span>—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }

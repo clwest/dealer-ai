@@ -11,14 +11,51 @@ vi.mock("@/lib/accountingApi", async () => {
   return {
     ...actual,
     fetchTrialBalance: vi.fn(),
+    fetchCostPostingFailures: vi.fn(),
   };
 });
 
 import {
+  fetchCostPostingFailures,
   fetchTrialBalance,
+  type CostPostingFailure,
+  type CostPostingFailuresResponse,
   type TrialBalanceSnapshot,
 } from "@/lib/accountingApi";
 import AccountingTrialBalancePage from "@/pages/AccountingTrialBalancePage";
+
+
+function makeFailure(
+  overrides: Partial<CostPostingFailure> = {},
+): CostPostingFailure {
+  return {
+    id: 1,
+    vehicle_id: 100,
+    vehicle_stock: "STOCK-001",
+    category: "parts",
+    category_display: "Parts",
+    amount: "125.50",
+    reference: "INV-9",
+    vendor: "Vendor",
+    incurred_at: "2026-08-01T00:00:00Z",
+    created_at: "2026-08-01T00:00:00Z",
+    age_in_hours: 48,
+    ...overrides,
+  };
+}
+
+
+function makeFailuresResponse(
+  overrides: Partial<CostPostingFailuresResponse> = {},
+): CostPostingFailuresResponse {
+  const defaults: CostPostingFailuresResponse = {
+    failures: [],
+    count: 0,
+    threshold_hours: 24,
+    as_of: "2026-08-02T10:00:00Z",
+  };
+  return { ...defaults, ...overrides };
+}
 
 
 function makeSnapshot(
@@ -92,6 +129,10 @@ describe("AccountingTrialBalancePage", () => {
   beforeEach(() => {
     vi.mocked(fetchTrialBalance).mockReset();
     vi.mocked(fetchTrialBalance).mockResolvedValue(makeSnapshot());
+    vi.mocked(fetchCostPostingFailures).mockReset();
+    vi.mocked(fetchCostPostingFailures).mockResolvedValue(
+      makeFailuresResponse(),
+    );
   });
 
   it("renders the header", async () => {
@@ -215,5 +256,52 @@ describe("AccountingTrialBalancePage", () => {
   it("renders the dealership slug in the card title", async () => {
     await renderPage();
     expect(screen.getByText(/copper-canyon/i)).toBeInTheDocument();
+  });
+
+  it("hides the cost-posting failures card when count is 0", async () => {
+    await renderPage();
+    expect(
+      screen.queryByText(/Cost-posting failures/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the cost-posting failures card when count > 0", async () => {
+    vi.mocked(fetchCostPostingFailures).mockResolvedValue(
+      makeFailuresResponse({
+        failures: [
+          makeFailure({
+            id: 1,
+            vehicle_stock: "STOCK-A",
+            category_display: "Parts",
+            amount: "125.50",
+            age_in_hours: 48,
+          }),
+          makeFailure({
+            id: 2,
+            vehicle_stock: "STOCK-B",
+            category_display: "Labor",
+            amount: "300.00",
+            age_in_hours: 72,
+          }),
+        ],
+        count: 2,
+      }),
+    );
+    await renderPage();
+    expect(screen.getByText(/Cost-posting failures \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText("STOCK-A")).toBeInTheDocument();
+    expect(screen.getByText("STOCK-B")).toBeInTheDocument();
+    expect(screen.getByText("$125.50")).toBeInTheDocument();
+    expect(screen.getByText("$300.00")).toBeInTheDocument();
+    expect(screen.getByText("48")).toBeInTheDocument();
+    expect(screen.getByText("72")).toBeInTheDocument();
+  });
+
+  it("renders the attention badge on the failures card", async () => {
+    vi.mocked(fetchCostPostingFailures).mockResolvedValue(
+      makeFailuresResponse({ failures: [makeFailure()], count: 1 }),
+    );
+    await renderPage();
+    expect(screen.getByText("Attention")).toBeInTheDocument();
   });
 });

@@ -22,7 +22,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
   fetchJournalEntry,
+  reverseJournalEntry,
   type JournalEntry,
 } from "@/lib/accountingApi";
 
@@ -60,6 +70,7 @@ export default function AccountingJournalEntryDetailPage() {
     "loading" | "ready" | "not_found" | "error"
   >("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     if (Number.isNaN(pk)) {
@@ -92,7 +103,7 @@ export default function AccountingJournalEntryDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [pk]);
+  }, [pk, reloadTick]);
 
   const isReversal = entry?.reverses_id !== null && entry?.reverses_id !== undefined;
   const totalDebit = entry
@@ -225,18 +236,148 @@ export default function AccountingJournalEntryDetailPage() {
               <CardDescription>
                 Journal entries are immutable — corrections happen by
                 posting a reversal (per M13.1 §5.c Option A). The
-                reversal dialog lands at M14.4.
+                reversal creates a new entry with debits/credits
+                swapped and a link back to this original.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="outline" size="sm" disabled>
-                Reverse this entry (M14.4)
-              </Button>
+              <ReverseEntryDialog
+                entry={entry}
+                onReversed={() => setReloadTick((tick) => tick + 1)}
+              />
             </CardContent>
           </Card>
         </>
       )}
     </div>
+  );
+}
+
+
+function ReverseEntryDialog({
+  entry,
+  onReversed,
+}: {
+  entry: JournalEntry;
+  onReversed: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [postedAt, setPostedAt] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const trimmedReason = reason.trim();
+  const reasonInvalid = trimmedReason.length === 0;
+
+  function reset() {
+    setReason("");
+    setPostedAt("");
+    setError(null);
+    setSubmitting(false);
+  }
+
+  async function handleConfirm() {
+    if (reasonInvalid || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await reverseJournalEntry(entry.id, {
+        reason: trimmedReason,
+        posted_at: postedAt.trim() || undefined,
+      });
+      setOpen(false);
+      reset();
+      onReversed();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) reset();
+      }}
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+      >
+        Reverse this entry
+      </Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reverse journal entry #{entry.id}</DialogTitle>
+          <DialogDescription>
+            Posts a new entry with debits and credits swapped. The
+            original is preserved (immutability per M13.1 §5.c
+            Option A).
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">
+              Reason <span className="text-destructive">*</span>
+            </span>
+            <Textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Why is this entry being reversed?"
+              rows={3}
+              aria-required
+              aria-invalid={reasonInvalid}
+            />
+            <span className="text-xs text-muted-foreground">
+              Required. Stored on the reversal entry for the audit
+              trail.
+            </span>
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Posted at (optional)</span>
+            <input
+              type="text"
+              value={postedAt}
+              onChange={(event) => setPostedAt(event.target.value)}
+              placeholder="Leave blank for now (ISO 8601 accepted)"
+              className="rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <span className="text-xs text-muted-foreground">
+              Blank posts the reversal at the current server
+              timestamp.
+            </span>
+          </label>
+
+          {error && (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={reasonInvalid || submitting}
+          >
+            {submitting ? "Posting…" : "Confirm reversal"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_136
+last_session_shipped: SESSION_137
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -16,328 +16,309 @@ milestone_11_status: shipped
 milestone_12_status: shipped
 milestone_13_status: shipped
 milestone_14_status: in-progress
-next_session: SESSION_137
+next_session: SESSION_138
 next_milestone: 14
 next_milestone_name: "Operator UI for accounting substrate"
-next_increment: 4
-next_increment_name: "M14.4 — Frontend: reversal dialog + cost-posting failure card"
+next_increment: 5
+next_increment_name: "M14.5 — Close-out (retrospective + capability matrix + roadmap flip + M15 skeleton)"
 ---
 
-# Next session — SESSION_137 · Milestone 14 · Increment 4 (M14.4 — Frontend: reversal dialog + cost-posting failure card)
+# Next session — SESSION_138 · Milestone 14 · Increment 5 (M14.5 — Close-out)
 
-> **SESSION_136 shipped M14.3 —**
-> frontend journal-entry browser +
-> detail. Extended `accountingApi.ts`
-> with list + detail types + two
-> fetchers. New
-> `AccountingJournalEntriesPage.tsx`
-> (paginated list with reversal-
-> linkage badges) +
-> `AccountingJournalEntryDetailPage
-> .tsx` (header card + lines table
-> + Corrections card with disabled
-> M14.4 placeholder button). Two
-> new routes registered. 24 focused
-> Vitest tests (13 list + 11
-> detail). Consumes existing M14.1
-> list + M13.1 retrieve endpoints.
-> Zero backend work. Browser-
-> verified (list + reversal detail
-> + original detail + not-found
-> states).
+> **SESSION_137 shipped M14.4 —**
+> reversal dialog + cost-posting
+> failure card. Extended
+> `accountingApi.ts` with two new
+> fetchers (`reverseJournalEntry` +
+> `fetchCostPostingFailures`) + two
+> new types. Wired the M14.3
+> placeholder Reverse button to a
+> shadcn `<Dialog>` with reason
+> textarea + optional posted_at +
+> Confirm/Cancel + inline error
+> handling. Added failure card to
+> the trial-balance page (rendered
+> only when count>0, "Attention"
+> badge, table of unposted
+> VehicleCosts >24h old). Detail
+> page now re-fetches on successful
+> reversal via a reloadTick
+> counter. 9 new Vitest tests. Zero
+> backend work. Browser E2E
+> verified end-to-end (typed
+> reason, confirmed, new reversal
+> entry appeared in list with
+> smoke_owner as posted_by, matching
+> $7,777.00 amount, "Reversal of
+> #6" badge). Failure card renders
+> live with real data.
 >
 > **Backend baseline: 4,277 pass**
 > (unchanged). **Frontend Vitest:
-> 89 → 113 pass** (+24). Frontend
-> operator routes: 18 → 20 (+2).
-> DRF admin surface 104
-> (unchanged). Tenancy carriers 47
-> (unchanged). Permission classes
-> 8 (unchanged). Celery-beat task
+> 113 → 122 pass** (+9). Frontend
+> operator routes: 20 (unchanged —
+> dialog is a modal, not a route).
+> DRF admin surface 104 (unchanged).
+> Tenancy carriers 47 (unchanged).
+> Permission classes 8 (unchanged
+> — zero drift extends to six
+> consecutive milestones now
+> including M14). Celery-beat task
 > families 9 (unchanged). Zero
 > migrations. `tsc --noEmit` clean;
 > `vite build` clean.
 >
-> **Eight M14.3 implementation-
-> time micro-decisions recorded**
-> in the handoff (Previous/Next
-> buttons over numeric page links
-> / fixed page_size 25 / reversal
-> discriminated via reverses_id
-> null-check / client-side line
-> totals for display / zero-value
-> cells rendered blank / not-found
-> detection via error message
-> regex / NaN pk short-circuits to
-> not-found / Reverse-button
-> placeholder disabled + labeled
-> "(M14.4)"). All as-recommended
-> per M10 §9 — do not count
-> against streak.
+> **Nine M14.4 implementation-time
+> micro-decisions recorded** in
+> handoff (reloadTick counter /
+> reset on close AND cancel /
+> hidden card at count=0 /
+> Promise.all parallel fetch /
+> trim-based reason validation /
+> free-text posted_at not date
+> picker / verbatim ApiError render
+> / age_in_hours not derived days /
+> flaky test converted to
+> findByText). All as-recommended
+> per M10 §9 — do not count against
+> streak.
 >
-> **Push authorization:** four
+> **Push authorization:** five
 > local commits queued (M14.0
 > planning + M14.1 backend + M14.2
-> frontend trial-balance + M14.3
-> frontend browser+detail) pending
-> user authorization.
+> trial-balance page + M14.3
+> browser+detail + M14.4
+> reversal+failures) pending user
+> authorization.
 >
-> **SESSION_137 opens M14.4 —
-> reversal dialog + cost-posting
-> failure card.** Wires the M14.3
-> placeholder Reverse button to a
-> shadcn `<Dialog>` (using the
-> existing M13.1 reverse
-> endpoint). Adds failure card to
-> the M14.2 trial-balance page
-> (using the M14.1 failures
-> endpoint). No new routes. No
-> backend work.
+> **SESSION_138 opens M14.5 —
+> close-out.** Documentation-only.
+> Per M10.8 / M11.7 / M12.8 / M13.4
+> precedent. Six close-out docs +
+> one coordinated commit landing
+> them all. **Milestone 14 —
+> Operator UI for accounting
+> substrate — will ship at
+> SESSION_138.**
 
-## First thing SESSION_137 must do
+## First thing SESSION_138 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean (M14.3
-  commit landed at SESSION_136
+- `git status` — clean (M14.4
+  commit landed at SESSION_137
   close; user authorized push
   when ready).
-- `git log --oneline -5` — top
-  should be the M14.3 frontend
+- `git log --oneline -6` — top
+  should be the M14.4 frontend
   commit.
 - `python3 manage.py test dealer_ai`
   → **4,277 pass, 1 skipped, 0
   fail**.
 - `cd frontend && npm test` →
-  **113 pass**.
+  **122 pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
   detected."
 - `cd frontend && npx tsc --noEmit`
   clean.
-- `redis-cli ping` → `PONG`.
 
 ### 2. Read first (in order)
 
 - `docs/roadmap/MILESTONE_14_
-  PLANNING.md` §7 Increment 4
-  (implementation spec).
-- `docs/handoffs/SESSION_136_m14_
-  inc3_journal_browser.md`
-  (previous session).
-- `backend/dealer_ai/views_
-  accounting.py`
-  `admin_journal_entry_reverse` +
-  `admin_cost_posting_failures`
-  (endpoint contracts to consume).
-- `frontend/src/lib/accountingApi
-  .ts` (module to extend — do NOT
-  rewrite existing fetchers).
-- `frontend/src/pages/Accounting
-  JournalEntryDetailPage.tsx`
-  (Corrections card with disabled
-  placeholder button is the
-  wiring point).
-- `frontend/src/pages/Accounting
-  TrialBalancePage.tsx` (extend
-  with failure card).
-- `frontend/src/components/ui/
-  dialog.tsx` +
-  `frontend/src/components/ui/
-  textarea.tsx` (shadcn
-  primitives already installed).
+  PLANNING.md` §7 M14.5
+  (close-out spec).
+- `docs/roadmap/MILESTONE_13_
+  RETROSPECTIVE.md` (template
+  for the M14 retrospective —
+  copy the structure).
+- All five prior M14 handoffs
+  (`SESSION_133..137`) as the
+  source for the retrospective's
+  "what shipped" content.
+- `docs/CAPABILITY_MATRIX.md`
+  §7n (M13's append point;
+  §7o mirrors that structure).
+- `docs/roadmap/IMPLEMENTATION_
+  ROADMAP.md` §Milestone 14
+  (planning entry to flip).
 
-## What M14.4 delivers
+## What M14.5 delivers
 
 Per `MILESTONE_14_PLANNING.md` §7
-M14.4:
+M14.5. **Documentation-only. No
+code changes.**
 
-### Extend accounting API client
+### Six close-out docs
 
-1. **`frontend/src/lib/
-   accountingApi.ts`** — add:
-   - `reverseJournalEntry(pk,
-     {reason, posted_at?})`
-     calling `POST /admin/
-     accounting/journal-entries/
-     <pk>/reverse/` (M13.1
-     endpoint). Returns the new
-     reversal `JournalEntry`.
-   - `fetchCostPostingFailures(
-     {thresholdHours?})` calling
-     `GET /admin/accounting/
-     cost-posting-failures/`
-     (M14.1 endpoint). Returns
-     failures array + count +
-     threshold_hours + as_of.
-   - TypeScript type for
-     `CostPostingFailure` (id +
-     vehicle_id + vehicle_stock
-     + category + category_
-     display + amount + reference
-     + vendor + incurred_at +
-     created_at + age_in_hours).
+1. **`docs/roadmap/MILESTONE_14_
+   RETROSPECTIVE.md`** — new.
+   Structure per M13.4 template:
+   - §1 Planned scope.
+   - §2 What actually shipped
+     (per-increment table).
+   - §3 What was NOT shipped
+     (deferrals + non-goals held).
+   - §4 Deviations from plan.
+   - §5 Compatibility (M1-M13
+     surfaces untouched).
+   - §6 Lessons (12 M13 lessons
+     re-verified + M14-specific
+     lessons: UI-only milestone
+     posture, dialog wiring
+     pattern, browser-verify E2E
+     discipline).
+   - §7 Streak update (planning-
+     time as-recommended stands
+     at 53 M5.1→M14.0; five
+     consecutive milestones).
+   - §8 What M14 unblocks for
+     M15+ (real accounting
+     workflows now operator-
+     usable; M9/M10/M12 GL post
+     work now has visible
+     downstream surface).
+2. **`docs/CAPABILITY_MATRIX.md`
+   §7o** — append. Enumerate
+   the M14 shipped surface:
+   two new backend endpoints,
+   three new frontend pages
+   with route paths, extended
+   `accountingApi.ts` module,
+   test counts, browser-verified
+   status.
+3. **`docs/roadmap/IMPLEMENTATION_
+   ROADMAP.md` §Milestone 14** —
+   flip planning entry to
+   shipped. Update the
+   §Milestone sequence to
+   reflect M14 complete + M15
+   as next.
+4. **`docs/roadmap/MILESTONE_14_
+   PLANNING.md`** — frontmatter
+   `status: active` → `status:
+   shipped`. Add closing note
+   at bottom mirroring the M13
+   planning doc close.
+5. **`00-START-NEXT-SESSION.md`**
+   — overwrite with M15.0
+   priority (planning refinement
+   + target selection per M14.5
+   +M13.4 precedent).
+6. **`docs/roadmap/MILESTONE_15_
+   PLANNING.md`** — new
+   skeleton per standing user
+   directive (M14.5 close draft
+   for user review at M15.0
+   open). §1 candidate targets
+   drawn from the M14
+   retrospective §8; §5 draft
+   decisions flagged
+   `[NEEDS-DECISION-BEFORE-
+   M15.0]`.
 
-### Reversal dialog (wire the M14.3 placeholder)
+### Coordinated commit
 
-2. **`frontend/src/pages/
-   AccountingJournalEntryDetail
-   Page.tsx`** — replace the
-   disabled placeholder button
-   with a wired shadcn
-   `<Dialog>`:
-   - Trigger: enabled "Reverse
-     this entry" button.
-   - Dialog content:
-     `<Textarea>` for reason
-     (required, min length 1
-     after trim, empty-blocked
-     client-side matching M13.1
-     `ImmutableJournalEntryError`
-     409 per §5.e Option A belt+
-     suspenders).
-   - Optional `posted_at` text
-     input (ISO string format;
-     defer date picker).
-   - Confirm button + Cancel
-     button.
-   - On success: re-fetch
-     detail. Reversal linkage
-     panel appears
-     automatically (M14.3
-     already renders it when
-     `reverses_id !== null`).
-   - Error handling: display
-     backend error message
-     inline in the dialog
-     (400/404/409 all mapped
-     to specific detail
-     messages per M13.1 view).
+- Single commit landing all six
+  docs. Matches the M13.4 batch
+  posture.
 
-### Cost-posting failure card
-
-3. **`frontend/src/pages/
-   AccountingTrialBalancePage
-   .tsx`** — add card above or
-   below the trial-balance
-   card:
-   - Fetches
-     `fetchCostPostingFailures()`
-     alongside the existing
-     `fetchTrialBalance()` in
-     `Promise.all`.
-   - Card hidden entirely when
-     `count === 0` (matches
-     M14.2 empty-state hiding
-     posture for the totals
-     footer).
-   - When `count > 0`: title
-     "Cost-posting failures
-     (N)", description
-     referencing the M13.2
-     detector, table with
-     stock + category + amount
-     + age_in_hours (or
-     age_in_days derived).
-   - Uses shadcn
-     `<Card variant="outline">`
-     or destructive-styled
-     accent to signal
-     operator attention.
-
-### Vitest coverage (~10 new tests)
-
-4. **Extend
-   `AccountingJournalEntryDetail
-   Page.test.tsx`** or new
-   dialog-specific test file:
-   - Reverse dialog opens when
-     button clicked.
-   - Empty reason disables
-     confirm button.
-   - Non-empty reason enables
-     confirm.
-   - Cancel closes dialog
-     without POST.
-   - Successful POST re-
-     fetches detail.
-   - Backend error displayed
-     in dialog.
-5. **Extend
-   `AccountingTrialBalancePage
-   .test.tsx`** or new:
-   - Failure card hidden when
-     count=0.
-   - Failure card renders
-     when count>0.
-   - Failure rows show
-     vehicle_stock + category
-     + amount + age.
-
-### Deltas at M14.4 close
+## Deltas at M14.5 close
 
 - **Backend baseline:** 4,277
   (unchanged).
-- **Frontend Vitest:** 113 →
-  ~123 (+10 tests).
+- **Frontend Vitest:** 122
+  (unchanged).
 - **Frontend operator routes:**
-  20 (unchanged — dialog is a
-  modal, not a route).
+  20 (unchanged).
 - **DRF admin surface:** 104
   (unchanged).
 - **Tenancy carriers:** 47.
 - **Permission classes:** 8.
+- **Celery-beat task families:**
+  9.
 - **Migrations:** none.
+- **Milestone 14 status:**
+  in-progress → **SHIPPED**.
 
-## Explicit non-goals for SESSION_137
+## Milestone 14 close totals
 
-- ❌ Do NOT add backend
-  endpoints (M14.1 shipped
-  everything M14.4 needs).
-- ❌ Do NOT add a date-picker
-  widget to the reversal dialog
-  — plain text input at MVP.
-- ❌ Do NOT change the M13.2
-  detector.
-- ❌ Do NOT add `as_of` picker
-  to trial-balance (still
-  deferred to M15+).
-- ❌ Do NOT add category-
-  aware GL mapping (deferred
-  per M13 retrospective §3
-  item 1).
+- Two new pure query verbs (M14.1
+  backend: `list_journal_entries`
+  + `detect_cost_posting_failures`).
+- Two new DRF admin endpoints
+  (M14.1: `admin-journal-entry-
+  list` + `admin-cost-posting-
+  failures`).
+- One new frozen dataclass
+  (M14.1: `JournalEntryListPage`).
+- One new frontend API client
+  module (M14.2 + M14.3 + M14.4:
+  `accountingApi.ts` with 4
+  fetchers + 1 mutator).
+- Three new frontend pages
+  (M14.2 trial-balance, M14.3
+  journal-entry browser, M14.3
+  journal-entry detail).
+- Three new operator routes
+  (M14.2 + M14.3).
+- One shadcn `<Dialog>` wired
+  (M14.4 reversal).
+- One cost-posting failure card
+  (M14.4).
+- **Backend test delta:** 4,240
+  → 4,277 (+37).
+- **Frontend Vitest delta:** 78
+  → 122 (+44).
+- **Zero backend regressions.**
+- **Zero frontend regressions.**
+- **Zero schema changes / zero
+  migrations.**
+- **Zero permission-class
+  drift** (streak: 6 consecutive
+  milestones — M10 + M11 + M12 +
+  M13 + M14).
+- **Six planning-time §5
+  decisions confirmed as-
+  recommended at M14.0 open**
+  (streak stands at 53
+  M5.1→M14.0 across 5
+  consecutive milestones).
+
+## Explicit non-goals for SESSION_138
+
+- ❌ Do NOT modify any code
+  (M14.5 is doc-only).
+- ❌ Do NOT add new tests.
 - ❌ Do NOT modify M1-M13
   business logic.
 - ❌ Do NOT force-push or amend
   any earlier commits.
+- ❌ Do NOT start M15
+  implementation — M15.0
+  planning refinement is a
+  separate session.
 
 ## NEXT TASK
 
-Start SESSION_137 with (a)
-starting-state verification,
-(b) the read-first list, then
-(c) extending `accountingApi
-.ts` with the reversal + failure
-fetchers + wiring the M14.3
-placeholder button to a shadcn
-`<Dialog>` + adding the failure
-card to the trial-balance page
-+ Vitest per
-`MILESTONE_14_PLANNING.md` §7
-M14.4. Browser-verify reversal
-end-to-end (open dialog → enter
-reason → confirm → observe
-reversal linkage appear on
-detail page). Ship the M14.4
-handoff at
-`docs/handoffs/SESSION_137_m14_
-inc4_reversal_and_failures.md`.
+Start SESSION_138 with (a)
+starting-state verification, (b)
+the read-first list, then (c)
+drafting the six M14.5 close-out
+docs + one coordinated commit
+per `MILESTONE_14_PLANNING.md` §7
+M14.5. Ship the M14.5 handoff at
+`docs/handoffs/SESSION_138_m14_
+inc5_closeout.md`.
 
-Backend baseline at SESSION_137
-close: **4,277 pass** (unchanged).
-Frontend baseline: **113 → ~123**
-(+10 Vitest tests).
+Backend baseline at SESSION_138
+close: **4,277 pass** (unchanged
+— close-out is doc-only).
+Frontend Vitest baseline: **122**
+(unchanged). **Milestone 14 —
+Operator UI for accounting
+substrate — SHIPPED at M14.5.**
 
 ---
 
@@ -348,20 +329,20 @@ Frontend baseline: **113 → ~123**
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_14_PLANNING.md`
-   §7 M14.4
+   §7 M14.5
 6. `docs/roadmap/MILESTONE_13_RETROSPECTIVE.md`
-   §6 (twelve lessons carry
-   into M14)
-7. `docs/handoffs/SESSION_136_m14_inc3_journal_browser.md`
-   (previous session)
+   (retrospective template)
+7. All five M14 handoffs
+   (`SESSION_133..137`)
 8. `docs/CAPABILITY_MATRIX.md` §7n
+   (append template)
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_136 — M14.3 shipped)
+## Operational state (post-SESSION_137 — M14.4 shipped)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
@@ -372,7 +353,7 @@ research + code are facts.
 - **Frontend (local):** Vite on
   `:5173`. `tsc --noEmit` +
   `vite build` clean. **Vitest
-  baseline: 113 pass**.
+  baseline: 122 pass**.
 - **Frontend (prod):** NONE.
 - **Async runtime:** Celery
   5.5.3 + Redis 6.4.0 +
@@ -380,52 +361,49 @@ research + code are facts.
   DatabaseScheduler. **9
   scheduled task families
   registered**. Next available
-  slot: 11:00. No new families
-  at M14.
+  slot: 11:00.
 - **Milestones shipped:** M1 →
   **M13**. **M14 in progress**
-  (M14.0 planning + M14.1
-  backend + M14.2 frontend
-  trial-balance + M14.3
-  frontend browser+detail
-  shipped).
+  (M14.0 + M14.1 + M14.2 +
+  M14.3 + M14.4 shipped; M14.5
+  close-out is the only
+  remaining step).
 - **DRF admin surface:** **104**
-  endpoints (unchanged since
-  M14.1).
+  endpoints.
 - **Frontend operator routes:**
-  **20** (M14.3 added
-  `dealer-ai-accounting/
-  journal-entries` +
-  `.../journal-entries/:pk`).
-  Final projected count at
-  M14 close = 20 (M14.4 adds
-  no routes; dialog is a
-  modal).
+  **20** (three new
+  `dealer-ai-accounting/*`
+  routes shipped across M14.2 +
+  M14.3).
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
-- **Service surface:**
-  unchanged.
+- **Service surface:** four M13
+  accounting modules + M14.1
+  two additive query verbs
+  (`list_journal_entries` +
+  `detect_cost_posting_failures`).
 - **Frontend accounting
   surface:** `frontend/src/lib/
-  accountingApi.ts` (three
-  fetchers: trial balance +
-  journal-entry list + journal-
-  entry detail; reversal +
-  failures land at M14.4).
-  Three page components:
+  accountingApi.ts` with 4
+  fetchers (trial balance +
+  journal-entry list + detail +
+  cost-posting failures) + 1
+  mutator (reverse journal
+  entry). Three page
+  components:
   `AccountingTrialBalancePage`
-  + `AccountingJournalEntries
-  Page` +
+  (with failure card) +
+  `AccountingJournalEntriesPage`
+  +
   `AccountingJournalEntryDetail
-  Page`.
+  Page` (with reversal dialog).
 - **Tenancy carriers:** **47**
-  (unchanged at M14).
+  (unchanged at M14 — no new
+  models).
 - **Permission classes:** **8**
-  (unchanged — zero drift
-  extends to six consecutive
-  milestones; M14.2 + M14.3
-  have no backend surface so
-  posture is preserved).
+  (unchanged — zero-drift
+  streak extends to six
+  consecutive milestones).
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17 scrub
@@ -433,14 +411,8 @@ research + code are facts.
   no LLM path).
 - **Deterministic rules:**
   unchanged.
-- **Accounting substrate:** four
-  M13 modules in
-  `services/accounting/` +
-  M14.1 additions.
-- **Milestone 14 next:** M14.4
-  reversal dialog + cost-
-  posting failure card per
+- **Milestone 14 next:** M14.5
+  close-out per
   `MILESTONE_14_PLANNING.md` §7
-  Increment 4. One code
-  increment + one close-out
-  remain after M14.4.
+  Increment 5. **After M14.5
+  the milestone ships.**

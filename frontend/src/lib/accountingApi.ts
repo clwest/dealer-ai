@@ -16,7 +16,7 @@
 // open). Callers format for display via Intl.NumberFormat rather than
 // coercing to Number in the API layer — preserves precision boundaries.
 
-import { authGetJSON } from "@/lib/authFetch";
+import { authGetJSON, authPostJSON } from "@/lib/authFetch";
 
 // ---------------------------------------------------------------------------
 // Trial balance (M13.3 endpoint)
@@ -143,4 +143,78 @@ export function fetchJournalEntry(pk: number): Promise<JournalEntry> {
   return authGetJSON<JournalEntryDetailResponse>(
     `/admin/accounting/journal-entries/${pk}/`,
   ).then((body) => body.journal_entry);
+}
+
+// ---------------------------------------------------------------------------
+// Reverse a journal entry (M13.1 endpoint)
+// ---------------------------------------------------------------------------
+//
+// Wired at M14.4 into the AccountingJournalEntryDetailPage
+// Corrections card. Empty reason is blocked client-side matching
+// M13.1's serializer 400 (belt+suspenders per §5.e Option A). The
+// endpoint returns the newly-posted reversal JournalEntry.
+
+export interface ReverseJournalEntryPayload {
+  reason: string;
+  /** Optional ISO8601 timestamp. Omit for now (defaults to server time). */
+  posted_at?: string;
+}
+
+export function reverseJournalEntry(
+  pk: number,
+  payload: ReverseJournalEntryPayload,
+): Promise<JournalEntry> {
+  return authPostJSON<JournalEntryDetailResponse>(
+    `/admin/accounting/journal-entries/${pk}/reverse/`,
+    payload,
+  ).then((body) => body.journal_entry);
+}
+
+// ---------------------------------------------------------------------------
+// Cost-posting failures (M14.1 endpoint)
+// ---------------------------------------------------------------------------
+//
+// Consumed by the trial-balance page as a failure card. Empty count
+// hides the card entirely per §0.a M14.4 decision (zero-noise
+// posture — no "0 failures" banner).
+
+export interface CostPostingFailure {
+  id: number;
+  vehicle_id: number;
+  vehicle_stock: string | null;
+  category: string;
+  category_display: string;
+  amount: string;
+  reference: string;
+  vendor: string;
+  incurred_at: string;
+  created_at: string;
+  age_in_hours: number;
+}
+
+export interface CostPostingFailuresResponse {
+  failures: CostPostingFailure[];
+  count: number;
+  threshold_hours: number;
+  as_of: string;
+}
+
+interface CostPostingFailuresBody {
+  cost_posting_failures: CostPostingFailuresResponse;
+}
+
+export function fetchCostPostingFailures(
+  params: { thresholdHours?: number } = {},
+): Promise<CostPostingFailuresResponse> {
+  const search = new URLSearchParams();
+  if (params.thresholdHours !== undefined) {
+    search.set("threshold_hours", String(params.thresholdHours));
+  }
+  const query = search.toString();
+  const path = `/admin/accounting/cost-posting-failures/${
+    query ? `?${query}` : ""
+  }`;
+  return authGetJSON<CostPostingFailuresBody>(path).then(
+    (body) => body.cost_posting_failures,
+  );
 }
