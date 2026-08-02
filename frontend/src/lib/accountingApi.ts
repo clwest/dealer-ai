@@ -52,11 +52,104 @@ interface TrialBalanceResponse {
   trial_balance: TrialBalanceSnapshot;
 }
 
-export async function fetchTrialBalance(): Promise<TrialBalanceSnapshot> {
-  const body = await authGetJSON<TrialBalanceResponse>(
-    "/admin/accounting/trial-balance/",
-  );
+export async function fetchTrialBalance(
+  asOf?: string,
+): Promise<TrialBalanceSnapshot> {
+  // Milestone 17 · Increment 2 — optional ``asOf`` param feeds
+  // the M13.3 endpoint's existing ``?as_of=`` query parameter.
+  // Backward-compatible: callers without the arg get the live
+  // "as of now" behavior.
+  const path = asOf
+    ? `/admin/accounting/trial-balance/?as_of=${encodeURIComponent(asOf)}`
+    : "/admin/accounting/trial-balance/";
+  const body = await authGetJSON<TrialBalanceResponse>(path);
   return body.trial_balance;
+}
+
+// ---------------------------------------------------------------------------
+// Trial-balance snapshots — freeze / list / detail (M17.1 endpoints)
+// ---------------------------------------------------------------------------
+//
+// Consumed by AccountingTrialBalancePage at M17.2. Freeze is operator-
+// triggered ("Freeze this view" button); list + detail feed the
+// "Prior closes" section. Duplicate freeze at the same instant surfaces
+// as a 409 per §5.d Option A.
+
+/** Compact projection returned by the snapshot list endpoint. */
+export interface TrialBalanceSnapshotSummary {
+  id: number;
+  as_of: string;
+  total_debits: string;
+  total_credits: string;
+  is_balanced: boolean;
+  created_at: string;
+  created_by_user_id: number | null;
+  created_by_username: string | null;
+}
+
+/** One frozen per-account row on a snapshot (M17.1 projection). */
+export interface FrozenSnapshotRow {
+  account_code: string;
+  account_name: string;
+  account_type: GLAccountType;
+  debit_total: string;
+  credit_total: string;
+  natural_balance: string;
+}
+
+/** Full detail projection (summary fields + frozen rows). */
+export interface FrozenTrialBalanceSnapshot
+  extends TrialBalanceSnapshotSummary {
+  rows: FrozenSnapshotRow[];
+}
+
+export interface TrialBalanceSnapshotListPage {
+  snapshots: TrialBalanceSnapshotSummary[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
+
+interface TrialBalanceSnapshotDetailResponse {
+  trial_balance_snapshot: FrozenTrialBalanceSnapshot;
+}
+
+interface TrialBalanceSnapshotListResponse {
+  trial_balance_snapshots: TrialBalanceSnapshotListPage;
+}
+
+export function freezeTrialBalance(
+  asOf: string,
+): Promise<FrozenTrialBalanceSnapshot> {
+  return authPostJSON<TrialBalanceSnapshotDetailResponse>(
+    "/admin/accounting/trial-balance/snapshots/",
+    { as_of: asOf },
+  ).then((body) => body.trial_balance_snapshot);
+}
+
+export function listTrialBalanceSnapshots(
+  params: { page?: number; pageSize?: number } = {},
+): Promise<TrialBalanceSnapshotListPage> {
+  const search = new URLSearchParams();
+  if (params.page !== undefined) search.set("page", String(params.page));
+  if (params.pageSize !== undefined) {
+    search.set("page_size", String(params.pageSize));
+  }
+  const query = search.toString();
+  const path = `/admin/accounting/trial-balance/snapshots/list/${
+    query ? `?${query}` : ""
+  }`;
+  return authGetJSON<TrialBalanceSnapshotListResponse>(path).then(
+    (body) => body.trial_balance_snapshots,
+  );
+}
+
+export function fetchTrialBalanceSnapshot(
+  pk: number,
+): Promise<FrozenTrialBalanceSnapshot> {
+  return authGetJSON<TrialBalanceSnapshotDetailResponse>(
+    `/admin/accounting/trial-balance/snapshots/${pk}/`,
+  ).then((body) => body.trial_balance_snapshot);
 }
 
 // ---------------------------------------------------------------------------
