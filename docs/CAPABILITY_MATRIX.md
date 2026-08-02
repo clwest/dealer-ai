@@ -1860,6 +1860,128 @@ for what shipped vs. deferred.
 
 ---
 
+## 7s. Demo Store Simulation + Pilot Validation Readiness (Milestone 18, shipped)
+
+Milestone 18 (SESSION_146 → SESSION_152)
+delivered **validation infrastructure** —
+the substrate + operator-facing surfaces
+enabling founder-led pilot testing with
+experienced independent-dealer operators.
+**First non-accounting target since M12.**
+Three coherent-story archetypes
+(retail_subprime + floor_planned + bhph)
+demonstrate the platform's shape to
+prospective customers. Thirteen daily
+briefs guide testers through a "day in the
+dealership" using shipped capabilities only.
+One new endpoint captures structured
+feedback. **Zero new operator routes** —
+testers use the same M1-M17 routes real
+operators would. **Zero-drift permission-
+class posture extends to fourteen
+consecutive milestones** (M10 → M18.5).
+Deferrals cataloged in
+`MILESTONE_18_RETROSPECTIVE.md` §3. See
+`docs/roadmap/MILESTONE_18_PLANNING.md` +
+`docs/roadmap/MILESTONE_18_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| Substrate: schema + service package + guards (M18.1) | Migration `0047_m181_demo_store_substrate.py` bundling `AddField Dealership.is_demo` BooleanField(default=False) + `AddField Dealership.demo_archetype` CharField(choices=`DEMO_ARCHETYPE_CHOICES`, blank) + `CreateModel TesterFeedback` (dealership FK CASCADE, tester_name, scenario_slug, category with choices=`TESTER_FEEDBACK_CATEGORY_CHOICES`, note, referenced_route, created_at). Vocab constants for both. Additive-only; zero data migration. Register `TesterFeedback` in `_TENANT_CARRIER_MODEL_NAMES` (49 → **50**). **New `services/demo_store/` package** with nine modules: `errors.py` (`NonDemoResetError(RuntimeError)`), `outbound_guard.py` (`SuppressedOutbound` marker + `is_demo_dealership()` + `suppress_if_demo()` canonical guard), `scenario_summary.py` (`ScenarioSummary` frozen dataclass), `synthetic_names.py` (40-name roster + `get_synthetic_name(index)`), `synthetic_data.py` (`DEMO`-prefixed VINs + `555-01xx` NANP phones + `.example` TLD emails), `registry.py` (`create_demo_store` / `reset_demo_store` / `list_demo_stores`), `archetypes/base.py` + three archetype modules. New `demo_store` management command with `create` / `reset` / `list` / `export_feedback` subcommands. Test helper `make_demo_dealership(archetype, slug)`. | Belt-and-suspenders guards per §5.c Option A: `reset_demo_store` raises `NonDemoResetError` if `is_demo=False` **and** asserts `dealership.is_demo` at write-verb top. `_delete_demo_store_children` iterates carriers in **reverse** order (child-before-parent for PROTECT FKs) + deletes demo-owned Users (those whose only memberships are at this dealership). Registry seeds M13.1 default COA on both create + reset. |
+| Substrate: outbound-egress scanner (M18.1) | Scanner test in `test_m181_demo_store_substrate.py::OutboundEgressScannerTests` greps `services/**/*.py` for `requests.(post|get|put|patch|delete)`, `httpx.(...)`, `smtplib.`, `django.core.mail`. Asserts each match is either behind the guard toolkit OR on the documented allowlist. **Allowlist**: `llm/openai_provider.py`, `llm/ollama.py` (LLM inference calls; behavior-change deferred per §0.a M18.1 decision 1). | Enforces guard-by-construction contract for **future** adapters. Any new verb egressing to email / SMS / lender / bureau / integration provider MUST either call `suppress_if_demo()` first OR be added to the allowlist with documented rationale. The scanner fails loud if violated — <0.1s runtime. |
+| Retail/subprime archetype (M18.2) | `services/demo_store/archetypes/retail_subprime.py`. 20 vehicles ($8k-$18k, used, 2013-2019 mixed makes, `DEMORS`-prefixed VINs) + VehicleAcquisition (auction / trade / private mix) + 4 salespeople (sales manager + 3 advisors with Django Users + UserDealershipRole + `Salesperson.user` linked) + 15 CustomerLeads across urgency × channel mix + 5 recent Sales via `record_sale` (fires M15.1 sync-sibling GL post; 1 BHPH + 2 cash + 2 retail-finance) + 1 BhphNote via `record_bhph_note` + 3 in-recon vehicles (each with completed ConditionReport + 2 findings + must-do ReconDecisions + outsourced WorkOrder to a shared demo Vendor + WorkOrderParts + 4 VehicleCost rows already-GL-posted + 3-event stage progression incoming→inspection→recon) + 1 shared demo Vendor + 2 sub-prime CreditApplications via `record_credit_application` + 1 follow-up cadence via `start_cadence` (auto-creates 3 tasks). ScenarioSummary populated with 6 scenario brief slugs. | Cross-domain integrity: every Sale has same-tenant buyer; every CreditApp references same-tenant Sale; recon vehicle costs reconcile with vendor + labor breakdown. Chargeback deferred per §0.a M18.2 decision 1. |
+| Floor-planned archetype + $825 recon overrun (M18.3) | `services/demo_store/archetypes/floor_planned.py`. 40 vehicles ($12k-$35k, 2016-2022, Ford / Chevy / RAM / Toyota heavy, `DEMOFP`-prefixed VINs) + 6 salespeople (owner + sales manager + 4 advisors) + 25 CustomerLeads + 4 shared Vendors (sunset-mechanical, riverside-body-paint, clearview-glass, elite-detail-bay) + 10 recent Sales (8 retail-finance across 3 lenders + 2 cash) + 5 in-recon vehicles + 3 CreditApplications + 3 follow-up cadences (auto-creating 7+ tasks) + 3 BeBacks (promised/returned/promised across test_drive / bring_co_signer / bring_trade_in reasons). **The FIRST recon target is the documented overrun anchor**: 2020 Ford F-150 XLT SuperCrew (stock FP-01), transmission slipping under load. Initial estimate $450 → WorkOrder authorized at $600 → vendor teardown revealed torque converter internals damaged → revised estimate $1,425 → verbal approval → work proceeding. `WorkOrder.actual_cost=$1,425` vs `authorized_cost=$600` shows the $825 overrun on the WO detail page. Three VehicleCost rows (parts $710 + labor $560 + body work $155) sum to $1,425 — the M2 investment ledger reads the same overrun story. Two VendorCommunication rows document the escalation: outbound `vendor_comm/email/sent` approving the initial $600, inbound `narrative/phone/logged` capturing the revised estimate + verbal approval. | Overrun scenario is the M18.5 recon-lead daily brief centerpiece. Testers cross-check three surfaces (WO detail, VehicleCost / M2 ledger, VendorCommunication history) and all three tell the same $1,425 story. |
+| BHPH archetype + M16 detector timing (M18.4) | `services/demo_store/archetypes/bhph.py`. Small BHPH dealership. 25 primary vehicles ($4k-$12k, 2010-2017, reliable-transportation mix, `DEMOBH`-prefixed VINs) + 5 additional historical vehicles (BH-H-01..BH-H-05) to accommodate the historical note count over the `Sale.vehicle OneToOneField` invariant + 4 salespeople (owner + sales manager + 2 collectors) + 10 pipeline CustomerLeads + 5 recent BHPH Sales via `record_sale` + `record_bhph_note` (fires M15 GL) + 25 historical BhphNotes (direct-create per scenario-authored posture) = **30 total active notes** + **~135-150 BhphPayment rows** across the portfolio with **~5 unposted (`posted_at=NULL`) within the last 24 hours** + 3 BhphPromiseToPay via `record_promise` covering all three states (promised + kept via `mark_kept` linking a real BhphPayment via `actual_payment` FK + broken via direct state update) + 5 CollectionContact rows via `record_contact` across phone / SMS / letter channels + outcome mix + 1 Repossession via `record_repossession` + `mark_recovered` (60+ day past-due note, ordered 21 days ago, recovered 12 days ago) + 2 follow-up cadences. | **M16 detector eligibility anchor**: the ~5 unposted payments will be picked up by the M16.1 detector filter (`posted_at__isnull=True`) at 11:00 project-time daily; testers watching the accounting brief see the trial-balance surface change after the 11:00 cycle. Historical payments (paid >3 days ago) all have `posted_at` populated. |
+| Daily briefs (M18.5) | 13 hand-written markdown briefs in `services/demo_store/briefs/` following the standard six-marker structure per §Store-story coherence: what happened before login / what to accomplish today / what's intentionally incomplete / which shipped capabilities help / what successful completion looks like / what's discoverable without a guided click path. **Retail_subprime**: `owner.md` (daily snapshot), `sales_manager.md` (morning pipeline), `recon.md` (vehicle-by-vehicle status), `accounting.md` (week close). **Floor_planned**: `owner.md` (capacity check), `sales_manager.md` (pipeline review), **`recon.md` ($1,425 overrun intervention centerpiece)**, `accounting.md` (floor plan curtailment). **BHPH**: `owner.md` (portfolio health), `sales_manager.md` (BHPH originations), `recon.md` (post-repo intake), **`accounting.md` (M16 detector timing story)**, **`collector.md` (daily book with promise-to-pay + collection contacts + repossession chain)**. Brief loader in `services/demo_store/briefs/__init__.py` — `list_briefs(archetype)` + `get_brief(archetype, role)` returning `Brief` frozen dataclass or `BriefNotFoundError`. `BRIEF_ROLES` fixed vocab. | Markdown files loaded at request time (no LLM path per §5.g scanner allowlist). Brief content matrix-tested for standard markers + scenario slug + archetype-specific anchors (floor_planned/recon names "1,425" + "FP-01"; bhph/accounting names "11:00" + "posted_at"). No DB model; content doesn't change per-tenant. |
+| POST feedback endpoint + CSV exporter (M18.5) | New `views_demo_store.py` with `admin_demo_store_feedback_create` handler. POST `/admin/demo-store/feedback/` reusing `IsSalesManagerOrOwnerAtActiveDealership` (**zero-drift streak extends to fourteen consecutive milestones now**). Body validated by `TesterFeedbackCreateRequestSerializer` — required `tester_name` + `scenario_slug` + `category` + `note`; optional `referenced_route`. Category vocab validated against `TESTER_FEEDBACK_CATEGORY_CHOICES` (confusion / bug / feature_request / value_statement / willingness_to_pay). Refuses submissions against non-demo Dealership with 403 + descriptive detail (belt-and-suspenders with M18.1 service-layer discipline). Returns 201 with persisted TesterFeedback projection. URL registered — DRF admin surface 107 → **108**. CSV exporter completed end-to-end at M18.1 via `demo_store export_feedback --dealership <slug> [--since <date>] [--out <path>]`; writes to `self.stdout` in tests + real usage. | Submissions per demo dealership; tenant scoping enforced by `get_current_dealership(request)`. Non-demo returns 403 not 500 because the surface concern is "you cannot submit tester feedback against a live dealership" — a permission-shape concern for a real operator (RuntimeError guards inside the service layer catch programming bugs). |
+| Test-fixture reuse (M18.1) | `_auth_helpers.make_demo_dealership(archetype, slug, name=None)` wraps `make_dealership` + sets `is_demo=True` + `demo_archetype=<value>`. Every M18.x test uses this helper for demo-tenant setup. `make_dealership`'s COA seeding continues to apply. | Zero test regressions. `make_demo_dealership` is transparent infrastructure for demo-store scenario tests. |
+| Test baseline | +145 backend across M18 (M17 close **4,363** → M18 close **4,538**). Zero regressions. Frontend Vitest **140** unchanged (feedback capture form deferred per §5.f evidence-driven boundary). One migration shipped at M18.1 (`0047_m181_demo_store_substrate.py`). `manage.py check` + `makemigrations --check` clean at every M18 close. Per-increment delta: M18.1 = +53 (substrate + guards + scanner + management command); M18.2 = +33 (retail_subprime archetype); M18.3 = +34 (floor_planned + overrun); M18.4 = +31 (bhph + M16 detector); M18.5 = +24 (briefs + endpoint). | Cross-milestone integrity check: full test suite passes on every commit; each archetype test verifies row counts, cross-domain integrity, GL posting, synthetic-only safety, ScenarioSummary shape, and reset canonical state. |
+
+**What is NOT shipped in Milestone
+18** (deferred per
+`MILESTONE_18_RETROSPECTIVE.md` §3):
+
+- **Public self-serve demo signup**
+  — hand-provisioned via CLI.
+- **Production deployment** solely for
+  this milestone.
+- **Full customer onboarding
+  automation** — separate initiative
+  post-validation.
+- **Product tours / walkthrough
+  overlays** — briefs are text, not
+  in-product.
+- **Broad clickstream analytics** —
+  `TesterFeedback` captures
+  structured; general behavioral
+  defers.
+- **Session recording** — no video /
+  DOM replay.
+- **Generic whole-platform UI polish**
+  — §5.f Option A limits to workflow-
+  blocking / materially misleading;
+  broader polish records via
+  `TesterFeedback` for later.
+- **Fake stubs for unfinished
+  capabilities** — scenarios use only
+  shipped behavior.
+- **Outbound email / SMS to real
+  destinations** — scanner enforces
+  the guard-by-construction contract.
+- **DMS / lender / bank / auction /
+  bureau / payment / accounting-
+  provider integrations.**
+- **Pricing logic, billing,
+  subscriptions, contracts.**
+- **Conversion of testers into real-
+  data pilot stores** — follows
+  validation.
+- **Chargeback substrate** per §0.a
+  M18.2 decision 1. Re-entry: F&I
+  scenario milestone if operator
+  evidence surfaces demand.
+- **Demo-store-aware LLM cost caps**
+  per §0.a M18.1 decision 1. Re-
+  entry: future "demo LLM cost caps"
+  decision.
+- **Feedback capture UI form** —
+  deferred per §5.f evidence gate.
+
+**What operators experienced at
+Milestone 18 close:**
+
+- **Three archetype demo stores** can
+  be provisioned with a single CLI
+  command. Each tells a coherent
+  operational story across every
+  shipped M1-M17 capability that
+  applies to the archetype.
+- **Testers walk daily briefs**
+  covering owner / sales manager /
+  recon / accounting / (BHPH-only)
+  collector roles per archetype.
+  Each brief points at the routes
+  a real operator would use.
+- **Reset restores canonical state**
+  atomically. Rogue data cleared,
+  demo-owned Users removed, COA
+  re-seeded, archetype rebuilt.
+- **Feedback capture** — testers or
+  Chris submit observations via POST
+  endpoint; CLI exports to CSV for
+  review.
+- **Zero risk of accidental real-
+  world side effects** — synthetic
+  VINs, NANP fiction phones, IANA-
+  reserved `.example` TLD emails, no
+  SSNs / payment credentials, and
+  the outbound-egress scanner
+  enforces the guard for every future
+  adapter that ships.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

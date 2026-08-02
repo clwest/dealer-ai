@@ -1,9 +1,11 @@
 ---
 title: "Milestone 18 — Demo Store Simulation + Pilot Validation Readiness"
-status: active
+status: shipped
 type: planning-memo
 generated: 2026-08-02
 generated_at_session: SESSION_145 (skeleton), SESSION_146 (expansion)
+shipped_at_session: SESSION_152
+retrospective: docs/roadmap/MILESTONE_18_RETROSPECTIVE.md
 milestone: 18
 milestone_name: "Demo Store Simulation + Pilot Validation Readiness"
 sources:

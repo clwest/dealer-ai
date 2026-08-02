@@ -2037,6 +2037,184 @@ user direction).**
 
 ---
 
+### Milestone 18 — Demo Store Simulation + Pilot Validation Readiness — SHIPPED at SESSION_152
+
+*Full delivery record:
+`docs/roadmap/MILESTONE_18_PLANNING.md` §7 (annotated
+SHIPPED per increment; five §0.a change-log amendments
+recorded across M18.1 + M18.2 implementation sessions) and
+`docs/roadmap/MILESTONE_18_RETROSPECTIVE.md`. Shipped
+surface enumerated in `docs/CAPABILITY_MATRIX.md` §7s.
+Backend test baseline delta: 4,363 → 4,538 (+175 tests
+across all M18 increments, zero regressions). Frontend
+Vitest baseline: 140 (unchanged — feedback capture form
+deferred per §5.f evidence gate). Sessions: 146 → 152
+(seven increments including planning + close-out; commits
+`469bc9e` M18.0 planning + `fe9a19a` M18.1 substrate +
+`4c82f71` M18.1 docs + `a7eb65e` M18.2 retail_subprime +
+`ee64e25` M18.2 docs + `aa6343f` M18.3 floor_planned +
+`2dec5d6` M18.3 docs + `42c604d` M18.4 bhph + `e18e84a`
+M18.4 docs + `957a7ba` M18.5 briefs + endpoint + `6b6c3a5`
+M18.5 docs + this close-out commit). One new backend
+entity (`TesterFeedback`; tenancy carriers 49 → 50). Two
+additive `Dealership` columns (`is_demo` +
+`demo_archetype`). One additive migration (`0047` — two
+`AddField` + one `CreateModel`; zero data migration). One
+new endpoint (POST `/admin/demo-store/feedback/`; DRF
+admin surface 107 → 108). One new service package
+(`services/demo_store/` with ten modules including nine
+core + `briefs/` sub-package containing 13 markdown daily
+brief files + brief loader). One new views module
+(`views_demo_store.py`). One new management command
+(`demo_store` with four subcommands). Three archetype
+builders (`retail_subprime.py` + `floor_planned.py` +
+`bhph.py`) each constructing coherent operational stories
+across every shipped M1-M17 capability that applies to
+the archetype. **All three archetype builders + all 13
+briefs + POST endpoint + CSV export** verified end-to-end
+via 175 focused tests. Frontend Vitest 140 (unchanged —
+zero frontend at M18). Frontend operator routes 20
+(unchanged — testers use existing M1-M17 routes). Zero-
+drift permission-class posture — extends to fourteen
+consecutive milestones (M10 → M18.5). Celery-beat task
+families 10 (unchanged — no beat entry at M18). Zero new
+post-LLM scrub stages (M18 has no LLM path). **Seven §5
+decisions confirmed as-recommended at M18.0 open** —
+streak extends to 77 planning-time as-recommended M5.1 →
+M18.0 across nine consecutive milestones (M10 + M11 +
+M12 + M13 + M14 + M15 + M16 + M17 + M18). Five §0.a
+implementation-time micro-decisions across M18.1 + M18.2
+— do not count against the streak per M10 §9.*
+
+**Business objective.** The platform now has a broad
+verified capability surface through M17. The highest-
+value next step is not another isolated accounting
+extension — it is **proving that experienced independent-
+dealer operators can enter a believable store, recognize
+their normal operating world, work through a realistic
+day using shipped capabilities, and provide actionable
+product + commercial feedback**. Testers Chris already
+knows in the car business may become the first pilot
+customers.
+
+**Related research.**
+- `INDEPENDENT_DEALER_PIVOT.md` — the persona shape the
+  three archetypes reflect (retail/subprime,
+  floor-planned/recon-heavy, BHPH).
+- `SALES_DEPARTMENT_MAPPING.md` §retail + subprime motion.
+- `BHPH_OPERATIONS_MAPPING.md` §portfolio operations +
+  payment rhythm.
+- `INVENTORY_ACQUISITION_MAPPING.md` §floor-planned
+  patterns.
+- `RECON_MAPPING.md` §outside-recon workflows.
+
+**Operational pain resolved.**
+- Before M18, Chris could show prospective testers **one**
+  demo persona (Copper Canyon Auto — the migration-seeded
+  default). The tester saw *a* store, not *their* store.
+  No coherent story linked across shipped capabilities to
+  demonstrate the platform's cross-domain integrity.
+- Before M18, tester feedback was captured on paper or in
+  ad-hoc spreadsheets. No structured category vocabulary.
+  No willingness-to-pay signal that could be aggregated.
+  No CSV export.
+- Before M18, hand-provisioning a demo store required
+  manually seeding vehicles + salespeople + leads +
+  sales + notes + payments across ~15 shipped models.
+  Tester sessions would have been prohibitively expensive
+  to run repeatably.
+- Before M18, no guard-by-construction posture protected
+  demo stores from accidental real-world side effects
+  (real email, real SMS, real bureau pulls, real payment
+  processing). The scanner test enforces the contract
+  going forward.
+
+**Existing reusable primitives.**
+- **`Dealership` model** — gained two additive columns
+  without breaking any existing tenancy path.
+- **`_TENANT_CARRIER_MODEL_NAMES`** — extended by one for
+  `TesterFeedback` following the M13.1 + M17.1 pattern.
+- **`_auth_helpers.make_dealership`** — companion
+  `make_demo_dealership(archetype, slug)` helper wraps it.
+- **M13.1 `seed_default_coa`** — called by the demo-store
+  registry on create + reset so archetype-authored M15
+  sale-bookings have the required accounts.
+- **M15 `record_sale` + M12 `record_bhph_note` + M12
+  `record_payment` + M12 `record_promise` + M12
+  `mark_kept` + M12 `record_contact` + M12
+  `record_repossession` + M12 `mark_recovered` + M10
+  `record_credit_application` + M11 `start_cadence`** —
+  every archetype builder consumes these shipped service
+  verbs; zero modifications.
+- **M2 investment ledger + M4 recon work order + M5
+  lifecycle stage + M6 photography + M13.3 trial
+  balance + M14.3 journal-entry browser + M16 detector
+  + M17 as_of picker** — all consumed by the archetype
+  builders via the same routes real operators would use.
+
+**Gap.**
+- Demo dealership designation (`is_demo` flag) so guards
+  can distinguish live from demo tenants (M18.1 fills).
+- Archetype vocab + builders for the three canonical
+  independent-dealer shapes (M18.2 + M18.3 + M18.4 fill).
+- Deterministic seed/reset substrate with belt-and-
+  suspenders guards (M18.1 fills).
+- Outbound-send-boundary guard toolkit + scanner (M18.1
+  fills).
+- Tester feedback capture (M18.1 model, M18.5 endpoint +
+  exporter).
+- Daily briefs walking role-scoped scenarios (M18.5
+  fills).
+
+**Scope (seven increments — first non-accounting
+milestone since M12; all shipped SESSION_146 → 152).**
+- **M18.0** — planning refinement + target selection.
+- **M18.1** — backend substrate (schema + service
+  package + guards + management command + scanner).
+- **M18.2** — retail/subprime archetype pack.
+- **M18.3** — floor-planned archetype pack (with $825
+  recon overrun anchor).
+- **M18.4** — BHPH archetype pack (with M16 detector
+  timing anchor).
+- **M18.5** — 13 daily briefs + POST feedback endpoint +
+  CSV exporter completion.
+- **M18.6** — close-out docs.
+
+**Out of scope for M18** (deferrals cataloged in
+`MILESTONE_18_RETROSPECTIVE.md` §3):
+- Public self-serve demo signup; production deployment
+  solely for this milestone; full customer onboarding
+  automation; product tours / walkthrough overlays;
+  broad clickstream analytics; session recording; generic
+  whole-platform UI polish; fake stubs for unfinished
+  capabilities; outbound email / SMS to real
+  destinations; DMS / lender / bank / auction / bureau /
+  payment / accounting-provider integrations; pricing
+  logic / billing / subscriptions / contracts;
+  conversion of testers into real-data pilot stores.
+- **Chargeback substrate** per §0.a M18.2 decision 1.
+  Re-entry: F&I scenario milestone if operator evidence
+  surfaces demand.
+- **Demo-store-aware LLM cost caps** per §0.a M18.1
+  decision 1.
+- **Feedback capture UI form** — deferred per §5.f
+  evidence gate.
+- Payroll / W-2 / 1099 (external services). GAAP-audited
+  financial reporting (out of scope for platform v1).
+  Direct DMS integration (belongs to a future vendor-
+  integration milestone).
+- All still-valid unblocked-work items from earlier
+  milestones per M17 §8 (period-close comparison view;
+  financial-reports substrate; CSV / PDF export of
+  frozen snapshots; auto-freeze on schedule; reopen /
+  unfreeze; M10 chargeback GL reversal; NSF / payment-
+  reversal; category-group-aware GL mapping; M14 UX
+  polish; sale-reversal; VehicleCost variance;
+  deposit / bank reconciliation; method-aware fund-flow;
+  BhphFee entity; BHPH interest accrual detector).
+
+---
+
 ## 5. Explicit non-goals and deferrals
 
 The following are documented in research but explicitly out of
