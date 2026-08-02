@@ -1,9 +1,11 @@
 ---
 title: "Milestone 16 — M12 BHPH payment GL post"
-status: active
+status: shipped
 type: planning-memo
 generated: 2026-08-02
 generated_at_session: SESSION_141 (skeleton), SESSION_142 (expansion)
+shipped_at_session: SESSION_144
+retrospective: docs/roadmap/MILESTONE_16_RETROSPECTIVE.md
 milestone: 16
 milestone_name: "M12 BHPH payment GL post"
 sources:
@@ -1214,9 +1216,61 @@ M16.2).
 
 *Full memo. All six §5 decisions
 confirmed as-recommended at SESSION_142
-M16.0 open. Streak extends to 64
-planning-time as-recommended M5.1 →
-M16.0 (seven consecutive milestones
-now: M10 + M11 + M12 + M13 + M14 +
-M15 + M16). M16.1 code lands next
-session.*
+M16.0 open. M16.1 code shipped at
+SESSION_143. M16 SHIPPED at
+SESSION_144 M16.2 close.*
+
+## Closing note (M16.2)
+
+Milestone 16 shipped at SESSION_144
+per the M10.8 / M11.7 / M12.8 /
+M13.4 / M14.5 / M15.2 close-out
+precedent. Three increments (M16.0
+planning + M16.1 backend + M16.2
+close-out) — matching M15's shape
+per M15 §6 lesson 8 (backend-only
+milestones compact to 3
+increments).
+
+**Backend delta:** 4,296 → **4,326
+pass**, 1 skipped, 0 fail (+30
+tests, zero regressions — exactly
+the top of the 25-30 planning
+target). **Frontend Vitest: 122
+pass** (unchanged — no frontend at
+M16 per §5.f Option A). **One
+migration shipped at M16.1**
+(`0045_m161_bhph_payment_posted_at`
+— one AddField for detector
+idempotency). DRF admin surface
+104 (unchanged). Frontend operator
+routes 20 (unchanged). Tenancy
+carriers 47 (unchanged —
+BhphPayment gained a column, not
+a new model). Permission classes
+8 (unchanged — zero-drift streak
+extends to **eight consecutive
+milestones**: M10 + M11 + M12 +
+M13 + M14 + M15 + M16). Celery-
+beat task families 9 → **10**
+(new bhph-payment daily entry at
+11:00 project-time).
+
+**Streak update:** 64 planning-
+time as-recommended M5.1 → M16.0.
+Seven consecutive milestones with
+every §5 decision confirmed as-
+recommended at planning-time open.
+Five §0.a M16.1 micro-decisions do
+not count against the streak per
+M10 §9.
+
+Cross-links:
+
+- Delivery record → `docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`
+- Shipped surface → `docs/CAPABILITY_MATRIX.md` §7q
+- Roadmap entry → `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+  §Milestone 16
+- Session handoffs → `docs/handoffs/SESSION_142_m16_inc0_planning.md`
+  · `docs/handoffs/SESSION_143_m16_inc1_backend.md`
+  · `docs/handoffs/SESSION_144_m16_close.md`

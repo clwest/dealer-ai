@@ -1678,6 +1678,179 @@ cost accrual + reversal.
 
 ---
 
+### Milestone 16 — M12 BHPH payment GL post — SHIPPED at SESSION_144
+
+*Full delivery record: `docs/roadmap/MILESTONE_16_PLANNING.md`
+§7 (annotated SHIPPED per increment; one §0.a change-log
+amendment recorded across M16.1 implementation session) and
+`docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`. Shipped surface
+enumerated in `docs/CAPABILITY_MATRIX.md` §7q. Backend test
+baseline delta: 4,296 → 4,326 (+30 tests, zero regressions —
+top of the 25-30 planning target). Frontend Vitest baseline:
+122 (unchanged — no frontend at M16 per §5.f Option A).
+Sessions 142 → 144. Zero new backend entities. One additive
+migration (`0045` — `BhphPayment.posted_at` denormalization
+column for detector idempotency). One new module in
+`services/accounting/` (`bhph_payment.py` — sixth module
+alongside `default_coa.py`, `journal.py`, `snapshot.py`,
+`vehicle_cost.py`, `sale_booking.py`) with three verbs
+(`detect_unposted_bhph_payments` pure query +
+`post_bhph_payment_journal` atomic sibling +
+`post_all_unposted_bhph_payments_for_dealership`
+orchestrator) + `UnexpectedBhphPaymentFeesError` broken-
+invariant guard + three account-code constants + local
+`_lookup_required_account` helper (duplicated from M13.2 per
+M15.1 §0.a decision 3 posture). Extended
+`services/accounting/tasks.py` with two `@instrumented_task`
+functions (`post_bhph_payment_journals_for_dealership` per-
+tenant + `post_bhph_payment_journals_for_all_tenants`
+orchestrator) + two task-name constants. New
+`accounting-bhph-payment-post-daily-11-00` beat entry in
+`dealer_kit/settings.py::CELERY_BEAT_SCHEDULE` at
+`crontab(hour=11, minute=0)` — tenth beat family, next open
+non-overlapping slot after M13.2's 10:00. Extended
+`services/accounting/__init__.py` `__all__` for the new
+verbs + constant + error class. Zero new endpoints —
+detector is Celery-scheduled, not operator-visible. Zero
+permission-class drift — extends zero-drift posture to eight
+consecutive milestones (M10 + M11 + M12 + M13 + M14 + M15 +
+M16). Celery-beat task families 9 → 10 (one added at
+M16.1). Zero new post-LLM scrub stages (M16 has no LLM
+path). DRF admin surface 104 (unchanged). Frontend operator
+routes 20 (unchanged — no frontend touched). Tenancy carrier
+47 (unchanged — BhphPayment gained a column, not a new
+model). **Six §5 decisions confirmed as-recommended at
+M16.0 open** — streak extends to 64 planning-time as-
+recommended M5.1 → M16.0 across seven consecutive milestones
+(M10 + M11 + M12 + M13 + M14 + M15 + M16). Five §0.a
+implementation-time micro-decisions across M16.1 — do not
+count against the streak per M10 §9.*
+
+**Business objective.** Wire the M12 BhphPayment write path
+to the M13 accounting substrate via a detector-shaped
+Celery-beat job. Every unposted BhphPayment produces a
+matching balanced JournalEntry automatically. The BHPH loan
+portfolio now amortizes visibly at the GL level (Notes
+Receivable decreases as principal is collected); interest
+income accrues cash-basis; aggregate cash-collected reaches
+the GL.
+
+**Related research.**
+- `BHPH_OPERATIONS_MAPPING.md` §3 (payment operations),
+  §3.10 (daily payment posting rhythm), §11.5 (BHPH ↔
+  accounting dependencies) — the operational rhythm
+  motivates the daily detector cadence.
+- `ACCOUNTING_DEPARTMENT_MAPPING.md` §1.1 (chart of
+  accounts — 100000 / 123000 / 430000) — the three
+  accounts M16 posts against were already defined in the
+  M13.1 default COA fixture.
+- `MILESTONE_13_PLANNING.md` §5.d Option C hybrid
+  (sync sibling for M9 sale-booking, detector for M2 cost
+  accrual + M12 BHPH payment posting) — M16 exercises the
+  detector half of the hybrid (M15 exercised the sync
+  half).
+- `MILESTONE_15_RETROSPECTIVE.md` §8 — flagged M12 BHPH
+  payment GL post as the M16 target. M16 picks it up.
+
+**Operational pain resolved.**
+- Before M16, trial balance reflected M13.2 cost accrual +
+  M15 sale-booking activity, but zero BHPH payment
+  amortization. 123000 BHPH Notes Receivable grew
+  monotonically with each BHPH sale and never decreased,
+  regardless of how many payments the operator collected.
+- Before M16, the M14.3 journal-entry browser showed no
+  BHPH-payment entries — invisible to operators looking for
+  payment-side audit trails.
+- Before M16, 430000 BHPH Interest Income showed zero
+  balance regardless of collection activity. The single
+  most operationally important BHPH revenue metric was
+  absent from the ledger.
+- Before M16, aggregate cash-collected from BHPH payments
+  had no GL representation. Operator ran the BHPH ops UI
+  in one window and the accounting UI in another; the two
+  never reconciled at the ledger level.
+
+**Existing reusable primitives.**
+- M13.1 `services/accounting/post_journal_entry` — the
+  atomic sibling target for M16's payment-posting verb.
+  Consumed unchanged.
+- M13.2 `services/accounting/vehicle_cost.py` — the
+  template for M16.1's module shape (`detect_unposted_*` +
+  `post_*_journal` + `post_all_unposted_*_for_dealership`).
+  Mirrored near-verbatim.
+- M13.2 `services/accounting/tasks.py` — the template for
+  M16.1's Celery task pair. Extended with two new
+  `@instrumented_task` functions.
+- M13.2 `CELERY_BEAT_SCHEDULE` pattern (02:00–10:00 non-
+  overlapping window) — M16.1 extends by one hour with an
+  11:00 entry.
+- M13.2 `_lookup_required_account` — mirrored verbatim in
+  the BHPH-payment module for account resolution per
+  M15.1 §0.a decision 3 (evidence gate for refactor not
+  tripped).
+- M15.1 account-code declaration pattern — local constants
+  per module, `__init__.py` re-exports from canonical
+  origin. `bhph_payment.py` re-declares
+  `CASH_ACCOUNT_CODE` + `BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE`
+  locally (duplicates `sale_booking.py`); declares new
+  `BHPH_INTEREST_INCOME_ACCOUNT_CODE`.
+- Default COA seeded per Dealership by M13.1 migration
+  `0043` — all three accounts M16 uses (100000 / 123000 /
+  430000) exist for every tenant.
+- M12.2 `services/bhph_payments/record_payment` — the
+  write path that produces the rows M16.1 posts.
+  Consumed unchanged (BhphPayment gained a nullable
+  `posted_at` column; existing callers unaffected).
+- M14.3 journal-entry browser + M14.2 trial-balance page
+  — the UI surface that surfaces M16's new entries
+  automatically. Zero frontend changes needed.
+- `_auth_helpers.make_dealership` — already seeds default
+  COA per M15.1 §0.a decision 8. Every M16.1 test uses
+  the helper for tenant setup.
+
+**Gap.**
+- Wire `BhphPayment` rows to `post_journal_entry` via a
+  daily detector (M16.1 fills this).
+- Cash-side account mapping (M16.1 fills this — §5.c
+  Option A uniform DR 100000).
+- Line composition for zero-amount split columns (M16.1
+  fills this — §5.e Option A skip-zero pattern produces
+  2- or 3-line entries).
+- Detector idempotency signal (M16.1 fills this — §5.d
+  Option A `BhphPayment.posted_at` column mirroring
+  M13.2's `VehicleCost.posted_at` verbatim).
+
+**Scope (three increments).**
+- **M16.0** — planning refinement + target selection.
+- **M16.1** — backend BHPH payment GL detector (new
+  sibling module + migration + Celery tasks + beat
+  entry).
+- **M16.2** — close-out docs.
+
+**Out of scope for M16** (deferrals cataloged in
+`MILESTONE_16_RETROSPECTIVE.md` §3):
+- Method-aware fund-flow routing; late fee GL posting;
+  NSF / payment-reversal handling; GL-derived BHPH
+  analytics; BHPH interest accrual detector (accrual-
+  basis); deposit / bank reconciliation workflow;
+  JournalEntry ⇄ BhphPayment FK linkage; charge-off GL
+  wiring; payment modification / deferral GL; cross-run
+  detector concurrency guard beyond Celery-beat single-
+  dispatcher assumption; repossession-inventory transfer
+  GL.
+- M10 F&I chargeback GL reversal + trial-balance
+  materialization / monthly close workflow + category-
+  group-aware GL mapping for M13.2 detector + M14 UX
+  polish + cost-of-sale variance handling + sale-
+  reversal workflow — all remain unblocked as M17+
+  candidates; substrate ready for each.
+- Payroll / W-2 / 1099 (external services). GAAP-audited
+  financial reporting (out of scope for platform v1).
+  Direct DMS integration (belongs to a future vendor-
+  integration milestone).
+
+---
+
 ## 5. Explicit non-goals and deferrals
 
 The following are documented in research but explicitly out of

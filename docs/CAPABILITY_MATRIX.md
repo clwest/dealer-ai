@@ -1547,6 +1547,169 @@ Milestone 15 close:**
 
 ---
 
+## 7q. M12 BHPH payment GL post (Milestone 16, shipped)
+
+Milestone 16 (SESSION_142 →
+SESSION_144) wired the M12
+BhphPayment write path to the M13
+accounting substrate via a
+detector-shaped Celery-beat job at
+11:00 project-time daily, per M13
+§5.d Option C hybrid posture. M15
+shipped the sync-sibling half
+(sale booking, operator intent);
+M16 ships the detector half (BHPH
+payment posting, elapsed
+condition). **One new backend
+module** in `services/accounting/`
+(`bhph_payment.py` — sixth module
+alongside `default_coa.py`,
+`journal.py`, `snapshot.py`,
+`vehicle_cost.py`, `sale_booking.py`).
+**Zero new entities.** **One
+additive migration** (`0045` —
+`BhphPayment.posted_at
+DateTimeField(null=True, blank=True)`
+for detector idempotency). **Zero
+new endpoints** — the detector is
+Celery-scheduled, not operator-
+visible. **Zero permission-class
+drift** (streak extends to eight
+consecutive milestones: M10 + M11
++ M12 + M13 + M14 + M15 + M16).
+**No LLM path introduced.** **No
+new frontend surface** — the M14.3
+journal-entry browser + M14.2
+trial-balance page surface the
+resulting entries automatically.
+Deferrals cataloged in
+`MILESTONE_16_RETROSPECTIVE.md` §3.
+See `docs/roadmap/MILESTONE_16_PLANNING.md`
++ `docs/roadmap/MILESTONE_16_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface (M16.1) | Notes |
+| --- | --- | --- |
+| Backend: BHPH payment GL detector (M16.1) | New module `services/accounting/bhph_payment.py` with three verbs: `detect_unposted_bhph_payments(*, dealership) -> QuerySet[BhphPayment]` pure query (posted_at__isnull=True filter for cross-run idempotency per §5.d Option A); `post_bhph_payment_journal(*, dealership, bhph_payment, posted_at=None) -> BhphPayment` atomic sibling verb (DR 100000 Cash on Hand for full `amount` per §5.c Option A + optional CR 123000 BHPH Notes Receivable for `applied_to_principal` + optional CR 430000 BHPH Interest Income for `applied_to_interest` per §5.e Option A — zero lines skipped); `post_all_unposted_bhph_payments_for_dealership(*, dealership, now=None) -> dict` orchestrator with per-row failure isolation (return shape matches M13.2 exactly). Three new account-code constants declared locally (`CASH_ACCOUNT_CODE`, `BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE` duplicate `sale_booking.py`; `BHPH_INTEREST_INCOME_ACCOUNT_CODE` new at M16.1). New `UnexpectedBhphPaymentFeesError(RuntimeError)` broken-invariant guard fires when `applied_to_fees != 0` (asserts M12.2 zero-fees invariant; future BhphFee milestone extends this verb). `_lookup_required_account` helper mirroring M13.2 verbatim per M15.1 §0.a decision 3. | Read-then-write. Atomic — either the JournalEntry + `posted_at` denorm commit or nothing does. Cross-tenant BhphPayment raises `CrossTenantGLAccountError` (fail-closed). Missing / inactive default COA account raises `MissingDefaultAccountError`. Non-zero `applied_to_fees` raises `UnexpectedBhphPaymentFeesError` — makes the M12→M16 milestone boundary contract explicit. |
+| Backend: Celery task pair + beat schedule (M16.1) | Extended `services/accounting/tasks.py` with two `@instrumented_task` functions: `post_bhph_payment_journals_for_dealership(*, dealership_id) -> dict` per-tenant + `post_bhph_payment_journals_for_all_tenants() -> dict` orchestrator (dispatches per-tenant via `.delay`). Two new task-name constants (`POST_BHPH_PAYMENT_FOR_TENANT_TASK_NAME` + `POST_BHPH_PAYMENT_FOR_ALL_TENANTS_TASK_NAME`). New `accounting-bhph-payment-post-daily-11-00` entry in `dealer_kit/settings.py::CELERY_BEAT_SCHEDULE` at `crontab(hour=11, minute=0)` — tenth beat family. Continues the 02:00-10:00 non-overlapping window pattern by one hour per §5.b Option A. | State-transitioning per M11 §6 lesson 17 — a successful GL post populates `BhphPayment.posted_at` as derived state. Same posture as M11.5 / M12.3 / M12.4 / M13.2. Per-row failure isolation preserved via orchestrator's `try/except` loop — one bad row does not block the rest. Cross-run idempotency via `posted_at__isnull=True` filter (matches M13.2). |
+| Model migration (M16.1) | Migration `0045_m161_bhph_payment_posted_at.py` — one `AddField` for `BhphPayment.posted_at DateTimeField(null=True, blank=True)`. Matches `0044_m132_vehicle_cost_posted_at.py` shape verbatim per §0.a M16.1 decision 1 (no `db_index` — existing `dealership_id` FK index scopes the detector query at expected daily volumes). All existing BhphPayment rows default null → become detector-eligible on next run. | Additive-only. Backward-compatible with every existing M12.2 write path — `record_payment` continues to work unchanged; the new column defaults null on every insert. |
+| Test-fixture reuse (M16.1) | `_auth_helpers.make_dealership` already seeds default COA per M15.1 §0.a decision 8 — all M16.1 tests using the helper have the required 100000 / 123000 / 430000 accounts pre-seeded. Zero test-fixture changes needed at M16. | Zero test regressions. `make_dealership`'s COA seeding is now transparent infrastructure for every accounting milestone. |
+| Test baseline | +30 backend (M15 close **4,296** → M16 close **4,326**) — all from M16.1 (M16.0 planning + M16.2 close-out are docs-only). Zero regressions. Frontend Vitest **122** unchanged. One migration shipped at M16.1. `manage.py check` + `makemigrations --check` clean at every M16 close. | 30 focused tests across 9 TestCase classes in `tests/test_m161_bhph_payment_gl.py`: `DetectUnpostedBhphPaymentsTests` (5) + `PostBhphPaymentJournalHappyPathTests` (7) + `PostBhphPaymentJournalGuardsTests` (6) + `PostAllUnpostedBhphPaymentsOrchestratorTests` (5) + `PostBhphPaymentTaskTests` (3) + `BhphPaymentOrchestratorDispatchTests` (1) + `BhphPaymentBeatScheduleTests` (2) + `TrialBalanceReflectsBhphPaymentsTests` (1). |
+
+**What is NOT shipped in Milestone
+16** (deferred per
+`MILESTONE_16_RETROSPECTIVE.md` §3):
+
+- **Method-aware fund-flow
+  routing.** All payments DR
+  100000 Cash on Hand. Cash /
+  ACH / debit split defers to a
+  deposit-workflow milestone.
+- **Late fee GL posting.**
+  `applied_to_fees` always zero
+  at M12.2; guarded by
+  `UnexpectedBhphPaymentFeesError`.
+  A future BhphFee milestone
+  extends this verb.
+- **NSF / payment-reversal
+  handling.** Returned ACH
+  drafts need an operational
+  contract + `reverse_journal_entry`
+  wiring.
+- **GL-derived BHPH analytics.**
+  M12.7 reads BhphPayment
+  directly; period-over-period
+  interest-income + amortization
+  reports defer.
+- **BHPH interest accrual
+  detector.** M16 is cash-basis
+  (interest income at payment
+  intake). Accrual-basis
+  (interest RECEIVABLE at
+  period-end) defers.
+- **Deposit / bank
+  reconciliation workflow.**
+  100000 Cash on Hand grows
+  monotonically post-M16;
+  reclassification to 110000
+  Bank Operating defers.
+- **JournalEntry ⇄ BhphPayment
+  FK linkage.** `description`
+  text drill-back sufficient at
+  MVP. Defers per M15 §3 item 9.
+- **Charge-off GL wiring.**
+  Uncollectible notes eventually
+  charge off (DR 550000 Bad
+  Debt Expense — account
+  addition needed / CR 123000
+  BHPH Notes Receivable).
+  Blocked on charge-off entity
+  first.
+- **Payment modification /
+  deferral GL.** Skip payments
+  / term extensions / deferrals
+  need entity representation
+  first.
+- **Cross-run detector
+  concurrency guard.** Inherits
+  M13.2's Celery-beat single-
+  dispatcher assumption. Row-
+  level locks defer to
+  operator-evidence trigger.
+- **Repossession-inventory
+  transfer GL.** M12.6
+  Repossession entity ships but
+  not GL-wired.
+- **Payroll / W-2 / 1099** —
+  external-service scope
+  boundary.
+- **GAAP-compliant audited
+  financial reporting** — out of
+  scope for platform v1.
+- **Direct DMS integration** —
+  belongs to a future vendor-
+  integration milestone.
+
+**What operators experienced at
+Milestone 16 close:**
+
+- **The M14.3 journal-entry
+  browser now shows BHPH-payment
+  entries alongside M13.2 cost-
+  accrual entries and M15 sale-
+  booking entries.** Every posted
+  BHPH payment surfaces as a
+  "M12 BHPH payment intake —
+  BhphPayment #<pk> against note
+  #<pk> ($<amount> <method>)"
+  entry. Line memos carry the
+  payment + note pks + line-
+  purpose annotation (cash in /
+  principal / interest).
+- **The M14.2 trial balance
+  reflects the BHPH loan
+  portfolio in real economic
+  terms.** 123000 BHPH Notes
+  Receivable amortizes down as
+  principal payments credit it
+  (previously grew unboundedly
+  from M15 sale bookings); 430000
+  BHPH Interest Income shows
+  collected-interest revenue for
+  the period; 100000 Cash on
+  Hand shows aggregate cash
+  collected (bank-reconciliation
+  reclassification defers).
+- **Zero endpoint or route
+  changes.** Operators still call
+  the same M12.2 BhphPayment
+  create endpoint; the GL entry
+  appears in the M14 browser
+  within one detector cycle
+  (11:00 project-time daily).
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full
