@@ -40,9 +40,12 @@ from rest_framework.response import Response
 from .models import (
     CREDIT_APP_FORMAT_CHOICES,
     CREDIT_APP_STATUS_CHOICES,
+    LENDER_SUBMISSION_STATUS_CHOICES,
     CreditApplication,
     CustomerLead,
     DealStructure,
+    LenderProgram,
+    LenderSubmission,
     Sale,
     Vehicle,
 )
@@ -51,6 +54,8 @@ from .services import f_and_i as f_and_i_service
 from .services.f_and_i import (
     CrossTenantCreditApplicationError,
     CrossTenantDealStructureError,
+    CrossTenantLenderSubmissionError,
+    DuplicateLenderProgramError,
 )
 from .services.tenancy import get_current_dealership
 
@@ -347,4 +352,259 @@ def admin_deal_structure_create(request):
     return Response(
         {"deal_structure": _project_deal_structure(deal)},
         status=status.HTTP_201_CREATED,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 3 (SESSION_108) — Lender admin endpoints.
+# ---------------------------------------------------------------------------
+#
+# Three endpoints:
+#   - POST /admin/lender-programs/         — create catalog entry
+#   - POST /admin/lender-submissions/      — record a submission
+#   - PATCH /admin/lender-submissions/<pk>/ — update status + terms
+#
+# All three share the M10.1 permission composition (``_M101_PERMS``).
+# Flat URL shape per §1.9.a Option A (established at SESSION_107).
+
+
+def _lookup_deal_structure_or_404(dealership, deal_structure_id):
+    try:
+        return DealStructure.objects.filter(dealership=dealership).get(
+            pk=deal_structure_id
+        )
+    except DealStructure.DoesNotExist:
+        return None
+
+
+def _lookup_lender_program_or_404(dealership, lender_program_id):
+    try:
+        return LenderProgram.objects.filter(dealership=dealership).get(
+            pk=lender_program_id
+        )
+    except LenderProgram.DoesNotExist:
+        return None
+
+
+def _lookup_lender_submission_or_404(dealership, pk):
+    try:
+        return LenderSubmission.objects.filter(dealership=dealership).get(pk=pk)
+    except LenderSubmission.DoesNotExist:
+        return None
+
+
+def _project_lender_program(program: LenderProgram) -> dict:
+    return {
+        "id": program.pk,
+        "name": program.name,
+        "contact": program.contact,
+        "terms_summary": program.terms_summary,
+        "is_active": program.is_active,
+        "created_at": program.created_at.isoformat(),
+        "updated_at": program.updated_at.isoformat(),
+    }
+
+
+def _project_lender_submission(submission: LenderSubmission) -> dict:
+    return {
+        "id": submission.pk,
+        "deal_structure_id": submission.deal_structure_id,
+        "lender_program_id": submission.lender_program_id,
+        "lender_program_name": submission.lender_program.name,
+        "submitted_at": submission.submitted_at.isoformat(),
+        "status": submission.status,
+        "counter_terms": submission.counter_terms,
+        "approval_terms": submission.approval_terms,
+        "notes": submission.notes,
+        "created_at": submission.created_at.isoformat(),
+        "updated_at": submission.updated_at.isoformat(),
+    }
+
+
+class LenderProgramCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/lender-programs/``."""
+
+    name = serializers.CharField(max_length=255)
+    contact = serializers.CharField(
+        required=False, allow_blank=True, max_length=255, default=""
+    )
+    terms_summary = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+    is_active = serializers.BooleanField(required=False, default=True)
+
+
+class LenderSubmissionCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/lender-submissions/``."""
+
+    deal_structure_id = serializers.IntegerField()
+    lender_program_id = serializers.IntegerField()
+    submitted_at = serializers.DateTimeField(required=False, allow_null=True)
+    status = serializers.ChoiceField(
+        choices=[key for key, _ in LENDER_SUBMISSION_STATUS_CHOICES],
+        required=False,
+    )
+    counter_terms = serializers.DictField(required=False, default=dict)
+    approval_terms = serializers.DictField(required=False, default=dict)
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class LenderSubmissionUpdateRequestSerializer(serializers.Serializer):
+    """Request shape for ``PATCH /admin/lender-submissions/<pk>/``.
+
+    ``status`` is required (the PATCH always changes status; terms
+    / notes are optional).
+    """
+
+    status = serializers.ChoiceField(
+        choices=[key for key, _ in LENDER_SUBMISSION_STATUS_CHOICES]
+    )
+    counter_terms = serializers.DictField(required=False)
+    approval_terms = serializers.DictField(required=False)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_lender_program_create(request):
+    """POST: create a LenderProgram (M10.3 catalog surface).
+
+    Duplicate ``(dealership, name)`` surfaces as 409 Conflict via
+    :class:`DuplicateLenderProgramError` — matches the M9.1
+    :class:`SaleAlreadyExistsError` → 409 pattern.
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = LenderProgramCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    try:
+        program = f_and_i_service.record_lender_program(
+            dealership=dealership,
+            name=data["name"],
+            contact=data.get("contact", ""),
+            terms_summary=data.get("terms_summary", ""),
+            is_active=data.get("is_active", True),
+        )
+    except DuplicateLenderProgramError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    return Response(
+        {"lender_program": _project_lender_program(program)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_lender_submission_create(request):
+    """POST: create a LenderSubmission (M10.3 submission surface).
+
+    Cross-tenant deal_structure or lender_program surfaces as 404,
+    same fail-closed shape as M9.1 / M10.1 / M10.2.
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = LenderSubmissionCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    deal_structure = _lookup_deal_structure_or_404(
+        dealership, data["deal_structure_id"]
+    )
+    if deal_structure is None:
+        return Response(
+            {"detail": "Deal structure not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    lender_program = _lookup_lender_program_or_404(
+        dealership, data["lender_program_id"]
+    )
+    if lender_program is None:
+        return Response(
+            {"detail": "Lender program not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    service_kwargs = dict(
+        dealership=dealership,
+        deal_structure=deal_structure,
+        lender_program=lender_program,
+        counter_terms=data.get("counter_terms") or {},
+        approval_terms=data.get("approval_terms") or {},
+        notes=data.get("notes", ""),
+    )
+    if "status" in data:
+        service_kwargs["status"] = data["status"]
+    if data.get("submitted_at") is not None:
+        service_kwargs["submitted_at"] = data["submitted_at"]
+
+    try:
+        submission = f_and_i_service.record_lender_submission(**service_kwargs)
+    except CrossTenantLenderSubmissionError:
+        return Response(
+            {"detail": "Parent resource not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"lender_submission": _project_lender_submission(submission)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["PATCH"])
+@permission_classes(_M101_PERMS)
+def admin_lender_submission_update(request, pk):
+    """PATCH: update a LenderSubmission status (+ optional terms /
+    notes).
+
+    Cross-tenant pk surfaces as 404. Unknown status → 400.
+    """
+    dealership = get_current_dealership(request)
+
+    submission = _lookup_lender_submission_or_404(dealership, pk)
+    if submission is None:
+        return Response(
+            {"detail": "Lender submission not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    serializer = LenderSubmissionUpdateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    update_kwargs = dict(new_status=data["status"])
+    if "counter_terms" in data:
+        update_kwargs["counter_terms"] = data["counter_terms"]
+    if "approval_terms" in data:
+        update_kwargs["approval_terms"] = data["approval_terms"]
+    if "notes" in data:
+        update_kwargs["notes"] = data["notes"]
+
+    try:
+        submission = f_and_i_service.update_lender_submission_status(
+            submission, **update_kwargs
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"lender_submission": _project_lender_submission(submission)},
+        status=status.HTTP_200_OK,
     )

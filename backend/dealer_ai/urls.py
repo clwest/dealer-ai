@@ -512,4 +512,26 @@ urlpatterns = [
         views_f_and_i.admin_deal_structure_create,
         name="admin-deal-structure-create",
     ),
+    # ---- Milestone 10 · Increment 3 — Lender catalog + submission API --
+    # Role-gated on the same permission class as M10.1/M10.2 (composed
+    # via ``_M101_PERMS`` in views_f_and_i). Flat URL shape per §1.9.a.
+    # Domain-error mapping in ``views_f_and_i.py``:
+    #   DuplicateLenderProgramError → 409;
+    #   CrossTenantLenderSubmissionError → 404;
+    #   ValueError → 400.
+    path(
+        "admin/lender-programs/",
+        views_f_and_i.admin_lender_program_create,
+        name="admin-lender-program-create",
+    ),
+    path(
+        "admin/lender-submissions/",
+        views_f_and_i.admin_lender_submission_create,
+        name="admin-lender-submission-create",
+    ),
+    path(
+        "admin/lender-submissions/<int:pk>/",
+        views_f_and_i.admin_lender_submission_update,
+        name="admin-lender-submission-update",
+    ),
 ]

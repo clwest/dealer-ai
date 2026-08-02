@@ -4607,3 +4607,226 @@ class DealStructure(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 3 (SESSION_108) — LenderProgram vocabulary.
+# ---------------------------------------------------------------------------
+
+# LenderSubmission status vocabulary per MILESTONE_10_PLANNING.md
+# §1.3.b Option A (user-confirmed at SESSION_108 open, recorded in
+# §0.a). Fixed set of four values matching FINANCE §workflow step 9
+# ("approval, conditional approval, counter-offer, or decline").
+# Extensions (`withdrawn_by_dealer`, `expired`) land when operator
+# evidence surfaces need. ``funded`` belongs to M10.5 as a Contract
+# / Funding state, not a submission state.
+LENDER_SUBMISSION_STATUS_PENDING = "pending"
+LENDER_SUBMISSION_STATUS_APPROVED = "approved"
+LENDER_SUBMISSION_STATUS_COUNTER = "counter"
+LENDER_SUBMISSION_STATUS_DECLINED = "declined"
+
+LENDER_SUBMISSION_STATUS_CHOICES = (
+    (LENDER_SUBMISSION_STATUS_PENDING, "Pending"),
+    (LENDER_SUBMISSION_STATUS_APPROVED, "Approved"),
+    (LENDER_SUBMISSION_STATUS_COUNTER, "Counter-offer"),
+    (LENDER_SUBMISSION_STATUS_DECLINED, "Declined"),
+)
+
+
+class LenderProgram(models.Model):
+    """Milestone 10 · Increment 3 — per-dealership catalog entry for
+    a lender program.
+
+    Structured record of a lender program the dealership has an
+    active relationship with. Per
+    ``MILESTONE_10_PLANNING.md`` §1.3.c Option A (user-confirmed
+    at SESSION_108 open, recorded in §0.a) — per-dealership scope
+    with FK to :class:`Dealership`. Coexists with the free-text
+    :attr:`DealerOnboardingProfile.subprime_lenders` field per §5.d
+    Option C (SESSION_106) — the free-text field remains a notes
+    area; this catalog is the structured surface that
+    :class:`LenderSubmission` FKs into.
+
+    **Uniqueness.** ``(dealership, name)`` unique — a dealership
+    cannot have two programs with the same name. Deactivated
+    programs (see ``is_active`` below) still occupy the name
+    slot so re-adding "ABC Bank" with the same name after
+    deactivation surfaces as a duplicate; operators either
+    reactivate the existing row or use a distinct name.
+
+    **`is_active` boolean.** Programs churn constantly per FINANCE
+    §7.2 ("Program rate sheets sit in binders, in email inboxes,
+    in portal messages, in the F&I manager's head. Programs
+    change monthly (sometimes weekly)."). Deactivation is a soft
+    delete — the row is preserved because
+    :class:`LenderSubmission` protects against hard-delete (see
+    the M10.3 submission model's ``on_delete=PROTECT``). The
+    :func:`services.f_and_i.list_active_lender_programs` verb
+    filters on this column for operator-facing lender pickers.
+
+    **No back-fill of `subprime_lenders`.** Per §5.d Option C —
+    operators re-populate the structured catalog manually. The
+    free-text field is preserved for the transition period and
+    beyond as a notes surface.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="lender_programs",
+    )
+    name = models.CharField(max_length=255)
+    # Contact person / phone / email — free-form single line for
+    # M10.3. If operators surface structured contact requirements
+    # later, extend additively (e.g. ``contact_email`` +
+    # ``contact_phone``) rather than rewriting.
+    contact = models.CharField(max_length=255, blank=True, default="")
+    # Free-text summary of current program terms (advance / tier
+    # cutoffs / vehicle age caps / typical stips) — the "binder /
+    # inbox / head" data from FINANCE §7.2 pulled into one place.
+    terms_summary = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Lender program"
+        verbose_name_plural = "Lender programs"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("dealership", "name"),
+                name="unique_lender_program_name_per_dealership",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        active = "active" if self.is_active else "inactive"
+        return f"LenderProgram #{self.pk} — {self.name} ({active})"
+
+
+class LenderSubmission(models.Model):
+    """Milestone 10 · Increment 3 — a submission of a DealStructure
+    to a LenderProgram.
+
+    Persists the F&I workflow step of submitting a structured deal
+    to a lender and tracking the response. Per FINANCE §workflow
+    step 8-10: F&I structures the deal (M10.2), selects a lender,
+    submits, and waits for approval / counter / decline.
+
+    **Attach shape — mandatory FK to DealStructure** per
+    ``MILESTONE_10_PLANNING.md`` §1.3.a Option A (user-confirmed
+    at SESSION_108 open, recorded in §0.a). Every submission is
+    *of* a deal structure to a lender; the CASCADE means deleting
+    the deal structure invalidates the submission history.
+
+    **FK to LenderProgram uses `on_delete=PROTECT`.** A program
+    with submissions cannot be hard-deleted — the submissions are
+    historical records for the F&I audit trail. Operators
+    deactivate programs via :attr:`LenderProgram.is_active`
+    instead of deleting them.
+
+    **Status vocabulary.** Fixed four-value set per §1.3.b Option
+    A: ``pending`` (default at write time) → ``approved`` /
+    ``counter`` / ``declined``. No transition constraints at
+    M10.3 — the service verb accepts any-to-any transition and
+    operator behavior is captured as-recorded. Transition rules
+    can be locked at M10.4 (Stipulation) or M10.7 (compliance)
+    if evidence surfaces a need.
+
+    **counter_terms / approval_terms.** Free-form JSONField per
+    §1.3.d Option A. Whatever the lender's response contained.
+    Vocabulary partitioning deferred to M10.7 compliance layer.
+    Both default to empty dict so the row shape is stable
+    regardless of status.
+
+    **Cross-tenant guard.** ``clean()`` enforces ``dealership``
+    matches both ``deal_structure.dealership`` and
+    ``lender_program.dealership``. Belt (model) + suspenders
+    (service layer's :class:`services.f_and_i.CrossTenantLenderSubmissionError`).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="lender_submissions",
+    )
+    deal_structure = models.ForeignKey(
+        "DealStructure",
+        on_delete=models.CASCADE,
+        related_name="lender_submissions",
+    )
+    # PROTECT — a program with submissions is a historical record;
+    # operators deactivate rather than delete.
+    lender_program = models.ForeignKey(
+        "LenderProgram",
+        on_delete=models.PROTECT,
+        related_name="submissions",
+    )
+    submitted_at = models.DateTimeField()
+    status = models.CharField(
+        max_length=32,
+        choices=LENDER_SUBMISSION_STATUS_CHOICES,
+        default=LENDER_SUBMISSION_STATUS_PENDING,
+    )
+    # Free-form JSON per §1.3.d Option A. Default empty dict so the
+    # row shape is stable across every status value.
+    counter_terms = models.JSONField(default=dict, blank=True)
+    approval_terms = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-submitted_at", "-created_at")
+        verbose_name = "Lender submission"
+        verbose_name_plural = "Lender submissions"
+
+    def __str__(self) -> str:
+        return (
+            f"LenderSubmission #{self.pk} — DS #{self.deal_structure_id} "
+            f"→ {self.lender_program.name} ({self.get_status_display()})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination guards at the model layer.
+
+        Two invariants:
+
+        1. ``dealership`` must match ``deal_structure.dealership``.
+        2. ``dealership`` must match ``lender_program.dealership``.
+
+        Both raise before the row reaches the DB. Data-scoping is
+        layer 4 in ``AUTHENTICATION_MODEL.md`` §1.
+        """
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.deal_structure_id is not None
+            and self.deal_structure.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "deal_structure": (
+                        "LenderSubmission.deal_structure must belong to "
+                        "the same dealership as the LenderSubmission. "
+                        "Cross-tenant contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )
+        if (
+            self.lender_program_id is not None
+            and self.lender_program.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "lender_program": (
+                        "LenderSubmission.lender_program must belong to "
+                        "the same dealership as the LenderSubmission. "
+                        "Cross-tenant contamination guard (see "
+                        "AUTHENTICATION_MODEL.md §1 layer 4)."
+                    )
+                }
+            )

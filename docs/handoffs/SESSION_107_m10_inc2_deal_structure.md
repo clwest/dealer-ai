@@ -8,7 +8,7 @@ milestone: 10
 milestone_status: in_progress
 increment: 2
 increment_status: shipped
-commit: TBD
+commit: b7c9bf3
 ---
 
 # SESSION_107 — Milestone 10 · Increment 2 (M10.2 — DealStructure entity + LTV/PTI/DTI ratio computation)

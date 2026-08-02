@@ -368,6 +368,18 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # the autofill signal is the safety net for callers that
     # bypass the service.
     "DealStructure",
+    # Milestone 10 · Increment 3 (SESSION_108) — LenderProgram
+    # + LenderSubmission entities per MILESTONE_10_PLANNING.md
+    # §1.3 (four §1.3.a-d decisions confirmed at SESSION_108
+    # open, all Option A, recorded in §0.a) (26 → 28).
+    # LenderProgram is a per-dealership catalog; LenderSubmission
+    # FKs to DealStructure (CASCADE) + LenderProgram (PROTECT).
+    # The M10.3 :mod:`services.f_and_i.lender` verbs write
+    # ``dealership`` explicitly on every row; the autofill
+    # signal is the safety net for callers that bypass the
+    # service.
+    "LenderProgram",
+    "LenderSubmission",
 )
 
 

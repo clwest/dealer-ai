@@ -52,6 +52,16 @@ from .deal_structure import (
     record_deal_structure,
     recompute_ratios,
 )
+from .lender import (
+    CrossTenantLenderSubmissionError,
+    DuplicateLenderProgramError,
+    get_lender_submission,
+    list_active_lender_programs,
+    list_submissions_for_deal_structure,
+    record_lender_program,
+    record_lender_submission,
+    update_lender_submission_status,
+)
 
 __all__ = [
     # M10.1 — credit application
@@ -67,4 +77,13 @@ __all__ = [
     "payment_to_income",
     "record_deal_structure",
     "recompute_ratios",
+    # M10.3 — lender catalog + submission
+    "CrossTenantLenderSubmissionError",
+    "DuplicateLenderProgramError",
+    "get_lender_submission",
+    "list_active_lender_programs",
+    "list_submissions_for_deal_structure",
+    "record_lender_program",
+    "record_lender_submission",
+    "update_lender_submission_status",
 ]

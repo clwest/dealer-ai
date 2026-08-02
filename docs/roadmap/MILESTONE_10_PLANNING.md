@@ -223,6 +223,88 @@ option, and the affected sections.
     (all writes / reads keep working
     against the NULL default).
 
+### SESSION_108 (M10.3 open) — four §1.3 decisions resolved (all Option A)
+
+- **Amendment.** Four load-bearing
+  decisions surfaced at SESSION_108
+  open that the planning-time §1.3
+  memo did not fully resolve. All
+  four confirmed by the user at
+  session open (all four as-
+  recommended).
+- **§1.3.a — LenderSubmission attach
+  point: Option A.** Mandatory FK
+  to `DealStructure` (CASCADE). Every
+  submission is *of* a deal structure
+  to a lender per FINANCE §workflow
+  step 8-10. Pre-DealStructure "will
+  this lender look at this customer?"
+  pre-qualification is a distinct
+  workflow that doesn't need to
+  overload the submission entity;
+  if a pre-qual surface emerges,
+  it lands as its own entity later.
+- **§1.3.b — LenderSubmission.status
+  vocabulary: Option A.** Fixed set
+  of four values: `pending` /
+  `approved` / `counter` /
+  `declined`. Mirrors M10.1 §5.b
+  Option A + M9.1 §5.c Option A
+  precedents. Additional values
+  (`withdrawn_by_dealer`, `expired`,
+  etc.) land when operator evidence
+  surfaces need. `funded` belongs
+  to M10.5 as a Contract / Funding
+  state, not a submission state.
+- **§1.3.c — LenderProgram catalog
+  scope: Option A.** Per-dealership
+  catalog with FK to `Dealership`
+  (tenant carrier). Matches §5.d
+  Option C from SESSION_106 (catalog
+  is additive alongside free-text
+  `subprime_lenders` notes) and
+  matches how indie dealers actually
+  work — each store has its own
+  lender relationships per FINANCE
+  §2. Unique constraint on
+  `(dealership, name)` — no
+  duplicate program names per tenant.
+- **§1.3.d — counter_terms /
+  approval_terms JSONField shape:
+  Option A.** Free-form JSON at
+  M10.3 (mirrors M10.2's
+  `back_end_products` shape).
+  Vocabulary partitioning deferred
+  to M10.7 compliance layer once
+  operator evidence surfaces the
+  actual shape lenders return.
+  Storing free-form JSON captures
+  whatever the lender's response
+  actually contained without
+  guessing.
+- **Effect on §7 M10.3 scope.**
+  - Ships (unchanged): `LenderProgram`
+    + `LenderSubmission` models +
+    migration `0027` + tenancy
+    carrier extensions 26 → 28
+    (both new entities) + new
+    `services/f_and_i/lender.py`
+    module (catalog + submission
+    verbs) + new endpoints + ~25
+    tests.
+  - LenderSubmission uses
+    `on_delete=PROTECT` for the
+    lender_program FK so deleting
+    a program that has submissions
+    is refused — the submission is
+    a historical record.
+  - LenderProgram carries an
+    `is_active` boolean so
+    dealerships can deactivate
+    programs without deleting
+    them (the `list_active_lender_programs`
+    verb filters on this).
+
 ---
 
 ## 1. Design memo
