@@ -4,6 +4,7 @@ from . import (
     views,
     views_analytics,
     views_be_backs,
+    views_bhph_analytics,
     views_bhph_notes,
     views_bhph_payments,
     views_bhph_promises,
@@ -805,6 +806,12 @@ urlpatterns = [
         views_bhph_notes.admin_bhph_note_create,
         name="admin-bhph-note-create",
     ),
+    # M12.7 addendum — list surface for the portfolio dashboard.
+    path(
+        "admin/bhph-notes/list/",
+        views_bhph_notes.admin_bhph_note_list,
+        name="admin-bhph-note-list",
+    ),
     path(
         "admin/bhph-notes/<int:pk>/",
         views_bhph_notes.admin_bhph_note_retrieve,
@@ -915,5 +922,13 @@ urlpatterns = [
         "admin/bhph-repossessions/<int:pk>/mark-re-intaked/",
         views_repossessions.admin_repossession_mark_re_intaked,
         name="admin-repossession-mark-re-intaked",
+    ),
+    # Milestone 12 · Increment 7 (SESSION_127) — BHPH portfolio
+    # analytics. Single summary endpoint at MVP per §0.a M12.7
+    # decision 2. Read-only aggregation over M12.1-M12.4 tables.
+    path(
+        "admin/bhph/analytics/summary/",
+        views_bhph_analytics.admin_bhph_analytics_summary,
+        name="admin-bhph-analytics-summary",
     ),
 ]

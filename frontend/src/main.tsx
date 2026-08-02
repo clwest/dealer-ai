@@ -8,6 +8,8 @@ import AdvisorWorkspacePage from "@/pages/AdvisorWorkspacePage";
 import DealerAnalyticsPage from "@/pages/DealerAnalyticsPage";
 import DealerAIDemo from "@/pages/DealerAIDemo";
 import DealerAdmin from "@/pages/DealerAdmin";
+import DealerAiBhphNoteDetail from "@/pages/DealerAiBhphNoteDetail";
+import DealerAiBhphPortfolio from "@/pages/DealerAiBhphPortfolio";
 import DealerAiSalesBeBacks from "@/pages/DealerAiSalesBeBacks";
 import DealerAiSalesFollowUps from "@/pages/DealerAiSalesFollowUps";
 import DealerAiSalesLeads from "@/pages/DealerAiSalesLeads";
@@ -155,6 +157,19 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route
                 path="dealer-ai-sales/be-backs"
                 element={<DealerAiSalesBeBacks />}
+              />
+              {/* Milestone 12 · Increment 7 (SESSION_127) — BHPH
+                  portfolio operator UI MVP per §5.f Option C.
+                  Portfolio dashboard + per-note detail ship;
+                  collection-contact and repo-order UI defer to a
+                  follow-on. */}
+              <Route
+                path="dealer-ai-bhph/portfolio"
+                element={<DealerAiBhphPortfolio />}
+              />
+              <Route
+                path="dealer-ai-bhph/notes/:pk"
+                element={<DealerAiBhphNoteDetail />}
               />
             </Route>
           </Route>
