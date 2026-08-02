@@ -161,6 +161,11 @@ def admin_sale_create(request, stock_number):
             finance_type=data["finance_type"],
             buyer=buyer,
             lender_name=data.get("lender_name", ""),
+            # M15.1 — propagate the acting user so the sibling
+            # sale-booking JournalEntry's ``posted_by_user`` FK is
+            # populated and the M14.3 browser shows who booked the
+            # sale.
+            posted_by_user=request.user,
         )
     except CrossTenantSaleError:
         # Never leak cross-tenant existence. Same fail-closed shape

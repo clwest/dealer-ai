@@ -44,6 +44,11 @@ from typing import Optional
 
 from django.db import transaction
 
+from ..accounting.sale_booking import post_sale_booking_journal
+from ..accounting.vehicle_cost import (
+    detect_unposted_costs,
+    post_vehicle_cost_journal,
+)
 from ..vehicle_ledger import compute_totals
 from ...models import (
     SALE_FINANCE_TYPE_CHOICES,
@@ -135,6 +140,7 @@ def record_sale(
     finance_type: str,
     buyer: Optional[CustomerLead] = None,
     lender_name: str = "",
+    posted_by_user=None,
 ) -> Sale:
     """Create a :class:`Sale` for ``vehicle`` and populate
     ``gross_realized`` at write time.
@@ -144,10 +150,27 @@ def record_sale(
     existing Sale (:class:`SaleAlreadyExistsError`). Refuses
     unknown ``finance_type`` values (:class:`ValueError`).
 
-    Transactional — the ledger read + Sale insert happen inside a
-    single ``transaction.atomic`` block so a concurrent second
-    ``record_sale`` on the same Vehicle observes a serialized
-    view of the OneToOne uniqueness invariant.
+    Transactional — the ledger read + Sale insert + M15.1 sibling
+    GL posts happen inside a single ``transaction.atomic`` block so
+    a concurrent second ``record_sale`` on the same Vehicle observes
+    a serialized view of the OneToOne uniqueness invariant AND so
+    that a GL post failure rolls back the Sale row.
+
+    M15.1 GL-posting side effects (per ``MILESTONE_15_PLANNING.md``
+    §5.d + §5.b Option A, confirmed at SESSION_139):
+
+    1. **Flush unposted VehicleCost rows for the target vehicle**
+       via :func:`services.accounting.post_vehicle_cost_journal` —
+       ensures Recon WIP has posted the full ``total_investment``
+       before the sale-booking journal clears it. Keeps trial
+       balance always internally consistent (no transient negative
+       Recon WIP for this vehicle).
+    2. **Post the sale-booking JournalEntry** via
+       :func:`services.accounting.post_sale_booking_journal` —
+       finance-type-aware receivable line + revenue line + COGS +
+       Recon-WIP-clear lines. The ``posted_by_user`` kwarg
+       propagates from the view so the M14.3 journal-entry browser
+       shows who booked the sale.
 
     Returns the persisted :class:`Sale` with ``gross_realized``
     populated from :func:`gross_realized`.
@@ -167,14 +190,28 @@ def record_sale(
             f"Vehicle #{vehicle.stock_number} already has a Sale."
         )
 
-    # Compute gross_realized against the current ledger state so the
-    # denormalized field is populated at insert time. M9.3 aggregations
-    # read this stored value directly; :func:`gross_realized` is
-    # available to re-derive on demand.
+    # §5.d Option A — flush unposted VehicleCost rows for the target
+    # vehicle before the sale-booking journal posts. Same transaction:
+    # either every prerequisite cost + the sale-booking entry commit,
+    # or nothing does. Reuses M13.2's tenant-scoped detector filter
+    # (``posted_at__isnull=True AND is_estimate=False``).
+    unposted_for_vehicle = list(
+        detect_unposted_costs(dealership=dealership).filter(
+            vehicle=vehicle
+        )
+    )
+    for cost in unposted_for_vehicle:
+        post_vehicle_cost_journal(
+            dealership=dealership, vehicle_cost=cost
+        )
+
+    # Refresh ``total_investment`` AFTER the flush so the
+    # ``gross_realized`` denormalization reflects the same ledger
+    # snapshot the sale-booking journal will use for its COGS line.
     totals = compute_totals(vehicle, dealership=dealership)
     computed_gross = sold_price - totals.total_investment
 
-    return Sale.objects.create(
+    sale = Sale.objects.create(
         dealership=dealership,
         vehicle=vehicle,
         buyer=buyer,
@@ -184,3 +221,14 @@ def record_sale(
         lender_name=lender_name,
         gross_realized=computed_gross,
     )
+
+    # §5.b Option A + §5.c Option A — sibling-service post of the
+    # sale-booking JournalEntry. Zero-cost path handled inside the
+    # verb (revenue-only + warning log).
+    post_sale_booking_journal(
+        dealership=dealership,
+        sale=sale,
+        posted_by_user=posted_by_user,
+    )
+
+    return sale

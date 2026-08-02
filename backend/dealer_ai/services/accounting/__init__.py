@@ -55,6 +55,15 @@ from .snapshot import (
     TrialBalanceSnapshot,
     compute_trial_balance,
 )
+from .sale_booking import (
+    BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE,
+    CASH_ACCOUNT_CODE,
+    CONTRACTS_IN_TRANSIT_ACCOUNT_CODE,
+    COST_OF_VEHICLE_SALES_ACCOUNT_CODE,
+    VEHICLE_SALES_RETAIL_ACCOUNT_CODE,
+    UnmappedFinanceTypeError,
+    post_sale_booking_journal,
+)
 from .vehicle_cost import (
     AP_TRADE_ACCOUNT_CODE,
     RECON_WIP_ACCOUNT_CODE,
@@ -67,6 +76,10 @@ from .vehicle_cost import (
 
 __all__ = [
     "AP_TRADE_ACCOUNT_CODE",
+    "BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE",
+    "CASH_ACCOUNT_CODE",
+    "CONTRACTS_IN_TRANSIT_ACCOUNT_CODE",
+    "COST_OF_VEHICLE_SALES_ACCOUNT_CODE",
     "DEFAULT_COA",
     "CrossTenantGLAccountError",
     "CrossTenantJournalEntryError",
@@ -80,6 +93,8 @@ __all__ = [
     "TrialBalanceRow",
     "TrialBalanceSnapshot",
     "UnbalancedJournalEntryError",
+    "UnmappedFinanceTypeError",
+    "VEHICLE_SALES_RETAIL_ACCOUNT_CODE",
     "compute_trial_balance",
     "detect_cost_posting_failures",
     "detect_unposted_costs",
@@ -87,6 +102,7 @@ __all__ = [
     "list_journal_entries",
     "post_all_unposted_costs_for_dealership",
     "post_journal_entry",
+    "post_sale_booking_journal",
     "post_vehicle_cost_journal",
     "reverse_journal_entry",
     "seed_default_coa",

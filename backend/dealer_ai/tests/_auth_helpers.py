@@ -22,6 +22,7 @@ from dealer_ai.models import (
     Salesperson,
     UserDealershipRole,
 )
+from dealer_ai.services.accounting import seed_default_coa
 from dealer_ai.services.tenancy import get_default_dealership
 
 User = get_user_model()
@@ -33,10 +34,17 @@ def make_dealership(slug: str = "test-dealership", name: str | None = None) -> D
     Kept separate from :func:`services.tenancy.get_default_dealership`
     which returns the migration-seeded row. Tests that need a *second*
     dealership (cross-dealership isolation coverage) use this helper.
+
+    Also seeds the default COA per M13.1 posture — brings test
+    dealerships in line with the production invariant that every
+    Dealership has the full default chart of accounts. Required for
+    M15.1 sale-booking GL post to succeed on test dealerships.
     """
-    return Dealership.objects.create(
+    dealership = Dealership.objects.create(
         slug=slug, name=name or slug.replace("-", " ").title()
     )
+    seed_default_coa(dealership)
+    return dealership
 
 
 def make_user(username: str = "testuser", password: str = "x") -> "User":

@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_139
+last_session_shipped: SESSION_140
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -17,61 +17,60 @@ milestone_12_status: shipped
 milestone_13_status: shipped
 milestone_14_status: shipped
 milestone_15_status: in_progress
-next_session: SESSION_140
+next_session: SESSION_141
 next_milestone: 15
 next_milestone_name: "M9 sale-booking GL post"
-next_increment: 1
-next_increment_name: "M15.1 — Backend: sale-booking GL post"
+next_increment: 2
+next_increment_name: "M15.2 — Close-out docs"
 ---
 
-# Next session — SESSION_140 · Milestone 15 · Increment 1 (M15.1 — Backend: sale-booking GL post)
+# Next session — SESSION_141 · Milestone 15 · Increment 2 (M15.2 — Close-out docs)
 
-> **SESSION_139 shipped M15.0 —**
-> planning-only session. Expanded
-> `MILESTONE_15_PLANNING.md` skeleton
-> (~305 lines) into active memo
-> (~635 lines). All six §5 load-
-> bearing decisions confirmed as-
-> recommended at session open per
-> the M5-M14 pattern. **Streak
-> extends to 58 planning-time as-
-> recommended M5.1 → M15.0** across
-> six consecutive milestones (M10 +
-> M11 + M12 + M13 + M14 + M15).
+> **SESSION_140 shipped M15.1 —**
+> single backend increment. New
+> `services/accounting/sale_booking.py`
+> module + `post_sale_booking_journal`
+> atomic sibling-service verb.
+> Extended `record_sale` with (a)
+> `posted_by_user` kwarg, (b) per-
+> vehicle unposted-VehicleCost flush
+> per §5.d Option A, (c) sibling call
+> to `post_sale_booking_journal` per
+> §5.b + §5.c Option A. Extended
+> `views_sale.py` `admin_sale_create`
+> to propagate `request.user`.
+> Extended `_auth_helpers.make_dealership`
+> to seed default COA (fixes existing
+> tests that hit the M15.1 GL path).
 >
-> **M15 target: Option A — M9 sale-
-> booking GL post.** Sync
-> `@transaction.atomic` sibling-
-> service call inside
-> `services/sale/record_sale` per M13
-> §5.d Option C hybrid posture. Every
-> sold vehicle produces a matching
-> balanced JournalEntry via
-> `services/accounting/post_journal_entry`.
-> M14.3 journal-entry browser
-> surfaces the resulting entries
-> automatically — zero frontend
-> increment at M15.
+> **Backend baseline: 4,277 → 4,296
+> pass, 1 skipped, 0 fail** (+19
+> tests, zero regressions). Frontend
+> Vitest: 122 pass (unchanged — no
+> frontend at M15 per §5.f Option A).
 >
-> **M15 sequencing:** three
-> increments total (M15.0 planning +
-> M15.1 backend + M15.2 close-out).
-> Smaller surface than M14's five
-> per backend-only scope.
+> **Nine §0.a M15.1 micro-decisions
+> recorded** — all as-recommended per
+> M10 §9 (do not count against
+> planning-time streak of 58).
+>
+> **M15 state:** M15.0 planning +
+> M15.1 backend shipped. **M15.2
+> close-out ahead — final increment.**
 
-## First thing SESSION_140 must do
+## First thing SESSION_141 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean (M15.0 docs
-  commit landed at SESSION_139
-  close per user authorization).
+- `git status` — clean (M15.1 code
+  + tests + handoff commit landed
+  at SESSION_140 close per user
+  authorization).
 - `git log --oneline -3` — top
-  should be the M15.0 docs commit.
+  should be the M15.1 code commit.
 - `python3 manage.py test dealer_ai`
-  → **4,277 pass, 1 skipped, 0
-  fail** (unchanged from
-  SESSION_138 close).
+  → **4,296 pass, 1 skipped, 0
+  fail**.
 - `cd frontend && npm test` → **122
   pass** (unchanged).
 - `python3 manage.py check` clean.
@@ -83,223 +82,143 @@ next_increment_name: "M15.1 — Backend: sale-booking GL post"
 ### 2. Read first (in order)
 
 - `docs/roadmap/MILESTONE_15_PLANNING.md`
-  §5.a–§5.f (six confirmed
-  decisions) + §7 M15.1 (increment
-  scope).
-- `docs/handoffs/SESSION_139_m15_inc0_planning.md`
-  (previous session — this
-  handoff details what SESSION_140
-  picks up).
-- `backend/dealer_ai/services/sale/computation.py`
-  (M9 write path — `record_sale`
-  will be extended).
-- `backend/dealer_ai/services/accounting/journal.py`
-  (M13.1 — `post_journal_entry`
-  is the atomic sibling target;
-  `JournalLineInput` dataclass is
-  the input contract).
-- `backend/dealer_ai/services/accounting/vehicle_cost.py`
-  (M13.2 — `post_vehicle_cost_journal`
-  is invoked for the un-posted-
-  cost flush per §5.d Option A;
-  `_lookup_required_account` is
-  the template for the sale-
-  booking module's account
-  helpers).
-- `backend/dealer_ai/services/accounting/default_coa.py`
-  (M13.1 — enumerates the account
-  codes M15 uses: 100000, 120000,
-  122000, 123000, 400000, 500000).
-- `backend/dealer_ai/views_sale.py`
-  (M9 endpoint — extend to pass
-  `request.user` through as
-  `posted_by_user`).
-- `backend/dealer_ai/tests/test_m9_sale_computation.py`
-  (M9 existing test file — new
-  M15.1 tests likely add a
-  companion file
-  `test_m151_sale_booking.py`
-  per M13/M14 pattern).
+  (frontmatter flip target + §0.a
+  micro-decision log).
+- `docs/handoffs/SESSION_140_m15_inc1_backend.md`
+  (M15.1 delivery record).
+- `docs/roadmap/MILESTONE_14_RETROSPECTIVE.md`
+  (mirror structure for the M15
+  retrospective).
+- `docs/CAPABILITY_MATRIX.md` §7o
+  (mirror for §7p M15 section).
+- `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+  §Milestone 14 SHIPPED (mirror
+  for the M15 SHIPPED entry).
 
-## What M15.1 delivers
+## What M15.2 delivers
 
 Per `MILESTONE_15_PLANNING.md` §7
-M15.1:
+M15.2 — **documentation-only
+closeout** per M10.8 / M11.7 /
+M12.8 / M13.4 / M14.5 precedent.
 
-- **New module**
-  `backend/dealer_ai/services/
-  accounting/sale_booking.py` with
-  `post_sale_booking_journal(*,
-  dealership, sale,
-  posted_by_user=None) ->
-  JournalEntry` — atomic sibling-
-  service verb composing
-  receivable + revenue + COGS +
-  Recon-WIP-clear lines and
-  delegating to
-  `post_journal_entry`.
-- **Finance-type → receivable
-  account mapping** per §5.b
-  Option A:
-  - `cash` → **100000 Cash on
-    Hand**.
-  - `retail` → **120000 Contracts
-    in Transit**.
-  - `bhph` → **123000 BHPH Notes
-    Receivable**.
-- **Zero-cost path** per §5.c
-  Option A — skip COGS + Recon
-  WIP pair when `total_investment
-  == 0`; post revenue-pair only;
-  log warning.
-- **Un-posted-cost flush** per
-  §5.d Option A — inside
-  `record_sale`, before the sale-
-  booking journal posts, iterate
-  every un-posted / non-estimate
-  VehicleCost for the target
-  vehicle and call
-  `post_vehicle_cost_journal`.
-- **`record_sale` extension** —
-  accept `posted_by_user=None`
-  kwarg (default preserves
-  existing call sites) + invoke
-  the flush + sale-booking calls
-  inside the existing
-  `@transaction.atomic` block.
-- **`views_sale.py` extension**
-  — pass `request.user` through
-  as `posted_by_user=request.user`
-  so the JournalEntry's
-  `posted_by_user` FK is populated.
-- **Focused tests (~25-30)** —
-  finance-type mapping (cash /
-  retail / BHPH), balanced double-
-  entry, cross-tenant guard,
-  zero-cost skip path, un-posted-
-  cost flush, missing-account
-  error, `posted_by_user`
-  propagation, atomic-rollback,
-  idempotency short-circuit,
-  M14.3 list-endpoint sees the
-  new entries.
+Deliverables:
 
-**Baselines projected at M15.1
-close:**
-- Backend: 4,277 → ~4,302-4,307
-  (+25-30 tests, 0 regressions).
-- Frontend Vitest: 122 (unchanged
-  — no frontend touched).
-- Migrations: 0043-0044
-  (unchanged — no schema changes).
-- DRF admin surface: 104
-  (unchanged).
-- Frontend operator routes: 20
-  (unchanged).
-- Tenancy carriers: 47
-  (unchanged).
-- Permission classes: 8
-  (unchanged — zero-drift extends
-  to seven consecutive milestones).
-- Celery-beat task families: 9
-  (unchanged).
+- `docs/roadmap/MILESTONE_15_RETROSPECTIVE.md`
+  — new. Mirrors M14 retrospective
+  structure. §1 planned scope + §2
+  what shipped (per-increment table)
+  + §3 deferrals (12 M15-specific
+  + 5 universal = 17) + §4
+  deviations + §5 compatibility +
+  §6 lessons (target ~8-10 carry
+  into M16+) + §7 streak update
+  (58 planning-time as-recommended
+  streak holds — no §5 re-votes)
+  + §8 what M15 unblocks.
+- `docs/CAPABILITY_MATRIX.md` §7p
+  — new section describing the
+  M15 GL-post surface. Mirrors
+  §7o structure.
+- `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+  §Milestone 15 SHIPPED entry —
+  new. Between the existing
+  §Milestone 14 SHIPPED entry
+  and §5 (non-goals). Mirrors
+  §Milestone 14 shape.
+- `docs/roadmap/MILESTONE_15_PLANNING.md`
+  frontmatter flip: `status:
+  active` → `status: shipped`;
+  add `shipped_at_session:
+  SESSION_141` + `retrospective:`
+  fields. Closing note appended
+  at bottom.
+- `docs/roadmap/MILESTONE_16_PLANNING.md`
+  skeleton per standing user
+  directive. Draft §1 candidate
+  M16 targets from M15
+  retrospective §8 + still-valid
+  M14 §8 unblocked-work list.
+- `00-START-NEXT-SESSION.md`
+  overwritten with M16.0
+  priority (planning + target
+  selection).
+- `docs/handoffs/SESSION_141_m15_close.md`
+  — new session handoff.
+- One coordinated commit
+  landing all M15.2 docs.
 
-## What SESSION_140 should do
+**Backend baseline unchanged at
+M15.2 close: 4,296 pass**
+(planning-only session). Frontend
+Vitest unchanged: 122 pass.
+
+## What SESSION_141 should do
 
 ### Recommended step sequence
 
 1. **Verify starting state** (§1
    above).
-
-2. **Read first (§2 above).**
-
-3. **Create the new module +
-   verb.** Write
-   `services/accounting/sale_booking.py`
-   with `post_sale_booking_journal`
-   + account-lookup helpers. Wire
-   into
-   `services/accounting/__init__.py`
-   `__all__`.
-
-4. **Extend `record_sale`** to
-   invoke the flush + sale-
-   booking calls. Preserve
-   existing call sites via
-   `posted_by_user=None` default.
-
-5. **Extend `views_sale.py`** to
-   propagate `request.user`.
-
-6. **Write focused tests
-   (~25-30).** New test file
-   `test_m151_sale_booking.py`.
-
-7. **Full test suite** → assert
-   4,277 → ~4,302-4,307 with 0
-   regressions.
-
-8. **Manual verification** via
-   `manage.py shell` — record a
-   sale for each finance_type;
-   verify a balanced JournalEntry
-   is created; verify M14.3 list
-   endpoint returns them with
-   `posted_by_username` populated.
-
+2. **Read first** (§2 above).
+3. **Draft
+   `MILESTONE_15_RETROSPECTIVE.md`**
+   mirroring M14's structure.
+   Enumerate deferrals + lessons
+   carefully.
+4. **Update
+   `CAPABILITY_MATRIX.md` §7p**
+   with the M15 GL-post surface.
+5. **Add
+   `IMPLEMENTATION_ROADMAP.md`
+   §Milestone 15 SHIPPED entry.**
+6. **Flip planning-doc
+   frontmatter** + append closing
+   note.
+7. **Draft
+   `MILESTONE_16_PLANNING.md`
+   skeleton** — pull candidate
+   targets from M15 §8 + M14 §8
+   (much of it remains valid).
+8. **Overwrite
+   `00-START-NEXT-SESSION.md`**
+   with M16.0 priority.
 9. **Ship handoff at
-   `docs/handoffs/SESSION_140_m15_inc1_backend.md`.**
+   `docs/handoffs/SESSION_141_m15_close.md`.**
+10. **Coordinated commit** of all
+    M15.2 docs together per
+    doc-governance rule.
 
-10. **Overwrite
-    `00-START-NEXT-SESSION.md`**
-    with M15.2 (close-out)
-    priority.
+## Explicit non-goals for SESSION_141
 
-## Explicit non-goals for SESSION_140
-
-- ❌ Do NOT ship sales-tax posting.
-- ❌ Do NOT ship trade-in
-  accounting.
-- ❌ Do NOT ship F&I product
-  revenue at sale.
-- ❌ Do NOT ship doc-fee revenue.
-- ❌ Do NOT ship reserve-
-  receivable at sale.
-- ❌ Do NOT ship BHPH interest-
-  accrual detector.
-- ❌ Do NOT add
-  `SALE_FINANCE_TYPE_WHOLESALE`
-  vocab.
-- ❌ Do NOT wire sale-reversal to
-  M14.4 JournalEntry reversal.
-- ❌ Do NOT add JournalEntry FK
-  to Sale.
-- ❌ Do NOT ship CIT-to-Cash
-  funding workflow.
-- ❌ Do NOT modify M13.2 detector
-  for post-sale VehicleCost.
-- ❌ Do NOT ship GL-derived
-  reporting analytics.
-- ❌ Do NOT ship any frontend
-  changes (§5.f Option A — M15 is
-  backend-only).
+- ❌ Do NOT ship any code changes
+  (M15.2 is docs-only per M10.8-
+  M14.5 precedent).
+- ❌ Do NOT modify M1-M15
+  business logic.
 - ❌ Do NOT force-push or amend
-  any earlier commits.
+  earlier commits.
+- ❌ Do NOT re-vote any §5
+  decision — amendments go to
+  §0.a as micro-decisions per
+  M10 §9.
 
 ## NEXT TASK
 
-Start SESSION_140 with (a)
+Start SESSION_141 with (a)
 starting-state verification, (b)
 the read-first list, then (c)
-implementing M15.1 per the six
-confirmed §5 decisions. Ship the
-M15.1 handoff.
+drafting the M15 retrospective +
+capability matrix §7p + roadmap
+§Milestone 15 SHIPPED entry +
+planning-doc frontmatter flip +
+M16 planning skeleton. Ship the
+M15.2 handoff. Milestone 15 will
+be SHIPPED at commit time.
 
-Backend baseline at SESSION_140
-close: **~4,302-4,307 pass** (+25-
-30 vs SESSION_139). Frontend
-baseline: **122 pass** (unchanged
-— M15 is backend-only).
+Backend baseline at SESSION_141
+close: **4,296 pass** (unchanged
+— docs-only). Frontend baseline:
+**122 pass** (unchanged).
 
 ---
 
@@ -311,51 +230,49 @@ baseline: **122 pass** (unchanged
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_15_PLANNING.md`
 6. `docs/roadmap/MILESTONE_14_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_139_m15_inc0_planning.md`
+7. `docs/handoffs/SESSION_140_m15_inc1_backend.md`
    (this session's close)
-8. `docs/handoffs/SESSION_138_m14_close.md`
+8. `docs/handoffs/SESSION_139_m15_inc0_planning.md`
 9. `docs/CAPABILITY_MATRIX.md` §7o
-10. `docs/research/ACCOUNTING_DEPARTMENT_MAPPING.md`
-    §3.5 (CIT / funding) + §3.13
-    (sales-tax deferred).
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_139 — M15.0 shipped, M15 in progress)
+## Operational state (post-SESSION_140 — M15.1 shipped, M15 in progress)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
   `0001`–`0044`. Test baseline:
-  **4,277 pass**, 1 skipped, 0
-  fail (unchanged — planning-
-  only session).
+  **4,296 pass**, 1 skipped, 0
+  fail (M15.1 delta: +19).
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
   `:5173`. `tsc --noEmit` +
   `vite build` clean. **Vitest
   baseline: 122 pass** (unchanged
-  — planning-only session).
+  — M15 is backend-only).
 - **Frontend (prod):** NONE.
 - **Async runtime:** Celery
   5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1
   DatabaseScheduler. **9
   scheduled task families
-  registered.** M15 adds no new
-  beat schedules — sale booking
-  is operator intent, not
-  elapsed condition.
+  registered** (unchanged at
+  M15 — sale booking is
+  operator intent, not detector-
+  shaped).
 - **Milestones shipped:** M1 →
-  **M14** (SESSION_138 close).
-  **M15 in progress** — M15.0
-  planning complete; M15.1
-  backend + M15.2 close-out
-  ahead.
+  **M14**. **M15 in progress**
+  — M15.0 planning + M15.1
+  backend shipped; M15.2 close-
+  out ahead.
 - **DRF admin surface:** **104**
-  endpoints (unchanged at M15).
+  endpoints (unchanged at M15 —
+  no new endpoints; sale-booking
+  is a side effect of M9's
+  existing create endpoint).
 - **Frontend operator routes:**
   **20** (unchanged at M15 —
   backend-only milestone).
@@ -364,12 +281,12 @@ research + code are facts.
 - **Service surface:** complete
   `services/f_and_i/` (M10) +
   five M11 packages + seven M12
-  packages + `services/
+  packages + **`services/
   accounting/` (M13 four modules
   + M14.1 two additive query
-  verbs). **M15.1 adds
-  `services/accounting/sale_booking.py`
-  as a fifth module.**
+  verbs + M15.1
+  `sale_booking.py`
+  module = 5 modules total)**.
 - **Frontend accounting
   surface:** unchanged at M15.
 - **Tenancy carriers:** **47**
@@ -378,9 +295,9 @@ research + code are facts.
 - **Permission classes:** **8**
   (unchanged — zero-drift
   streak extends to seven
-  consecutive milestones on
-  M15.1 landing: M10 + M11 +
-  M12 + M13 + M14 + M15).
+  consecutive milestones: M10
+  + M11 + M12 + M13 + M14 +
+  M15).
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17 scrub
@@ -388,7 +305,8 @@ research + code are facts.
   no LLM path).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 15 next:** M15.1
-  backend — sale-booking GL
-  post inside `record_sale` via
-  new sibling module.
+- **Milestone 15 next:** M15.2
+  close-out docs (retrospective
+  + capability matrix §7p +
+  roadmap flip + M16 planning
+  skeleton).

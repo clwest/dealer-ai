@@ -187,6 +187,80 @@ and per-increment as §0.a amendments.*
   six §5 decisions at M15.0 open
   confirmed as-recommended.
 
+**SESSION_140 M15.1 close (2026-08-02):**
+
+*Nine implementation-time micro-
+decisions. All as-recommended per
+M10 §9 (do not count against
+planning-time streak).*
+
+1. **Zero-value COGS pair skipped
+   via `> Decimal("0.00")` guard**
+   — handles negative-total-
+   investment edge via explicit
+   `else` warn-log branch.
+2. **Un-posted-cost flush uses
+   `detect_unposted_costs(...).filter(vehicle=vehicle)`**
+   — reuses M13.2's tenant-scoped
+   filter rather than adding a
+   per-vehicle detector verb.
+3. **`_lookup_required_account`
+   duplicated in the sale-booking
+   module** — mirrors M13.2
+   verbatim; not promoted to a
+   shared helper (evidence gate
+   not tripped).
+4. **`CrossTenantGLAccountError`
+   reused for cross-tenant Sale
+   check** — matches M13.2
+   VehicleCost cross-tenant
+   posture; same fail-closed 404.
+5. **`UnmappedFinanceTypeError`
+   as `RuntimeError` subclass**
+   — broken-invariant signal, not
+   user-input error (matches
+   `MissingDefaultAccountError`
+   posture).
+6. **`gross_realized` refreshed
+   AFTER the cost flush** — so
+   the denormalized value on the
+   Sale row matches the COGS
+   line the sale-booking journal
+   posts.
+7. **JournalEntry description
+   text carries `Sale #<pk> of
+   stock <stock>
+   (<finance_type_display>)`** —
+   operator drill-back at M14.3
+   browser without an FK
+   addition (§3 item 9 deferral
+   held).
+8. **`_auth_helpers.make_dealership`
+   extended to seed default
+   COA** — brings test
+   dealerships in line with the
+   M13.1 migration invariant.
+9. **`test_m9_sale_computation.py`
+   patched inline** (four
+   `Dealership.objects.create`
+   calls + `seed_default_coa`
+   import) rather than migrated
+   to `make_dealership` — keeps
+   file's slug conventions
+   stable.
+
+**M15.1 delta:** 4,277 → **4,296
+pass** (+19 tests, 0 regressions).
+Frontend Vitest: 122 (unchanged).
+Migrations: 0043-0044 (unchanged).
+Tenancy carriers 47 (unchanged).
+DRF admin surface 104 (unchanged).
+Frontend operator routes 20
+(unchanged). Permission classes 8
+(unchanged — zero-drift streak
+extends to seven consecutive
+milestones).
+
 ## 1. Business questions this milestone answers
 
 Four operator-workflow questions, each

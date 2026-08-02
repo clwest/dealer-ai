@@ -48,6 +48,7 @@ from dealer_ai.models import (
     VehicleAcquisition,
     VehicleCost,
 )
+from dealer_ai.services.accounting import seed_default_coa
 from dealer_ai.services.sale import (
     CrossTenantSaleError,
     SaleAlreadyExistsError,
@@ -106,6 +107,7 @@ class GrossRealizedVerbTests(TestCase):
         self.dealership = Dealership.objects.create(
             slug="m91-gr", name="M9.1 Gross Realized"
         )
+        seed_default_coa(self.dealership)
 
     def test_returns_decimal(self) -> None:
         vehicle = _seed_vehicle_with_ledger(
@@ -182,6 +184,7 @@ class GrossRealizedVerbTests(TestCase):
         other = Dealership.objects.create(
             slug="m91-gr-other", name="Other Tenant"
         )
+        seed_default_coa(other)
         vehicle = _seed_vehicle_with_ledger(
             self.dealership, stock="GR-XTENANT"
         )
@@ -205,6 +208,7 @@ class RecordSaleVerbTests(TestCase):
         self.dealership = Dealership.objects.create(
             slug="m91-rec", name="M9.1 Record"
         )
+        seed_default_coa(self.dealership)
 
     def test_persists_all_fields(self) -> None:
         vehicle = _seed_vehicle_with_ledger(
@@ -270,6 +274,7 @@ class RecordSaleVerbTests(TestCase):
         other = Dealership.objects.create(
             slug="m91-rec-other", name="Other Tenant"
         )
+        seed_default_coa(other)
         vehicle = _seed_vehicle_with_ledger(
             self.dealership, stock="REC-XTENANT"
         )
@@ -286,6 +291,7 @@ class RecordSaleVerbTests(TestCase):
         other = Dealership.objects.create(
             slug="m91-rec-buyer-other", name="Other Buyer Tenant"
         )
+        seed_default_coa(other)
         vehicle = _seed_vehicle_with_ledger(
             self.dealership, stock="REC-XBUYER"
         )
