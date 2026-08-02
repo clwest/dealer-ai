@@ -4150,3 +4150,270 @@ class Delivery(models.Model):
                     )
                 }
             )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 1 (SESSION_106) — CreditApplication vocabulary.
+# ---------------------------------------------------------------------------
+
+# CreditApplication source-format vocabulary per
+# FINANCE_DEPARTMENT_MAPPING.md §1.1 (three formats: paper on a
+# clipboard, in-store tablet or terminal, online pre-qualification
+# form). Kept as module-level constants so
+# ``services.f_and_i.record_credit_application`` and the M10.1 tests
+# import the canonical literals without redeclaring — mirrors the
+# ``SALE_FINANCE_TYPE_*`` / ``DELIVERY_CHECKLIST_*`` pattern.
+CREDIT_APP_FORMAT_PAPER = "paper"
+CREDIT_APP_FORMAT_TABLET = "tablet"
+CREDIT_APP_FORMAT_ONLINE_PREQUAL = "online_prequal"
+
+CREDIT_APP_FORMAT_CHOICES = (
+    (CREDIT_APP_FORMAT_PAPER, "Paper (clipboard)"),
+    (CREDIT_APP_FORMAT_TABLET, "In-store tablet / terminal"),
+    (CREDIT_APP_FORMAT_ONLINE_PREQUAL, "Online pre-qualification"),
+)
+
+# CreditApplication status vocabulary. Deliberately small at M10.1
+# per PROJECT_RULES.md rule 4 (scope discipline). Extensions
+# (``approved`` / ``declined`` / ``adverse_action``) belong to
+# per-lender state and land with :class:`LenderSubmission` at M10.3
+# — see MILESTONE_10_PLANNING.md §7 M10.3. The M10.1 vocabulary
+# captures only the states the platform can determine from its own
+# actions.
+CREDIT_APP_STATUS_RECEIVED = "received"
+CREDIT_APP_STATUS_SUBMITTED = "submitted"
+CREDIT_APP_STATUS_WITHDRAWN = "withdrawn"
+
+CREDIT_APP_STATUS_CHOICES = (
+    (CREDIT_APP_STATUS_RECEIVED, "Received (not yet submitted)"),
+    (CREDIT_APP_STATUS_SUBMITTED, "Submitted to lender(s)"),
+    (CREDIT_APP_STATUS_WITHDRAWN, "Withdrawn"),
+)
+
+# Retention window per FINANCE_DEPARTMENT_MAPPING.md §6.9 (federal
+# + state rules range 2 years for some paper documents to 5-7 years
+# for most transaction records). Conservative default of 7 years
+# covers the upper bound. Stored as a module constant (not a Django
+# setting) so the invariant "credit apps are retained ≥7 years from
+# capture" is source-of-truth in the code, not overridable per
+# environment.
+CREDIT_APP_RETENTION_YEARS = 7
+
+
+class CreditApplicationRetentionActiveError(RuntimeError):
+    """Raised when :meth:`CreditApplication.delete` is called on a
+    row whose ``retention_expires_at`` is still in the future.
+
+    Model-layer enforcement per MILESTONE_10_PLANNING.md §5.e —
+    retention clocks are locked at the model layer so a service-only
+    guard can't be bypassed by an ad-hoc ``.delete()`` call, Django
+    admin action, or cascade from an unrelated model. The invariant
+    "credit apps are retained ≥7 years from capture" is the model's
+    responsibility to hold.
+    """
+
+
+class CreditApplication(models.Model):
+    """Milestone 10 · Increment 1 — the customer credit application.
+
+    Captures the credit-application intake step of the F&I workflow
+    per ``FINANCE_DEPARTMENT_MAPPING.md`` §1.1 — the written or
+    electronic form on which the customer authorizes the dealer to
+    pull their credit and submit their information to lenders.
+
+    **Attach shape — nullable FKs to both `CustomerLead` and `Sale`**
+    per ``MILESTONE_10_PLANNING.md`` §5.a Option C (user-confirmed at
+    SESSION_106 open, recorded in §0.a). Credit apps intake at lead
+    time (``lead`` FK set, ``sale`` FK null); on sale close the
+    ``sale`` FK is set (``lead`` FK preserved). ``clean()`` requires
+    at least one of the two to be set — the app must attach to
+    something in-tenant. Neither FK cascades; ``SET_NULL`` on both
+    preserves the credit-application row (the retention-clock record
+    of record) if either parent is deleted.
+
+    **Retention clock — locked at the model layer.** ``captured_at``
+    starts the clock; ``retention_expires_at`` is computed at write
+    time as ``captured_at + CREDIT_APP_RETENTION_YEARS``. The
+    :meth:`delete` override refuses any delete before
+    ``retention_expires_at``, raising
+    :class:`CreditApplicationRetentionActiveError`. This is per
+    ``MILESTONE_10_PLANNING.md`` §5.e — service-only enforcement
+    would let ad-hoc callers (Django admin action, management
+    command, cascade from a future related model) bypass the
+    invariant. The model holds the line.
+
+    **Minimal PII surface at M10.1.** Full applicant identity
+    (full SSN, DOB, driver's-license number, address) surfaces at
+    M10.2+ when the Safeguards Rule technical-controls layer is in
+    scope (encryption at rest, access logging, field-level ACLs
+    per FINANCE §6.4). At M10.1 the model captures ``applicant_full_name``
+    (identity for operator lookup) and optionally
+    ``applicant_ssn_last4`` (for lender-portal correlation), both
+    plain-text at rest. Storing full SSN before the technical-controls
+    layer ships would violate the Safeguards Rule; the schema is
+    intentionally narrow so M10.1 cannot become a compliance-debt
+    substrate.
+
+    **Cross-tenant guard.** ``clean()`` enforces that whichever
+    parent FK is set (``lead`` or ``sale``) belongs to the same
+    dealership as the credit application. Mirrors :meth:`Sale.clean`
+    / :meth:`Delivery.clean` / :meth:`VehicleAcquisition.clean`.
+    Belt (model) + suspenders (service layer's
+    :class:`services.f_and_i.CrossTenantCreditApplicationError`).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="credit_applications",
+    )
+    # §5.a Option C: FKs to both CustomerLead and Sale, nullable +
+    # SET_NULL. Credit apps outlive both parents (retention clock is
+    # the record of record). ``clean()`` requires at least one set.
+    lead = models.ForeignKey(
+        "CustomerLead",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="credit_applications",
+    )
+    sale = models.ForeignKey(
+        "Sale",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="credit_applications",
+    )
+    applicant_full_name = models.CharField(max_length=255)
+    # Last-4 only at M10.1 (full-SSN handling deferred until the
+    # Safeguards Rule technical-controls layer lands). Blank
+    # permitted for pre-qualification apps that haven't collected
+    # SSN yet.
+    applicant_ssn_last4 = models.CharField(max_length=4, blank=True, default="")
+    source_format = models.CharField(
+        max_length=32,
+        choices=CREDIT_APP_FORMAT_CHOICES,
+    )
+    status = models.CharField(
+        max_length=32,
+        choices=CREDIT_APP_STATUS_CHOICES,
+        default=CREDIT_APP_STATUS_RECEIVED,
+    )
+    # ``captured_at`` starts the retention clock. Distinct from
+    # ``created_at`` (row insert time) because a paper app may be
+    # captured on paper hours or days before it lands in the
+    # system. Callers can override; the service defaults to
+    # ``timezone.now()`` if omitted.
+    captured_at = models.DateTimeField()
+    # Denormalized from ``captured_at + CREDIT_APP_RETENTION_YEARS``
+    # at write time by the service verb. Stored (not computed on
+    # read) so retention-audit queries can filter without per-row
+    # date arithmetic. :meth:`delete` reads this column directly to
+    # decide whether to allow the delete.
+    retention_expires_at = models.DateTimeField()
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-captured_at", "-created_at")
+        verbose_name = "Credit application"
+        verbose_name_plural = "Credit applications"
+
+    def __str__(self) -> str:
+        return (
+            f"CreditApplication #{self.pk} — "
+            f"{self.applicant_full_name} ({self.get_status_display()})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination + attach-shape guards at the model layer.
+
+        Three invariants (§5.a Option C):
+
+        1. At least one of ``lead`` / ``sale`` is set — the app must
+           attach to an in-tenant parent. A credit app with both FKs
+           null has no operational anchor and no way to be found by
+           lead-scoped or sale-scoped operator queries.
+        2. When ``lead`` is set, ``lead.dealership`` must match
+           ``dealership``. Prevents cross-tenant contamination via
+           lead assignment.
+        3. When ``sale`` is set, ``sale.dealership`` must match
+           ``dealership``. Same guard on the sale side.
+
+        Retention-clock consistency (``retention_expires_at`` must be
+        ≥ ``captured_at``) is enforced by the service verb, not the
+        model — a raw ``.save()`` with an incoherent retention date
+        surfaces the invariant at the compliance query layer where
+        it matters, and Django's clean() cannot enforce it without
+        also requiring the service to bypass ``clean()`` (which
+        would defeat the model-layer guard on the FK invariants).
+        """
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if self.lead_id is None and self.sale_id is None:
+            raise ValidationError(
+                {
+                    "__all__": (
+                        "CreditApplication must attach to at least one "
+                        "of lead or sale (see MILESTONE_10_PLANNING.md "
+                        "§5.a Option C)."
+                    )
+                }
+            )
+        if (
+            self.lead_id is not None
+            and self.lead.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "lead": (
+                        "CreditApplication.lead must belong to the same "
+                        "dealership as the CreditApplication. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )
+        if (
+            self.sale_id is not None
+            and self.sale.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "sale": (
+                        "CreditApplication.sale must belong to the same "
+                        "dealership as the CreditApplication. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )
+
+    def delete(self, *args, **kwargs):
+        """Refuse delete while the retention window is still active.
+
+        Per MILESTONE_10_PLANNING.md §5.e — retention is a model-layer
+        invariant. Compares ``retention_expires_at`` against
+        :func:`django.utils.timezone.now`. Raises
+        :class:`CreditApplicationRetentionActiveError` when the
+        window is still open.
+
+        Callers that need to purge an expired app call ``.delete()``
+        normally after the window closes. There is no ``force=``
+        escape hatch — if operators need to purge an unexpired
+        record for a specific compliance reason (a customer's
+        deletion request under a state privacy law), that surface
+        lands as a discrete verb in the compliance-workflow
+        increment (M10.7), not here.
+        """
+        if self.retention_expires_at is not None and (
+            timezone.now() < self.retention_expires_at
+        ):
+            raise CreditApplicationRetentionActiveError(
+                f"CreditApplication #{self.pk} is still within its "
+                f"retention window (expires {self.retention_expires_at.isoformat()}). "
+                f"Refusing delete."
+            )
+        return super().delete(*args, **kwargs)

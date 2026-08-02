@@ -345,6 +345,16 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # :func:`services.delivery.record_delivery` writes ``dealership``
     # explicitly on every row; the autofill signal is the safety net.
     "Delivery",
+    # Milestone 10 · Increment 1 (SESSION_106) — CreditApplication
+    # entity per MILESTONE_10_PLANNING.md §5.a Option C (user-
+    # confirmed at SESSION_106 open, recorded in §0.a) (24 → 25).
+    # Nullable FKs to CustomerLead and Sale. The M10.1
+    # :func:`services.f_and_i.record_credit_application` writes
+    # ``dealership`` explicitly on every row; the autofill signal
+    # is the safety net for callers that bypass the service
+    # (Django admin form, ad-hoc management command). Retention
+    # clock is enforced at the model layer per §5.e.
+    "CreditApplication",
 )
 
 

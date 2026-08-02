@@ -30,6 +30,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from .models import (
     ROLE_DEALER_OWNER,
+    ROLE_F_AND_I_MANAGER,
     ROLE_RECON_MANAGER,
     ROLE_SALES_MANAGER,
     Salesperson,
@@ -222,6 +223,56 @@ class IsDealerOwnerAtActiveDealership(BasePermission):
             getattr(request, "user", None),
             dealership,
             (ROLE_DEALER_OWNER,),
+        )
+
+
+class IsFinanceManagerOrOwnerAtActiveDealership(BasePermission):
+    """Authenticated user holds ``f_and_i_manager`` OR ``dealer_owner``
+    at ``get_current_dealership(request)``.
+
+    Milestone 10 · Increment 1 — the M10 F&I admin API surface
+    (credit-app intake at M10.1, deal-desk at M10.2, lender submission
+    at M10.3, stipulation tracking at M10.4, contract + funding at
+    M10.5, chargeback at M10.6, compliance record + UI at M10.7).
+
+    Composed from two existing role constants — no new role added.
+    ``f_and_i_manager`` already exists in M1 ``ROLE_CHOICES`` and is
+    the operational persona that owns credit apps, deal structuring,
+    lender submissions, stipulations, contracts, funding, and
+    chargebacks day-to-day. ``dealer_owner`` retains everything.
+
+    Explicit non-grants:
+
+    - ``sales_manager`` does **not** grant F&I admin access. F&I is a
+      separate department with distinct compliance obligations
+      (Safeguards Rule, Red Flags Rule, FCRA) that sales managers do
+      not carry. The two roles overlap operationally at deal-desk but
+      are distinct on the compliance side, and the platform mirrors
+      that split at the permission layer.
+    - ``recon_manager`` / ``advisor`` / ``porter`` / ``collections``
+      all receive 403.
+    - ``collections`` may become a grant at M10.6 chargeback
+      reconciliation — deferred until operator evidence surfaces
+      need.
+
+    Reusable at any endpoint whose tenant anchor is the caller's
+    active dealership (i.e. the ``/api/dealer-ai/admin/credit-*``,
+    ``.../deal-*``, ``.../stipulations/*`` families as they land in
+    M10.1-M10.7). Endpoints whose tenant anchor is a URL kwarg (e.g.
+    the 4C advisor classes) should not reuse this class — their
+    target-tenant discovery is different.
+    """
+
+    message = (
+        "Requires f_and_i_manager or dealer_owner at the active dealership."
+    )
+
+    def has_permission(self, request, view) -> bool:
+        dealership = get_current_dealership(request)
+        return _user_holds_any_role_at(
+            getattr(request, "user", None),
+            dealership,
+            (ROLE_F_AND_I_MANAGER, ROLE_DEALER_OWNER),
         )
 
 

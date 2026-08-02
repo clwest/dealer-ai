@@ -94,9 +94,64 @@ implementation time as substrate reality asserts
 itself. Every amendment records the session,
 option, and the affected sections.
 
-*(None yet — planning-time only. Amendments
-recorded at the top of each M10 session that
-requires one.)*
+### SESSION_106 (M10.1 open) — §5.a / §5.b / §5.c / §5.d confirmed
+
+- **Amendment.** All four §5 load-bearing
+  decisions confirmed by the user at
+  SESSION_106 open. No spec changes — the
+  recommended path becomes the ratified
+  path (§5.a resolved from TBD in favor of
+  Option C after FINANCE §workflow re-read).
+- **§5.a — CreditApplication attach point:
+  Option C.** Nullable FKs to both
+  `CustomerLead` **and** `Sale`. Credit
+  apps intake at lead time (Lead FK set,
+  Sale FK null); on close, the Sale FK is
+  set (Lead FK preserved). Matches FINANCE
+  §workflow (credit-app intake precedes
+  deal structure and sale close) and
+  prevents re-orphaning if the operational
+  anchor moves from lead to sale.
+- **§5.b — Stipulation vocabulary:
+  Option A.** Small fixed set: `proof_of_income`
+  / `proof_of_insurance` / `proof_of_residence`
+  / `references` / `other`. Extend when
+  operator evidence surfaces need. Matches
+  M9.1 finance-type precedent (`cash` /
+  `retail` / `bhph`).
+- **§5.c — Chargeback impact on
+  `Sale.gross_realized`: Option B.** Zero
+  M9 schema change. A new verb
+  `services/f_and_i/computation.py::net_realized(sale)`
+  will sit alongside M9.1's
+  `gross_realized` when M10.7 lands.
+  Follows M8 §6 lesson 11 additive-
+  extension pattern.
+- **§5.d — Onboarding lender migration:
+  Option C.** Zero data loss. The
+  structured `LenderProgram` catalog
+  (M10.3) is additive alongside the
+  existing free-text
+  `DealerOnboardingProfile.subprime_lenders`
+  field; the free-text field becomes a
+  notes area.
+- **Effect on §7 M10.1 scope.**
+  - Ships (unchanged): `CreditApplication`
+    model + migration `0025` + retention
+    clock at the model layer +
+    `services/f_and_i/` package (with
+    `record_credit_application` + read
+    verb + retention-clock verb) +
+    tenancy carrier 24 → 25 + new
+    permission class
+    `IsFinanceManagerOrOwnerAtActiveDealership`
+    + first endpoint + ~30 tests.
+  - Attach shape (§5.a=C): `lead` FK
+    nullable, `sale` FK nullable. At least
+    one required at write time (model-
+    layer `clean()`).
+  - Non-goals unchanged (M10.2-M10.7
+    deferred).
 
 ---
 

@@ -4,6 +4,7 @@ from . import (
     views,
     views_analytics,
     views_delivery,
+    views_f_and_i,
     views_lifecycle,
     views_listings,
     views_photos,
@@ -480,5 +481,20 @@ urlpatterns = [
         "admin/deliveries/<int:delivery_id>/",
         views_delivery.admin_delivery_update,
         name="admin-delivery-update",
+    ),
+    # ---- Milestone 10 · Increment 1 — F&I credit-application API ------
+    # Role-gated on
+    # ``IsFinanceManagerOrOwnerAtActiveDealership`` per
+    # MILESTONE_10_PLANNING.md §7 M10.1. ``f_and_i_manager`` +
+    # ``dealer_owner`` at the active dealership pass; every other
+    # role receives 403 (deliberate — F&I has distinct compliance
+    # obligations from sales / recon per FINANCE §6.4).
+    # Domain-error mapping in ``views_f_and_i.py``:
+    #   CrossTenantCreditApplicationError → 404;
+    #   ValueError → 400.
+    path(
+        "admin/credit-applications/",
+        views_f_and_i.admin_credit_application_create,
+        name="admin-credit-application-create",
     ),
 ]
