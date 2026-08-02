@@ -8,7 +8,7 @@ milestone: 10
 milestone_status: in_progress
 increment: 5
 increment_status: shipped
-commit: TBD
+commit: 0729a7d
 ---
 
 # SESSION_110 — Milestone 10 · Increment 5 (M10.5 — Contract + BackEndProductAgreement + Funding)

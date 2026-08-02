@@ -5279,6 +5279,19 @@ class BackEndProductAgreement(models.Model):
     deductible = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )
+    # Milestone 10 · Increment 6 (SESSION_111) — additive
+    # cancellation-tracking extension per §1.7.c Option A (user-
+    # confirmed at SESSION_111 open, recorded in §0.a). Populated
+    # by the M10.6 chargeback service verb when
+    # ``chargeback_type=product_cancellation`` and the ``bepa``
+    # FK is set on the Chargeback. Both fields nullable so M10.5-
+    # era rows survive with NULL — the M10.6 pattern mirrors the
+    # M10.2 additive extension of M10.1's CreditApplication
+    # income columns.
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -5406,6 +5419,217 @@ class Funding(models.Model):
                     "contract": (
                         "Funding.contract must belong to the same "
                         "dealership as the Funding. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 6 (SESSION_111) — Chargeback vocabulary.
+# ---------------------------------------------------------------------------
+
+# Chargeback type vocabulary per MILESTONE_10_PLANNING.md §1.7.b
+# Option B (user-confirmed at SESSION_111 open, recorded in §0.a).
+# Five FINANCE §5.7 triggers plus an ``other`` fallback matching
+# the M10.1 §5.b + M10.3 §1.3.b + M10.4 §5.b + M10.5 §1.5.d
+# vocab-with-other pattern.
+CHARGEBACK_TYPE_FPD = "first_payment_default"
+CHARGEBACK_TYPE_EARLY_PAYOFF = "early_payoff"
+CHARGEBACK_TYPE_PRODUCT_CANCELLATION = "product_cancellation"
+CHARGEBACK_TYPE_REPOSSESSION = "repossession"
+CHARGEBACK_TYPE_DEAL_UNWIND = "deal_unwind"
+CHARGEBACK_TYPE_OTHER = "other"
+
+CHARGEBACK_TYPE_CHOICES = (
+    (CHARGEBACK_TYPE_FPD, "First payment default"),
+    (CHARGEBACK_TYPE_EARLY_PAYOFF, "Early payoff"),
+    (CHARGEBACK_TYPE_PRODUCT_CANCELLATION, "Product cancellation"),
+    (CHARGEBACK_TYPE_REPOSSESSION, "Repossession"),
+    (CHARGEBACK_TYPE_DEAL_UNWIND, "Deal unwind"),
+    (CHARGEBACK_TYPE_OTHER, "Other"),
+)
+
+# Deal-level chargeback types per FINANCE §5.7 — these undo the
+# funding and cause the associated Funding row to auto-transition
+# to ``chargedback`` state per §1.7.f Option A. ``product_cancellation``
+# is explicitly excluded (reduces commission but leaves the deal
+# funded). ``other`` is also excluded (safer default — operators
+# explicitly mark the Funding chargedback via separate PATCH for
+# novel-type chargebacks).
+DEAL_LEVEL_CHARGEBACK_TYPES = frozenset(
+    (
+        CHARGEBACK_TYPE_FPD,
+        CHARGEBACK_TYPE_EARLY_PAYOFF,
+        CHARGEBACK_TYPE_REPOSSESSION,
+        CHARGEBACK_TYPE_DEAL_UNWIND,
+    )
+)
+
+
+class Chargeback(models.Model):
+    """Milestone 10 · Increment 6 — chargeback event row.
+
+    Persists a lender-driven chargeback event per FINANCE §5.7 —
+    when the lender reverses part or all of the dealer's
+    compensation on a funded deal because something subsequently
+    went wrong (FPD, early payoff, product cancellation,
+    repossession, deal unwind, or other).
+
+    **Attach shape — nullable FKs to both Contract and BEPA**
+    per ``MILESTONE_10_PLANNING.md`` §1.7.a Option A (user-
+    confirmed at SESSION_111 open, recorded in §0.a). Mirrors
+    the M10.1 §5.a Option C precedent. ``clean()`` requires at
+    least one of the two to be set. Product-cancellation
+    chargebacks are conceptually attached to both — the
+    contract's funding is adjusted AND the specific BEPA's
+    commission is pro-rated.
+
+    **Fixed type vocabulary** per §1.7.b Option B. Six values:
+    FINANCE §5.7's five triggers plus ``other``.
+
+    **Audit trail.** ``recorded_by`` FK to
+    ``settings.AUTH_USER_MODEL`` nullable, SET_NULL on user
+    delete per §1.7.e Option A + the M10.4 ``documented_by``
+    pattern. Sourced from ``request.user`` at the endpoint
+    layer. ``chargeback_date`` is the operator-provided
+    business date (may predate row insert if backfilled);
+    ``created_at`` is the row insert timestamp.
+
+    **Funding auto-transition side effect.** Per §1.7.f Option
+    A the service verb :func:`services.f_and_i.record_chargeback`
+    auto-transitions the associated Funding row to
+    ``chargedback`` state when ``chargeback_type`` is one of the
+    four deal-level types (see
+    :data:`DEAL_LEVEL_CHARGEBACK_TYPES`). ``product_cancellation``
+    and ``other`` chargebacks do not touch Funding state.
+
+    **BEPA cancellation-field auto-populate side effect.** When
+    ``chargeback_type=product_cancellation`` and ``bepa`` FK is
+    set, the service verb populates
+    ``BackEndProductAgreement.cancelled_at`` (from
+    ``chargeback_date``) + ``cancellation_amount`` (from
+    ``chargeback_amount``).
+
+    **Cross-tenant guard.** ``clean()`` enforces ``dealership``
+    matches whichever parent FK is set — ``contract.dealership``
+    if ``contract`` is set, ``bepa.dealership`` if ``bepa`` is
+    set. Both may be set (product cancellation); both must
+    match the chargeback's own tenant. Belt + suspenders per
+    project pattern.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="chargebacks",
+    )
+    # §1.7.a Option A: nullable FKs to both. clean() requires
+    # at least one. CASCADE on both — a chargeback attached to
+    # a deleted parent has no attribution and shouldn't survive.
+    contract = models.ForeignKey(
+        "Contract",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="chargebacks",
+    )
+    bepa = models.ForeignKey(
+        "BackEndProductAgreement",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="chargebacks",
+    )
+    chargeback_type = models.CharField(
+        max_length=32,
+        choices=CHARGEBACK_TYPE_CHOICES,
+    )
+    # Operator-provided business date (may predate row insert if
+    # backfilled from a lender statement).
+    chargeback_date = models.DateField()
+    # Amount reversed. Stored as a positive Decimal — the sign
+    # is implicit (chargebacks always reduce realized revenue).
+    # The ``services.f_and_i.chargeback.net_realized`` verb
+    # subtracts these amounts from ``Sale.gross_realized``.
+    chargeback_amount = models.DecimalField(
+        max_digits=10, decimal_places=2
+    )
+    # §1.7.e Option A: FK to User nullable SET_NULL. Sourced
+    # from ``request.user`` at the endpoint layer per M10.4
+    # server-side audit-trail pattern.
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="chargebacks_recorded",
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-chargeback_date", "-created_at")
+        verbose_name = "Chargeback"
+        verbose_name_plural = "Chargebacks"
+
+    def __str__(self) -> str:
+        return (
+            f"Chargeback #{self.pk} — "
+            f"{self.get_chargeback_type_display()} "
+            f"(${self.chargeback_amount} on {self.chargeback_date})"
+        )
+
+    def clean(self) -> None:
+        """Cross-tenant contamination + attach-shape guards.
+
+        Three invariants:
+
+        1. At least one of ``contract`` / ``bepa`` is set — a
+           chargeback with both FKs null has no attribution.
+        2. When ``contract`` is set,
+           ``contract.dealership`` must match ``dealership``.
+        3. When ``bepa`` is set, ``bepa.dealership`` must match
+           ``dealership``.
+        """
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if self.contract_id is None and self.bepa_id is None:
+            raise ValidationError(
+                {
+                    "__all__": (
+                        "Chargeback must attach to at least one of "
+                        "contract or bepa (see MILESTONE_10_PLANNING.md "
+                        "§1.7.a Option A)."
+                    )
+                }
+            )
+        if (
+            self.contract_id is not None
+            and self.contract.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "contract": (
+                        "Chargeback.contract must belong to the same "
+                        "dealership as the Chargeback. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )
+        if (
+            self.bepa_id is not None
+            and self.bepa.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "bepa": (
+                        "Chargeback.bepa must belong to the same "
+                        "dealership as the Chargeback. Cross-tenant "
                         "contamination guard (see AUTHENTICATION_MODEL.md "
                         "§1 layer 4)."
                     )

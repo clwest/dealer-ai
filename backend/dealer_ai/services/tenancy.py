@@ -406,6 +406,19 @@ _TENANT_CARRIER_MODEL_NAMES = (
     "Contract",
     "BackEndProductAgreement",
     "Funding",
+    # Milestone 10 · Increment 6 (SESSION_111) — Chargeback entity
+    # per MILESTONE_10_PLANNING.md §1.7 (six §1.7.a-f decisions
+    # confirmed at SESSION_111 open, recorded in §0.a) (32 → 33).
+    # Nullable FKs to Contract + BackEndProductAgreement (mirrors
+    # M10.1 §5.a Option C). The M10.6
+    # :func:`services.f_and_i.record_chargeback` writes
+    # ``dealership`` explicitly on every row and auto-transitions
+    # the associated Funding to ``chargedback`` for deal-level
+    # types + auto-populates BEPA ``cancelled_at`` /
+    # ``cancellation_amount`` for product-cancellation type. The
+    # autofill signal is the safety net for callers that bypass
+    # the service.
+    "Chargeback",
 )
 
 

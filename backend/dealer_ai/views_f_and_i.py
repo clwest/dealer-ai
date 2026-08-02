@@ -39,6 +39,7 @@ from rest_framework.response import Response
 
 from .models import (
     BEPA_TYPE_CHOICES,
+    CHARGEBACK_TYPE_CHOICES,
     CONTRACT_TYPE_CHOICES,
     CREDIT_APP_FORMAT_CHOICES,
     CREDIT_APP_STATUS_CHOICES,
@@ -46,6 +47,7 @@ from .models import (
     STIPULATION_STATE_CHOICES,
     STIPULATION_TYPE_CHOICES,
     BackEndProductAgreement,
+    Chargeback,
     Contract,
     CreditApplication,
     CustomerLead,
@@ -61,6 +63,7 @@ from .permissions import IsFinanceManagerOrOwnerAtActiveDealership
 from .services import f_and_i as f_and_i_service
 from .services.f_and_i import (
     ContractAlreadyVoidedError,
+    CrossTenantChargebackError,
     CrossTenantContractError,
     CrossTenantCreditApplicationError,
     CrossTenantDealStructureError,
@@ -1234,4 +1237,156 @@ def admin_funding_update(request, pk):
     return Response(
         {"funding": _project_funding(funding)},
         status=status.HTTP_200_OK,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 10 · Increment 6 (SESSION_111) — Chargeback admin endpoint.
+# ---------------------------------------------------------------------------
+#
+# One endpoint:
+#   - POST /admin/chargebacks/  — record chargeback (with atomic
+#                                 side effects: Funding auto-transition
+#                                 for deal-level types, BEPA
+#                                 cancellation-field auto-populate for
+#                                 product-cancellation type)
+#
+# ``recorded_by`` sourced from ``request.user`` server-side per the
+# M10.4 audit-trail pattern — the endpoint doesn't accept it in
+# the request body.
+
+
+def _project_chargeback(chargeback: Chargeback) -> dict:
+    return {
+        "id": chargeback.pk,
+        "contract_id": chargeback.contract_id,
+        "bepa_id": chargeback.bepa_id,
+        "chargeback_type": chargeback.chargeback_type,
+        "chargeback_date": chargeback.chargeback_date.isoformat(),
+        "chargeback_amount": str(chargeback.chargeback_amount),
+        "recorded_by_id": chargeback.recorded_by_id,
+        "notes": chargeback.notes,
+        "created_at": chargeback.created_at.isoformat(),
+        "updated_at": chargeback.updated_at.isoformat(),
+    }
+
+
+class ChargebackCreateRequestSerializer(serializers.Serializer):
+    """Request shape for ``POST /admin/chargebacks/``.
+
+    Requires at least one of ``contract_id`` or ``bepa_id`` per
+    §1.7.a Option A. Validation-time check in the view (the
+    serializer accepts both nullable to allow either).
+    """
+
+    chargeback_type = serializers.ChoiceField(
+        choices=[key for key, _ in CHARGEBACK_TYPE_CHOICES]
+    )
+    chargeback_date = serializers.DateField()
+    chargeback_amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2
+    )
+    contract_id = serializers.IntegerField(required=False, allow_null=True)
+    bepa_id = serializers.IntegerField(required=False, allow_null=True)
+    notes = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+    skip_funding_transition = serializers.BooleanField(
+        required=False, default=False
+    )
+
+
+def _lookup_bepa_or_404(dealership, pk):
+    try:
+        return BackEndProductAgreement.objects.filter(
+            dealership=dealership
+        ).get(pk=pk)
+    except BackEndProductAgreement.DoesNotExist:
+        return None
+
+
+@api_view(["POST"])
+@permission_classes(_M101_PERMS)
+def admin_chargeback_create(request):
+    """POST: record a Chargeback with atomic side effects.
+
+    Requires at least one of ``contract_id`` or ``bepa_id``.
+    Cross-tenant contract / bepa → 404 (never leak). Unknown
+    chargeback_type → 400. Missing both parent IDs → 400.
+
+    Two atomic side effects (per §1.7.f + §1.7.c):
+
+    1. Deal-level chargebacks (FPD / early_payoff / repossession
+       / deal_unwind) auto-transition the resolved Contract's
+       Funding to ``chargedback``. Bypass with
+       ``skip_funding_transition=True``.
+    2. ``product_cancellation`` chargebacks with ``bepa_id``
+       auto-populate the BEPA's ``cancelled_at`` +
+       ``cancellation_amount`` columns.
+
+    ``recorded_by`` is sourced from ``request.user`` server-
+    side per the M10.4 audit-trail pattern.
+    """
+    dealership = get_current_dealership(request)
+
+    serializer = ChargebackCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    if data.get("contract_id") is None and data.get("bepa_id") is None:
+        return Response(
+            {
+                "detail": (
+                    "At least one of contract_id or bepa_id is required."
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    contract = None
+    if data.get("contract_id") is not None:
+        contract = _lookup_contract_or_404(dealership, data["contract_id"])
+        if contract is None:
+            return Response(
+                {"detail": "Contract not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    bepa = None
+    if data.get("bepa_id") is not None:
+        bepa = _lookup_bepa_or_404(dealership, data["bepa_id"])
+        if bepa is None:
+            return Response(
+                {"detail": "Back-end product agreement not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    try:
+        chargeback = f_and_i_service.record_chargeback(
+            dealership=dealership,
+            chargeback_type=data["chargeback_type"],
+            chargeback_date=data["chargeback_date"],
+            chargeback_amount=data["chargeback_amount"],
+            contract=contract,
+            bepa=bepa,
+            recorded_by=request.user,
+            notes=data.get("notes", ""),
+            skip_funding_transition=data.get(
+                "skip_funding_transition", False
+            ),
+        )
+    except CrossTenantChargebackError:
+        return Response(
+            {"detail": "Parent resource not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except ValueError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {"chargeback": _project_chargeback(chargeback)},
+        status=status.HTTP_201_CREATED,
     )

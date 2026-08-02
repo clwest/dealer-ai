@@ -508,6 +508,144 @@ option, and the affected sections.
     to M10.6 Chargeback
     attribution and land there.
 
+### SESSION_111 (M10.6 open) — six §1.7 + §5.c decisions resolved
+
+- **Amendment.** Six load-bearing
+  decisions surfaced at SESSION_111
+  open. All six confirmed by the
+  user at session open (all as-
+  recommended). §5.c Option B was
+  previously ratified at
+  SESSION_106 (additive
+  `net_realized` verb; no M9
+  schema change on
+  `Sale.gross_realized`).
+- **§1.7.a — Chargeback attach
+  point: Option A.** Nullable FKs
+  to both `Contract` and
+  `BackEndProductAgreement`. At
+  least one required via
+  clean(). Mirrors M10.1 §5.a
+  Option C precedent. Product-
+  cancellation chargebacks are
+  conceptually attached to
+  both — the contract's funding
+  is adjusted AND the specific
+  BEPA's commission is pro-
+  rated.
+- **§1.7.b — Chargeback type
+  vocabulary: Option B.** 5+1
+  fixed set: FINANCE §5.7's five
+  triggers (`first_payment_default`,
+  `early_payoff`,
+  `product_cancellation`,
+  `repossession`, `deal_unwind`)
+  plus `other` fallback. Matches
+  the M10.1 §5.b + M10.3 §1.3.b
+  + M10.4 §5.b + M10.5 §1.5.d
+  vocab-with-`other` pattern.
+- **§1.7.c — BEPA cancellation-
+  fields additive extension:
+  Option A.** Add `cancelled_at`
+  DateTime nullable +
+  `cancellation_amount`
+  Decimal(10,2) nullable to
+  `BackEndProductAgreement` via
+  migration `0030`. Same
+  additive-extension pattern
+  used at M10.2 for M10.1
+  CreditApplication income
+  columns. Populated by the
+  chargeback service verb when
+  `chargeback_type=product_cancellation`
+  and the `bepa` FK is set.
+- **§1.7.d — `net_realized`
+  verb location: Option A.**
+  `services/f_and_i/chargeback.py::net_realized(sale)`.
+  Colocates with the chargeback
+  aggregation logic that produces
+  the value. Avoids cross-service
+  imports from
+  `services/analytics/`. Per §5.c
+  Option B — additive alongside
+  M9.1 `Sale.gross_realized`; no
+  M9 schema change.
+- **§1.7.e — Chargeback
+  timestamps + audit trail:
+  Option A.** Three fields:
+  `chargeback_date` (operator-
+  provided business date;
+  DateField), `created_at` (auto
+  row insert; matches project
+  convention as "recorded_at"),
+  `recorded_by` FK to
+  `settings.AUTH_USER_MODEL`
+  nullable SET_NULL. `recorded_by`
+  sourced from `request.user` at
+  the endpoint layer per M10.4
+  server-side-audit-trail
+  pattern.
+- **§1.7.f — Automatic Funding
+  state transition on
+  chargeback: Option A.** Yes
+  for deal-level chargebacks
+  (four types:
+  `first_payment_default` /
+  `early_payoff` /
+  `repossession` /
+  `deal_unwind`) — auto-
+  transition Funding to
+  `chargedback` atomically
+  within the chargeback service
+  verb. No for
+  `product_cancellation` per
+  FINANCE §5.7 (product
+  cancellation reduces
+  commission but leaves the
+  deal funded). No for `other`
+  (safer default — operators
+  must explicitly mark the
+  Funding chargedback via
+  separate PATCH if a novel-
+  type chargeback undoes
+  funding). Optional
+  `skip_funding_transition=True`
+  service kwarg for edge cases
+  (partial reversal, operator
+  override).
+- **Effect on §7 M10.6 scope.**
+  - Ships: `Chargeback` model +
+    additive BEPA extension +
+    migration `0030` + tenancy
+    carrier extension 32 → 33
+    + new
+    `services/f_and_i/chargeback.py`
+    module (record verb +
+    `net_realized` verb) + one
+    new endpoint
+    (POST /admin/chargebacks/)
+    + ~20 focused tests.
+  - `net_realized(sale)`
+    aggregates chargebacks
+    attributed via Contract →
+    DealStructure → Vehicle
+    match; also picks up BEPA-
+    only chargebacks whose
+    parent Contract's
+    DealStructure targets the
+    same Vehicle. Uses a Q-
+    based OR filter + distinct
+    pk set to avoid double-
+    counting when both FKs
+    point to matching parents.
+  - Auto-Funding-transition
+    logic gated on the four
+    deal-level types +
+    Contract.funding exists.
+    Product-cancellation
+    chargebacks explicitly do
+    not touch Funding state.
+
 ---
 
 ## 1. Design memo

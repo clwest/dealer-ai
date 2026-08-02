@@ -86,6 +86,12 @@ from .funding import (
     mark_funded,
     record_funding,
 )
+from .chargeback import (
+    CrossTenantChargebackError,
+    get_chargeback,
+    net_realized,
+    record_chargeback,
+)
 
 __all__ = [
     # M10.1 — credit application
@@ -130,4 +136,9 @@ __all__ = [
     "record_funding",
     "sign_contract",
     "void_contract",
+    # M10.6 — chargeback + net_realized
+    "CrossTenantChargebackError",
+    "get_chargeback",
+    "net_realized",
+    "record_chargeback",
 ]

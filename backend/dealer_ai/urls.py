@@ -584,4 +584,15 @@ urlpatterns = [
         views_f_and_i.admin_funding_update,
         name="admin-funding-update",
     ),
+    # ---- Milestone 10 · Increment 6 — Chargeback admin API ------------
+    # Role-gated on the same permission class as M10.1-M10.5
+    # (``_M101_PERMS``). Flat URL shape per §1.9.a.
+    # Domain-error mapping in ``views_f_and_i.py``:
+    #   CrossTenantChargebackError → 404;
+    #   ValueError → 400.
+    path(
+        "admin/chargebacks/",
+        views_f_and_i.admin_chargeback_create,
+        name="admin-chargeback-create",
+    ),
 ]
