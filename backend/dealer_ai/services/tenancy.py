@@ -524,6 +524,22 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # write ``dealership`` explicitly on every row. Autofill signal
     # is the safety net for callers that bypass the service.
     "Repossession",
+    # Milestone 13 · Increment 1 (SESSION_129) — accounting substrate
+    # entities per MILESTONE_13_PLANNING.md §5.a Option A + §5.b
+    # Option A + §5.c Option A + §5.e Option A (all six §5 decisions
+    # user-confirmed at SESSION_129 open, recorded in §0.a) (44 → 47).
+    # GLAccount: per-dealership chart-of-accounts row seeded by the
+    # M13.1 data migration. JournalEntry: immutable double-entry
+    # posting (self-FK for reversal chain). JournalEntryLine: one
+    # debit/credit row on a JournalEntry (PROTECT on account FK to
+    # preserve schedule integrity per ACCOUNTING §1.3). The M13.1
+    # :mod:`services.accounting` verbs write ``dealership`` explicitly
+    # on every row. Autofill signal is the safety net for callers
+    # that bypass the service (Django admin, ad-hoc management
+    # command).
+    "GLAccount",
+    "JournalEntry",
+    "JournalEntryLine",
 )
 
 

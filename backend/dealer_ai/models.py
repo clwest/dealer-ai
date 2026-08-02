@@ -7014,3 +7014,276 @@ class Repossession(models.Model):
             )
         if errors:
             raise ValidationError(errors)
+
+
+# Milestone 13 · Increment 1 (SESSION_129) — accounting substrate vocab.
+# Chart-of-accounts account types per ACCOUNTING §1.1 (NADA / dealer-
+# standard chart). Fixed five-member set; extensions require §5 vote per
+# M11 §6 lesson 18 / M12 §6 lesson 3 (vocab-set assertions use exact
+# equality). Anchors: MILESTONE_13_PLANNING.md §5.b Option A + §0.a
+# SESSION_129 confirmation.
+GL_ACCOUNT_TYPE_ASSET = "asset"
+GL_ACCOUNT_TYPE_LIABILITY = "liability"
+GL_ACCOUNT_TYPE_EQUITY = "equity"
+GL_ACCOUNT_TYPE_REVENUE = "revenue"
+GL_ACCOUNT_TYPE_EXPENSE = "expense"
+
+GL_ACCOUNT_TYPE_CHOICES = (
+    (GL_ACCOUNT_TYPE_ASSET, "Asset"),
+    (GL_ACCOUNT_TYPE_LIABILITY, "Liability"),
+    (GL_ACCOUNT_TYPE_EQUITY, "Equity"),
+    (GL_ACCOUNT_TYPE_REVENUE, "Revenue"),
+    (GL_ACCOUNT_TYPE_EXPENSE, "Expense"),
+)
+
+# Normal balance side per account type — a double-entry invariant. Debits
+# increase asset + expense balances; credits increase liability + equity
+# + revenue balances. Consumed by M13.3 trial-balance snapshot verbs and
+# by any downstream reporting that projects account balances in "natural
+# sign" (positive = normal-side).
+GL_NORMAL_BALANCE_DEBIT_TYPES = frozenset(
+    {GL_ACCOUNT_TYPE_ASSET, GL_ACCOUNT_TYPE_EXPENSE}
+)
+GL_NORMAL_BALANCE_CREDIT_TYPES = frozenset(
+    {
+        GL_ACCOUNT_TYPE_LIABILITY,
+        GL_ACCOUNT_TYPE_EQUITY,
+        GL_ACCOUNT_TYPE_REVENUE,
+    }
+)
+
+
+class GLAccount(models.Model):
+    """Milestone 13 · Increment 1 — a chart-of-accounts entry.
+
+    Per MILESTONE_13_PLANNING.md §5.b Option A (user-confirmed at
+    SESSION_129 open, recorded in §0.a). Platform ships a fixed default
+    COA per Dealership via the M13.1 data migration
+    (``0043_m131_accounting_substrate.py`` — RunPython step). Per-dealer
+    overrides defer to M14+ per §5.b non-goals — the ``is_active`` flag
+    lets an operator hide a shipped account without deleting it (schedule
+    integrity per ACCOUNTING §1.3 relies on the historical account
+    existing).
+
+    **Cross-tenant guard.** Each Dealership owns its own COA rows; the
+    ``(dealership, code)`` unique constraint namespaces codes within a
+    tenant. :class:`JournalEntryLine.clean` enforces that any line's
+    ``account`` belongs to the same tenant as the parent entry
+    (belt+suspenders with the service-layer
+    :class:`services.accounting.CrossTenantGLAccountError`).
+
+    **Immutability posture.** Rows may be soft-hidden via ``is_active``
+    but the fixed default set (loaded by the M13.1 data migration) must
+    remain present so historical postings continue to resolve. Deletion
+    of a GLAccount that has any :class:`JournalEntryLine` rows attached
+    is blocked at the DB layer by ``on_delete=PROTECT`` on the line's
+    ``account`` FK.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="gl_accounts",
+    )
+    # Six-digit code per ACCOUNTING §1.1 NADA-style chart. Held as a
+    # string (not integer) so future non-numeric department suffixes
+    # (§1.2) land as additive width without a schema migration.
+    code = models.CharField(max_length=16)
+    name = models.CharField(max_length=255)
+    account_type = models.CharField(
+        max_length=16, choices=GL_ACCOUNT_TYPE_CHOICES
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["dealership", "code"],
+                name="uniq_gl_account_code_per_dealership",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code} — {self.name} ({self.account_type})"
+
+
+class JournalEntry(models.Model):
+    """Milestone 13 · Increment 1 — an atomic double-entry posting.
+
+    Per MILESTONE_13_PLANNING.md §5.c Option A (user-confirmed at
+    SESSION_129 open, recorded in §0.a). Immutable once written.
+    Corrections happen via reversing entries — a new JournalEntry with
+    inverted debit/credit lines and a non-null ``reverses`` FK pointing
+    at the original.
+
+    **Balance invariant.** Sum of ``debit`` across all lines equals sum
+    of ``credit`` across all lines. Enforced at service-layer post time
+    by :func:`services.accounting.post_journal_entry` via
+    :class:`services.accounting.UnbalancedJournalEntryError` (400). The
+    DB does not enforce this — a raw ``JournalEntry.objects.create`` +
+    naked ``JournalEntryLine.objects.create`` can produce an unbalanced
+    entry; production paths must go through the service verb.
+
+    **Reversal semantics.** ``reverses`` is a self-FK. A reversing entry
+    is itself immutable — reversing a reversal is legal (double reversal
+    restores the original economic effect) but each reversal creates a
+    new row rather than modifying an existing one. ``reason`` is required
+    on reversing entries (enforced at the service layer, not the model).
+
+    **Cross-tenant guard.** ``clean()`` enforces that any ``reverses``
+    target belongs to the same tenant. Line-level cross-tenant guards
+    live on :class:`JournalEntryLine.clean` (each line's ``account``
+    must belong to the entry's tenant).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="journal_entries",
+    )
+    description = models.CharField(max_length=500)
+    # Business-effective moment. Distinct from ``created_at`` (row
+    # insertion) — an operator posting a Jul 31 accrual on Aug 3 sets
+    # ``posted_at`` to Jul 31. Trial-balance snapshots filter by
+    # ``posted_at``, not ``created_at``.
+    posted_at = models.DateTimeField()
+    posted_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Self-FK for reversal chain. PROTECT so a reversed original can't
+    # be deleted while its reversal exists (audit trail preservation).
+    reverses = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reversed_by",
+        help_text=(
+            "If this entry reverses another, points at the original."
+        ),
+    )
+    # Populated when this entry is itself a reversal (per §5.c Option A
+    # audit-trail requirement — every correction carries its stated
+    # reason). Blank on original postings.
+    reason = models.CharField(max_length=500, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-posted_at", "-created_at"]
+
+    def __str__(self) -> str:
+        return (
+            f"JournalEntry #{self.pk} — {self.description[:60]} "
+            f"({self.posted_at.isoformat()})"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        errors: dict[str, str] = {}
+        if (
+            self.reverses_id is not None
+            and self.reverses.dealership_id != self.dealership_id
+        ):
+            errors["reverses"] = (
+                "JournalEntry.reverses must belong to the same "
+                "dealership as the JournalEntry. Cross-tenant "
+                "contamination guard (see AUTHENTICATION_MODEL.md "
+                "§1 layer 4)."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+
+class JournalEntryLine(models.Model):
+    """Milestone 13 · Increment 1 — one debit/credit row on a JournalEntry.
+
+    Per MILESTONE_13_PLANNING.md §5.c Option A. Each line names exactly
+    one :class:`GLAccount` and populates exactly one of ``debit`` /
+    ``credit`` (the other stays at ``0.00``). A JournalEntry with N lines
+    has N (debit, credit) tuples; the balance invariant is enforced at
+    :func:`services.accounting.post_journal_entry` time.
+
+    **Cross-tenant guard.** ``clean()`` enforces that the referenced
+    ``account`` belongs to the entry's tenant (belt+suspenders with the
+    service-layer :class:`services.accounting.CrossTenantGLAccountError`).
+
+    **Deletion posture.** ``account`` uses ``PROTECT`` so a GLAccount
+    with attached line history can't be deleted; ``entry`` uses
+    ``CASCADE`` because deleting a JournalEntry (rare — only for
+    test-database cleanup) must remove its lines.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="journal_entry_lines",
+    )
+    entry = models.ForeignKey(
+        "JournalEntry",
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    account = models.ForeignKey(
+        "GLAccount",
+        on_delete=models.PROTECT,
+        related_name="journal_lines",
+    )
+    debit = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    credit = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    memo = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        side = f"Dr {self.debit}" if self.debit else f"Cr {self.credit}"
+        return (
+            f"JournalEntryLine #{self.pk} — entry #{self.entry_id} "
+            f"{self.account.code if self.account_id else '?'} {side}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        errors: dict[str, str] = {}
+        if (
+            self.entry_id is not None
+            and self.entry.dealership_id != self.dealership_id
+        ):
+            errors["entry"] = (
+                "JournalEntryLine.entry must belong to the same "
+                "dealership as the JournalEntryLine."
+            )
+        if (
+            self.account_id is not None
+            and self.account.dealership_id != self.dealership_id
+        ):
+            errors["account"] = (
+                "JournalEntryLine.account must belong to the same "
+                "dealership as the JournalEntryLine. Cross-tenant "
+                "GLAccount reference (see AUTHENTICATION_MODEL.md "
+                "§1 layer 4)."
+            )
+        if errors:
+            raise ValidationError(errors)

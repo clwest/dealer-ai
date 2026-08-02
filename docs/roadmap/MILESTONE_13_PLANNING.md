@@ -95,8 +95,26 @@ Same posture as M12.0. Non-negotiable:
 
 ### 0.a Change log — resolved decisions
 
-*(Populated at M13.0 open + per-
-increment as §0.a amendments.)*
+**SESSION_129 open (M13.0) —
+six §5 decisions confirmed as-
+recommended by the user.** Streak
+extends to **47 planning-time as-
+recommended M5.1 → M13.0**
+(M12.1 six + M13.0 six =
+41 + 6 = 47).
+
+| # | Decision | Resolution |
+|---|---|---|
+| §5.a | Milestone slice selection (load-bearing) | **Option A** — substrate (GLAccount + JournalEntry) + Q1 (M2 cost reconciliation) as the first slice. M13.2 = M2 reconciliation; M13.3 = trial-balance snapshot; M13.4 = closeout. |
+| §5.b | GL chart-of-accounts source | **Option B** — platform-shipped default COA (auto-dealer industry-standard, per ACCOUNTING §1.1 NADA / dealer-standard chart); per-dealer overrides defer to M14+. |
+| §5.c | Journal entry immutability | **Option A** — immutable + reversing entries. Every correction is a new posting. |
+| §5.d | GL-posting trigger shape | **Option C** — hybrid: sync `@transaction.atomic` for M9 sale-booking (operator intent), detector for M2 cost accrual + M12 payment posting (elapsed condition). |
+| §5.e | Substrate location | **Option A** — new `services/accounting/` package inside `dealer_ai/`. Mirrors every M2-M12 service-package posture. |
+| §5.f | Operator UI scope at M13 | **Option C** — no UI at M13 (backend-only). Operator UI defers to M14 once substrate is stable. |
+
+*(Per-increment §0.a amendments
+appended below as implementation
+sessions surface micro-decisions.)*
 
 ## 1. Business questions this milestone answers
 

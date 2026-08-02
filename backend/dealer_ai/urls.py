@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import (
     views,
+    views_accounting,
     views_analytics,
     views_be_backs,
     views_bhph_analytics,
@@ -930,5 +931,35 @@ urlpatterns = [
         "admin/bhph/analytics/summary/",
         views_bhph_analytics.admin_bhph_analytics_summary,
         name="admin-bhph-analytics-summary",
+    ),
+    # Milestone 13 · Increment 1 (SESSION_129) — accounting substrate
+    # endpoints per MILESTONE_13_PLANNING.md §7 M13.1 + §5.a Option A
+    # + §5.c Option A + §5.e Option A + §5.f Option C (backend-only —
+    # operator UI defers to M14). Gated on IsSalesManagerOrOwnerAt
+    # ActiveDealership per M12 continuity (permission-class count stays
+    # at 8, zero drift).
+    #
+    # Domain-error mapping in ``views_accounting.py``:
+    #   EmptyJournalEntryError / InvalidJournalLineError /
+    #   UnbalancedJournalEntryError → 400;
+    #   CrossTenantGLAccountError / CrossTenantJournalEntryError → 404
+    #   (fail-closed);
+    #   ImmutableJournalEntryError → 409 (empty-reason reversal);
+    #   missing lookups in-tenant → 404;
+    #   serializer error → 400.
+    path(
+        "admin/accounting/journal-entries/",
+        views_accounting.admin_journal_entry_create,
+        name="admin-journal-entry-create",
+    ),
+    path(
+        "admin/accounting/journal-entries/<int:pk>/reverse/",
+        views_accounting.admin_journal_entry_reverse,
+        name="admin-journal-entry-reverse",
+    ),
+    path(
+        "admin/accounting/journal-entries/<int:pk>/",
+        views_accounting.admin_journal_entry_retrieve,
+        name="admin-journal-entry-retrieve",
     ),
 ]
