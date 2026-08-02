@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_132
+last_session_shipped: SESSION_133
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -15,244 +15,282 @@ milestone_10_status: shipped
 milestone_11_status: shipped
 milestone_12_status: shipped
 milestone_13_status: shipped
-milestone_14_status: planning
-next_session: SESSION_133
+milestone_14_status: in-progress
+next_session: SESSION_134
 next_milestone: 14
-next_milestone_name: "TBD — user names target at SESSION_133 open"
-next_increment: 0
-next_increment_name: "M14.0 — Planning refinement + target selection"
+next_milestone_name: "Operator UI for accounting substrate"
+next_increment: 1
+next_increment_name: "M14.1 — Backend: journal-entry list + cost-posting failure endpoints"
 ---
 
-# Next session — SESSION_133 · Milestone 14 · Increment 0 (M14.0 — Planning refinement + target selection)
+# Next session — SESSION_134 · Milestone 14 · Increment 1 (M14.1 — Backend: list + failure endpoints)
 
-> **SESSION_132 shipped M13.4 —** six
-> close-out docs (retrospective +
-> capability matrix §7n + roadmap
-> flip + planning frontmatter flip +
-> session-start refresh + M14
-> planning skeleton) + one
-> coordinated commit. **Milestone
-> 13 — Accounting reconciliation
-> core (v1) — SHIPPED.**
+> **SESSION_133 shipped M14.0 —**
+> planning-only. Expanded
+> `MILESTONE_14_PLANNING.md` from
+> skeleton to active memo. **M14
+> target locked: Option D — Operator
+> UI for the M13 accounting
+> substrate.** All six §5 load-
+> bearing decisions confirmed as-
+> recommended at session open (§5.a
+> Option A four-surface scope +
+> §5.b Option B filter-less list +
+> §5.c Option A Decimal-as-string +
+> §5.d Option A dedicated
+> `dealer-ai-accounting/*` nav
+> group + §5.e Option A shadcn
+> `<Dialog>` reversal + §5.f
+> Option A Vitest coverage for
+> every new page). **Streak: 53
+> planning-time as-recommended M5.1
+> → M14.0** across five consecutive
+> milestones now (M10 + M11 + M12 +
+> M13 + M14).
 >
-> **M13 close totals:** three new
-> entities (GLAccount + JournalEntry
-> + JournalEntryLine) across three
-> implementation sessions + one
-> additive VehicleCost extension
-> (`posted_at` at M13.2) + one new
-> `services/accounting/` package
-> with four modules (`default_coa`
-> + `journal` + `vehicle_cost` +
-> `snapshot`) + one new Celery-beat
-> task family (M13.2 vehicle-cost
-> posting at 10:00) + four new
-> admin endpoints (three journal-
-> entry + one trial-balance) +
-> platform-shipped default COA (24
-> accounts per Dealership). Zero
-> new frontend routes (backend-only
-> per §5.f Option C). Zero new
-> post-LLM scrub stages (M13 is
-> entirely deterministic double-
-> entry math). **Six planning-time
-> §5 decisions confirmed as-
-> recommended at M13.0 open** —
-> streak extends to **47 planning-
-> time as-recommended M5.1 →
-> M13.0** across four consecutive
-> milestones now (M10 + M11 + M12
-> + M13). Eleven §0.a
-> implementation-time micro-
-> decisions across M13.2 + M13.3
-> also all as-recommended (do not
-> count against streak per M10 §9).
+> §7 locks six increments (five
+> code + one close-out): M14.1
+> backend endpoints → M14.2
+> frontend trial-balance render →
+> M14.3 frontend journal-entry
+> browser + detail → M14.4
+> frontend reversal dialog + cost-
+> posting failure card → M14.5
+> close-out. Projected M14 close
+> totals: backend 4,240 → ~4,255
+> (+15); frontend Vitest 78 →
+> ~113 (+35); DRF admin surface
+> 102 → 104 (+2); frontend
+> operator routes 17 → 20 (+3);
+> tenancy carriers 47 (unchanged);
+> permission classes 8 (unchanged
+> — zero-drift streak to six
+> consecutive milestones);
+> Celery-beat task families 9
+> (unchanged — read-only
+> milestone); zero migrations.
 >
 > **Backend baseline: 4,240 pass,
-> 1 skipped, 0 fail** (was 4,150
-> at M12 close — **+90 tests, 0
-> regressions**). **Frontend
-> Vitest baseline: 78 pass**
-> (unchanged — no frontend at M13).
-> Migrations `0043`–`0044`.
-> Tenancy carriers 47. DRF admin
-> surface 102. Frontend operator
-> routes 17. Celery-beat task
-> families 9. Permission classes
-> 8 (unchanged — zero drift
-> across five consecutive
-> milestones now).
+> 1 skipped, 0 fail** (unchanged
+> — planning-only session).
+> **Frontend Vitest baseline: 78
+> pass** (unchanged).
 >
-> **Push authorization:** four
-> local commits (M13.1 through
-> M13.4) queued for user
-> authorization at SESSION_132
-> close.
+> **Push authorization:** one
+> local commit (M14.0 planning +
+> handoff + session-start refresh)
+> pending user authorization at
+> SESSION_133 close. Doc-only
+> commit — push can execute
+> immediately once authorized (no
+> test-suite dependency).
 >
-> **SESSION_133 opens M14.0 —
-> planning refinement + target
-> selection.** Per
-> `MILESTONE_14_PLANNING.md`
-> (draft planning skeleton
-> written at M13.4 close per
-> standing user directive).
-> **§5.a is the load-bearing
-> decision** — user names the M14
-> target at session open, drawing
-> from the M13 retrospective §8
-> unblocked-work list.
+> **SESSION_134 opens M14.1 —
+> backend list + failure
+> endpoints.** Two new pure query
+> verbs + two new DRF admin
+> endpoints. Read-only. No schema
+> changes. Full spec in
+> `MILESTONE_14_PLANNING.md` §7
+> Increment 1.
 
-## First thing SESSION_133 must do
+## First thing SESSION_134 must do
 
-### 1. Name the M14 target milestone
+### 1. Verify starting state
 
-`IMPLEMENTATION_ROADMAP.md`
-§Milestone sequence ends at
-Milestone 13. **M14 target is not
-predetermined** — user names it at
-session open based on operational
-evidence + business priority.
-
-Candidate targets drawn from
-`MILESTONE_13_RETROSPECTIVE.md` §8
-(what M13 unblocks) — surfaced
-without recommendation because
-target selection is a business-
-priority call, not a technical
-recommendation:
-
-- **Option A** — M9 sale-booking GL
-  post. Sync sibling-service call
-  inside `record_sale` per M13 §5.d
-  Option C hybrid trigger posture.
-- **Option B** — M12 BHPH payment
-  GL post. Detector at 11:00
-  project-time daily (next slot
-  after M13.2 10:00).
-- **Option C** — M10 F&I
-  chargeback GL reversal.
-  Chargebacks are already
-  reversal-shaped in the
-  operational surface.
-- **Option D** — Operator UI for
-  M13 substrate (journal-entry
-  browser, trial-balance render,
-  reversal-with-reason dialog).
-  Per M13 §5.f Option C the entire
-  M13 milestone shipped backend-
-  only; UI was deferred to M14.
-- **Option E** — Trial-balance
-  materialization + monthly close
-  workflow. `TrialBalanceSnapshot`
-  entity + freeze verb over the
-  M13.3 pure recompute
-  aggregator.
-- **Option F** — Non-accounting
-  target user names at open based
-  on operational evidence not
-  visible in the M13 retrospective.
-
-Once the target is confirmed,
-expand `MILESTONE_14_PLANNING.md`
-§1 (business questions) + §5
-(load-bearing decisions) + §7
-(sequencing) into a full memo.
-
-### 2. Verify starting state
-
-- `git status` — clean (M13.4
-  commit landed at SESSION_132
-  close; batch push authorized +
-  executed).
+- `git status` — clean (M14.0
+  commit landed at SESSION_133
+  close; user authorized push).
 - `git log --oneline -5` — top
-  should be `Milestone 13 shipped
-  — Accounting reconciliation
-  core (SESSION_129-132)` or
-  similar.
+  should be the M14.0 planning
+  commit or similar.
 - `git log origin/main..HEAD
-  --oneline` — **empty** (all M13
-  commits pushed).
+  --oneline` — **empty** (M14.0
+  commit pushed).
 - `python3 manage.py test dealer_ai`
   → **4,240 pass, 1 skipped, 0
   fail**.
-- `cd frontend && npm test` →
-  **78 pass**.
+- `cd frontend && npm test` → **78
+  pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
   detected."
-- `npx tsc --noEmit` + `npx vite
-  build` both clean.
 - `redis-cli ping` → `PONG`.
 
-## What M14.0 delivers
+### 2. Read first (in order)
 
-Per `MILESTONE_14_PLANNING.md`
-§5 M14.0:
+- `docs/roadmap/MILESTONE_14_
+  PLANNING.md` §7 Increment 1
+  (implementation spec).
+- `docs/roadmap/MILESTONE_13_
+  RETROSPECTIVE.md` §6 (twelve
+  lessons carry into M14).
+- `docs/handoffs/SESSION_133_m14
+  _inc0_planning.md` (previous
+  session).
+- `backend/dealer_ai/views_
+  accounting.py` (M13.1 + M13.3
+  endpoint patterns to mirror).
+- `backend/dealer_ai/services/
+  accounting/journal.py` (M13.1
+  verbs — extend with list verb).
+- `backend/dealer_ai/services/
+  accounting/vehicle_cost.py`
+  (M13.2 detector — extend with
+  failure query verb).
 
-- Full expansion of the planning
-  skeleton written at M13.4.
-- User names the M14 target
-  milestone (§5.a).
-- Additional §5 decisions surface
-  once target is confirmed (§5.b-
-  §5.f expected — historical §5
-  counts have been 6 for M10 /
-  M11 / M12 / M13).
-- §7 sequencing lands after §5
-  decisions are locked.
-- §0.a change log records the
-  target selection + all §5
-  confirmations.
+## What M14.1 delivers
 
-**No code at M14.0.** Planning-
-only session. Backend baseline
-stays at 4,240 pass. Frontend
-unchanged.
+Per `MILESTONE_14_PLANNING.md` §7
+M14.1:
 
-## What SESSION_133 should do
+### Backend service verbs (2 new)
 
-### Recommended step sequence
+1. **`list_journal_entries(
+   dealership, page=1,
+   page_size=25)`** in
+   `services/accounting/journal.py`.
+   - Ordering: `-posted_at` (most
+     recent first).
+   - Returns list + total count +
+     pagination metadata.
+   - **No filters** at M14.1 per
+     §5.b Option B. Filter
+     surface layers at M15+ per
+     operator evidence.
+   - Tenancy-scoped: filter on
+     `dealership=` and
+     `lines__account__dealership=`
+     for cross-tenant guards.
 
-1. **Confirm the M14 target with
-   the user** (§1 above).
+2. **`detect_cost_posting_failures(
+   dealership, now=None,
+   threshold_hours=24)`** in
+   `services/accounting/vehicle_
+   cost.py`.
+   - Query filter:
+     `posted_at__isnull=True AND
+     is_estimate=False AND
+     created_at__lte=now-
+     threshold`.
+   - Threshold default 24h (one
+     detector-run boundary; the
+     M13.2 detector runs at
+     10:00 daily).
+   - Returns list of unposted
+     `VehicleCost` rows older
+     than the threshold.
 
-2. **Read first (in order):**
-   - `docs/roadmap/MILESTONE_14_PLANNING.md`
-     (this session's expansion
-     target).
-   - `docs/roadmap/MILESTONE_13_RETROSPECTIVE.md`
-     §6 (twelve lessons carry
-     into M14) + §8 (unblocked
-     work).
-   - `docs/handoffs/SESSION_132_m13_close.md`
-     (previous session).
-   - `docs/CAPABILITY_MATRIX.md`
-     §7n (M13 shipped surface).
-   - Target-specific research doc
-     (per the confirmed §5.a
-     option).
+### Backend admin endpoints (2 new)
 
-3. **Verify starting state** (§2
-   above).
+3. **`GET admin/accounting/
+   journal-entries/list/`** in
+   `views_accounting.py`.
+   - Query params: `?page=` +
+     `?page_size=` (both
+     optional, defaults 1 and
+     25).
+   - Reuses
+     `IsSalesManagerOrOwnerAt
+     ActiveDealership`.
+   - Empty-list response for
+     zero-portfolio tenants
+     (not 404) per zero-
+     portfolio semantics
+     (M13.3 lesson 8).
+   - Decimal-as-string on all
+     money fields per §5.c
+     Option A.
 
-4. **Draft §1 (business
-   questions) + §5 (load-bearing
-   decisions) + §7 (sequencing)**
-   in `MILESTONE_14_PLANNING.md`.
+4. **`GET admin/accounting/
+   cost-posting-failures/`** in
+   `views_accounting.py`.
+   - Query param: optional
+     `?threshold_hours=<int>`
+     (default 24).
+   - Same permission class.
+   - Empty-list response for
+     zero-failure tenants.
+   - Projects VehicleCost →
+     dict with fields: id +
+     vehicle_stock +
+     category_group + amount +
+     is_estimate +
+     created_at + age_in_hours.
 
-5. **Ship handoff at
-   `docs/handoffs/SESSION_133_m14_inc0_planning.md`.**
+### URL entries (2 new)
 
-6. **Overwrite
-   `00-START-NEXT-SESSION.md`**
-   with M14.1 priority (first
-   implementation increment for
-   the confirmed target).
+5. Add both endpoints to
+   `backend/dealer_ai/urls.py`
+   under the M13.1 accounting
+   URL block.
 
-## Explicit non-goals for SESSION_133
+### Tests (~15-20 focused)
 
-- ❌ Do NOT ship M14.1+ code.
+6. Add tests in
+   `backend/dealer_ai/tests/`
+   matching M13.1 + M13.3
+   naming (e.g.
+   `test_m141_accounting_
+   list_endpoint.py` +
+   `test_m141_cost_posting_
+   failures_endpoint.py` +
+   service verb tests).
+7. Test coverage areas:
+   - List: pagination, ordering
+     (recent-first), tenancy
+     guard (no cross-tenant
+     leakage), empty-state
+     (zero postings → empty
+     list not 404), permission
+     denial (401/403 without
+     role).
+   - Failures: threshold
+     default 24h, custom
+     threshold, tenancy guard,
+     empty-state, estimate
+     exclusion, posted-cost
+     exclusion (posted_at NOT
+     NULL), age-in-hours
+     projection.
+
+### Deltas at M14.1 close
+
+- **Backend baseline:** 4,240 →
+  ~4,255 (+15 tests).
+- **Frontend baseline:** 78
+  (unchanged — backend-only
+  increment).
+- **DRF admin surface:** 102 →
+  104 (+2).
+- **Tenancy carriers:** 47
+  (unchanged — no new models).
+- **Permission classes:** 8
+  (unchanged — zero-drift streak
+  continues).
+- **Celery-beat task families:**
+  9 (unchanged — no detectors
+  added).
+- **Migrations:** none (no
+  schema changes).
+
+## Explicit non-goals for SESSION_134
+
+- ❌ Do NOT ship frontend work
+  (starts at M14.2).
+- ❌ Do NOT add filter surface
+  to the list endpoint (§5.b
+  Option B locks filter-less
+  MVP).
+- ❌ Do NOT add new write verbs
+  (M14 is entirely read-only).
+- ❌ Do NOT add new tenancy
+  carriers.
+- ❌ Do NOT add new permission
+  classes.
+- ❌ Do NOT add schema changes /
+  migrations.
 - ❌ Do NOT modify M1-M13
   business logic.
 - ❌ Do NOT force-push or amend
@@ -260,21 +298,21 @@ unchanged.
 
 ## NEXT TASK
 
-Start SESSION_133 with (a) naming
-the M14 target with the user
-(candidates in §1 above; user
-picks based on operational
-evidence + business priority),
-(b) the read-first list, (c)
-starting-state verification, then
-(d) expanding `MILESTONE_14_PLANNING.md`
-§1 + §5 + §7 into a full memo.
-Ship the M14.0 handoff.
+Start SESSION_134 with (a)
+starting-state verification, (b)
+the read-first list, then (c)
+implementing the two service
+verbs + two admin endpoints per
+`MILESTONE_14_PLANNING.md` §7
+M14.1 with matching test
+coverage. Ship the M14.1 handoff
+at `docs/handoffs/SESSION_134_
+m14_inc1_list_and_failures.md`.
 
-Backend baseline at SESSION_133
-close: **4,240 pass** (unchanged
-— planning-only). Frontend
-baseline: unchanged.
+Backend baseline at SESSION_134
+close: **~4,255 pass** (was 4,240
+at M14.0). Frontend baseline
+unchanged.
 
 ---
 
@@ -285,21 +323,21 @@ baseline: unchanged.
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_14_PLANNING.md`
+   §7 M14.1
 6. `docs/roadmap/MILESTONE_13_RETROSPECTIVE.md`
-7. `docs/handoffs/SESSION_132_m13_close.md`
-   (this session's close)
-8. `docs/handoffs/SESSION_131_m13_inc3_trial_balance.md`
-9. `docs/CAPABILITY_MATRIX.md` §7n
-10. Target-specific research
-    (per §5.a confirmed at
-    SESSION_133 open).
+   §6 (twelve lessons carry
+   into M14)
+7. `docs/handoffs/SESSION_133_m14_inc0_planning.md`
+   (previous session)
+8. `docs/CAPABILITY_MATRIX.md` §7n
+9. `docs/research/ACCOUNTING_DEPARTMENT_MAPPING.md`
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_132 — M13 SHIPPED)
+## Operational state (post-SESSION_133 — M14.0 shipped)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
@@ -318,61 +356,56 @@ research + code are facts.
   DatabaseScheduler. **9
   scheduled task families
   registered** (M7.2 02:00 →
-  M13.2 10:00 — no gaps in the
-  02:00-10:00 hourly grid). Next
-  available slot: 11:00.
+  M13.2 10:00). Next available
+  slot: 11:00. No new families
+  at M14 (read-only milestone).
 - **Milestones shipped:** M1 →
-  **M13** (SESSION_132 close).
-  M14 planning drafted.
+  **M13**. **M14 in progress**
+  (M14.0 planning shipped
+  SESSION_133).
 - **DRF admin surface:** **102**
-  endpoints.
+  endpoints. Projected 104 at
+  M14.1 close.
 - **Frontend operator routes:**
-  **17** (unchanged since M12.7 —
-  no UI at M13 per §5.f Option C).
+  **17** (unchanged — M14
+  frontend starts at M14.2).
+  Projected 20 at M14 close.
 - **Public endpoints:** +1 M6.5
   showroom (unchanged).
 - **Service surface:** complete
   `services/f_and_i/` (M10) +
   five M11 packages + seven M12
-  packages + `services/accounting/`
-  (M13 — four modules covering
-  default COA + journal verbs +
-  M2 cost reconciliation +
-  trial-balance snapshot).
+  packages + `services/
+  accounting/` (M13 — four
+  modules; two verbs additive
+  at M14.1).
 - **Tenancy carriers:** **47**
-  (44 at M12 close → 47 at M13
-  close via M13.1 GLAccount +
-  JournalEntry + JournalEntryLine).
+  (unchanged at M14 — no new
+  models).
 - **Permission classes:** **8**
-  (unchanged — every M13
-  endpoint reused M4
-  `IsSalesManagerOrOwnerAtActiveDealership`;
-  zero drift across five
-  consecutive milestones now:
-  M10 + M11 + M12 + M13).
+  (unchanged — projected zero
+  drift through M14 close per
+  §0 practices).
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17 scrub
-  stages (unchanged — M13 has no
-  LLM path).
+  stages (unchanged — M14 has
+  no LLM path).
 - **Deterministic rules:**
   unchanged.
 - **Accounting substrate:** four
   M13 modules in
-  `services/accounting/` — `default_coa`
-  (fixture + seeder) +
-  `journal` (post + reverse +
-  get verbs, six domain errors,
-  JournalLineInput dataclass) +
-  `vehicle_cost` (detect +
-  post + orchestrator with
-  uniform GL mapping) +
-  `snapshot` (compute_trial_balance
-  pure verb + frozen dataclasses).
-- **Milestone 14 next:** M14.0
-  planning refinement + target
-  selection. User names target
-  at session open from the M13
-  §8 unblocked-work list. M14.1
-  implementation deferred to
-  post-planning session.
+  `services/accounting/`.
+  Extended at M14.1 with two
+  new pure query verbs
+  (list_journal_entries in
+  `journal.py` +
+  detect_cost_posting_failures
+  in `vehicle_cost.py`).
+- **Milestone 14 next:** M14.1
+  backend list + failures
+  endpoints per
+  `MILESTONE_14_PLANNING.md` §7
+  Increment 1. Five code
+  increments + one close-out
+  remain.
