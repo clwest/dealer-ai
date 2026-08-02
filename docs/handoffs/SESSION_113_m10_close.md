@@ -8,7 +8,7 @@ milestone: 10
 milestone_status: shipped
 increment: 8
 increment_status: shipped
-commit: TBD
+commit: 11642a7
 ---
 
 # SESSION_113 — Milestone 10 · Increment 8 (M10.8 — closeout)
