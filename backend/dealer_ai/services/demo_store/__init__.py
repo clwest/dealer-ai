@@ -47,7 +47,10 @@ from .errors import NonDemoResetError
 from .outbound_guard import (
     SuppressedOutbound,
     is_demo_dealership,
+    is_outbound_enabled,
+    is_pilot_dealership,
     suppress_if_demo,
+    suppress_if_outbound_disabled,
 )
 from .registry import (
     create_demo_store,
@@ -78,10 +81,13 @@ __all__ = [
     "get_brief",
     "get_synthetic_name",
     "is_demo_dealership",
+    "is_outbound_enabled",
+    "is_pilot_dealership",
     "list_briefs",
     "list_demo_stores",
     "reset_demo_store",
     "suppress_if_demo",
+    "suppress_if_outbound_disabled",
     "synthetic_email",
     "synthetic_phone",
     "synthetic_vin",

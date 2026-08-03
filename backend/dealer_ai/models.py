@@ -71,6 +71,72 @@ TESTER_FEEDBACK_CATEGORY_CHOICES = (
 )
 
 
+# Milestone 19 · Increment 1 (SESSION_154) — pilot prospect state vocab.
+# Per MILESTONE_19_PLANNING.md §5.b Option C (user-confirmed at SESSION_153
+# open). Fixed 4-state vocab tracking Chris's decision cycle for a
+# prospective pilot dealer. Terminal states are ``converted`` (pilot
+# dealership created) and ``declined`` (Chris turned them away). Growth-
+# only-list discipline (per M9-M18 lesson) — new states append.
+PILOT_PROSPECT_STATE_PROSPECT = "prospect"
+PILOT_PROSPECT_STATE_QUALIFIED = "qualified"
+PILOT_PROSPECT_STATE_CONVERTED = "converted"
+PILOT_PROSPECT_STATE_DECLINED = "declined"
+
+PILOT_PROSPECT_STATE_CHOICES = (
+    (PILOT_PROSPECT_STATE_PROSPECT, "Prospect"),
+    (PILOT_PROSPECT_STATE_QUALIFIED, "Qualified"),
+    (PILOT_PROSPECT_STATE_CONVERTED, "Converted"),
+    (PILOT_PROSPECT_STATE_DECLINED, "Declined"),
+)
+
+
+# Milestone 19 · Increment 1 (SESSION_154) — pilot onboarding step vocab.
+# Per MILESTONE_19_PLANNING.md §5.f Option A. Seven fixed step slugs the
+# checklist walks through; ``readiness_confirmed`` is the final
+# operator sign-off that gates the pilot dealer's operator surface
+# access via :func:`services.pilot_onboarding.is_pilot_ready`.
+# Growth-only-list discipline; new steps append.
+PILOT_ONBOARDING_STEP_DEALERSHIP_CREATED = "dealership_created"
+PILOT_ONBOARDING_STEP_PROFILE_CONFIGURED = "profile_configured"
+PILOT_ONBOARDING_STEP_OWNER_USER_ADDED = "owner_user_added"
+PILOT_ONBOARDING_STEP_STAFF_USERS_ADDED = "staff_users_added"
+PILOT_ONBOARDING_STEP_INVENTORY_IMPORTED = "inventory_imported"
+PILOT_ONBOARDING_STEP_CAPABILITIES_ENABLED = "capabilities_enabled"
+PILOT_ONBOARDING_STEP_READINESS_CONFIRMED = "readiness_confirmed"
+
+PILOT_ONBOARDING_STEP_CHOICES = (
+    (PILOT_ONBOARDING_STEP_DEALERSHIP_CREATED, "Dealership created"),
+    (PILOT_ONBOARDING_STEP_PROFILE_CONFIGURED, "Profile configured"),
+    (PILOT_ONBOARDING_STEP_OWNER_USER_ADDED, "Owner user added"),
+    (PILOT_ONBOARDING_STEP_STAFF_USERS_ADDED, "Staff users added"),
+    (PILOT_ONBOARDING_STEP_INVENTORY_IMPORTED, "Inventory imported"),
+    (PILOT_ONBOARDING_STEP_CAPABILITIES_ENABLED, "Capabilities enabled"),
+    (PILOT_ONBOARDING_STEP_READINESS_CONFIRMED, "Readiness confirmed"),
+)
+
+# Ordered tuple used by the checklist verb to check readiness
+# preconditions: ``readiness_confirmed`` cannot be advanced until every
+# prior step has ``completed_at`` populated.
+PILOT_ONBOARDING_STEP_ORDER: tuple[str, ...] = tuple(
+    key for key, _ in PILOT_ONBOARDING_STEP_CHOICES
+)
+
+
+# Milestone 19 · Increment 1 (SESSION_154) — pilot termination mode vocab.
+# Per MILESTONE_19_PLANNING.md §5.h Option A. Two modes for
+# :func:`services.pilot_onboarding.terminate_pilot`:
+# - ``archive`` preserves child rows for post-mortem review.
+# - ``cleanup`` cascades reverse-order per M18.2 pattern; customer PII
+#   removed from the tenant.
+PILOT_TERMINATION_MODE_ARCHIVE = "archive"
+PILOT_TERMINATION_MODE_CLEANUP = "cleanup"
+
+PILOT_TERMINATION_MODE_CHOICES = (
+    (PILOT_TERMINATION_MODE_ARCHIVE, "Archive (preserve child rows)"),
+    (PILOT_TERMINATION_MODE_CLEANUP, "Cleanup (cascade-delete children)"),
+)
+
+
 class Dealership(models.Model):
     """Tenancy root introduced in Milestone 1.
 
@@ -103,6 +169,31 @@ class Dealership(models.Model):
     Every other tenancy path continues to work unchanged — a demo
     dealership is a Dealership with the flag set, not a parallel
     model. Preserves the "one authoritative tenancy model" invariant.
+
+    **Milestone 19 · Increment 1 — pilot + outbound-policy fields**
+    (per ``MILESTONE_19_PLANNING.md`` §5.c Option A + §5.h Option A +
+    §0.a M19.1 decision 2, user-confirmed at SESSION_153 open + refined
+    at SESSION_154 open). Four additive columns:
+
+    - ``is_pilot`` — Boolean, default False. When True, this dealership
+      is a founder-led pilot per §5.c Option A. Live production
+      dealerships have both ``is_demo`` and ``is_pilot`` False. Gates
+      the ``services/pilot_onboarding/`` termination path per §5.h
+      Option A belt-and-suspenders (``NonPilotTerminationError`` +
+      ``assert dealership.is_pilot`` at write-verb top).
+    - ``outbound_enabled`` — Boolean, default False. Explicit **send-
+      policy** flag orthogonal to ``is_demo``/``is_pilot``. The M18.1
+      outbound guard checks THIS field, not the tenant-type flags —
+      per §0.a M19.1 decision 2. Demo and pilot creation paths both
+      set False; live production creation (future) sets False by
+      default until an operator explicitly enables. Separates "what
+      the tenant is" (tenant type flags) from "what the platform is
+      allowed to do on the tenant's behalf" (this policy field).
+    - ``terminated_at`` — DateTimeField nullable. Populated by
+      :func:`services.pilot_onboarding.terminate_pilot` when a pilot
+      ends. Preserves audit trail alongside ``termination_reason``.
+    - ``termination_reason`` — TextField blank. Free text captured
+      at termination time. Consumed by post-mortem review.
     """
 
     name = models.CharField(max_length=255)
@@ -115,6 +206,12 @@ class Dealership(models.Model):
         blank=True,
         default="",
     )
+    # Milestone 19 · Increment 1 — pilot + outbound-policy fields
+    # (§5.c Option A + §5.h Option A + §0.a M19.1 decision 2).
+    is_pilot = models.BooleanField(default=False)
+    outbound_enabled = models.BooleanField(default=False)
+    terminated_at = models.DateTimeField(null=True, blank=True)
+    termination_reason = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -7560,3 +7657,252 @@ class TesterFeedback(models.Model):
             f"TesterFeedback #{self.pk} — {self.category} "
             f"from {self.tester_name} at {self.created_at.isoformat()}"
         )
+
+
+class PilotProspect(models.Model):
+    """Milestone 19 · Increment 1 — an operator-tracked pilot candidate.
+
+    Per ``MILESTONE_19_PLANNING.md`` §5.b Option C (user-confirmed at
+    SESSION_153 open) + §0.a M19.1 decision 1 (user-confirmed at
+    SESSION_154 open). Pre-tenant operator record — Chris fills one
+    per candidate demo tester who might convert to a pilot. **Not** a
+    tenancy carrier: a prospect who hasn't converted has no
+    dealership tenant to be scoped to.
+
+    **Two optional dealership FKs preserve the audit trail without
+    forcing tenancy invariants:**
+
+    - ``source_demo_dealership`` — SET_NULL, nullable. Points at the
+      demo :class:`Dealership` this prospect tested on before saying
+      "I want my own store." Preserved after conversion so Chris can
+      track which archetypes converted best.
+    - ``converted_dealership`` — SET_NULL, nullable. Populated by the
+      M19 service verb when ``eligibility_state`` advances to
+      ``converted``. Points at the newly-created pilot Dealership.
+      Both FKs may co-exist — the prospect started on a demo and
+      converted to a real pilot.
+
+    **State machine** (§5.b Option C, mirrors M11.5 BeBack shape):
+    ``prospect`` → ``qualified`` → ``converted`` OR → ``declined``.
+    Terminal states are ``converted`` + ``declined``. Re-transition
+    would erase operator intent; if a declined prospect should be
+    revisited, a new PilotProspect row is created.
+
+    **Cross-tenant guard.** ``clean()`` enforces
+    ``converted_dealership_id`` non-null iff
+    ``eligibility_state='converted'``. Belt-and-suspenders with the
+    service-layer ``advance_prospect_state`` verb.
+
+    **Access.** The M19.3 endpoints wrapping this model check that
+    the caller is an owner-role at the migration-seeded default
+    dealership (Chris's operator tenant). No cross-operator leakage
+    because the model has no tenant scope.
+    """
+
+    contact_name = models.CharField(max_length=64)
+    contact_email = models.EmailField()
+    contact_phone = models.CharField(max_length=64, blank=True, default="")
+    dealer_business_name = models.CharField(max_length=255)
+    # Reuses ``DealerOnboardingProfile.dealer_type`` vocab domain
+    # (independent vs franchise + used vs new mix). Held as free
+    # CharField at M19.1; the M19.5 playbook + admin surface presents
+    # the choice set to Chris.
+    dealer_type = models.CharField(max_length=32, blank=True, default="")
+    bhph_enabled = models.BooleanField(default=False)
+    estimated_inventory_size = models.PositiveIntegerField(
+        null=True, blank=True
+    )
+    # Free text — how did Chris meet them (conference, referral,
+    # inbound web form, existing customer, etc.)
+    contact_source = models.CharField(max_length=64, blank=True, default="")
+    eligibility_state = models.CharField(
+        max_length=32,
+        choices=PILOT_PROSPECT_STATE_CHOICES,
+        default=PILOT_PROSPECT_STATE_PROSPECT,
+    )
+    chris_notes = models.TextField(blank=True, default="")
+    # SET_NULL — an archived demo dealership shouldn't cascade-delete
+    # historical prospect records. Optional at all times.
+    source_demo_dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pilot_prospects_from_demo",
+    )
+    # SET_NULL — a terminated pilot dealership shouldn't cascade-
+    # delete the prospect audit trail. Populated on state advance to
+    # ``converted``.
+    converted_dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pilot_prospect_source",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return (
+            f"PilotProspect #{self.pk} — {self.dealer_business_name} "
+            f"({self.eligibility_state})"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+        if (
+            self.eligibility_state == PILOT_PROSPECT_STATE_CONVERTED
+            and self.converted_dealership_id is None
+        ):
+            errors["converted_dealership"] = (
+                "PilotProspect in 'converted' state must have "
+                "converted_dealership set."
+            )
+        if (
+            self.eligibility_state != PILOT_PROSPECT_STATE_CONVERTED
+            and self.converted_dealership_id is not None
+        ):
+            errors["eligibility_state"] = (
+                "PilotProspect with converted_dealership set must be in "
+                "'converted' state."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+
+class PilotOnboardingChecklist(models.Model):
+    """Milestone 19 · Increment 1 — one checklist row per pilot dealership.
+
+    Per ``MILESTONE_19_PLANNING.md`` §5.f Option A (user-confirmed at
+    SESSION_153 open). Auto-created by
+    :func:`services.pilot_onboarding.create_pilot_dealership` — every
+    pilot dealership has exactly one checklist. Progress tracked via
+    child :class:`PilotOnboardingStep` rows.
+
+    **Tenancy posture.** ``dealership`` FK CASCADE — the checklist
+    disappears with the pilot (both under archive-mode termination
+    for post-mortem preservation via optional prior export, and under
+    cleanup-mode termination which explicitly wipes children).
+
+    **Uniqueness.** ``OneToOneField`` on ``dealership`` — at most one
+    checklist per pilot dealership. The M19.3 endpoint layer refuses
+    to create a second.
+
+    **Readiness gating.** ``is_ready`` — Boolean, default False.
+    Advanced to True by
+    :func:`services.pilot_onboarding.advance_step` when the
+    ``readiness_confirmed`` step is completed. The M19.4 admin surface
+    reads this flag to gate the pilot dealer's operator surface
+    access — a pilot owner can't log into their store until
+    ``is_ready=True``.
+    """
+
+    dealership = models.OneToOneField(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="pilot_onboarding_checklist",
+    )
+    is_ready = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return (
+            f"PilotOnboardingChecklist #{self.pk} for "
+            f"{self.dealership.slug} "
+            f"({'ready' if self.is_ready else 'in-progress'})"
+        )
+
+
+class PilotOnboardingStep(models.Model):
+    """Milestone 19 · Increment 1 — one step row on a pilot checklist.
+
+    Per ``MILESTONE_19_PLANNING.md`` §5.f Option A. Rows are created
+    on-demand by :func:`services.pilot_onboarding.advance_step` when
+    the operator advances a step for the first time — no auto-
+    materialization of every step at checklist create time.
+
+    **Fixed vocab.** ``step_slug`` chooses from
+    :data:`PILOT_ONBOARDING_STEP_CHOICES` (7 slugs, growth-only per
+    the M9-M18 lesson). ``PILOT_ONBOARDING_STEP_ORDER`` names the
+    ordered sequence used by the readiness precondition check —
+    ``readiness_confirmed`` refuses to advance until every prior
+    step's row exists with ``completed_at`` populated.
+
+    **Uniqueness.** ``(checklist, step_slug)`` unique per checklist —
+    a step is either present-and-completed or absent. Re-advancing a
+    completed step is refused at the service layer per M18 §6 lesson
+    4 immutability posture (a correction would create a new step or
+    update ``notes``, not re-complete).
+
+    **Cross-tenant guard.** ``clean()`` enforces that
+    ``checklist.dealership_id == dealership_id`` (belt-and-suspenders
+    with the service-layer verb).
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="pilot_onboarding_steps",
+    )
+    checklist = models.ForeignKey(
+        "PilotOnboardingChecklist",
+        on_delete=models.CASCADE,
+        related_name="steps",
+    )
+    step_slug = models.CharField(
+        max_length=32, choices=PILOT_ONBOARDING_STEP_CHOICES
+    )
+    completed_at = models.DateTimeField()
+    notes = models.TextField(blank=True, default="")
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-completed_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["checklist", "step_slug"],
+                name="uniq_pilot_onboarding_step_per_checklist",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"PilotOnboardingStep #{self.pk} — {self.step_slug} on "
+            f"checklist #{self.checklist_id}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        if (
+            self.checklist_id is not None
+            and self.checklist.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "checklist": (
+                        "PilotOnboardingStep.checklist must belong to "
+                        "the same dealership as the "
+                        "PilotOnboardingStep. Cross-tenant "
+                        "contamination guard (see AUTHENTICATION_MODEL.md "
+                        "§1 layer 4)."
+                    )
+                }
+            )

@@ -558,6 +558,22 @@ _TENANT_CARRIER_MODEL_NAMES = (
     # Option A belt-and-suspenders guard. Autofill signal is the safety
     # net for callers that bypass the service.
     "TesterFeedback",
+    # Milestone 19 · Increment 1 (SESSION_154) — pilot onboarding
+    # checklist substrate per MILESTONE_19_PLANNING.md §5.f Option A
+    # (user-confirmed at SESSION_153 open) + §0.a M19.1 decision 1
+    # (user-confirmed at SESSION_154 open) (50 → 52). Both models
+    # carry a real ``dealership`` FK CASCADE — checklist is
+    # OneToOneField, step is ForeignKey with unique_together per
+    # (checklist, step_slug). Note: ``PilotProspect`` is
+    # deliberately NOT registered here — it is a pre-tenant
+    # operator record scoped to Chris's operator surface, not to a
+    # specific dealership tenant. The autofill signal cannot attach
+    # a dealership to a model without a dealership FK; forcing one
+    # would corrupt the pre-tenant invariant. Prospect tenancy
+    # scope is enforced at the endpoint layer via operator-role
+    # check.
+    "PilotOnboardingChecklist",
+    "PilotOnboardingStep",
 )
 
 

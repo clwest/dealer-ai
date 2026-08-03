@@ -68,6 +68,33 @@ def make_demo_dealership(
     return dealership
 
 
+def make_pilot_dealership(
+    slug: str = "pilot-dealership",
+    name: str | None = None,
+    outbound_enabled: bool = False,
+) -> Dealership:
+    """Milestone 19 · Increment 1 — companion to :func:`make_dealership`.
+
+    Creates a pilot dealership with ``is_pilot=True``,
+    ``is_demo=False``, and the requested outbound policy. Delegates
+    to :func:`make_dealership` so the default COA gets seeded.
+
+    Per §5.g Option A + §0.a M19.1 decision 2, ``outbound_enabled``
+    defaults False. Tests exercising outbound behavior explicitly
+    pass True.
+
+    Note: this helper does not create a
+    :class:`PilotOnboardingChecklist` — tests that need one use
+    ``services.pilot_onboarding.create_pilot_dealership`` for a
+    fuller construction.
+    """
+    dealership = make_dealership(slug=slug, name=name)
+    dealership.is_pilot = True
+    dealership.outbound_enabled = outbound_enabled
+    dealership.save(update_fields=["is_pilot", "outbound_enabled"])
+    return dealership
+
+
 def make_user(username: str = "testuser", password: str = "x") -> "User":
     """Create an auth user with a predictable username/password.
 

@@ -27,6 +27,7 @@ Covers:
 from __future__ import annotations
 
 import re
+import warnings
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
@@ -310,22 +311,54 @@ class IsDemoDealershipTests(TestCase):
 
 
 class SuppressIfDemoTests(TestCase):
-    def test_none_returns_none(self) -> None:
-        self.assertIsNone(
-            suppress_if_demo(None, verb_name="some.verb")
-        )
+    """M18.1-era guard tests. At M19.1 the predicate shifted from
+    ``is_demo`` to ``outbound_enabled`` (per outbound_guard.py
+    docstring). ``suppress_if_demo`` is a deprecated alias that
+    delegates to ``suppress_if_outbound_disabled`` — a None
+    dealership or any dealership with ``outbound_enabled=False``
+    (including a fresh live/real dealership) now suppresses by
+    design. These tests are updated to reflect the intentional
+    M19.1 semantic shift; the M19.1 test module owns the primary
+    coverage."""
 
-    def test_non_demo_returns_none(self) -> None:
+    def test_none_returns_marker(self) -> None:
+        # M19.1: no tenant context => no policy context => suppress.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            self.assertIsInstance(
+                suppress_if_demo(None, verb_name="some.verb"),
+                SuppressedOutbound,
+            )
+
+    def test_non_demo_with_outbound_disabled_returns_marker(self) -> None:
+        # M19.1: a fresh Dealership row defaults ``outbound_enabled=False``;
+        # the guard suppresses even though ``is_demo=False``.
         d = Dealership.objects.create(slug="m181-supp-real", name="Real")
-        self.assertIsNone(
-            suppress_if_demo(d, verb_name="some.verb")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            result = suppress_if_demo(d, verb_name="some.verb")
+        self.assertIsInstance(result, SuppressedOutbound)
+
+    def test_non_demo_with_outbound_enabled_returns_none(self) -> None:
+        # M19.1: an operator-enabled live dealership egresses normally.
+        d = Dealership.objects.create(
+            slug="m181-supp-real-enabled",
+            name="Real Enabled",
+            outbound_enabled=True,
         )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            self.assertIsNone(
+                suppress_if_demo(d, verb_name="some.verb")
+            )
 
     def test_demo_returns_suppressed_marker(self) -> None:
         d = make_demo_dealership(
             archetype=DEMO_ARCHETYPE_BHPH, slug="m181-supp-demo"
         )
-        result = suppress_if_demo(d, verb_name="some.verb")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            result = suppress_if_demo(d, verb_name="some.verb")
         self.assertIsInstance(result, SuppressedOutbound)
         assert result is not None  # narrows for the next assertions.
         self.assertEqual(result.verb_name, "some.verb")
