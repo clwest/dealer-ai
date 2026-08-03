@@ -1,11 +1,11 @@
 ---
-title: "Milestone 23 — (target selection deferred to M23.0)"
-status: draft
+title: "Milestone 23 — BHPH Origination + Payment Intake"
+status: active
 type: planning-memo
 generated: 2026-08-03
-generated_at_session: SESSION_174 (skeleton + M22-close planning inputs)
+generated_at_session: SESSION_174 (skeleton), SESSION_175 (expansion)
 milestone: 23
-milestone_name: "(pending — locked at M23.0 open)"
+milestone_name: "BHPH Origination + Payment Intake"
 sources:
   - docs/PROJECT_RULES.md
   - docs/DOC_GOVERNANCE.md
@@ -13,652 +13,1969 @@ sources:
   - docs/roadmap/AUTHENTICATION_MODEL.md
   - docs/roadmap/MILESTONE_22_RETROSPECTIVE.md
   - docs/roadmap/MILESTONE_22_PLANNING.md
+  - docs/roadmap/MILESTONE_21_PLANNING.md
   - docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md
   - docs/CAPABILITY_MATRIX.md §7w
 ---
 
-# Milestone 23 — Planning skeleton (target TBD at M23.0)
+# Milestone 23 — BHPH Origination + Payment Intake
 
-Skeleton drafted at M22.5 close-out
-(SESSION_174). This memo intentionally
-does NOT lock a target; SESSION_175
-(M23.0) presents the candidate list,
-resolves §5.a with the user, and
-expands the skeleton into a full active
-planning memo per the M18 / M19 / M20 /
-M21 / M22 precedent.
+> **Active planning memo.** Expanded at
+> SESSION_175 M23.0 open from the
+> skeleton drafted at M22.4 close.
+> §5.a Candidate O2 (BHPH note
+> origination + payment intake sub-
+> scope) confirmed at open per the
+> primary operational-coverage lens
+> — closes the BHPH lifecycle bookends
+> that M12 (backend), M12.7 (read UI),
+> M20.4 (Playwright coverage of
+> collections), and M21.2 (write-side
+> UI for collections) established.
+> Before M23, dealership BHPH
+> workflows are shippable for the
+> collector persona but broken for
+> the originating persona — a
+> dealership cannot CREATE a BHPH
+> note through the product, and a
+> collector cannot record a cash
+> payment against an existing note.
+> Both gaps require curl or Django
+> shell today.
+>
+> **M23 returns to the M21 Candidate
+> O UI-creation shape** after M22's
+> validation-shape milestone. The
+> refined governing contract for
+> UI-creation milestones applies:
+> every M23 surface (a) maps to
+> shipped backend + missing frontend,
+> (b) closes a missing operator-
+> facing UI, (c) adds or extends a
+> Playwright operational journey,
+> (d) is not generic UX polish.
+>
+> **M23 also carries M22's audit-
+> correctness-as-supporting-
+> infrastructure posture** — the
+> M23.0 empirical verification
+> surfaced a NEW audit false-
+> positive class distinct from
+> M22.1's variable-first URL
+> assembly: **HTTP-verb-agnostic
+> URL-prefix matching**. Row 123 of
+> the audit misclassifies
+> `admin-bhph-note-create` as
+> `covered` via `getBhphNote` (a
+> GET wrapper on the pk-suffixed
+> URL that shares the same path
+> prefix as the POST create
+> endpoint but hits a different
+> verb + path shape). M23.1 ships
+> the targeted fix per §5.d under
+> a ~2-hour budget guard, matching
+> M22.1's precedent.
+>
+> **M23 introduces zero new backend
+> service verbs, zero new DRF
+> endpoints, zero new frontend
+> routes, zero new tenancy
+> carriers, zero new migrations,
+> zero new permission classes.** The
+> zero-drift permission-class
+> streak extends **twenty-two →
+> twenty-three** consecutive
+> milestones (M10 → M23). Backend
+> baseline growth expected only
+> from new seed-fixture tests +
+> possibly audit-script correctness
+> tests + component Vitest tests.
+>
+> **Eight load-bearing decisions** —
+> §5.a target selection + §5.b
+> component attachment plan + §5.c
+> journey folder + shape + §5.d
+> audit-tool false-positive side-
+> fix posture + §5.e seed command
+> pattern + §5.f baseline
+> verification approach + §5.g
+> testid hardening posture + §5.h
+> increment sequencing and
+> completion contract. **All eight
+> confirmed as-recommended at
+> SESSION_175 M23.0 open** — streak
+> extends to **89 planning-time as-
+> recommended M5.1 → M23.0** across
+> **fourteen consecutive milestones
+> now** (M10 → M23).
 
-## Standing rule
-
-Per the M18 / M19 / M20 / M21 / M22
-planning pattern: at M23.0 open the
-target selection proceeds by presenting
-the full candidate list, recommending
-one option with rationale grounded in
-operator pain resolved by that
-candidate, and awaiting user
-confirmation. Once selected, §5.b–§5.h
-load-bearing planning decisions get
-drafted with recommendations for
-confirm-as-recommended at M23.0 open
-(streak extension expected: 88 → 89
-planning-time as-recommended M5.1 →
-M23.0 across fourteen consecutive
-milestones).
-
-Per the M21.0 §5.f Option B DoD
-amendment (formalized in
-IMPLEMENTATION_ROADMAP at M21.5, applied
-by M22): the M23 planning memo must
-either name at least one Playwright
-operational journey addition or
-extension, OR document in §3 why no
-journey change is required.
-Infrastructure-only milestones satisfy
-via the exception path. This constraint
-applies to the active memo, not this
-skeleton.
-
-## Planning inputs from M22 close
-
-The M22 Accounting Operational
-Validation milestone surfaced concrete
-inputs that must inform M23 target
-selection + scope. This section carries
-them forward as first-class planning
-material.
-
-### Input 1 — Audit-driven scope pool (post-M22.1 fix)
-
-The M22.1-corrected audit artifact
-catalogs **43 backend-only endpoints**
-(down from 47 pre-M22.1). The M22.1
-fix reclassified four accounting
-endpoints from backend-only to
-`covered`; the remaining backend-only
-count carries forward as scope pool
-for future OSC-shape milestones:
-
-- **`defer-candidate-O2` — 40+
-  endpoints** (future OSC-shape
-  milestones): F&I write UI (16),
-  walk-in / phone / referral /
-  webhook lead creation (4), deal-
-  writeup mutations (3), test-drive
-  creation (2), BHPH note origination
-  + payment intake (2), remaining
-  accounting write endpoints (JE
-  create, possibly others), misc
-  dashboards.
-- **`defer-domain-milestone` —
-  reduced from 3 to 0** for
-  accounting (all reclassified at
-  M22.1). If any remain in the
-  regenerated artifact for other
-  domains, they're candidates for
-  their own domain milestones.
-- **`intentional-omission`** —
-  unchanged (auth flows, health
-  checks, demo utilities).
-
-Any M23 candidate that ships operator
-UI should select from this pool. Any
-M23 candidate that validates
-already-shipped UI (validation-shape)
-should draw evidence from the pre-
-M22.1 misclassification patterns —
-other domains may have similar
-variable-first URL-assembly wrappers
-still misclassified.
-
-### Input 2 — Elevated candidates at M23.0 open
-
-Per the M22 retrospective §8 + §9:
-
-**Elevated (recommendation strength
-increased at M23 open):**
-
-- **Candidate A2 — next accounting
-  iteration (bounded scope).** Per
-  M22 retrospective §9. §5.b page/
-  persona walk during M22.2
-  surfaced three deferred future-
-  evidence candidates (as-of picker
-  interaction journey, cost-posting
-  failures rendering journey, JE
-  list navigation journey). Could
-  be bundled into a single
-  accounting-adjacent milestone.
-  Additional candidates for
-  investigation via dedicated
-  accounting sub-audit at M23.0
-  open: JE creation UI (may or may
-  not exist — no shipped wrapper
-  detected during §5.b walk), cost-
-  posting failures remediation
-  actions, month-end close workflow,
-  accounting operator navigation.
-  Small-to-medium scope; matches
-  M22 refined governing contract
-  shape.
-
-- **Candidate H — test-hygiene
-  remediation (NEW).** Three
-  journeys (office/accounting_workflow
-  freeze, sales_manager/daily_startup
-  lead-assignment, recon/workflow
-  decision) mutate DB state their
-  seeds don't reset — same-day
-  multi-runs fail; clean-DB runs
-  pass. Small-scope tooling
-  improvement — extend each seed
-  with cleanup analogous to
-  M22.2's reversal-cleanup. Would
-  make the acceptance suite
-  reliably re-runnable across
-  sessions without DB reset.
-  **Highest immediate operational
-  value at lowest scope cost.**
-
-- **Candidate O2 — next OSC
-  iteration.** Selects from the
-  40+ `defer-candidate-O2`
-  endpoints. Sub-candidates
-  unchanged from M22.0: F&I write
-  substrate (16 endpoints — needs
-  internal narrowing to 2 anchor
-  workflows); lead-source-specific
-  intake forms (4); BHPH note
-  origination + payment intake
-  (2); deal-writeup lifecycle (3);
-  test-drive creation (2). Scope
-  selection at M23.0 grounded in
-  operator-pain evidence.
-
-**Gated (external signal
-precondition still absent):**
-
-- **Candidate T** — process real
-  tester feedback (M18.5 CSV
-  export). Gated on Chris running
-  tester sessions between M22
-  close and M23.0 open. If
-  sessions ran, T becomes
-  actionable.
-- **Candidate U** — hosted-demo
-  substrate (public self-serve
-  signup). Gated on willingness to
-  hand demo stores to strangers.
-- **Candidate L** — first-live-
-  pilot staging dry-run. Gated on
-  a real pilot dealer + a staging
-  environment.
-- **Candidate M** — multi-operator
-  support (`IsPlatformOperator`
-  permission class). Gated on a
-  second operator being introduced.
-  **Breaks the zero-drift
-  permission-class streak with
-  intent.**
-
-**Deferred pending evidence
-(unchanged posture from
-M20 / M21 / M22 close):**
-
-- **Candidate D** — demo-aware
-  LLM router / cost caps.
-- **Candidate C** — F&I chargeback
-  substrate.
-
-**Deferred but stable:**
-
-- **Candidate P** — onboarding UX
-  polish.
-- **Candidate G** — dashboard
-  testid hardening. Not urgent —
-  M22.2 opportunistic testids
-  landed with zero required per
-  §5.d Option B; journey
-  brittleness not surfacing.
-
-### Input 3 — DoD amendment binding
-
-M21.0 §5.f Option B (adopt with
-documented exception path)
-formalized in
-`docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-at M21.5. Every M23 customer-facing
-milestone MUST add or update at
-least one Playwright operational
-journey OR explicitly document why
-not. Applies to the M23.0 active
-memo (not this skeleton).
-
-### Input 4 — M22 governing-contract precedent
-
-M22 shipped the refined governing
-contract for validation-shape
-milestones (map to shipped
-frontend + backend + Playwright
-evidence + journey-as-verifier +
-gap-split-by-size). Any M23
-candidate that validates already-
-shipped UI inherits this contract
-by default. Domain milestones or
-UI-creation milestones use the
-M21 Candidate O contract shape.
-Both contracts share three
-conditions (map to shipped
-backend, add/extend Playwright
-journey, not generic polish);
-they differ on whether shipped
-frontend is required (validation)
-or missing frontend is the scope
-target (UI-creation).
-
-### Input 5 — M22 velocity data
-
-- M22.0 planning: 1 session.
-- M22.1 audit tooling correction:
-  1 session (3 targeted changes,
-  ~30-40 min active work under a
-  ~2-hour §5.e budget guard).
-- M22.2 JE reversal journey: 1
-  session (5 seed tests + 1
-  journey + 2 assertion helpers,
-  first-run pass).
-- M22.3: SKIPPED.
-- M22.4 close-out: 1 session
-  (retrospective + capability
-  matrix + M23 skeleton + roadmap
-  amendment + audit artifact
-  verified + push).
-
-**Four sessions for one
-validation-shape milestone.**
-Down from M21's five-session
-shape by one (M22.3 skipped).
-If M23 picks another validation-
-shape (e.g. Candidate H test-
-hygiene, or Candidate A2
-accounting-adjacent validation),
-expect similar 3-4 session
-velocity. If M23 picks a UI-
-creation shape (O2), expect
-the M21 five-session pattern
-(one anchor increment per
-sub-scope).
-
-### Input 6 — M22 audit false-negative reframe
-
-The M22.1 root-cause reframe
-(from "nested TS template
-literals" to "variable-first URL
-assembly with nested templates
-as co-occurring pattern") is
-authoritative for M23+ audit
-maintenance. Any future
-milestone touching the audit
-script should preserve this
-framing. Also implies that
-other domains (recon, F&I,
-BHPH beyond M21) may have
-similar variable-first URL-
-assembly wrappers still
-misclassified — a fresh
-accounting-style sub-audit for
-each domain could reduce audit
-noise further.
-
-## Candidate list
-
-Compiled from
-`MILESTONE_22_RETROSPECTIVE.md` §8 +
-§9 + carry-forwards from M19 / M20 /
-M21 / M22 planning skeletons.
-**Priority ranking happens at M23.0
-with the full brief in hand.**
-
-### Elevated at M23.0
-
-- **Candidate H — Test-hygiene
-  remediation (NEW at M22 close).**
-  Extend the three affected seeds
-  (freeze snapshot cleanup, lead
-  assignment reset, recon
-  decision reset) with cleanup
-  analogous to M22.2's reversal-
-  cleanup. Small scope, high
-  operational value (acceptance
-  suite reliably re-runnable
-  across sessions without DB
-  reset). Recommendation
-  strength: HIGH — bounded shape,
-  matches M22 refined governing
-  contract (shipped test surface
-  + missing test hygiene + no
-  journey change required if
-  seeds fix the same journeys).
-
-- **Candidate A2 — Next accounting
-  iteration (bounded scope).**
-  Per M22 retrospective §9. Ships
-  operator UI or Playwright
-  journeys for accounting gaps
-  identified during M22.2 §5.b
-  walk (as-of picker journey,
-  cost-posting failures journey,
-  JE list navigation journey) plus
-  any additional gaps surfaced by
-  a dedicated accounting sub-audit
-  at M23.0 open (JE creation UI,
-  cost-posting failures actions,
-  month-end close, accounting
-  operator navigation).
-  Recommendation strength: MEDIUM
-  — smaller than M21 shape;
-  requires sub-audit to confirm
-  scope boundary.
-
-- **Candidate O2 — Next
-  Operational Surface Completion
-  iteration.** Per M22.1-corrected
-  audit artifact. Selects from
-  40+ `defer-candidate-O2`
-  endpoints. Sub-scope options
-  unchanged from M22.0.
-  Recommendation strength: MEDIUM
-  — highest scope; delivers most
-  operator-visible surface; also
-  the highest risk of scope creep
-  if any of the sub-scopes turn
-  out larger than they appear.
-
-### Gated candidates (from M19 / M20 / M21 / M22 §9)
-
-- **Candidate T** — process real
-  tester feedback (M18.5 CSV
-  export). Gated on tester
-  sessions between M22 close and
-  M23.0 open.
-- **Candidate U** — hosted-demo
-  substrate. Gated on demo-
-  scaling willingness.
-- **Candidate L** — first-live-
-  pilot staging dry-run. Gated on
-  real pilot + staging env.
-- **Candidate M** — multi-operator
-  support. Gated on second
-  operator. **Breaks zero-drift
-  streak with intent.**
-
-### Deferred pending evidence
-
-- **Candidate D** — demo-aware
-  LLM router / cost caps.
-- **Candidate C** — F&I chargeback
-  substrate.
-
-### Deferred but stable
-
-- **Candidate P** — onboarding UX
-  polish. May be subsumed by an
-  OSC iteration.
-- **Candidate G** — dashboard
-  testid hardening. Not urgent.
-
-## Guiding question for M23.0 candidate evaluation
+## Guiding question (durable, per M22 close)
 
 **Which candidate most increases
 operational coverage for a
 dealership employee?**
 
-This lens is primary at §5.a
-target selection. Evaluate every
-candidate through it FIRST.
-Endpoint count, implementation
-effort, roadmap momentum, and
-continuity with prior scope are
-secondary signals used to break
-ties within candidates that
-score comparably on operational
-coverage. Established durable
-guidance at M22 close per the
-M20-M22 operational-contract
-demonstration: shipped
-Playwright coverage produces
-better planning decisions than
-speculation, and the same lens
-should govern scope selection.
+This lens governed §5.a target
+selection at M23.0. It also
+governs any mid-milestone scope
+addition or subtraction. Endpoint
+count, implementation effort,
+roadmap momentum, and continuity
+with prior scope are secondary
+signals used to break ties within
+candidates that score comparably
+on operational coverage. Applies
+to every future milestone open.
 
-Bounded infrastructure-adjacent
-candidates (Candidate H test-
-hygiene remediation is the
-current example) can win via
-"increases coverage
-RELIABILITY across all
-existing journeys" framing —
-reliability is a form of
-coverage.
+## Preserve the M20–M22 operational contract (durable)
 
-## Planning artifact generation discussion
-
-**Not necessarily M23 scope**,
-but every future planning
-session should include a
-standing discussion topic:
-which planning artifacts are
-mature enough to become
-generated or partially-
-generated from the codebase
-rather than hand-maintained?
-
-Current examples of the
-maturity threshold:
-
-- **Already auto-generated:**
-  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-  is emitted by
-  `backend/dealer_ai/scripts/audit_operational_surface.py`.
-  Works well — hand-authored
-  narrative + auto-generated
-  tables.
-- **Candidates for
-  generation:** portions of
-  CAPABILITY_MATRIX (per-
-  domain endpoint tables,
-  journey coverage tables);
-  standalone endpoint
-  coverage summaries;
-  component-to-wrapper
-  mappings.
-- **Should stay hand-
-  authored:** narrative
-  planning memos,
-  retrospectives, business
-  problem framings, §5
-  load-bearing decisions —
-  these encode judgment
-  that scripts cannot
-  reproduce.
-
-When authoring or updating a
-planning artifact by hand,
-ask: "Could a script maintain
-this from the codebase?" If
-yes, flag it in retrospective
-§9 as a future-work candidate.
-When the hand-maintenance cost
-of a specific artifact exceeds
-the cost of generation tooling,
-generation graduates to
-shipped scope. Not urgent for
-M23; standing conversation
-topic as the platform matures.
-
-## Preserve the M20–M22 operational contract
-
-Compound guidance to carry
-forward through every future
-milestone:
+Compound guidance carried forward
+through every M23 decision and
+increment:
 
 - Verify through the real
   application before locking
-  scope.
+  scope (M22 lesson;
+  operationalized as the M23.0
+  empirical verification of the
+  two BHPH endpoints that
+  surfaced the audit false-
+  positive class).
 - Let evidence drive roadmap
-  decisions — retrospective
-  §9 recommendations decay
-  when the codebase changes.
+  decisions — retrospective §9
+  recommendations decay when the
+  codebase changes.
 - Keep milestones tightly
-  bounded — evidence-sized
-  §5.h Option B posture
-  allows shape to shrink as
-  well as grow (M21.4 +
-  M22.3 collapses are the
-  reference cases).
+  bounded — evidence-sized §5.h
+  Option B posture allows shape
+  to shrink as well as grow.
 - Extend Playwright journeys
   whenever customer-facing
-  operational behavior
-  changes (M21.0 §5.f Option
-  B DoD amendment).
+  operational behavior changes
+  (M21.0 §5.f DoD amendment).
 - Allow completed operational
-  journeys to reveal the
-  next highest-value work
-  rather than planning from
-  assumptions.
+  journeys to reveal the next
+  highest-value work rather than
+  planning from assumptions.
 
-## What M23.0 must do
+## Guiding principle (Candidate O UI-creation contract, M21 shape)
 
-At SESSION_175 (or whenever M23.0
-opens):
+M23 inherits the M21 Candidate O
+governing contract (M22 refined
+it for validation-shape
+milestones; M23 returns to the
+UI-creation shape). Every M23
+shipped surface must satisfy
+four conditions:
 
-1. **Verify CI status** on the M22
-   push — confirm the coordinated
-   push landed all four M22
-   commits cleanly and CI ran on
-   the extended journeys. Address
-   any regression as §0.a M23.0
-   amendments before opening §5.a.
-2. **Regenerate the audit artifact**
-   before candidate presentation.
-   Any endpoint that shipped
-   between M22.4 close and M23.0
-   open will show up. Fresh
-   evidence prevents proposing
-   scope that's already partially
-   covered. Post-M22.1 fix the
-   audit is trustworthy for
-   accounting; other domains may
-   still have variable-first
-   URL-assembly false negatives.
-3. **Present the candidate list**
-   above with a recommendation +
-   rationale per candidate. Note
-   the two-way tie between
-   Candidate H (test-hygiene —
-   small scope, high operational
-   value) and Candidate A2 or O2
-   (larger scope, more visible
-   operator impact). Discuss
-   trade-offs.
-4. **Recommend a target** for §5.a
-   selection. Ground the
-   recommendation in:
-   - **PRIMARY:** operational
-     coverage delta for a
-     dealership employee (per
-     guiding question above).
-     Which employee-persona
-     workflow does this
-     candidate enable or make
-     more reliable?
-   - Operator pain resolved.
-   - Dependencies on already-
-     shipped substrate.
-   - Deferred items with re-entry
-     paths.
-   - Whether the candidate blocks
-     future milestones or is
-     blocked by them.
-   - Evidence from Inputs 1–6.
-   - Explicitly note candidates
-     with LOW operational-
-     coverage delta — they need
-     a strong case on other
-     dimensions to win.
-5. **Await user confirmation** or
-   redirection to a different
-   candidate.
-6. **Once §5.a locks**, draft
-   §5.b–§5.h load-bearing
-   planning decisions with
-   recommendations for confirm-
-   as-recommended at M23.0 open.
-   Streak 88 → 89 expected.
-7. **DoD amendment compliance
-   check.** The M23 active memo
-   §3 must either name the
-   Playwright journey addition
-   / extension OR document why
-   no journey change is required
-   (infrastructure-only
-   milestones only). Non-
-   compliance is a planning-memo
-   review finding.
-8. **Expand this skeleton** into
-   a full active planning memo
-   analogous to
-   `MILESTONE_18_PLANNING.md` /
-   `MILESTONE_19_PLANNING.md` /
-   `MILESTONE_20_PLANNING.md` /
-   `MILESTONE_21_PLANNING.md` /
-   `MILESTONE_22_PLANNING.md`.
-   Frontmatter `status: draft` →
-   `status: active`;
-   `milestone_name` populated
-   from §5.a.
+1. **Maps to an already-shipped
+   backend capability** — the
+   two anchor endpoints
+   (`admin-bhph-note-create` +
+   `admin-bhph-payment-create`)
+   ship since M12; the M23
+   scope closes their operator-
+   facing UI gap.
+2. **Closes a missing operator-
+   facing UI** — verified
+   empirically at M23.0 open.
+   Neither endpoint has a
+   consumer wrapper in
+   `bhphApi.ts` today; both are
+   reachable only via curl /
+   Django shell.
+3. **Adds or extends a
+   Playwright operational
+   journey** — two new sibling
+   spec files under
+   `acceptance/journeys/bhph/`
+   per §5.c Option B.
+4. **Is not generic UX polish**
+   — scope items map 1:1 to a
+   backend verb + a missing
+   form; cosmetic friction
+   discovered mid-milestone
+   feeds Candidate P (deferred),
+   not this milestone.
 
-## Non-goals for this skeleton
+This governing contract binds
+every §5 decision, every
+increment scope call, every gap-
+review decision. When these
+conditions conflict with
+feasibility mid-milestone, the
+resolution posture is to defer
+the scope item to a future
+milestone rather than relax any
+of the four conditions.
 
-- ❌ Do NOT lock §5.a target at
-  M22.4. Inputs 1–6 above inform
-  the recommendation at M23.0
-  open; they do not preempt it.
-- ❌ Do NOT draft §5.b–§5.h
-  recommendations at M22.4 —
-  those live inside the full
-  planning memo after §5.a
-  locks.
-- ❌ Do NOT commit to any
-  candidate's scope estimate at
-  M22.4.
-- ❌ Do NOT rewrite the candidate
-  list order to imply priority
-  — that's the M23.0 open
-  exercise. The elevated /
-  gated / deferred annotations
-  are recommendation-strength
-  signals, not a locked
-  ranking.
+## 0. Engineering practices to preserve from M2–M22
 
-## Anchors that win on conflict
+Same posture as M22.0 except
+where noted. Non-negotiable:
+
+- **Backend-first architecture.**
+  M23 ships zero new backend
+  business logic. Every UI
+  action goes through an
+  existing service verb via an
+  existing endpoint; the
+  frontend + acceptance
+  workspaces are the only
+  workspaces whose surface
+  expands (plus M23.1's
+  audit-script fix).
+- **Service ownership.** Every
+  UI target invokes an existing
+  service verb — no parallel
+  write paths. If a proposed
+  scope item would require a
+  new service verb, it is out
+  of scope for M23.
+- **Tenancy discipline.** Every
+  new UI form scopes writes
+  through the existing tenant
+  middleware. No M23 UI
+  bypasses the tenancy carrier
+  stack; every write asserts
+  dealership context per the
+  existing authenticated-cookie
+  pattern.
+- **Load-bearing decisions get
+  user review BEFORE code.** All
+  eight §5 decisions confirmed
+  at SESSION_175 M23.0 open.
+  Any implementation-time
+  micro-decisions surface as
+  §0.a amendments.
+- **Additive extension over
+  fork.** M23 does not modify
+  existing endpoints, service
+  verbs, or components in ways
+  that break current operator
+  use. New forms attach to
+  existing pages (per M17 §6
+  lesson 6 + M21.2 precedent).
+  M23 adds zero frontend
+  routes.
+- **Zero-drift permission-class
+  posture.** Every UI action
+  uses the existing
+  authenticated-cookie flow;
+  both anchor endpoints stay
+  within their shipped
+  permission class
+  (`IsSalesManagerOrOwnerAtActiveDealership`).
+  Streak extends **twenty-two →
+  twenty-three** consecutive
+  milestones (M10 → M23).
+- **Every M23 assertion of
+  shipped-surface counts uses
+  `>=`** per the M9–M22
+  growth-only-list lesson.
+  Journey counts stay exact-
+  equality where the milestone
+  shape locks a specific
+  number (M23 targets 9
+  journeys at close — 7
+  existing + 2 new per §5.c
+  Option B).
+- **In-place page extension
+  over new route** per M17 §6
+  lesson 6 + M21.2 posture.
+  M23 target pages:
+  `DealerAiBhphPortfolio.tsx`
+  (note origination form
+  attaches to Notes card
+  header, replacing the empty-
+  state CTA);
+  `DealerAiBhphNoteDetail.tsx`
+  (payment intake form
+  attaches as a new Payments
+  card matching the
+  Promises/Contacts/Repossessions
+  pattern). No new top-level
+  routes.
+- **Naming discipline** per
+  M17 §6 lesson 3. Component
+  names reflect operator
+  vocabulary
+  (`RecordBhphNoteForm`,
+  `RecordBhphPaymentForm`),
+  not developer vocabulary
+  (`CreateNoteModal`,
+  `PmtForm`).
+- **Journey isolation, per-
+  workflow spec files, and
+  business-outcome assertions**
+  per M20 §5.d + §5.e and M22
+  §5.c precedent. Each new
+  journey extends the existing
+  BHPH seed additively (per
+  §5.e Option A) and asserts
+  business state (a BHPH note
+  is originated with expected
+  principal / APR; a payment
+  is recorded reducing the
+  outstanding balance) — not
+  DOM state.
+- **Fail-loud contract** per
+  M20 §0. Journey test names
+  identify the operational
+  workflow. Failure messages
+  target the business outcome
+  that failed. Screenshots +
+  traces attach on failure per
+  the M20 CI job configuration.
+- **Journey-as-verifier per
+  §5.f Option B** carries
+  forward from M22.2 — no
+  manual pre-verification of
+  workflows before authoring
+  journeys.
+- **Opportunistic testids per
+  §5.g Option B** carries
+  forward — add `data-testid`
+  only where new journeys need
+  stable selectors.
+
+### 0.a Change log — resolved decisions
+
+**SESSION_175 M23.0 open (2026-08-03):**
+
+- **§5.a → O2 (BHPH note
+  origination + payment intake
+  sub-scope) confirmed at
+  open** per the operational-
+  coverage primary lens. User
+  named at SESSION_175 M23.0
+  open. Milestone name: **"BHPH
+  Origination + Payment
+  Intake."** Completes the
+  BHPH lifecycle bookends from
+  M12 (backend), M12.7 (read
+  UI), M20.4 (Playwright
+  coverage), and M21.2 (write-
+  side UI for collections).
+  Candidates H (test-hygiene),
+  A2 (next accounting
+  iteration), other O2 sub-
+  scopes (F&I, lead-source
+  intake, deal-writeup, test-
+  drive), and T/U/L/M/D/C/P/G
+  all deferred with re-entry
+  paths preserved per
+  discovery rule.
+- **Empirical verification at
+  M23.0 open surfaced NEW
+  audit false-positive class**
+  distinct from M22.1's
+  variable-first URL
+  assembly: **HTTP-verb-
+  agnostic URL-prefix
+  matching**. Audit row 123
+  (`admin-bhph-note-create`)
+  claims coverage via
+  `getBhphNote` — but that's
+  the GET wrapper for
+  `admin/bhph-notes/<pk>/`,
+  not the POST create
+  wrapper. Empirical verify:
+  no `createBhphNote` in
+  `bhphApi.ts`. Both anchor
+  endpoints are genuinely
+  backend-only. The false-
+  positive class becomes
+  M23.1 supporting-work
+  scope per §5.d Option A.
+- **§5.b → Option A confirmed
+  as-recommended.** Note
+  origination attaches to
+  `DealerAiBhphPortfolio.tsx`
+  (Notes card header,
+  replacing the current empty-
+  state message with a
+  persistent CTA); payment
+  intake attaches to
+  `DealerAiBhphNoteDetail.tsx`
+  as a new Payments card
+  matching the existing
+  Promises/Contacts/Repossessions
+  pattern. Matches M17 §6
+  lesson 6 + M21.2 in-place-
+  page-extension posture. No
+  new routes.
+- **§5.c → Option B confirmed
+  as-recommended.** New
+  sibling spec files:
+  `acceptance/journeys/bhph/note_origination.spec.ts`
+  +
+  `acceptance/journeys/bhph/payment_intake.spec.ts`.
+  Origination and payment
+  intake are distinct
+  workflows from collections
+  (different persona intent);
+  matches M22.2 §5.c Option B
+  precedent for distinct-
+  workflow-shape journeys.
+  Existing
+  `bhph/collections_workflow.spec.ts`
+  stays untouched.
+- **§5.d → Option A confirmed
+  as-recommended.** Bounded
+  targeted fix in-scope per
+  M22.1 §5.e precedent
+  (matching HTTP verb between
+  wrapper and endpoint). Ships
+  as M23.1 supporting-work
+  increment. ~2-hour budget
+  guard. Explicit non-goal:
+  AST-based audit rewrite.
+  If targeted fix exceeds
+  guard, ship partial + defer
+  residual to a future audit-
+  tooling milestone.
+- **§5.e → Option A confirmed
+  as-recommended.** Extend
+  `seed_journey_bhph_collections_workflow`
+  additively with a vehicle
+  fixture (origination target
+  — an available inventory
+  vehicle for the operator to
+  attach a BHPH note to) +
+  fresh-note fixture (payment
+  intake target — a note with
+  non-zero balance for the
+  operator to record a payment
+  against). Idempotent via
+  stable description /
+  reference tags per M20.3 /
+  M22.2 precedent. If seed
+  size becomes unwieldy, split
+  later.
+- **§5.f → Option B confirmed
+  as-recommended.** Journey-as-
+  verifier carries forward
+  from M22.2 §5.f Option B.
+  Playwright IS the
+  verification; if the shipped
+  workflow doesn't complete,
+  the journey fails loudly.
+  Vitest doesn't substitute
+  (mocks API layer).
+- **§5.g → Option B confirmed
+  as-recommended.** Opportunistic
+  testids only per M21 §5.g +
+  M22 practice. Add
+  `data-testid` only where new
+  M23 journeys need stable
+  selectors.
+- **§5.h → Option B confirmed
+  as-recommended.** Evidence-
+  sized four-to-five
+  increments. **M23.0 planning**
+  (this session) + **M23.1
+  audit-tool false-positive
+  fix** (supporting work) +
+  **M23.2 note origination UI
+  + journey** + **M23.3
+  payment intake UI +
+  journey** + **M23.4 close-
+  out** (retrospective,
+  capability matrix update,
+  M24 skeleton, coordinated
+  close-out commit).
+  Milestone completion
+  contract: every in-scope UI
+  ships with a passing
+  operational journey; audit
+  correction closes the HTTP-
+  verb-agnostic false-
+  positive class; retrospective
+  §9 records the BHPH
+  lifecycle now operationally
+  complete + M24 candidate
+  evidence.
+- **Streak extends to 89
+  planning-time as-recommended
+  M5.1 → M23.0.** Fourteen
+  consecutive milestones now
+  (M10 → M23).
+
+## 1. Business questions this milestone answers
+
+Five operator-workflow questions,
+each tied to the governing
+contract. Every question is
+answerable in principle before
+M23 (backend capability exists)
+but not in practice (no UI
+path).
+
+### Q1. Can a dealership originate a BHPH note on a vehicle sale through the product?
+
+**Before M23:** No. The M12
+backend ships
+`admin-bhph-note-create` (POST
+`admin/bhph-notes/`) since
+SESSION_128 (M12). No wrapper
+in `bhphApi.ts`; no component
+consumes it. Origination
+requires curl / Django shell.
+The `DealerAiBhphPortfolio.tsx`
+empty-state message literally
+documents this gap by
+instructing operators to `POST
+/admin/bhph-notes/` on a BHPH
+sale.
+
+**After M23:** Yes. The M23.2
+note origination UI closes the
+gap. `RecordBhphNoteForm`
+attaches to the Notes card
+header in
+`DealerAiBhphPortfolio.tsx`;
+operators pick an available
+inventory vehicle + fill note
+terms (principal, APR, cadence,
+first payment date) + submit.
+The M23.2 Playwright journey
+walks the workflow end-to-end
+and asserts the resulting note
+persists with the expected
+shape.
+
+### Q2. Can a BHPH collector record a cash payment against an existing note through the product?
+
+**Before M23:** No. The M12/M16
+backend ships
+`admin-bhph-payment-create`
+(POST `admin/bhph-notes/<pk>/payments/`)
+since SESSION_128/M12 with M16
+integration. No wrapper in
+`bhphApi.ts`; no component
+consumes it. Cash payment
+recording requires curl /
+Django shell. The
+`DealerAiBhphNoteDetail.tsx`
+Promises / Contacts /
+Repossessions cards are shipped
+but the natural counterpart —
+Payments — is absent.
+
+**After M23:** Yes. The M23.3
+payment intake UI closes the
+gap. `RecordBhphPaymentForm`
+attaches as a new Payments
+card matching the existing
+sibling-card pattern; operators
+fill amount + method + date +
+memo + submit. The M23.3
+Playwright journey walks the
+workflow end-to-end and
+asserts the resulting payment
+persists with the expected
+shape + reduces the
+outstanding balance
+appropriately.
+
+### Q3. Is the M21 audit artifact trustworthy across ALL domains, or only for accounting (post-M22.1)?
+
+**Before M23:** Only for
+accounting endpoints. M22.1
+fixed the variable-first URL
+assembly false-negative class
+for accounting; other domains
+may still have similar
+misclassifications. Additionally,
+the M23.0 empirical verification
+surfaced a NEW false-positive
+class — HTTP-verb-agnostic
+URL-prefix matching — that
+affects at least one BHPH
+endpoint (row 123). Anyone
+scoping a future OSC-shape
+milestone from the audit's
+BHPH-adjacent rows would build
+on partially-incorrect premises.
+
+**After M23:** Trustworthy for
+the HTTP-verb-agnostic false-
+positive class post-M23.1
+targeted fix (per §5.d Option
+A). Row 123 reclassifies from
+`covered` to `wrapper-only`
+before M23.2 lands (revealing
+the genuine gap); back to
+`covered` after M23.2 ships the
+`createBhphNote` wrapper +
+component consumer. Other
+false-positive/negative
+patterns not yet surfaced
+remain candidates for future
+M22.1-shape targeted fixes.
+
+### Q4. Is the BHPH lifecycle now operationally complete through the product?
+
+**Before M23:** Partially.
+Complete for the collector
+persona (M12.7 read UI + M20.4
+Playwright coverage + M21.2
+write-side UI for collections
+workflow). Broken for the
+originating persona — a
+dealership cannot CREATE a
+BHPH note without curl. Also
+broken for cash payment
+recording — the collector
+cannot record incoming cash
+without curl.
+
+**After M23:** Yes. All BHPH
+lifecycle verbs — origination,
+promise-to-pay recording,
+promise-kept / promise-broken
+transitions, collection contact
+logging, cash payment
+recording, repossession
+initiation, repossession
+mark-recovered / mark-re-
+intaked — reachable through
+the product with Playwright
+journey coverage. Anchors the
+BHPH persona (originating
+finance manager +
+collector) whose Playwright
+coverage now spans origination
+→ collection → repossession
+end-to-end.
+
+### Q5. What is the next M24 candidate, based on evidence rather than speculation?
+
+**Before M23:** Speculative.
+The M22 retrospective §9
+elevated H (test-hygiene), A2
+(accounting iteration), and O2
+(next OSC iteration). Without
+M23's journey-authoring
+evidence, M24 candidate
+selection would rely on
+retrospective assumptions
+similar to how the M21 §9
+recommendation was falsified
+at M22.0.
+
+**After M23:** Evidence-based.
+M23.2 + M23.3 journey
+authoring surfaces any
+workflow that cannot complete
+through the UI as a small
+in-scope fix (per §5.d
+inherited posture) or as a
+documented next candidate.
+The M23.4 retrospective §9
+records the identified next
+candidate — H (test-hygiene
+still elevated), A2
+(accounting iteration if any
+dedicated sub-audit surfaces
+genuinely-missing accounting
+workflows), remaining O2 sub-
+scopes (F&I write substrate,
+lead-source intake, deal-
+writeup lifecycle, test-drive
+creation), or a new candidate
+surfaced during M23 authoring.
+
+## 2. What existing primitives extend
+
+M23 continues the "additive
+extension over fork" pattern
+(M11.1 / M12.3 / M13.2 / M14.1 /
+M15.1 / M16.1 / M17.1 / M18.1 /
+M19.1 / M20.1 / M21.2 / M22.2).
+Zero new backend service verbs,
+zero new DRF endpoints, zero
+new tenancy carriers, zero new
+migrations, zero new frontend
+routes, zero new permission
+classes.
+
+### Extended — frontend workspace
+
+- **`frontend/src/lib/bhphApi.ts`**
+  — extended with two new
+  typed write wrappers:
+  `createBhphNote(payload)`
+  hitting POST
+  `admin/bhph-notes/` and
+  `createBhphPayment(notePk, payload)`
+  hitting POST
+  `admin/bhph-notes/<pk>/payments/`.
+  Payload types match the
+  backend serializers verbatim.
+  These wrappers close the
+  M23.0 empirical-verification
+  gaps.
+- **`frontend/src/components/bhph/`**
+  extended with two new
+  components:
+  - `RecordBhphNoteForm.tsx`
+    — origination form with
+    vehicle picker, principal
+    input, APR input, cadence
+    picker, first-payment-date
+    picker, submit + error
+    handling.
+  - `RecordBhphPaymentForm.tsx`
+    — payment intake form with
+    amount input, method
+    picker (cash / check /
+    money order / etc), date
+    picker, memo textarea,
+    submit + error handling.
+    Attached inside a new
+    Payments card matching the
+    existing Promises /
+    Contacts / Repossessions
+    sibling pattern.
+- **`frontend/src/pages/DealerAiBhphPortfolio.tsx`**
+  — Notes card extended with
+  a persistent "Add note" CTA
+  in the header (replacing the
+  current documentation-of-
+  gap empty-state text).
+  Opens a modal containing
+  `RecordBhphNoteForm`.
+  Optimistic list refresh on
+  submit success.
+- **`frontend/src/pages/DealerAiBhphNoteDetail.tsx`**
+  — new Payments card added
+  as a sibling to
+  Promises/Contacts/Repossessions,
+  containing the existing
+  payment list (already
+  consumed via
+  `listBhphPayments`) + the
+  new `RecordBhphPaymentForm`.
+  Optimistic list refresh on
+  submit success.
+
+### Extended — acceptance workspace
+
+- **`acceptance/journeys/bhph/note_origination.spec.ts`**
+  (new). M23.2 anchor. Walks:
+  land on
+  `/dealer-ai-bhph-portfolio`
+  → click "Add note" → fill
+  origination form → submit →
+  verify status message →
+  verify new note appears in
+  Notes card. Business-outcome
+  assertion via API — a BHPH
+  note exists with the
+  expected shape (correct
+  vehicle FK, principal, APR,
+  cadence).
+- **`acceptance/journeys/bhph/payment_intake.spec.ts`**
+  (new). M23.3 anchor. Walks:
+  land on note detail page
+  for seeded note-with-balance
+  fixture → click "Record
+  payment" → fill amount +
+  method + date → submit →
+  verify status message →
+  verify new payment appears
+  in Payments card. Business-
+  outcome assertion via API —
+  the payment persists with
+  the expected shape, and the
+  note's outstanding balance
+  decreases by the payment
+  amount.
+- **Extended assertion
+  helpers** at
+  `acceptance/support/assertions/bhph.ts`
+  with two new helpers:
+  `expectBhphNoteOriginated(request, vehicleId)`
+  and
+  `expectBhphPaymentRecorded(request, noteId, amount)`.
+
+### Extended — backend workspace
+
+- **`backend/dealer_ai/management/commands/seed_journey_bhph_collections_workflow.py`**
+  — existing BHPH seed
+  extended additively per §5.e
+  Option A with:
+  - **Vehicle fixture** — an
+    available inventory
+    vehicle (stable stock
+    number tag; idempotent)
+    that the M23.2 origination
+    journey targets. Different
+    vehicle from the note-
+    detail fixture so
+    origination has a fresh
+    target on each run.
+  - **Fresh-note-with-balance
+    fixture** — a distinct
+    BHPH note with non-zero
+    outstanding balance (no
+    payments yet) that the
+    M23.3 payment-intake
+    journey targets. Distinct
+    from the existing
+    collections-workflow note.
+  - **Payment cleanup on
+    re-invocation** — analogous
+    to M22.2's reversal-
+    cleanup: any payment
+    recorded against the
+    M23.3 fixture in a
+    previous journey run
+    gets deleted so the
+    fixture stays reversible.
+- **`backend/dealer_ai/tests/test_m204_seed_journey_bhph_collections_workflow.py`**
+  (or the equivalent existing
+  seed test module) extended
+  with test cases covering
+  the new fixtures'
+  idempotency + tenant
+  scoping + payment cleanup
+  behavior.
+- **`backend/dealer_ai/scripts/audit_operational_surface.py`**
+  — existing (M21.1)
+  audit script. Corrected per
+  §5.d Option A to discriminate
+  HTTP verb between wrapper
+  calls and endpoint patterns
+  before claiming coverage.
+  Explicit scope: fix the
+  HTTP-verb-agnostic URL-
+  prefix matching false-
+  positive class. Explicit
+  non-scope: AST rewrite.
+- **`docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`**
+  — regenerated at M23.1
+  close (both endpoints
+  reclassify to
+  `wrapper-only` / stay
+  backend-only until the
+  M23.2/M23.3 wrappers ship);
+  regenerated again at M23.4
+  close (both reclassify to
+  `covered`).
+
+### Consumed but not modified
+
+- **All shipped M1–M22
+  service verbs and DRF
+  endpoints.** M23 UI attaches
+  to them. No backend
+  modifications.
+- **All shipped frontend
+  routes.** M23 adds no
+  routes; every new UI
+  attaches to an existing
+  page. Frontend operator
+  routes stay at **20**.
+- **All shipped M1–M22
+  tenancy carriers,
+  permission classes, and
+  migrations.** No
+  modifications. Zero-drift
+  streak extends **twenty-two
+  → twenty-three** consecutive
+  milestones.
+- **M20 acceptance framework
+  + M22 CI job.** M23
+  consumes the framework;
+  no framework modifications.
+  New journey files follow
+  the M20/M21/M22 spec-file
+  convention.
+
+## 3. What's NOT in this milestone (deferrals)
+
+Every deferral recorded with
+a clear re-entry path.
+**Twelve M23-specific +
+eleven universal = 23
+deferrals.**
+
+**DoD compliance (per M21.0
+§5.f Option B amendment
+formalized in
+IMPLEMENTATION_ROADMAP at
+M21.5):** M23 satisfies the
+customer-facing milestone
+journey-addition requirement
+**by construction**. M23.2
+ships
+`bhph/note_origination.spec.ts`
+and M23.3 ships
+`bhph/payment_intake.spec.ts`
+— both new Playwright
+operational journeys directly
+addressing shipped operator
+surface. The audit-tooling
+correction increment (M23.1)
+is supporting work and does
+not itself require a journey
+change. The close-out
+increment (M23.4) references
+the two new journeys as the
+DoD-satisfying output.
+
+**M23-specific deferrals:**
+
+1. **Sale-time origination
+   trigger** — attaching
+   `RecordBhphNoteForm` to
+   `VehicleSalePage.tsx`
+   (§5.b Option B) so the
+   note is originated at the
+   moment a sale is marked
+   BHPH. Deferred to operator-
+   use evidence — the M23.2
+   portfolio-based CTA
+   attachment ships first;
+   sale-time trigger revisited
+   when operator usage
+   demonstrates the sale-time
+   flow is more natural.
+2. **F&I write substrate**
+   (16 endpoints) — largest
+   remaining OSC scope.
+   Warrants dedicated F&I
+   milestone shape rather
+   than OSC bite. Deferred
+   to M24 or later
+   consideration.
+3. **Lead-source-specific
+   intake forms** (walk-in /
+   phone / referral / webhook
+   — 4 endpoints). Deferred
+   to future OSC iteration.
+4. **Deal-writeup lifecycle**
+   (3 endpoints). Deferred
+   to future OSC iteration.
+5. **Test-drive creation**
+   (2 endpoints). Deferred
+   to future OSC iteration.
+6. **Additional accounting
+   workflows** — as-of picker
+   interaction journey, cost-
+   posting failures rendering
+   journey, JE list navigation
+   journey (Candidate A2 from
+   M22 §9). Deferred to
+   dedicated accounting-
+   completeness milestone.
+7. **Test-hygiene remediation**
+   (Candidate H from M22
+   §9) — extend three
+   affected seeds (freeze
+   snapshot, lead assignment,
+   recon decision) with
+   cleanup analogous to
+   M22.2's reversal-cleanup.
+   Deferred as future work;
+   would improve suite re-
+   runnability but doesn't
+   add employee workflow
+   coverage.
+8. **Full AST-based audit
+   rewrite** — explicit non-
+   scope per §5.d Option A.
+   Targeted regex fix only.
+9. **Non-BHPH audit false-
+   positive/negative sweep**
+   — the M23.1 fix
+   generalizes to other
+   domains with HTTP-verb-
+   agnostic URL-prefix
+   matching. Deferred to
+   future audit-tooling
+   milestone.
+10. **Payment method
+    validation richness** —
+    the M12/M16 backend
+    accepts a discrete list
+    of payment methods
+    (cash / check / money
+    order / ACH / card).
+    M23.3 UI uses the
+    shipped enum unchanged;
+    validation beyond the
+    backend's existing
+    enforcement is not
+    in-scope.
+11. **BHPH note contract
+    PDF generation** — real-
+    world BHPH origination
+    typically produces a
+    printable contract for
+    signature. Explicit non-
+    scope for M23; contract-
+    generation is a separate
+    domain warranting its
+    own milestone shape if
+    prioritized.
+12. **Migration to `vite
+    preview` in CI,
+    cross-browser CI matrix,
+    npm audit remediation,
+    CI artifact upload
+    verification, systematic
+    audit refresh schedule**
+    — all carry forward per
+    M21 §3(6)–(10) and M22
+    §3(7)–(11).
+
+**Universal deferrals (any
+platform milestone):**
+
+- Payroll (external service).
+- W-2 / 1099 generation
+  (external service).
+- Year-end tax return
+  preparation (external CPA).
+- GAAP-compliant audited
+  financial reporting.
+- Direct DMS integration
+  (future vendor-integration
+  milestone).
+- Real inventory-feed
+  integrations
+  (Manheim / ADESA / ACV).
+- Bilingual UI.
+- Payment processing / e-sign
+  / DMS write-back.
+- Multi-tenant SaaS shell
+  (billing / org).
+- Predictive ML on
+  operational data.
+- SSO / MFA on top of M1 auth.
+
+## 4. What existing tests bind
+
+M23 introduces zero new backend
+migrations, zero new tenancy
+carriers, zero new permission
+classes, zero new endpoints,
+zero new frontend routes. All
+existing `>=` counting tests
+stay satisfied.
+
+- **Backend test baseline.**
+  M23 is expected to grow the
+  backend baseline modestly
+  through new seed fixture
+  tests (idempotency + tenant
+  scoping + payment cleanup)
+  plus possibly one audit-
+  script correctness test.
+  Baseline **4,766** at M23.0
+  open; target **~4,772–
+  4,780** at M23 close
+  depending on final scope
+  selection.
+- **Frontend Vitest baseline.**
+  M23 will grow Vitest
+  coverage as two new
+  components ship (form
+  validation, submit handler,
+  error paths, vehicle picker
+  interaction for origination,
+  method picker interaction
+  for payment intake).
+  Baseline **180** at M23.0
+  open; target **~195–210**
+  at M23 close.
+- **Acceptance suite.** M23
+  adds two new sibling
+  journeys per §5.c Option B.
+  Journey count grows from
+  **7 → 9** by M23 close.
+  Pilot-critical subset stays
+  as-is unless BHPH
+  origination or payment
+  intake is judged pilot-
+  critical at each authoring
+  increment's open.
+- **Migrations.** Unchanged
+  through M23 close at
+  `0001`–`0048`.
+- **Tenancy carriers.**
+  Unchanged at **52**.
+- **Permission classes.**
+  Unchanged at **7 actual**.
+  Zero-drift streak extends
+  **twenty-two → twenty-
+  three** consecutive
+  milestones (M10 → M23).
+- **DRF admin surface.**
+  Unchanged at **113**.
+- **Frontend operator
+  routes.** Unchanged at
+  **20**.
+- **Celery-beat task
+  families.** Unchanged at
+  **10**.
+
+## 5. Load-bearing decisions
+
+Eight decisions. **All eight
+confirmed as-recommended at
+SESSION_175 M23.0 open.**
+Streak extends to **89
+planning-time as-recommended
+M5.1 → M23.0** (fourteen
+consecutive milestones now).
+
+### 5.a `[RESOLVED at SESSION_175 open]` — Milestone target selection
+
+**Question.** Which candidate
+from the M23 skeleton
+(H / A2 / O2 subtypes /
+T / U / L / M / D / C / P / G)
+defines M23 scope?
+
+**Decision.** **O2 — BHPH note
+origination + payment intake
+sub-scope.** User named at
+SESSION_175 M23.0 open per the
+primary operational-coverage
+lens. Milestone name: **"BHPH
+Origination + Payment
+Intake."** Completes the BHPH
+lifecycle bookends from M12
+backend + M12.7 read UI +
+M20.4 Playwright + M21.2 write-
+side UI for collections.
+Candidates H, A2, other O2 sub-
+scopes, and T/U/L/M/D/C/P/G
+all deferred with re-entry
+paths preserved per discovery
+rule.
+
+**Rationale.** (1) Highest
+per-item operational-coverage
+delta at smallest scope — two
+endpoints; each resolves a
+real employee workflow that
+currently requires curl.
+(2) Completes the BHPH
+lifecycle story — M12 backend
++ M12.7 read + M20.4 journey
++ M21.2 write-side existed;
+origination + payment intake
+are the missing bookends.
+(3) Compounds forward — once
+BHPH is end-to-end operational,
+future BHPH work becomes
+validation/extension rather
+than gap-filling. (4) Governing
+contract fit is clean (M21
+Candidate O UI-creation
+contract). (5) Streak-neutral
+— zero new permission classes;
+zero-drift streak extends 22
+→ 23. (6) Empirical
+verification at M23.0 open
+surfaced NEW audit false-
+positive class (HTTP-verb-
+agnostic URL-prefix matching)
+that becomes bounded M23.1
+supporting-work scope per
+§5.d.
+
+### 5.b `[RESOLVED at SESSION_175 open]` — Component attachment plan
+
+**Question.** Where do the two
+new forms attach?
+
+- **Option A** — Note
+  origination attaches to
+  `DealerAiBhphPortfolio.tsx`
+  (Notes card header CTA);
+  payment intake attaches to
+  `DealerAiBhphNoteDetail.tsx`
+  (new Payments card
+  matching sibling pattern).
+- **Option B** — Note
+  origination attaches to
+  `VehicleSalePage.tsx`
+  (sale-time trigger); payment
+  intake same as A.
+- **Option C** — Dedicated
+  routes for both.
+
+**Decision. Option A —
+portfolio CTA + note-detail
+Payments card** confirmed
+as-recommended.
+
+**Rationale.** (1) Matches
+M17 §6 lesson 6 + M21.2 in-
+place-page-extension posture
+— no new routes. (2) The
+portfolio page already
+communicates the origination
+gap in its empty state
+(`DealerAiBhphPortfolio.tsx:193`
+literally documents the
+required curl); converting
+that documentation-of-gap
+into an actionable CTA is a
+natural fit and provides
+immediate operator value.
+(3) The payment intake
+attachment (note detail page
+with new Payments card
+matching Promises/Contacts/
+Repossessions sibling
+pattern) matches operator
+mental model — the payment
+card lives next to the other
+per-note action cards.
+(4) Sale-time origination
+trigger (Option B) is a
+follow-up worth revisiting
+after operator use — too
+speculative at M23.0 without
+evidence. Recorded as §3
+deferral 1. (5) Dedicated
+routes (Option C) add
+navigation cost without
+justification when in-place
+extension works.
+
+### 5.c `[RESOLVED at SESSION_175 open]` — Journey folder + shape
+
+**Question.** Extend existing
+`bhph/collections_workflow.spec.ts`
+or add new sibling spec files?
+
+- **Option A** — Extend the
+  existing spec file with
+  origination + payment steps.
+- **Option B** — New sibling
+  spec files:
+  `bhph/note_origination.spec.ts`
+  +
+  `bhph/payment_intake.spec.ts`.
+- **Option C** — One new
+  consolidated spec:
+  `bhph/origination_and_payment.spec.ts`.
+
+**Decision. Option B — two
+new sibling spec files**
+confirmed as-recommended.
+
+**Rationale.** (1) Origination
+is a distinct workflow from
+collections (different
+persona intent: finance
+manager originating vs.
+collector working the
+portfolio). (2) Payment
+intake is a distinct workflow
+from origination (different
+persona intent: collector
+recording cash vs. finance
+manager originating).
+(3) Matches M22.2 §5.c Option
+B precedent for distinct-
+workflow-shape journeys.
+(4) Two separate specs keeps
+failure attribution clean —
+a payment-intake regression
+doesn't fail the origination
+journey. (5) `collections_workflow.spec.ts`
+stays untouched — trusted
+output from M20.4 / M21.2.
+(6) Consolidated single spec
+(Option C) mixes concerns and
+makes selective test running
+harder.
+
+### 5.d `[RESOLVED at SESSION_175 open]` — Audit-tool false-positive side-fix posture
+
+**Question.** M23.0 empirical
+verification surfaced NEW
+audit false-positive class —
+HTTP-verb-agnostic URL-prefix
+matching claims coverage that
+doesn't exist. Fix in-scope
+or defer?
+
+- **Option A** — Bounded
+  targeted fix in-scope per
+  M22.1 §5.e precedent
+  (matching HTTP verb between
+  wrapper and endpoint). ~2-
+  hour budget guard.
+- **Option B** — Defer to
+  future audit-tooling
+  milestone.
+- **Option C** — Fix as part
+  of M23.2 note-origination
+  increment (fold in).
+
+**Decision. Option A —
+bounded targeted fix as M23.1
+supporting-work increment**
+confirmed as-recommended.
+
+**Rationale.** (1) Matches
+the durable-guidance memory
+established at M22 close
+("audit correctness as
+supporting infrastructure —
+welcome bounded audit-
+correction sub-scope"). Every
+accuracy gain compounds
+across future scope decisions.
+(2) Matches M22.1 shape —
+supporting work first, anchor
+work second. Discipline the
+audit correction with a
+budget guard so it can't
+consume anchor scope.
+(3) Explicit non-goal: AST-
+based audit rewrite. Full
+refactor belongs in a
+dedicated audit-tooling
+milestone.
+(4) If the targeted fix
+exceeds ~2 hours at M23.1
+open, ship partial fix,
+document residual patterns
+for future audit-tooling
+milestone, and proceed to
+M23.2.
+(5) Option B leaves M24+
+candidate selection dependent
+on partially-untrustworthy
+audit rows for BHPH.
+(6) Option C folds concerns
+— the audit fix and the
+anchor UI shouldn't ship in
+the same commit for clean
+attribution.
+
+### 5.e `[RESOLVED at SESSION_175 open]` — Seed command pattern
+
+**Question.** New per-journey
+seed commands or extend the
+existing BHPH seed?
+
+- **Option A** — Extend
+  `seed_journey_bhph_collections_workflow`
+  additively with vehicle
+  fixture (origination
+  target) + fresh-note
+  fixture (payment intake
+  target) + payment cleanup.
+- **Option B** — New per-
+  workflow seed commands
+  (`seed_journey_bhph_note_origination`
+  +
+  `seed_journey_bhph_payment_intake`).
+
+**Decision. Option A —
+extend existing seed
+additively** confirmed as-
+recommended.
+
+**Rationale.** (1) Matches
+M21 Lesson 4 ("reference
+existing seed shape") +
+M22.2 §5.g Option A
+("additive fixtures preserve
+tenant context"). (2) The
+existing seed already
+provisions BHPH state on the
+default dealership; adding
+vehicle + fresh-note
+fixtures is additive without
+disrupting the collections
+workflow the existing
+journey depends on.
+(3) Payment cleanup on
+re-invocation mirrors
+M22.2's reversal-cleanup
+pattern — proven reliable
+for suite re-runnability
+without `--reset`.
+(4) Idempotency preserved
+via stable fixture tags per
+existing seed pattern.
+(5) Option B creates seed
+sprawl — three seeds where
+one suffices. (6) Splitting
+reversible — if the
+extended seed becomes hard
+to reason about mid-
+milestone, split then; do
+not pre-split.
+
+### 5.f `[RESOLVED at SESSION_175 open]` — Baseline verification approach
+
+**Question.** Manual pre-
+verification of workflows
+before authoring journeys,
+or journey-as-verifier?
+
+- **Option A** — Manual
+  developer pass-through of
+  each shipped workflow
+  before authoring journey.
+- **Option B** — Journey-as-
+  verifier (author the
+  journey; let it be the
+  verification).
+
+**Decision. Option B —
+journey-as-verifier** carries
+forward from M22.2 §5.f
+Option B confirmed as-
+recommended.
+
+**Rationale.** (1) M22.2
+proved fast and reliable —
+JE reversal journey passed
+on first run without manual
+pre-verification. (2) The
+M23 shipping surface is
+NEW UI (M22 was already-
+shipped UI); expect the
+journey-as-verifier posture
+to surface small operator-
+surface gaps via §5.d
+inherited posture (small
+in-scope fix vs. large
+deferred as next candidate
+evidence) — same policy as
+M22.2 but with higher
+likelihood of small fixes
+since the UI is fresh.
+(3) Playwright's fail-loud
+contract catches any
+incompleteness in the
+shipped workflow as a
+specific business-outcome
+assertion failure — cheaper
+than manual verification
+and produces test artifacts
+for regression detection.
+(4) Vitest coverage
+(component-level) does not
+substitute — mocks the API
+layer; only Playwright
+exercises the full stack.
+
+### 5.g `[RESOLVED at SESSION_175 open]` — Testid hardening posture
+
+**Question.** Opportunistic
+testids or full-coverage
+pass?
+
+- **Option A** — Full-
+  coverage testid pass
+  across the shipped BHPH
+  surfaces.
+- **Option B** —
+  Opportunistic — add
+  `data-testid` only where
+  new M23 journeys need
+  stable selectors.
+
+**Decision. Option B —
+opportunistic** carries
+forward from M21 §5.g + M22
+practice confirmed as-
+recommended.
+
+**Rationale.** (1) M22.2
+shipped zero testid
+additions since role-based
+selectors matched shipped
+markup cleanly. Expect
+similar for M23 given the
+new components will use
+the same shadcn/Radix
+primitives. (2) Full-
+coverage testid pass
+remains Candidate G's
+future milestone shape.
+(3) Opportunistic-only
+preserves Rule 4 (scope
+discipline). (4) Testids
+land at natural insertion
+points during journey
+authoring — form field
+inputs, submit buttons,
+newly-inserted list rows.
+
+### 5.h `[RESOLVED at SESSION_175 open]` — Increment sequencing + completion contract
+
+**Question.** How are M23
+increments sequenced, and
+what does "M23 shipped"
+mean?
+
+- **Option A** — 3 fixed
+  increments (M23.0 + M23.1
+  both anchors + M23.2
+  close).
+- **Option B** — Evidence-
+  sized 4-to-5 increments.
+  M23.0 planning + M23.1
+  audit fix (supporting) +
+  M23.2 note origination
+  UI + M23.3 payment intake
+  UI + M23.4 close-out.
+- **Option C** — 5 fixed
+  increments matching M22
+  shape.
+
+**Decision. Option B —
+evidence-sized four-to-
+five increments** confirmed
+as-recommended.
+
+**Rationale.** (1) Matches
+M21.h + M22.h Option B
+posture. Fixed increment
+counts distort scope
+either upward (padding) or
+downward (compression).
+(2) Preserves Rule 4
+(small complete
+increments). (3) Two
+anchor UIs are pre-
+committed at §5.a because
+their scope is known; the
+audit fix is bounded per
+§5.d. (4) M23.4 close
+matches the M20.5 / M21.5
+/ M22.4 pattern. (5)
+Expected shape is 5
+increments. Collapse to 4
+if M23.2 + M23.3 fold
+together (unlikely — each
+has its own journey +
+assertion helper + form
+component). Skip M23.1 if
+the audit fix exceeds the
+~2-hour §5.d budget guard.
+
+**Milestone completion
+contract:**
+
+- **`createBhphNote` +
+  `createBhphPayment`
+  wrappers ship** in
+  `bhphApi.ts` with types
+  matching backend
+  serializers verbatim.
+- **`RecordBhphNoteForm`
+  attaches to
+  `DealerAiBhphPortfolio.tsx`**
+  as a Notes card header
+  CTA + modal.
+- **`RecordBhphPaymentForm`
+  attaches to
+  `DealerAiBhphNoteDetail.tsx`**
+  as a new Payments card
+  matching sibling pattern.
+- **Two new Playwright
+  journeys ship**:
+  `bhph/note_origination.spec.ts`
+  +
+  `bhph/payment_intake.spec.ts`,
+  both passing on `main`
+  CI.
+- **Seed extended** with
+  vehicle fixture +
+  fresh-note fixture +
+  payment cleanup on
+  re-invocation.
+- **Audit tooling
+  correction closes** the
+  HTTP-verb-agnostic URL-
+  prefix-matching false-
+  positive class;
+  regenerated artifact
+  correctly reflects
+  `admin-bhph-note-create`
+  as `wrapper-only` before
+  M23.2 (revealing the
+  gap) and `covered` after.
+- **Vitest coverage
+  grows** for the two new
+  components (~10-15
+  tests).
+- **All M23 shipped
+  journeys pass on `main`
+  CI** in the coordinated
+  push at M23.4.
+- **Retrospective §9**
+  records the BHPH
+  lifecycle now
+  operationally complete +
+  M24 next-candidate
+  identified by journey-
+  authoring evidence.
+
+## 6. Anchors that win on conflict
 
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+   (M22 shipped section
+   landed at M22.4)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_22_RETROSPECTIVE.md`
    §8 + §9 (M22 corrections
-   landed + standing M23
-   question)
+   + standing M23 question)
 6. `docs/roadmap/MILESTONE_22_PLANNING.md`
    (M22 refined governing
-   contract that any validation-
-   shape M23 inherits)
-7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (audit artifact — authoritative
-   for accounting post-M22.1
-   fix; other domains may still
-   need M22.1-shape corrections)
-8. `docs/CAPABILITY_MATRIX.md`
-   §7w (M22 shipped surface)
+   contract for validation-
+   shape milestones — M23
+   inherits the M21 shape
+   as it returns to UI-
+   creation)
+7. `docs/roadmap/MILESTONE_21_PLANNING.md`
+   (M21 Candidate O
+   governing contract that
+   M23 inherits directly)
+8. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+   (audit artifact —
+   authoritative for
+   accounting post-M22.1;
+   authoritative for BHPH
+   post-M23.1 targeted fix)
+9. `docs/CAPABILITY_MATRIX.md`
+   §7w (M22 shipped
+   surface)
+
+## 7. Sequencing
+
+**Four-to-five increments
+total** — locked at
+SESSION_175 M23.0 close per
+§5.h Option B. Expected
+minimum shape is five
+(M23.0 + M23.1 + M23.2 +
+M23.3 + M23.4) with M23.1
+optional-skip if the audit
+fix exceeds the ~2-hour
+§5.d budget guard.
+Combine increments if
+implementation evidence
+shows a smaller complete
+shape; do not split merely
+to match this draft.
+
+### Increment 0 (M23.0) — Planning refinement + target selection
+
+**Scope.** SESSION_175 (this
+session). §5.a O2 (BHPH
+note origination + payment
+intake sub-scope) confirmed
+at open per operational-
+coverage lens. §5.b–§5.h
+drafted with recommendations;
+all seven confirmed as-
+recommended. Empirical
+verification of the two
+target endpoints surfaced
+NEW audit false-positive
+class (HTTP-verb-agnostic
+URL-prefix matching). Full
+memo expansion (this
+document). DoD compliance
+verified via §3 by-
+construction path.
+
+**Deliverable.**
+- This planning memo,
+  expanded from the M22.4
+  skeleton.
+- §0.a change log with all
+  eight §5 decisions
+  resolved.
+- Session handoff at
+  `docs/handoffs/SESSION_175_m23_inc0_planning.md`.
+- `00-START-NEXT-SESSION.md`
+  overwritten with M23.1
+  priority.
+
+**Backend baseline
+unchanged:** 4,766 pass, 1
+skipped, 0 fail. Frontend
+Vitest unchanged: 180 pass.
+Acceptance suite
+unchanged: 7 journeys.
+
+### Increment 1 (M23.1) — Audit-tool false-positive fix + artifact refresh
+
+**Scope.** SESSION_176.
+Supporting work per §5.d
+Option A.
+
+**Deliverable.**
+- Targeted fix in
+  `backend/dealer_ai/scripts/audit_operational_surface.py`
+  to discriminate HTTP verb
+  between wrapper calls and
+  endpoint patterns before
+  claiming coverage.
+- Optional backend test for
+  the fix.
+- Regenerated
+  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`.
+  Row 123
+  (`admin-bhph-note-create`)
+  should reclassify from
+  `covered` to `wrapper-only`
+  or backend-only (depending
+  on whether any wrapper
+  hits the exact POST verb
+  — expected: no such wrapper
+  exists, so classification
+  becomes `defer-candidate-
+  O2` matching the audit's
+  current handling of row
+  126 `admin-bhph-payment-
+  create`). Coverage count
+  expected to change by a
+  small delta (potentially
+  -1 or so as false-
+  positives get corrected).
+- Session handoff at
+  `docs/handoffs/SESSION_176_m23_inc1_audit_fix.md`.
+- `00-START-NEXT-SESSION.md`
+  refreshed for M23.2.
+
+**Backend baseline target
+at M23.1 close:** 4,766 →
+**~4,767** (possible audit-
+script correctness test).
+Frontend Vitest: 180
+(unchanged). Acceptance
+suite: 7 (unchanged).
+
+**Budget guard.** If audit
+correction exceeds ~2
+hours, stop, document the
+remaining false-positive
+patterns as a future
+audit-tooling milestone,
+and proceed to M23.2 with
+a partial fix per §5.d
+Option A.
+
+### Increment 2 (M23.2) — Note origination UI + journey
+
+**Scope.** SESSION_177.
+First anchor UI.
+
+**Deliverable.**
+- `createBhphNote` wrapper
+  in
+  `frontend/src/lib/bhphApi.ts`
+  hitting POST
+  `admin/bhph-notes/`.
+- `RecordBhphNoteForm`
+  component in
+  `frontend/src/components/bhph/`
+  with vehicle picker,
+  principal, APR, cadence,
+  first-payment-date,
+  submit + error handling.
+- Attached to
+  `DealerAiBhphPortfolio.tsx`
+  Notes card as a
+  persistent "Add note"
+  CTA + modal.
+- Vitest coverage for the
+  new component (submit +
+  validation + error paths
+  + vehicle picker
+  interaction).
+- Extended
+  `seed_journey_bhph_collections_workflow`
+  with vehicle fixture
+  (origination target) +
+  backend tests
+  (idempotency + tenant
+  scoping).
+- Extended
+  `acceptance/support/assertions/bhph.ts`
+  with
+  `expectBhphNoteOriginated(request, vehicleId)`
+  helper.
+- New
+  `acceptance/journeys/bhph/note_origination.spec.ts`
+  walking: land on
+  `/dealer-ai-bhph-portfolio`
+  → click "Add note" →
+  fill form → submit →
+  verify status → verify
+  new note appears in
+  Notes card → business-
+  outcome assertion via
+  API.
+- Concurrent §5.d small
+  operator-surface gap
+  fixes per M22.2
+  precedent if any
+  discovered (in-scope)
+  with §0.a M23.2
+  amendments.
+- Session handoff at
+  `docs/handoffs/SESSION_177_m23_inc2_note_origination.md`.
+- `00-START-NEXT-SESSION.md`
+  refreshed for M23.3.
+
+**Backend baseline target
+at M23.2 close:** ~4,767 →
+**~4,770** (seed fixture
+idempotency tests).
+Frontend Vitest: 180 →
+**~187-192** (new
+component tests).
+Acceptance suite: **7 →
+8**.
+
+### Increment 3 (M23.3) — Payment intake UI + journey
+
+**Scope.** SESSION_178.
+Second anchor UI.
+
+**Deliverable.**
+- `createBhphPayment`
+  wrapper in
+  `frontend/src/lib/bhphApi.ts`
+  hitting POST
+  `admin/bhph-notes/<pk>/payments/`.
+- `RecordBhphPaymentForm`
+  component in
+  `frontend/src/components/bhph/`
+  with amount, method
+  picker, date, memo,
+  submit + error handling.
+- Attached to
+  `DealerAiBhphNoteDetail.tsx`
+  as a new Payments card
+  matching Promises/Contacts/
+  Repossessions sibling
+  pattern.
+- Vitest coverage for the
+  new component.
+- Extended
+  `seed_journey_bhph_collections_workflow`
+  with fresh-note-with-
+  balance fixture +
+  payment cleanup on
+  re-invocation + backend
+  tests.
+- Extended
+  `acceptance/support/assertions/bhph.ts`
+  with
+  `expectBhphPaymentRecorded(request, noteId, amount)`
+  helper.
+- New
+  `acceptance/journeys/bhph/payment_intake.spec.ts`
+  walking: land on note
+  detail for seeded
+  fresh-note fixture →
+  click "Record payment"
+  → fill form → submit →
+  verify status → verify
+  new payment appears in
+  Payments card →
+  business-outcome
+  assertion via API
+  (payment persists,
+  balance decreases).
+- Concurrent §5.d small
+  operator-surface gap
+  fixes if any surfaced.
+- Session handoff at
+  `docs/handoffs/SESSION_178_m23_inc3_payment_intake.md`.
+- `00-START-NEXT-SESSION.md`
+  refreshed for M23.4.
+
+**Backend baseline target
+at M23.3 close:** ~4,770 →
+**~4,774** (seed fixture
+idempotency + payment
+cleanup tests). Frontend
+Vitest: ~192 → **~200-205**.
+Acceptance suite: **8 →
+9**.
+
+### Increment 4 (M23.4) — CI hardening + retrospective + close-out
+
+**Scope.** SESSION_179.
+Close-out.
+
+**Deliverable.**
+- CI job validation on all
+  new / extended journeys.
+- `docs/CAPABILITY_MATRIX.md`
+  §7x — M23 shipped
+  surface: audit tooling
+  correction + 2 new
+  wrappers + 2 new
+  components + seed
+  fixture extensions + 2
+  new journeys + 2 new
+  assertion helpers.
+- `docs/roadmap/MILESTONE_23_RETROSPECTIVE.md`
+  covering lessons
+  learned, what shipped,
+  deferrals reviewed, §8
+  corrections landed, §9
+  next-candidate
+  identified with
+  evidence.
+- `docs/roadmap/MILESTONE_24_PLANNING.md`
+  skeleton (status:
+  draft).
+- `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+  updated with M23
+  shipped status.
+- Session handoff at
+  `docs/handoffs/SESSION_179_m23_inc4_close.md`.
+- `00-START-NEXT-SESSION.md`
+  refreshed for M24.0.
+- Coordinated close-out
+  commit + push per M18.6
+  / M19.6 / M20.5 / M21.5
+  / M22.4 pattern.
+
+**Backend baseline target
+at M23.4 close:** **~4,774
+pass**, 1 skipped, 0 fail.
+Frontend Vitest: **~200-
+205 pass**. Acceptance
+suite: **9 journeys / 15
+passed on clean DB
+(~20s)**. Migrations
+unchanged `0001`–`0048`.
+Tenancy carriers
+unchanged at 52.
+Permission classes
+unchanged at 7 — zero-
+drift streak twenty-two
+→ **twenty-three**
+consecutive milestones.
+Frontend operator routes
+unchanged at 20.
