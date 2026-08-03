@@ -31,6 +31,14 @@ const SEED_COMMANDS = [
   "seed_journey_recon_workflow",
   "seed_journey_office_accounting_workflow",
   "seed_journey_bhph_collections_workflow",
+  // Milestone 24 · Increment 1 (SESSION_181) — Sales Operational Entry
+  // journeys (walk-in / phone / referral / webhook). The seed
+  // provisions its own operator + advisor + a referring-customer
+  // lead used by the M24.3 referral picker. The M24.1-4 journeys
+  // reuse the existing sales_manager persona (acceptance-sales-
+  // manager) for auth; the M20 seed provisions Acceptance Advisor,
+  // which the M24 journeys use as the assignment target.
+  "seed_journey_sales_operational_entry",
 ] as const;
 
 function runManagementCommand(command: string): void {

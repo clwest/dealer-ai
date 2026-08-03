@@ -1,14 +1,33 @@
 // Milestone 11 · Increment 6 (SESSION_119) — sales-side channel-filtered leads.
+// Milestone 24 · Increment 1 (SESSION_181) — Walk-in intake CTA + Dialog +
+//   LeadDetailModal wire-in on the sales-side leads page.
 //
 // Consumes GET /admin/leads/ with the M11.6 channel filter added on
 // top of the existing handed_off / urgency / since / ordering
 // filters. Rendered as a filterable table.
+//
+// M24.1 additions (per MILESTONE_24_PLANNING.md §5.b + §5.d, revised
+// at SESSION_181 M24.1 open):
+// - `+ Walk-in` Dialog CTA in the page header opens a shared
+//   `<LeadIntakeForm channel="walk_in">` (posts via `createWalkInLead`).
+//   On success the intake Dialog closes, the leads list refetches,
+//   and the newly created lead's `LeadDetailModal` opens on the same
+//   page (no redirect; the sales-side `/dealer-ai-sales/leads` route
+//   is the list view — there is no dedicated detail route today).
+// - Row click opens `LeadDetailModal` for any lead in the list.
+// - `AssignmentDropdown` reaches via the modal header (unchanged).
+//
+// Phone / referral CTAs land in M24.2 / M24.3 as sibling extensions
+// following the walk-in shape (per §5.h sequencing).
 //
 // Role gating: backend enforces IsSalesManagerOrOwnerAtActiveDealership.
 // Advisors / other roles receive 403 and the page renders the error.
 
 import { useCallback, useEffect, useState } from "react";
 
+import LeadDetailModal from "@/components/LeadDetailModal";
+import { LeadIntakeForm } from "@/components/sales/LeadIntakeForm";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -16,7 +35,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { fetchAdminLeads, type AdminLead } from "@/lib/api";
+import { createWalkInLead } from "@/lib/salesApi";
 
 type ChannelFilter =
   | ""
@@ -44,6 +71,8 @@ export default function DealerAiSalesLeads() {
     "loading",
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoadState("loading");
@@ -70,12 +99,22 @@ export default function DealerAiSalesLeads() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Sales leads</h1>
-        <p className="text-sm text-muted-foreground">
-          Every lead across every intake channel. Filter by channel to
-          narrow the queue.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Sales leads</h1>
+          <p className="text-sm text-muted-foreground">
+            Every lead across every intake channel. Filter by channel to
+            narrow the queue.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setWalkInDialogOpen(true)}
+            data-testid="sales-leads-add-walk-in"
+          >
+            + Walk-in
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -138,7 +177,12 @@ export default function DealerAiSalesLeads() {
               </thead>
               <tbody>
                 {leads.map((lead) => (
-                  <tr key={lead.id} className="border-b last:border-0">
+                  <tr
+                    key={lead.id}
+                    className="cursor-pointer border-b last:border-0 hover:bg-muted/40"
+                    onClick={() => setSelectedLeadId(lead.id)}
+                    data-testid={`sales-leads-row-${lead.id}`}
+                  >
                     <td className="py-2">{lead.name}</td>
                     <td className="py-2">{lead.phone || "—"}</td>
                     <td className="py-2">{lead.channel ?? "chat"}</td>
@@ -154,6 +198,34 @@ export default function DealerAiSalesLeads() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={walkInDialogOpen} onOpenChange={setWalkInDialogOpen}>
+        <DialogContent data-testid="sales-leads-walk-in-dialog">
+          <DialogHeader>
+            <DialogTitle>Record a walk-in lead</DialogTitle>
+            <DialogDescription>
+              Capture the essentials while the customer is on the lot.
+              After you record the lead, the detail view opens so you
+              can assign and continue immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <LeadIntakeForm
+            channel="walk_in"
+            onSubmit={createWalkInLead}
+            onCreated={(lead) => {
+              setWalkInDialogOpen(false);
+              setSelectedLeadId(lead.id);
+              void load();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <LeadDetailModal
+        leadId={selectedLeadId}
+        onClose={() => setSelectedLeadId(null)}
+        onHandoffComplete={() => void load()}
+      />
     </div>
   );
 }
