@@ -16,6 +16,7 @@ import { APIRequestContext, expect } from "@playwright/test";
 
 export interface BhphNoteProjection {
   id: number;
+  sale_id: number;
   principal_financed: string;
   apr: string;
   term_weeks: number;
@@ -344,6 +345,54 @@ export async function fetchChildCounts(
  * expected minimum count. The M20.4 seed plants exactly one of each,
  * so this asserts >= 1.
  */
+// ---------------------------------------------------------------------
+// M23.2 — note origination assertion helper.
+// ---------------------------------------------------------------------
+
+/**
+ * Assert that a BhphNote exists targeting the given sale, and that
+ * its terms match the values the origination journey submitted.
+ * Fails loudly if no note exists for the sale or if the persisted
+ * terms drift from what the operator entered — either is an
+ * operational-completeness regression on the M12 origination path.
+ */
+export async function expectBhphNoteOriginated(
+  request: APIRequestContext,
+  saleId: number,
+  expected: {
+    principal: string;
+    apr: string;
+    termWeeks: number;
+    paymentFrequency: "weekly" | "biweekly" | "semi_monthly";
+  },
+): Promise<BhphNoteProjection> {
+  const notes = await fetchNoteList(request);
+  const matches = notes.filter((n) => n.sale_id === saleId);
+  expect(
+    matches.length,
+    `expected exactly one BhphNote targeting sale ${saleId}; found ${matches.length}`,
+  ).toBe(1);
+  const note = matches[0]!;
+  expect(
+    Number(note.principal_financed),
+    `note ${note.id} principal_financed=${note.principal_financed} vs expected ${expected.principal}`,
+  ).toBeCloseTo(Number(expected.principal), 2);
+  expect(
+    Number(note.apr),
+    `note ${note.id} apr=${note.apr} vs expected ${expected.apr}`,
+  ).toBeCloseTo(Number(expected.apr), 2);
+  expect(
+    note.term_weeks,
+    `note ${note.id} term_weeks=${note.term_weeks} vs expected ${expected.termWeeks}`,
+  ).toBe(expected.termWeeks);
+  expect(
+    note.payment_frequency,
+    `note ${note.id} payment_frequency=${note.payment_frequency} vs expected ${expected.paymentFrequency}`,
+  ).toBe(expected.paymentFrequency);
+  return note;
+}
+
+
 export async function expectNoteDetailPopulated(
   request: APIRequestContext,
   notePk: number,

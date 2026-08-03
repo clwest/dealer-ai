@@ -23,6 +23,16 @@
 // Every write wrapper attaches to the M12.7 collector dashboard
 // surface via a component in DealerAiBhphNoteDetail.tsx.
 //
+// Milestone 23 · Increment 2 (SESSION_177) — BHPH note-origination
+// wrapper:
+//
+//   POST /admin/bhph-notes/                                (M12.1)
+//
+// Closes the origination-side gap that M12 backend + M12.7 read UI
+// + M20.4 Playwright coverage + M21.2 write-side UI for collections
+// established. Attaches to DealerAiBhphPortfolio.tsx Notes card as
+// a persistent "Add note" CTA + modal per M23 §5.b Option A.
+//
 // Money on the wire is Decimal-as-string per the M9.5 + M10.1
 // convention.
 
@@ -107,6 +117,43 @@ export interface BhphNoteDetailResponse {
 
 export function getBhphNote(pk: number): Promise<BhphNoteDetailResponse> {
   return authGetJSON<BhphNoteDetailResponse>(`/admin/bhph-notes/${pk}/`);
+}
+
+// ---------------------------------------------------------------------------
+// M23.2 — BHPH note origination (POST /admin/bhph-notes/)
+// ---------------------------------------------------------------------------
+//
+// Creates a new BhphNote against a BHPH-marked Sale. Payload shape
+// matches BhphNoteCreateRequestSerializer in
+// backend/dealer_ai/views_bhph_notes.py verbatim. Server enforces:
+//   - sale must belong to caller's tenant (M12.1)
+//   - sale.finance_type must be BHPH (409 → NonBhphSaleError → 400)
+//   - no existing BhphNote for the sale (M12 one-note-per-sale rule → 409 →
+//     DuplicateBhphNoteError)
+//   - payment_frequency must be a known cadence (400 →
+//     UnknownBhphFrequencyError)
+
+export interface CreateBhphNotePayload {
+  sale_id: number;
+  principal_financed: string; // Decimal-as-string (min 0.01)
+  apr: string;                // Decimal-as-string (min 0.00)
+  term_weeks: number;         // int (min 1)
+  payment_frequency: BhphPaymentFrequency;
+  first_payment_due: string;  // ISO 8601 date (YYYY-MM-DD)
+  default_grace_days?: number; // optional (default 5, min 0)
+}
+
+export interface BhphNoteCreateResponse {
+  bhph_note: BhphNoteProjection;
+}
+
+export function createBhphNote(
+  payload: CreateBhphNotePayload,
+): Promise<BhphNoteCreateResponse> {
+  return authPostJSON<BhphNoteCreateResponse>(
+    "/admin/bhph-notes/",
+    payload,
+  );
 }
 
 // ---------------------------------------------------------------------------

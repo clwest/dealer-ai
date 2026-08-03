@@ -657,6 +657,126 @@ where noted. Non-negotiable:
   improvements land at low
   per-milestone cost.
 
+**SESSION_177 M23.2 close (2026-08-03):**
+
+- **First anchor UI shipped.**
+  `RecordBhphNoteForm.tsx`
+  attaches to
+  `DealerAiBhphPortfolio.tsx`
+  as a persistent "Add note"
+  CTA + shadcn Dialog per
+  §5.b Option A. Replaces the
+  empty-state message that
+  previously documented the
+  POST curl workaround. Form
+  fields match
+  `BhphNoteCreateRequestSerializer`
+  verbatim: sale_id (int),
+  principal_financed (decimal),
+  apr (decimal), term_weeks
+  (int), payment_frequency
+  (enum), first_payment_due
+  (date).
+- **`createBhphNote` wrapper
+  shipped** in
+  `frontend/src/lib/bhphApi.ts`
+  posting to
+  `POST /admin/bhph-notes/`
+  per M12.1 contract.
+- **Seed extension shipped.**
+  `seed_journey_bhph_collections_workflow.py`
+  provisions a distinct BHPH-
+  marked Sale (stock
+  `M23-BHPH-ORIG`, sold-price
+  $8,250, no attached note)
+  that the origination journey
+  targets. Note cleanup on
+  re-invocation matches
+  M22.2's reversal-cleanup
+  pattern. SUCCESS message
+  prints `m23_orig_sale_pk=<N>`
+  for the journey to parse.
+- **§5.d small-fix landed.**
+  Journey authoring surfaced
+  a session-invalidation bug
+  in `_provision_collector`:
+  `set_password` was called
+  on every seed invocation,
+  invalidating Django session
+  hashes (which incorporate
+  the password hash). When
+  the M23.2 journey re-
+  invoked the seed mid-suite
+  to look up the fixture pk,
+  the collector persona
+  landed on `/login`. Fix:
+  only call `set_password` on
+  new users. Pre-existing
+  latent bug — the M20.4
+  journey never re-invoked
+  seeds so the pattern never
+  surfaced. One-file trivial
+  change per §5.d Option B
+  in-scope threshold.
+- **Extended seed test
+  module** with 7 new M23.2
+  test cases (fixture
+  provisioning, BHPH-marked,
+  no-attached-note invariant,
+  distinct from M20.4, SUCCESS
+  message format, idempotency,
+  note cleanup, reset).
+- **Extended
+  `acceptance/support/assertions/bhph.ts`**
+  with
+  `expectBhphNoteOriginated(request, saleId, expected)`
+  helper. Verifies note
+  exists + terms match
+  operator input.
+- **New Playwright journey**
+  at
+  `acceptance/journeys/bhph/note_origination.spec.ts`.
+  Walks: parse sale pk from
+  seed stdout → land on
+  portfolio → click "Add
+  note" → fill form → submit
+  → verify dialog closes →
+  business-outcome assertion.
+  **First-run pass after the
+  seed session-invalidation
+  fix.**
+- **Route URL correction.**
+  M23.2 authoring surfaced
+  that the portfolio route
+  is `/dealer-ai-bhph/portfolio`
+  (not `-portfolio` as the
+  memo pre-committed).
+  Corrected in journey source
+  during authoring; matches
+  M20.4 precedent.
+- **Verification.** Isolated
+  M23.2: 7 passed (6 setup +
+  1) @ 13.1s. Full clean-DB
+  dry-run: **14 passed (8
+  journeys) @ 18.8s**. No
+  regressions.
+- **Backend baseline delta:**
+  4,766 → **4,773 (+7)** M23.2
+  seed tests. Frontend Vitest:
+  **180 → 187 (+7)**
+  RecordBhphNoteForm tests.
+  Acceptance suite: **7 → 8
+  journeys**.
+- **Cross-milestone pattern
+  emerging.** M22.2 shipped
+  zero §5.d gap fixes (mature
+  shipped UI); M23.2 shipped
+  one (pre-existing latent
+  bug surfaced by new usage
+  pattern). §5.d Option B's
+  split-by-size posture
+  correctly handled both.
+
 ## 1. Business questions this milestone answers
 
 Five operator-workflow questions,
@@ -1938,10 +2058,14 @@ and proceed to M23.2 with
 a partial fix per §5.d
 Option A.
 
-### Increment 2 (M23.2) — Note origination UI + journey
+### Increment 2 (M23.2) — Note origination UI + journey ✅ SHIPPED
 
 **Scope.** SESSION_177.
-First anchor UI.
+First anchor UI. See §0.a M23.2
+close entry for shipped outcome
++ evidence-based findings
+(session-invalidation seed fix,
+route URL correction).
 
 **Deliverable.**
 - `createBhphNote` wrapper

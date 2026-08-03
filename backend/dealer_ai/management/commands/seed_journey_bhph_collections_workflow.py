@@ -40,6 +40,24 @@ needing to fabricate state mid-journey:
   ``complete`` state — referenced by ID during the mark-re-intaked
   step.
 
+Milestone 23 · Increment 2 additions — enable the note-origination
+journey to walk the "operator originates a BHPH note against a
+BHPH-marked sale" workflow end-to-end without needing to
+fabricate a sale mid-journey:
+
+- One **second Vehicle** (stock ``M23-BHPH-ORIG``) that anchors a
+  distinct BHPH-marked sale awaiting a note.
+- One **second CustomerLead** (buyer) attached to that sale.
+- One **BHPH-marked Sale** (``finance_type=SALE_FINANCE_TYPE_BHPH``)
+  with the M23.2 fixture vehicle + buyer, **no BhphNote attached**
+  — the origination journey creates the note against this sale.
+- **Note cleanup on re-invocation**: any BhphNote linked to the
+  M23.2 fixture sale in a previous journey run gets deleted so the
+  fixture stays reversible without ``--reset``. Analogous to
+  M22.2's reversal-cleanup pattern.
+- SUCCESS message includes ``m23_orig_sale_pk=<N>`` so the
+  journey can parse it via ``invokeSeed()`` stdout.
+
 Per M20 planning §5.d Option B: composes M12 service verbs
 (``record_bhph_note`` cannot be used because it requires an
 existing Sale + also enforces a uniqueness guard that fights
@@ -122,11 +140,27 @@ FIXTURE_APR = Decimal("21.99")
 FIXTURE_TERM_WEEKS = 78
 FIXTURE_PROMISE_AMOUNT = Decimal("125.00")
 
+# M23.2 additive fixture — a distinct BHPH-marked sale AWAITING a
+# note. The origination journey creates the note against this sale.
+# Different stock number from M20.4's ``M20-BHPH-ACCEPT`` so the two
+# workflows never contend for the same fixture chain.
+M23_ORIG_FIXTURE_STOCK = "M23-BHPH-ORIG"
+M23_ORIG_FIXTURE_BUYER_NAME = "M23 Origination Buyer"
+M23_ORIG_FIXTURE_BUYER_EMAIL = "m23-bhph-orig-buyer@example.com"
+M23_ORIG_FIXTURE_SOLD_PRICE = Decimal("8250.00")
+
 
 def _existing_note(dealership: Dealership) -> BhphNote | None:
     return BhphNote.objects.filter(
         dealership=dealership,
         sale__vehicle__stock_number=FIXTURE_STOCK,
+    ).order_by("pk").first()
+
+
+def _existing_m23_orig_sale(dealership: Dealership) -> Sale | None:
+    return Sale.objects.filter(
+        dealership=dealership,
+        vehicle__stock_number=M23_ORIG_FIXTURE_STOCK,
     ).order_by("pk").first()
 
 
@@ -159,6 +193,17 @@ class Command(BaseCommand):
 
             collector = self._provision_collector(dealership)
             note = self._provision_note_chain(dealership, collector)
+            m23_orig_sale = self._provision_m23_orig_sale(dealership)
+            # Sweep any BhphNote a previous journey run created
+            # against the M23.2 fixture sale so re-runs stay
+            # reversible without --reset. Analogous to M22.2's
+            # reversal-cleanup pattern.
+            dropped = self._drop_notes_targeting(m23_orig_sale)
+            if dropped:
+                self.stdout.write(
+                    f"cleared {dropped} pre-existing note(s) "
+                    f"targeting the M23.2 origination fixture sale."
+                )
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -166,7 +211,8 @@ class Command(BaseCommand):
                 f"collector={collector.username} "
                 f"(sales_manager @ {dealership.slug}), "
                 f"note_pk={note.pk}, "
-                f"vehicle_stock={FIXTURE_STOCK}."
+                f"vehicle_stock={FIXTURE_STOCK}, "
+                f"m23_orig_sale_pk={m23_orig_sale.pk}."
             )
         )
 
@@ -203,10 +249,25 @@ class Command(BaseCommand):
         UserDealershipRole.objects.filter(
             user__username=COLLECTOR_USERNAME, dealership=dealership
         ).delete()
+        # M23.2 — also sweep the origination fixture chain (any
+        # note created against it + the sale + vehicle + buyer).
+        m23_notes_deleted = 0
+        m23_sale = _existing_m23_orig_sale(dealership)
+        if m23_sale is not None:
+            m23_notes_deleted, _ = BhphNote.objects.filter(
+                sale=m23_sale
+            ).delete()
+            m23_vehicle = m23_sale.vehicle
+            m23_buyer = m23_sale.buyer
+            m23_sale.delete()
+            m23_vehicle.delete()
+            if m23_buyer is not None:
+                m23_buyer.delete()
         self.stdout.write(
             f"reset: deleted repos={n_repos} contacts={n_contacts} "
             f"promises={n_promises} payments={n_payments} "
             f"reports={n_reports} + note chain + "
+            f"m23_notes={m23_notes_deleted} + m23 sale chain + "
             "cleared collector membership."
         )
 
@@ -215,9 +276,17 @@ class Command(BaseCommand):
             username=COLLECTOR_USERNAME,
             defaults={"email": f"{COLLECTOR_USERNAME}@example.com"},
         )
-        user.set_password(COLLECTOR_PASSWORD)
-        user.is_active = True
-        user.save()
+        # §0.a M23.2 fix — only reset the password on new users.
+        # Django's session hash includes the password hash, so
+        # calling set_password on every seed invocation invalidates
+        # any active sessions (surfaces when a journey re-invokes
+        # the seed mid-suite — the M23.2 note-origination journey
+        # is the first to do this). Password stays deterministic
+        # (COLLECTOR_PASSWORD) either way.
+        if created:
+            user.set_password(COLLECTOR_PASSWORD)
+            user.is_active = True
+            user.save()
         UserDealershipRole.objects.get_or_create(
             user=user,
             dealership=dealership,
@@ -402,3 +471,63 @@ class Command(BaseCommand):
             "recovered-state repossession, condition report)."
         )
         return note
+
+    def _provision_m23_orig_sale(self, dealership: Dealership) -> Sale:
+        """Ensure the M23.2 origination fixture sale exists — a BHPH-
+        marked sale with no attached BhphNote. Idempotent via the
+        stable ``M23-BHPH-ORIG`` vehicle stock number.
+        """
+        existing = _existing_m23_orig_sale(dealership)
+        if existing is not None:
+            self.stdout.write(
+                f"reused existing M23.2 origination sale pk={existing.pk}."
+            )
+            return existing
+
+        vehicle = Vehicle.objects.create(
+            dealership=dealership,
+            stock_number=M23_ORIG_FIXTURE_STOCK,
+            year=2016,
+            model="Civic",
+            price=Decimal("9995.00"),
+        )
+        buyer = CustomerLead.objects.create(
+            dealership=dealership,
+            name=M23_ORIG_FIXTURE_BUYER_NAME,
+            email=M23_ORIG_FIXTURE_BUYER_EMAIL,
+            phone="+15559990023",
+            channel=LEAD_CHANNEL_WALK_IN,
+            urgency="immediate",
+            notes=(
+                "[M23.2-bhph-orig] Fixture buyer for the BHPH note "
+                "origination acceptance journey."
+            ),
+        )
+        sale_date = timezone.now().date()
+        sale = Sale.objects.create(
+            dealership=dealership,
+            vehicle=vehicle,
+            buyer=buyer,
+            sale_date=sale_date,
+            sold_price=M23_ORIG_FIXTURE_SOLD_PRICE,
+            finance_type=SALE_FINANCE_TYPE_BHPH,
+            lender_name="",
+            gross_realized=Decimal("0.00"),
+        )
+        self.stdout.write(
+            f"created M23.2 origination sale pk={sale.pk} "
+            f"(vehicle={vehicle.stock_number}, no BhphNote attached)."
+        )
+        return sale
+
+    def _drop_notes_targeting(self, target_sale: Sale) -> int:
+        """Delete any BhphNote linked to the given sale. Called after
+        provisioning the M23.2 origination sale so any note the
+        journey created in a previous run gets swept — keeps the
+        fixture reversible across suite re-runs without ``--reset``.
+        Analogous to M22.2's reversal-cleanup pattern.
+        """
+        deleted, _ = BhphNote.objects.filter(
+            dealership=target_sale.dealership, sale=target_sale
+        ).delete()
+        return deleted

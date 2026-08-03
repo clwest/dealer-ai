@@ -4,10 +4,19 @@
 // GET /admin/bhph-notes/list/ (M12.7 addendum). Shows the five
 // portfolio metrics + a browsable list of notes. Per-note detail
 // lives at /dealer-ai-bhph/notes/<pk>/.
+//
+// Milestone 23 · Increment 2 (SESSION_177) — extended with a
+// persistent "Add note" CTA + shadcn Dialog containing the
+// `RecordBhphNoteForm`. Replaces the previous empty-state message
+// that documented the POST curl workaround; closes the origination
+// operator-surface gap per M23 §5.b Option A (in-place page
+// extension).
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { RecordBhphNoteForm } from "@/components/bhph/RecordBhphNoteForm";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,6 +24,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   fetchBhphAnalyticsSummary,
   listBhphNotes,
@@ -75,6 +91,8 @@ export default function DealerAiBhphPortfolio() {
     "loading",
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [originationDialogOpen, setOriginationDialogOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,7 +120,7 @@ export default function DealerAiBhphPortfolio() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadTick]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -182,16 +200,28 @@ export default function DealerAiBhphPortfolio() {
           <section>
             <Card>
               <CardHeader>
-                <CardTitle>Notes ({notes.length})</CardTitle>
-                <CardDescription>
-                  Up to 100 most recently originated notes.
-                </CardDescription>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Notes ({notes.length})</CardTitle>
+                    <CardDescription>
+                      Up to 100 most recently originated notes.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setOriginationDialogOpen(true)}
+                    data-testid="portfolio-add-note-cta"
+                  >
+                    Add note
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {notes.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No BHPH notes yet. Origination happens via
-                    `POST /admin/bhph-notes/` on a BHPH sale.
+                    No BHPH notes yet. Use "Add note" above to
+                    originate one against a BHPH-marked sale.
                   </p>
                 ) : (
                   <table className="w-full text-sm">
@@ -237,6 +267,28 @@ export default function DealerAiBhphPortfolio() {
           </section>
         </>
       )}
+
+      <Dialog
+        open={originationDialogOpen}
+        onOpenChange={setOriginationDialogOpen}
+      >
+        <DialogContent data-testid="portfolio-add-note-dialog">
+          <DialogHeader>
+            <DialogTitle>Originate a BHPH note</DialogTitle>
+            <DialogDescription>
+              Post a new BhphNote against an existing BHPH-marked sale.
+              One note per sale; the sale must belong to this
+              dealership.
+            </DialogDescription>
+          </DialogHeader>
+          <RecordBhphNoteForm
+            onOriginated={() => {
+              setOriginationDialogOpen(false);
+              setReloadTick((tick) => tick + 1);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

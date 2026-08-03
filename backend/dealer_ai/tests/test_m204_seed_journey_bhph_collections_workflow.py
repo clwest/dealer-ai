@@ -25,10 +25,14 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
+from decimal import Decimal
+
 from dealer_ai.management.commands.seed_journey_bhph_collections_workflow import (
     COLLECTOR_PASSWORD,
     COLLECTOR_USERNAME,
     FIXTURE_STOCK,
+    M23_ORIG_FIXTURE_BUYER_EMAIL,
+    M23_ORIG_FIXTURE_STOCK,
 )
 from dealer_ai.models import (
     BHPH_PROMISE_STATE_BROKEN,
@@ -241,3 +245,108 @@ class SeedBhphCollectionsResetTests(TestCase):
         self.assertTrue(
             User.objects.filter(username=COLLECTOR_USERNAME).exists()
         )
+
+
+# ---------------------------------------------------------------------
+# Milestone 23 · Increment 2 — origination fixture coverage.
+# ---------------------------------------------------------------------
+
+
+class SeedBhphCollectionsM23OriginationFixtureTests(TestCase):
+    def test_m23_orig_sale_provisioned_bhph_marked_no_note(self) -> None:
+        from dealer_ai.models import SALE_FINANCE_TYPE_BHPH
+
+        _run_seed()
+        sale = Sale.objects.get(
+            vehicle__stock_number=M23_ORIG_FIXTURE_STOCK
+        )
+        self.assertEqual(sale.finance_type, SALE_FINANCE_TYPE_BHPH)
+        self.assertFalse(
+            BhphNote.objects.filter(sale=sale).exists(),
+            "M23.2 origination fixture sale must have no attached BhphNote — "
+            "the journey creates it.",
+        )
+
+    def test_m23_orig_sale_distinct_from_m20_collections_fixture(self) -> None:
+        _run_seed()
+        m20_sale = Sale.objects.get(
+            vehicle__stock_number=FIXTURE_STOCK
+        )
+        m23_sale = Sale.objects.get(
+            vehicle__stock_number=M23_ORIG_FIXTURE_STOCK
+        )
+        self.assertNotEqual(m20_sale.pk, m23_sale.pk)
+        self.assertNotEqual(m20_sale.vehicle_id, m23_sale.vehicle_id)
+        self.assertNotEqual(m20_sale.buyer_id, m23_sale.buyer_id)
+
+    def test_m23_orig_buyer_uses_expected_email(self) -> None:
+        _run_seed()
+        buyer = CustomerLead.objects.get(email=M23_ORIG_FIXTURE_BUYER_EMAIL)
+        sale = Sale.objects.get(
+            vehicle__stock_number=M23_ORIG_FIXTURE_STOCK
+        )
+        self.assertEqual(sale.buyer_id, buyer.pk)
+
+    def test_success_message_prints_m23_orig_sale_pk(self) -> None:
+        # The M23.2 journey parses this line from stdout to know which
+        # sale to originate a note against. Ensure the key format the
+        # journey greps for stays stable.
+        output = _run_seed()
+        self.assertIn("m23_orig_sale_pk=", output)
+
+    def test_second_invocation_does_not_duplicate_m23_orig_sale(self) -> None:
+        _run_seed()
+        _run_seed()
+        self.assertEqual(
+            Sale.objects.filter(
+                vehicle__stock_number=M23_ORIG_FIXTURE_STOCK
+            ).count(),
+            1,
+        )
+
+    def test_seed_sweeps_note_created_against_m23_orig_sale(self) -> None:
+        from dealer_ai.models import BHPH_PAYMENT_FREQUENCY_WEEKLY
+        import datetime as dt
+
+        _run_seed()
+        sale = Sale.objects.get(
+            vehicle__stock_number=M23_ORIG_FIXTURE_STOCK
+        )
+        # Simulate what the M23.2 journey does — create a note
+        # against the origination fixture sale. Direct create
+        # matches the seed's demo-archetype convention.
+        note = BhphNote.objects.create(
+            dealership=sale.dealership,
+            sale=sale,
+            principal_financed=Decimal("5000.00"),
+            apr=Decimal("18.50"),
+            term_weeks=52,
+            payment_frequency=BHPH_PAYMENT_FREQUENCY_WEEKLY,
+            payment_amount=Decimal("120.00"),
+            first_payment_due=dt.date.today() + dt.timedelta(days=7),
+        )
+        self.assertTrue(
+            BhphNote.objects.filter(pk=note.pk).exists(),
+            "note should exist before re-seed",
+        )
+
+        _run_seed()
+
+        # Note should have been swept; sale + fixture chain remain.
+        self.assertFalse(
+            BhphNote.objects.filter(pk=note.pk).exists(),
+            "note should be cleared by the second seed invocation",
+        )
+        self.assertTrue(
+            Sale.objects.filter(pk=sale.pk).exists(),
+            "M23.2 origination sale itself must survive the note cleanup",
+        )
+
+    def test_reset_deletes_m23_orig_sale_chain(self) -> None:
+        _run_seed()
+        _run_seed("--reset")
+        # After reset, the M23.2 fixture re-provisions as fresh rows.
+        sales = Sale.objects.filter(
+            vehicle__stock_number=M23_ORIG_FIXTURE_STOCK
+        )
+        self.assertEqual(sales.count(), 1)
