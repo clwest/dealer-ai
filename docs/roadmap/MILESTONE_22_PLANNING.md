@@ -438,6 +438,126 @@ noted. Non-negotiable:
   consecutive milestones now
   (M10 → M22).
 
+**SESSION_172 M22.1 close (2026-08-03):**
+
+- **Audit tooling correction
+  shipped** per §5.e Option B.
+  Root cause identified during
+  inspection: the false-negative
+  class wasn't purely "nested
+  template literals" as the M21
+  retrospective §4 initially
+  documented — the actual class
+  is **variable-first URL
+  assembly**, where a wrapper
+  assigns its URL into a
+  `const path` variable and then
+  passes the identifier to
+  `authGetJSON(path)` rather than
+  a string literal.
+  `_HELPER_CALL_RE` only matched
+  literal-arg helper calls, so
+  four accounting wrappers
+  (`fetchTrialBalance`,
+  `listTrialBalanceSnapshots`,
+  `fetchJournalEntries`,
+  `fetchCostPostingFailures`)
+  were invisible to the audit.
+  The three list-shaped wrappers
+  ALSO exercise nested template
+  literals in their querystring
+  assembly, so both fixes were
+  needed.
+- **Three targeted changes** in
+  `backend/dealer_ai/scripts/audit_operational_surface.py`:
+  (1) `_HELPER_CALL_RE` extended
+  with an identifier alternative
+  so `authGetJSON(path)` calls
+  match; (2) new
+  `_resolve_variable_url()`
+  helper walks backward from the
+  helper call to find `const <name> = <expr>;`
+  within the enclosing wrapper;
+  (3) `_collapse_ts_templates()`
+  + rewritten `_expand_helper_calls()`
+  use balanced-brace parsing to
+  handle nested `${...}`
+  substitutions correctly
+  (previous `[^}]+` regex
+  truncated at the first `}` and
+  mangled nested cases). Also
+  added `_extract_url_literals()`
+  to handle ternary assignments
+  (`const path = cond ? "..." : "..."`)
+  by emitting both branches as
+  distinct consumers.
+- **Artifact regenerated.**
+  Coverage **106 → 110 (+4)**.
+  Backend-only **47 → 43 (-4)**.
+  All four accounting
+  misclassifications from
+  §0.a M22.0 discovery
+  reclassify to `covered`.
+  Ancillary changes: two row-
+  ordering shuffles (recon row
+  51, f_and_i row 101) where
+  the same wrappers list in
+  different order — same
+  dispositions, no semantic
+  change. No unexpected
+  reclassifications elsewhere.
+- **Backend baseline unchanged
+  at 4,761.** No audit-script
+  correctness test added — the
+  artifact regeneration itself
+  is the functional verification
+  (the four target rows either
+  reclassify or they don't).
+  Discretionary per M22.0
+  planning; deferred to a future
+  audit-tooling milestone if
+  needed.
+- **Budget guard status.** Fix
+  completed well under the ~2-
+  hour §5.e budget guard (active
+  work ~30-40 minutes across
+  inspection + three targeted
+  edits + debug + verification).
+  No deferral needed to a future
+  audit-tooling milestone.
+- **Root-cause reframe.** The
+  M21 retrospective §4 called
+  this the "nested template
+  literal class." The M22.1
+  investigation shows it's
+  more accurately the
+  "variable-first URL assembly
+  class" with nested templates
+  as a common co-occurring
+  pattern. Both aspects needed
+  fixing; the reframing helps
+  future audit maintainers
+  understand the actual
+  failure mode.
+- **Deferred to future audit-
+  tooling work.** The audit
+  still uses regex-based
+  extraction rather than AST
+  parsing per §5.e Option B
+  scope guard. Future patterns
+  that break the regex approach
+  (e.g. URLs assembled by
+  string concatenation across
+  multiple statements,
+  computed URL values from
+  Map/Record lookups) will
+  surface as future false-
+  negatives requiring the
+  same M22.1-shape targeted-
+  fix response OR a full AST
+  rewrite. Not addressed at
+  M22.1 per budget.
+
 ## 1. Business questions this milestone answers
 
 Five operator-workflow questions,
@@ -1573,53 +1693,58 @@ Frontend Vitest unchanged: 180
 pass. Acceptance suite
 unchanged: 6 journeys.
 
-### Increment 1 (M22.1) — Audit tooling correction + artifact refresh
+### Increment 1 (M22.1) — Audit tooling correction + artifact refresh ✅ SHIPPED
 
 **Scope.** SESSION_172. Supporting
 work per §5.e Option B.
 
-**Deliverable.**
-- Targeted regex fix in
-  `backend/dealer_ai/scripts/audit_operational_surface.py`
-  handling nested TypeScript
-  template literals in URL
-  construction paths.
-- Optional (as-needed): a
-  small backend test verifying
-  the fix against the known
-  false-negative patterns.
+**Shipped.**
+- Three targeted changes to
+  `backend/dealer_ai/scripts/audit_operational_surface.py`:
+  (1) `_HELPER_CALL_RE` extended
+  to match identifier arguments
+  (`authGetJSON(path)` in addition
+  to literal-arg calls); (2) new
+  `_resolve_variable_url()` +
+  `_extract_url_literals()`
+  helpers walk backward from the
+  helper call to find the
+  `const path = <expr>;`
+  assignment within the enclosing
+  wrapper, handling both plain
+  template literals and ternary
+  assignments; (3) balanced-brace
+  `_collapse_ts_templates()` +
+  rewritten `_expand_helper_calls()`
+  correctly handle nested
+  `${...}` substitutions (e.g.
+  `` `?${qs}` `` inside
+  `` ${qs ? ... : ""} ``).
 - Regenerated
-  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-  with corrected accounting
-  dispositions. Coverage
-  count expected to increase
-  by at least four
-  (accounting
-  misclassifications
-  corrected); if additional
-  false-negatives surface,
-  cataloged and either fixed
-  or deferred per §0.a M22.1
-  amendment.
+  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`.
+  Coverage **106 → 110 (+4)**;
+  backend-only **47 → 43 (-4)**.
+  All four accounting endpoints
+  from §0.a M22.0 discovery
+  reclassified to `covered`.
+- No audit-script correctness
+  test added — the artifact
+  regeneration itself is the
+  functional verification per
+  §0.a M22.1 discretionary call.
+- Backend baseline unchanged at
+  4,761 (no test additions).
 - Session handoff at
   `docs/handoffs/SESSION_172_m22_inc1_audit_correction.md`.
 - `00-START-NEXT-SESSION.md`
   refreshed for M22.2.
 
-**Backend baseline target at
-M22.1 close:** 4,761 → **~4,762–
-4,763** (audit-script tests if
-any). Frontend Vitest:
-unchanged. Acceptance suite:
-unchanged.
-
-**Budget guard.** If audit
-correction exceeds ~2 hours,
-stop, document the remaining
-false-negative patterns as a
-future audit-tooling milestone,
-and proceed to M22.2 with a
-partial fix per §5.e Option B.
+**Budget guard outcome.** Fix
+completed in ~30-40 minutes of
+active work — well under the ~2-
+hour §5.e guard. No deferral to
+a future audit-tooling milestone
+required.
 
 ### Increment 2 (M22.2) — JE reversal journey + seed extension
 

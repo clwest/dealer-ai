@@ -157,6 +157,43 @@ def normalize_django(pattern: str) -> str:
     return out.rstrip("/") + "/"
 
 
+def _collapse_ts_templates(s: str) -> str:
+    """Replace ``${...}`` substitutions with ``{PARAM}`` using balanced-
+    brace parsing so nested templates (`` ${qs ? `?${qs}` : ""} ``) are
+    handled correctly. M22.1 §5.e fix — the previous ``[^}]+`` regex
+    truncated at the first ``}`` and produced garbage for nested cases.
+    """
+    result: list[str] = []
+    i = 0
+    n = len(s)
+    while i < n:
+        if i + 1 < n and s[i] == "$" and s[i + 1] == "{":
+            # Walk forward until the matching ``}``. Track backtick
+            # nesting so a ``}`` inside a nested template literal
+            # doesn't close the outer substitution prematurely.
+            depth = 1
+            j = i + 2
+            in_backtick = False
+            while j < n and depth > 0:
+                ch = s[j]
+                if ch == "`":
+                    in_backtick = not in_backtick
+                elif not in_backtick and ch == "{":
+                    depth += 1
+                elif not in_backtick and ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                j += 1
+            if depth == 0:
+                result.append("{PARAM}")
+                i = j + 1
+                continue
+        result.append(s[i])
+        i += 1
+    return "".join(result)
+
+
 def normalize_frontend(url_expr: str) -> str:
     """Strip template ``${...}`` substitutions to ``{PARAM}`` and strip
     leading ``API_BASE`` / plain quotes so patterns compare to Django."""
@@ -170,8 +207,9 @@ def normalize_frontend(url_expr: str) -> str:
     raw = re.sub(r"^\$\{API_BASE\}", "", raw)
     # Also strip a bare API_BASE prefix that the file sometimes concatenates
     raw = re.sub(r"^API_BASE\s*\+\s*", "", raw)
-    # Now collapse remaining template substitutions to {PARAM}
-    raw = _TS_TEMPLATE_RE.sub("{PARAM}", raw)
+    # Now collapse remaining template substitutions to {PARAM} — balanced-
+    # brace parser handles nested templates (M22.1 §5.e fix).
+    raw = _collapse_ts_templates(raw)
     # Trim query strings
     raw = raw.split("?", 1)[0]
     if not raw.startswith("/"):
@@ -275,9 +313,108 @@ _HELPER_CALL_RE = re.compile(
     # (e.g. ``authGetJSON<ListResponse<AdminLead>>``); match anything
     # up to the opening ``(`` on a best-effort basis.
     r"(?:<[^(]*?>)?"
-    r"\(\s*(`[^`]*`|\"[^\"]*\"|'[^']*')",
+    # First argument may be a literal (template / double- / single-
+    # quoted string) OR a bare identifier that the wrapper assigns
+    # earlier via ``const path = ...``. M22.1 §5.e fix — identifier
+    # matches trigger the _resolve_variable_url() lookback in
+    # extract_frontend_consumers().
+    r"\(\s*(`[^`]*(?:`|$)|\"[^\"]*\"|'[^']*'|[a-zA-Z_][\w]*)",
     re.MULTILINE | re.DOTALL,
 )
+
+
+# Wrapper body captured for lookback URL-variable resolution. A wrapper
+# starts at ``export function name(`` and ends at the next such header
+# or EOF. Used by _resolve_variable_url() to find ``const path = ...``.
+_WRAPPER_HEADER_RE = re.compile(
+    r"^export\s+(?:async\s+)?function\s+([a-zA-Z_][\w]*)\s*[<(]",
+    re.MULTILINE,
+)
+
+
+def _resolve_variable_url(
+    api_source: str,
+    helper_start: int,
+    var_name: str,
+) -> str | None:
+    """Search backward from a helper call for ``const <var_name> = <expr>``
+    within the enclosing wrapper function. Returns the assigned expression
+    as source text, or None if no assignment is found.
+
+    Handles simple cases:
+    - ``const path = "/admin/...";``
+    - ``const path = \\`/admin/.../${...}\\`;``
+    - ``const path = cond ? "..." : "...";`` (ternary — returns the full
+      expression; callers use _extract_url_literals to pick out embedded
+      literals for matching).
+    """
+    # Find the wrapper header that owns this helper call.
+    wrapper_start = 0
+    for m in _WRAPPER_HEADER_RE.finditer(api_source):
+        if m.start() >= helper_start:
+            break
+        wrapper_start = m.start()
+    body = api_source[wrapper_start:helper_start]
+    # Look for `const|let|var <name> = <expr>;` — match the last one
+    # since a later assignment overrides an earlier one.
+    pattern = re.compile(
+        r"(?:const|let|var)\s+" + re.escape(var_name)
+        + r"\s*=\s*([\s\S]+?);",
+    )
+    matches = list(pattern.finditer(body))
+    if not matches:
+        return None
+    return matches[-1].group(1).strip()
+
+
+def _extract_url_literals(expr: str) -> list[str]:
+    """Return every top-level string / template literal in an expression.
+    Handles ternaries (``asOf ? \\`...\\` : "..."``) by returning both
+    branches. Nested template literals inside ``${...}`` substitutions
+    are NOT double-counted — the balanced-brace collapse in
+    normalize_frontend handles them at normalization time.
+    """
+    literals: list[str] = []
+    i = 0
+    n = len(expr)
+    while i < n:
+        ch = expr[i]
+        if ch == "`":
+            # Walk to matching backtick, honoring nested ${...} which
+            # may themselves contain backticked templates.
+            j = i + 1
+            depth = 0
+            while j < n:
+                cj = expr[j]
+                if cj == "\\":
+                    j += 2
+                    continue
+                if cj == "$" and j + 1 < n and expr[j + 1] == "{":
+                    depth += 1
+                    j += 2
+                    continue
+                if depth > 0 and cj == "}":
+                    depth -= 1
+                    j += 1
+                    continue
+                if depth == 0 and cj == "`":
+                    literals.append(expr[i : j + 1])
+                    i = j + 1
+                    break
+                j += 1
+            else:
+                # Unterminated — bail on this literal
+                i = n
+        elif ch in "\"'":
+            j = expr.find(ch, i + 1)
+            if j == -1:
+                i = n
+                continue
+            literals.append(expr[i : j + 1])
+            i = j + 1
+        else:
+            i += 1
+    return literals
 
 # Base-path helper definitions in ``api.ts`` — small utility functions
 # that return a URL prefix. We regex them out and substitute their
@@ -316,18 +453,45 @@ def _build_base_path_map(api_source: str) -> dict[str, str]:
 def _expand_helper_calls(url_expr: str, base_paths: dict[str, str]) -> str:
     """Replace ``${_helper(arg)}`` occurrences in a template literal
     with the helper's returned string, so URL normalization has
-    something to match against."""
+    something to match against. Other ``${...}`` substitutions collapse
+    to ``{PARAM}``. Uses balanced-brace parsing (M22.1 §5.e fix) so
+    nested templates (`` `?${qs}` `` inside `` ${qs ? ... : ""} ``) are
+    handled correctly rather than truncated at the first ``}``.
+    """
     if "${" not in url_expr:
         return url_expr
 
-    def _sub(match: re.Match[str]) -> str:
-        inside = match.group(0)[2:-1]  # strip ``${`` and ``}``
-        helper_match = re.match(r"([A-Za-z_][\w]*)\s*\(", inside)
-        if helper_match and helper_match.group(1) in base_paths:
-            return base_paths[helper_match.group(1)]
-        return "{PARAM}"
-
-    return _TS_TEMPLATE_RE.sub(_sub, url_expr)
+    result: list[str] = []
+    i = 0
+    n = len(url_expr)
+    while i < n:
+        if i + 1 < n and url_expr[i] == "$" and url_expr[i + 1] == "{":
+            depth = 1
+            j = i + 2
+            in_backtick = False
+            while j < n and depth > 0:
+                ch = url_expr[j]
+                if ch == "`":
+                    in_backtick = not in_backtick
+                elif not in_backtick and ch == "{":
+                    depth += 1
+                elif not in_backtick and ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                j += 1
+            if depth == 0:
+                inside = url_expr[i + 2 : j]
+                helper_match = re.match(r"([A-Za-z_][\w]*)\s*\(", inside)
+                if helper_match and helper_match.group(1) in base_paths:
+                    result.append(base_paths[helper_match.group(1)])
+                else:
+                    result.append("{PARAM}")
+                i = j + 1
+                continue
+        result.append(url_expr[i])
+        i += 1
+    return "".join(result)
 
 
 _EXPORT_FUNCTION_RE = re.compile(
@@ -366,9 +530,46 @@ def extract_frontend_consumers(api_source: str) -> list[FrontendConsumer]:
     for m in _HELPER_CALL_RE.finditer(api_source):
         helper = m.group(1)
         raw_url_expr = m.group(2)
-        expanded = _expand_helper_calls(raw_url_expr, base_paths)
         source_line = api_source[: m.start()].count("\n") + 1
         wrapper = _wrapper_owning_line(api_source, source_line)
+
+        # If the captured first-arg is an identifier (not a string
+        # literal), look backward within the wrapper for the assignment
+        # that produced it. M22.1 §5.e fix — closes the four accounting
+        # false-negatives (fetchTrialBalance, listTrialBalanceSnapshots,
+        # fetchJournalEntries, fetchCostPostingFailures) plus any
+        # future wrapper that assembles its URL into a variable.
+        if raw_url_expr and raw_url_expr[0] not in "`\"'":
+            resolved = _resolve_variable_url(
+                api_source, m.start(), raw_url_expr,
+            )
+            if resolved is None:
+                # Unresolvable — the wrapper uses a variable we can't
+                # trace. Skip rather than emit a false-positive
+                # consumer with a garbage URL.
+                continue
+            # Extract every string / template literal in the assignment
+            # (handles ternaries + template expressions). Each contributes
+            # a consumer row so ternary branches both match Django
+            # patterns.
+            literals = _extract_url_literals(resolved)
+            if not literals:
+                continue
+            for lit in literals:
+                expanded = _expand_helper_calls(lit, base_paths)
+                consumers.append(
+                    FrontendConsumer(
+                        helper=helper,
+                        url_expr=lit,
+                        normalized_pattern=normalize_frontend(expanded),
+                        source_line=source_line,
+                        wrapper_name=wrapper,
+                        component_consumed=True,
+                    )
+                )
+            continue
+
+        expanded = _expand_helper_calls(raw_url_expr, base_paths)
         consumers.append(
             FrontendConsumer(
                 helper=helper,
