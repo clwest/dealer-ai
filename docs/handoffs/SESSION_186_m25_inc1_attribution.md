@@ -9,7 +9,7 @@ milestone_status: in-progress
 milestone_name: "Lead-to-Test-Drive Operational Completion"
 increment: 1
 increment_status: shipped
-commit: TBD
+commit: 368fe37
 ---
 
 # SESSION_186 — Milestone 25 · Increment 1 (M25.1 — attribution display + JSONField backend addition)
