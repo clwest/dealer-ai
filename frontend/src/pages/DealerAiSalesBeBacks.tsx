@@ -1,4 +1,5 @@
 // Milestone 11 · Increment 6 (SESSION_119) — be-back list + transitions.
+// Milestone 21 · Increment 3 (SESSION_169) — record-be-back CREATE form.
 //
 // Consumes GET /admin/be-backs/list/ added in M11.6. Operator can mark
 // a promised be-back as returned or no_show inline (matches the
@@ -6,9 +7,17 @@
 // detector runs at 07:00 daily — operators typically only mark
 // no-show manually before the grace period elapses (customer
 // called to cancel).
+//
+// M21.3 attaches the RecordBeBackForm (createBeBack wrapper existed
+// in salesApi.ts since M11.6 but had no component consumer — the
+// M21.1 audit flagged it as wrapper-only). The form appears above
+// the queue table. On successful record the new row is optimistically
+// prepended; a subsequent filter change or manual reload picks up
+// the true server order.
 
 import { useCallback, useEffect, useState } from "react";
 
+import { RecordBeBackForm } from "@/components/sales/RecordBeBackForm";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -96,6 +105,16 @@ export default function DealerAiSalesBeBacks() {
           manually if the customer cancels ahead of time.
         </p>
       </div>
+
+      <RecordBeBackForm
+        onRecorded={(beBack) => {
+          // Optimistically prepend so the operator sees the row
+          // immediately. If the current filter would exclude the new
+          // row (e.g. filter="returned" and new row is "promised"),
+          // the next load() call will drop it.
+          setBeBacks((current) => [beBack, ...current]);
+        }}
+      />
 
       <Card>
         <CardHeader>

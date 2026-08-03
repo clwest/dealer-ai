@@ -36,6 +36,7 @@ from dealer_ai.models import (
     ROLE_ADVISOR,
     ROLE_SALES_MANAGER,
     CustomerLead,
+    FollowUpCadence,
     Salesperson,
     UserDealershipRole,
 )
@@ -200,3 +201,39 @@ class SeedSalesManagerDailyStartupResetTests(TestCase):
         self.assertEqual(
             Salesperson.objects.filter(slug=ADVISOR_SLUG).count(), 1
         )
+
+
+class SeedSalesManagerDailyStartupM21_3Tests(TestCase):
+    """M21.3 fixture — one active FollowUpCadence on the first seeded
+    lead so the journey has a stable pause target."""
+
+    def test_provisions_active_24hr_cadence_on_first_lead(self) -> None:
+        _run_seed()
+        leads = list(
+            CustomerLead.objects.filter(notes__startswith=FIXTURE_TAG).order_by(
+                "pk"
+            )
+        )
+        self.assertEqual(len(leads), 3)
+        cadences = FollowUpCadence.objects.filter(
+            lead=leads[0], template="24hr", is_active=True
+        )
+        self.assertEqual(cadences.count(), 1)
+
+    def test_cadence_is_idempotent_across_reruns(self) -> None:
+        _run_seed()
+        _run_seed()
+        active = FollowUpCadence.objects.filter(
+            template="24hr", is_active=True
+        )
+        self.assertEqual(active.count(), 1)
+
+    def test_reset_cascades_cadences_and_re_seeds(self) -> None:
+        _run_seed()
+        _run_seed("--reset")
+        # After reset + re-seed there should still be exactly one
+        # active 24hr cadence (on the fresh first lead).
+        active = FollowUpCadence.objects.filter(
+            template="24hr", is_active=True
+        )
+        self.assertEqual(active.count(), 1)

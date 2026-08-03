@@ -1,11 +1,22 @@
 // Milestone 11 · Increment 6 (SESSION_119) — follow-up task work-queue.
+// Milestone 21 · Increment 3 (SESSION_169) — cadence config panel.
 //
 // Consumes GET /admin/follow-up-tasks/ (M11.4). Default filter "due
 // today, pending"; operator can complete / skip inline. Optimistic
 // transition updates local state; on error, refetches.
+//
+// M21.3 attaches the CadenceConfigPanel above the queue table. The
+// createCadence / pauseCadence wrappers already existed in
+// salesApi.ts since M11.4 but had no component consumers — the
+// M21.1 audit flagged both as wrapper-only. The panel gives
+// operators a UI path to start a follow-up cadence for a lead and
+// to pause an active cadence (by ID, since M11.4 ships no cadence
+// list endpoint). A change to cadences triggers a queue reload so
+// newly-spawned tasks appear immediately.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CadenceConfigPanel } from "@/components/sales/CadenceConfigPanel";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -102,6 +113,8 @@ export default function DealerAiSalesFollowUps() {
           or skip inline as you work the queue.
         </p>
       </div>
+
+      <CadenceConfigPanel onChanged={() => void load()} />
 
       <Card>
         <CardHeader>

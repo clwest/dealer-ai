@@ -14,15 +14,25 @@ base:
   with varied urgency values) representing the queue the sales
   manager triages first thing.
 
-Per M20 planning §5.d Option B: composes existing service verbs
-(``record_phone_lead``) — no parallel write paths. Idempotent via a
-stable ``fixture_tag`` in seeded leads' notes + stable
-advisor/username slugs.
+Milestone 21 · Increment 3 additions — enable the M21.3 write-side
+journey extension for be-back CREATE + follow-up cadence CONFIG:
 
-The ``--reset`` flag deletes the seeded leads + clears the seeded
-user's role membership + hides the advisor (is_active=False) then
-re-seeds. Users are preserved; the advisor row is preserved so
-historical assignments still resolve per :class:`Salesperson` doc.
+- One **pre-existing active FollowUpCadence** (24hr template) on
+  the first seeded lead. The M21.3 journey pauses it via the
+  cadence-by-ID form. A separate cadence created via the form
+  (1wk template on the same lead) proves that pausing the seeded
+  cadence does not block a distinct-template create.
+
+Per M20 planning §5.d Option B: composes existing service verbs
+(``record_phone_lead``, ``start_cadence``) — no parallel write
+paths. Idempotent via a stable ``fixture_tag`` in seeded leads'
+notes + stable advisor/username slugs.
+
+The ``--reset`` flag deletes the seeded leads + cascades cadences
++ clears the seeded user's role membership + hides the advisor
+(is_active=False) then re-seeds. Users are preserved; the advisor
+row is preserved so historical assignments still resolve per
+:class:`Salesperson` doc.
 """
 
 from __future__ import annotations
@@ -36,10 +46,15 @@ from dealer_ai.models import (
     ROLE_SALES_MANAGER,
     CustomerLead,
     Dealership,
+    FollowUpCadence,
     Salesperson,
     UserDealershipRole,
 )
 from dealer_ai.services.accounting import seed_default_coa
+from dealer_ai.services.follow_ups.cadence import (
+    DuplicateActiveCadenceError,
+    start_cadence,
+)
 from dealer_ai.services.leads.channel_intake import record_phone_lead
 from dealer_ai.services.tenancy import get_default_dealership
 
@@ -114,6 +129,7 @@ class Command(BaseCommand):
             sm_user = self._provision_sales_manager(dealership)
             advisor_user, advisor = self._provision_advisor(dealership)
             leads = self._provision_leads(dealership)
+            cadence = self._provision_seed_cadence(dealership, leads)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -121,11 +137,16 @@ class Command(BaseCommand):
                 f"sales_manager={sm_user.username} "
                 f"(sales_manager @ {dealership.slug}), "
                 f"advisor={advisor.slug} (user={advisor_user.username}), "
-                f"leads={[lead.pk for lead in leads]}."
+                f"leads={[lead.pk for lead in leads]}, "
+                f"cadence_pk={cadence.pk if cadence else None}."
             )
         )
 
     def _reset(self, dealership: Dealership) -> None:
+        # FollowUpCadence + FollowUpTask rows cascade via the leads.
+        cadence_count = FollowUpCadence.objects.filter(
+            lead__in=_existing_leads(dealership)
+        ).count()
         deleted_leads, _ = _existing_leads(dealership).delete()
         UserDealershipRole.objects.filter(
             user__username=SM_USERNAME, dealership=dealership
@@ -137,7 +158,8 @@ class Command(BaseCommand):
             is_active=False
         )
         self.stdout.write(
-            f"reset: deleted {deleted_leads} lead row(s) + cleared "
+            f"reset: deleted {deleted_leads} lead row(s) "
+            f"(+ {cadence_count} cadence(s) via cascade) + cleared "
             "sales-manager membership + deactivated advisor."
         )
 
@@ -223,6 +245,55 @@ class Command(BaseCommand):
                 f"(active={advisor.is_active})."
             )
         return advisor_user, advisor
+
+    def _provision_seed_cadence(
+        self, dealership: Dealership, leads: list[CustomerLead]
+    ) -> FollowUpCadence | None:
+        """[M21.3] Plant one active FollowUpCadence on the first seeded
+        lead so the journey has a stable pause target.
+
+        Idempotent — if an active cadence already exists on the target
+        lead we reuse it. Uses the 24hr template; the M21.3 journey
+        creates a distinct 1wk cadence via the form to prove template
+        pairing works.
+        """
+        if not leads:
+            return None
+        target_lead = leads[0]
+        existing = FollowUpCadence.objects.filter(
+            dealership=dealership,
+            lead=target_lead,
+            template="24hr",
+            is_active=True,
+        ).first()
+        if existing is not None:
+            self.stdout.write(
+                f"reused existing seed cadence pk={existing.pk} "
+                f"(lead={target_lead.pk}, template=24hr)."
+            )
+            return existing
+        try:
+            cadence = start_cadence(
+                dealership=dealership,
+                lead=target_lead,
+                template="24hr",
+            )
+        except DuplicateActiveCadenceError:
+            # Belt-and-suspenders: another process created it between
+            # the filter above and the start_cadence call.
+            cadence = FollowUpCadence.objects.filter(
+                dealership=dealership,
+                lead=target_lead,
+                template="24hr",
+                is_active=True,
+            ).first()
+            assert cadence is not None
+            return cadence
+        self.stdout.write(
+            f"created seed cadence pk={cadence.pk} "
+            f"(lead={target_lead.pk}, template=24hr)."
+        )
+        return cadence
 
     def _provision_leads(self, dealership: Dealership) -> list[CustomerLead]:
         existing = list(_existing_leads(dealership).order_by("pk"))

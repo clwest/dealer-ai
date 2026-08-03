@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-03
-last_session_shipped: SESSION_168
+last_session_shipped: SESSION_169
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -23,60 +23,64 @@ milestone_18_status: shipped
 milestone_19_status: shipped
 milestone_20_status: shipped
 milestone_21_status: in-progress
-next_session: SESSION_169
+next_session: SESSION_170
 next_milestone: 21
 next_milestone_name: "Operational Surface Completion"
-next_increment: 3
-next_increment_name: "M21.3 — Be-back CREATE + Follow-up cadence CONFIG + journey extensions"
+next_increment: 5
+next_increment_name: "M21.5 — Close-out (retrospective + capability matrix + M22 skeleton + coordinated push)"
 ---
 
-# Next session — SESSION_169 · Milestone 21 · Increment 3 (M21.3 — Be-back CREATE + Follow-up cadence CONFIG)
+# Next session — SESSION_170 · Milestone 21 · Increment 5 (M21.5 — close-out)
 
-> **Milestone 21.2 shipped at
-> SESSION_168** — first M21 anchor
-> implementation. Seven BHPH write
-> endpoints now reachable through
-> the operator UI (previously
-> curl-only). Seven new components
-> attached to
-> `DealerAiBhphNoteDetail.tsx`;
-> seven new `bhphApi.ts` write
-> wrappers; extended seed with
-> M21.2 fixtures; re-expanded
-> acceptance journey covers all 7
-> endpoints end-to-end.
+> **Milestone 21.3 shipped at
+> SESSION_169** — second anchor
+> implementation combined with the
+> M21-conditional cadence CONFIG
+> scope. Three previously wrapper-
+> only endpoints (`createBeBack`,
+> `createCadence`, `pauseCadence`)
+> now have component-level
+> consumers on the operator UI.
+> `RecordBeBackForm` on
+> `DealerAiSalesBeBacks.tsx`;
+> `CadenceConfigPanel` (create +
+> pause-by-id + inline-pause) on
+> `DealerAiSalesFollowUps.tsx`.
+> Extended sales-manager seed with
+> a stable 24hr cadence for pause
+> testing. Extended daily-startup
+> journey with three new sub-steps
+> covering all three new endpoints.
 >
-> **Backend:** 4,755 → 4,758 pass.
-> **Frontend Vitest:** 153 → 171
-> pass (+18 new tests).
+> **Backend:** 4,758 → 4,761 pass.
+> **Frontend Vitest:** 171 → 180
+> pass (+9 new tests).
 > **Acceptance suite:** 6 journeys
-> (BHPH re-expanded from read-only
-> to full write coverage; verified
-> locally 7/7 pass).
+> (sales_manager daily startup
+> extended; verified locally 7/7
+> pass in 1.1s).
 >
-> **SESSION_169 opens M21.3 — the
-> second anchor implementation
-> combined with the M21-conditional
-> cadence-CONFIG scope.** Three
-> endpoints across two feature
-> areas: be-back CREATE (1) +
-> follow-up cadence CONFIG (2).
-> Combined into one increment per
-> M21.0 §5.h Option B size
-> discipline.
+> **SESSION_170 opens M21.5 — the
+> close-out increment.** Docs-only:
+> capability matrix update,
+> retrospective, M22 skeleton,
+> IMPLEMENTATION_ROADMAP amendment,
+> M21.1 audit regeneration to
+> reflect new coverage, coordinated
+> push per M18.6 / M19.6 / M20.5.
 
-## First thing SESSION_169 must do
+## First thing SESSION_170 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean.
 - `git log --oneline -6` — top
-  should be the M21.2 commit.
+  should be the M21.3 commit.
 - `python3 manage.py test dealer_ai`
-  → **4,758 pass, 1 skipped, 0
+  → **4,761 pass, 1 skipped, 0
   fail**.
 - `cd frontend && npm test` →
-  **171 pass**.
+  **180 pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
@@ -87,183 +91,269 @@ next_increment_name: "M21.3 — Be-back CREATE + Follow-up cadence CONFIG + jour
   clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. Ship the missing `salesApi.ts` component consumers
+### 2. Regenerate the M21.1 audit artifact
 
-The `createBeBack`, `createCadence`,
-and `pauseCadence` wrappers already
-exist in `frontend/src/lib/salesApi.ts`
-— they're wrapper-only per the M21.1
-audit. **This increment adds the
-component-level consumers.**
+Rerun the audit tooling to reflect
+new coverage:
 
-**Attach location decision surfaces
-at M21.3 open** (per §5.e Option C):
+```bash
+cd backend
+python3 -m dealer_ai.scripts.audit_operational_surface
+```
 
-- `RecordBeBackForm` — attach to
-  `DealerAiSalesBeBacks.tsx`
-  (adjacent to the existing queue
-  table + row actions). Fields:
-  `lead_id` (numeric input or lead
-  picker), `promised_at` (datetime),
-  `promised_reason` enum, `notes`.
-- `CreateCadenceForm` +
-  `PauseCadenceButton` — attach to
-  `DealerAiSalesFollowUps.tsx` in a
-  new cadence-config panel, OR
-  create an adjacent
-  `DealerAiSalesCadences.tsx`
-  page-embedded panel — decide at
-  session open based on component
-  fit.
+Expected changes vs. the M21.1
+snapshot:
 
-Follow the M21.2 pattern: forms
-under `frontend/src/components/sales/`
-(or continue the `bhph/` pattern
-scaled to sales); wire into the
-target page with optimistic merges
-into the returned projection.
+- **BHPH write path (7
+  endpoints):** move from
+  `M21-anchor` → `covered` (the
+  bhphApi.ts wrappers now exist
+  AND `DealerAiBhphNoteDetail.tsx`
+  imports the components that
+  use them).
+- **Be-back CREATE (1
+  endpoint):** move from
+  `M21-anchor` → `covered`
+  (RecordBeBackForm imported by
+  `DealerAiSalesBeBacks.tsx`).
+- **Follow-up cadence CONFIG (2
+  endpoints):** move from
+  `M21-conditional` → `covered`
+  (CadenceConfigPanel imported
+  by `DealerAiSalesFollowUps.tsx`).
+- **Total coverage delta:**
+  ~96 → ~106 covered; ~57 → ~47
+  backend-only.
 
-### 3. Ship Vitest coverage
+Review the regenerated artifact
+before commit — if the
+recommender misclassifies any
+new row (e.g. a new
+`defer-candidate-O2` that's
+actually intentional-omission),
+edit the disposition manually
+per the M21.1 human-review
+posture.
 
-Same shape as M21.2 tests:
-- Submit path (happy path posts
-  correct payload).
-- Validation path (required
-  fields).
-- Error path (backend 400 / 409
-  / 404 rendered as human-readable
-  messages).
-- Button handler tests (confirm
-  dialogs, disabled states).
+### 3. Verify the full acceptance suite passes locally
 
-Target Vitest baseline movement:
-171 → ~183-188 (roughly +12-17
-new tests for 3-4 new components).
+```bash
+rm -f backend/db.acceptance.sqlite3
+cd acceptance
+npx playwright test
+```
 
-### 4. Extend seed(s) + backend tests
+Expected: **12 passed** (6 setup
+projects + 6 journeys) matching
+the M20 close baseline shape.
+The two extended journeys
+(BHPH + sales_manager) plus the
+four unchanged journeys all
+pass. If a journey fails, address
+as §0.a M21.5 amendment before
+close-out commit.
 
-Extend
-`seed_journey_sales_manager_daily_startup`
-to plant state supporting the
-new UI:
-- A candidate `Lead` for the be-
-  back CREATE form (already
-  seeded — verify).
-- A cadence template for the
-  pause action (if not already
-  seeded — the seeded state may
-  already include a cadence
-  from prior increments; check
-  first).
-- A follow-up task in a state
-  where the cadence pause is
-  meaningful.
+### 4. Ship the capability matrix update
 
-Backend tests: idempotency +
-tenant scoping per the M20.2
-seed test pattern.
+Add **§7v — Milestone 21 shipped
+surface** to
+`docs/CAPABILITY_MATRIX.md`:
 
-**Decision at M21.3 open** (per
-§5.e Option C): if cadence
-config has a temporally-distinct
-workflow, ship a NEW seed
-command
-`seed_journey_sales_manager_cadence_config`
-+ a NEW journey. If cadence
-lives naturally within daily-
-startup, extend the existing
-seed + journey.
+- New surface: 10 frontend
+  components across two domains
+  (bhph/ + sales/), 7 new
+  bhphApi.ts write wrappers,
+  extended seeds (2), extended
+  journey (1 BHPH re-expanded +
+  1 sales_manager extended), 1
+  new operator-invoked audit
+  script + audit artifact.
+- Backend delta: 4,755 → 4,761
+  (+6 seed coverage tests
+  across BHPH + sales_manager
+  extensions).
+- Frontend delta: 153 → 180
+  (+27 new tests across 7
+  component test files).
+- Acceptance delta: 6 → 6
+  journeys (2 extended, 4
+  unchanged).
+- Zero-drift streak: **twenty
+  → twenty-one** consecutive
+  milestones (M10 → M21).
+- Planning-time streak: **86
+  → 87** as-recommended across
+  twelve consecutive milestones
+  (M10 → M21).
 
-### 5. Extend or add the acceptance journey
+### 5. Ship the M21 retrospective
 
-**Path A — Extend
-`acceptance/journeys/sales_manager/daily_startup.spec.ts`.**
-Add three sub-steps at the end
-of the current journey:
-- Record a be-back via form →
-  assert new row appears.
-- Create a cadence via form →
-  assert cadence surfaces.
-- Pause the seeded cadence via
-  button → assert paused state.
+`docs/roadmap/MILESTONE_21_RETROSPECTIVE.md`.
+Structure matches M18-M20
+retrospectives:
 
-**Path B — Add a new journey
-file
-`acceptance/journeys/sales_manager/cadence_config.spec.ts`.**
-Preferred if the cadence-
-management workflow is
-temporally separate from daily
-startup (e.g. weekly admin
-task vs. morning triage).
+- §1 What shipped (summary).
+- §2 What worked well.
+- §3 What was harder than
+  expected.
+- §4 Deferred items (M21-
+  conditional cadence CONFIG
+  landed; M21.4 skipped;
+  defer-candidate-O2 endpoints
+  carried forward).
+- §5 Lessons learned.
+- §6 Deltas against planning
+  memo estimates.
+- §7 Governing-contract
+  validation.
+- §8 Unblocks / new candidates
+  surfaced by M21 work.
+- §9 Standing M22 question
+  (should M22 pick another
+  OSC iteration or the return-
+  to-accounting candidate?).
 
-Assertions target business
-state via the M11.4 admin API
-— not DOM state.
+### 6. Draft the M22 planning skeleton
 
-### 6. Ship the M21.3 handoff + refresh entry point
+`docs/roadmap/MILESTONE_22_PLANNING.md`
+with frontmatter `status: draft`.
+Candidate list refreshed from
+M21 retrospective §8 + §9 +
+carry-forwards:
 
-- `docs/handoffs/SESSION_169_m21_inc3_be_back_cadence.md`.
-- Refresh
+- **Elevated:** Candidate A
+  (return to accounting stream)
+  — now four consecutive
+  milestones diverging (M18 →
+  M21); the M21 audit surfaced
+  three accounting endpoints
+  (journal-entry-reverse +
+  snapshot create/list/retrieve)
+  with `defer-domain-milestone`
+  disposition — clean scope
+  target.
+- **Elevated:** Candidate O2
+  (next OSC iteration) —
+  regenerated M21.1 audit
+  should show ~47 backend-only
+  endpoints available for
+  future OSC scope.
+- **Gated:** T (tester
+  feedback), U (hosted demo),
+  L (staging pilot dry-run),
+  M (multi-operator) —
+  unchanged from M21.0.
+- **Deferred pending
+  evidence:** D (LLM router),
+  C (F&I chargeback) — same
+  posture as M20/M21.
+
+### 7. Update IMPLEMENTATION_ROADMAP
+
+`docs/roadmap/IMPLEMENTATION_ROADMAP.md`:
+- Mark M21 as shipped.
+- Add M21 to shipped-milestones
+  list with completion note.
+- **Formalize the DoD amendment**
+  (M21.0 §5.f Option B) in the
+  roadmap's milestone-contract
+  section: every future customer-
+  facing milestone MUST add or
+  update at least one Playwright
+  operational journey OR
+  explicitly document in §3 why
+  no journey change is required.
+
+### 8. Ship the M21.5 handoff
+
+`docs/handoffs/SESSION_170_m21_inc5_close.md`.
+Match the M20.5 handoff shape:
+what shipped, streak update,
+what's next, anchors.
+
+### 9. Refresh entry point + coordinated push
+
+- Overwrite
   `00-START-NEXT-SESSION.md`
-  for SESSION_170 / M21.5
+  for SESSION_171 / M22.0
+  (planning refinement + target
+  selection).
+- Create the coordinated close-
+  out commit that lands all
+  M21.5 documentation together
+  (matches M18.6 / M19.6 /
+  M20.5 pattern).
+- **Push** the M21 branch to
+  `origin/main` — this is the
+  first M21 push. Six commits:
+  M21.0 planning + M21.1 audit
+  + M21.2 BHPH + M21.3 be-back
+  + cadence + M21.5 close-out.
+
+## Non-goals for SESSION_170
+
+- ❌ Do NOT ship any new frontend
+  code — M21.5 is docs-only
   close-out.
-- **Do NOT push** — M21
-  coordinated push happens at
-  M21 close (SESSION_170) per
-  M18.6 / M19.6 / M20.5.
-
-## Non-goals for SESSION_169
-
-- ❌ Do NOT modify any backend
-  service verb — every M21.3
-  UI attaches to an existing
-  verb via an existing
-  endpoint.
-- ❌ Do NOT add or modify any
-  DRF endpoint.
-- ❌ Do NOT add new frontend
-  routes. Attach to
-  `DealerAiSalesBeBacks.tsx` +
-  `DealerAiSalesFollowUps.tsx`
-  (or attach cadence config
-  in-place, no new route).
-- ❌ Do NOT modify M1–M21.2
-  shipped surface.
-- ❌ Do NOT bundle any
-  additional `defer-candidate-
-  O2` scope items — M21.4 was
-  skipped by scope-lock at
-  §0.a M21.1.
-- ❌ Do NOT force-push or
-  amend earlier commits (M21
-  coordinated push at close).
+- ❌ Do NOT ship any new backend
+  code (except possibly a tweak
+  to the audit script if the
+  regen surfaces a false-positive
+  disposition worth fixing;
+  guard as §0.a M21.5).
+- ❌ Do NOT modify shipped seed
+  commands or acceptance
+  journeys unless a regression
+  surfaces during the local
+  full-suite run.
+- ❌ Do NOT open M22 planning
+  §5.a — that's SESSION_171's
+  work.
+- ❌ Do NOT force-push or amend
+  earlier commits.
+- ❌ Do NOT bundle any additional
+  scope items from the audit —
+  M21 scope is locked.
 
 ## Baseline expected at close
 
-- **Backend:** ~4,770-4,780
-  pass.
-- **Frontend Vitest:** ~183-188
-  pass.
+- **Backend:** 4,761 pass
+  (unchanged from M21.3 close).
+- **Frontend Vitest:** 180 pass
+  (unchanged).
 - **Acceptance suite:** 6
-  journeys (extended) or 7 (if
-  cadence gets its own).
-- **Migrations, tenancy,
-  permissions, routes:**
-  unchanged.
+  journeys (unchanged; full
+  suite verified locally).
+- **Migrations:** `0001`–`0048`
+  (unchanged).
+- **Tenancy carriers:** 52
+  (unchanged).
+- **Permission classes:** 7
+  (zero-drift streak extends
+  **twenty → twenty-one**
+  consecutive milestones at
+  M21 close).
+- **Frontend operator
+  routes:** 20 (unchanged).
+- **DRF admin surface:** 113
+  (unchanged).
 
 ## NEXT TASK
 
-Start SESSION_169 with (a)
+Start SESSION_170 with (a)
 starting-state verification, (b)
-component-attachment location
-decisions (be-back + cadence
-config), (c) ship components +
-wrappers-are-already-there
-consumers, (d) Vitest coverage,
-(e) seed extension + backend
-tests, (f) journey extension or
-addition, (g) ship the M21.3
-handoff.
+regenerate the audit artifact
++ human-review dispositions,
+(c) verify full acceptance
+suite locally, (d) capability
+matrix §7v, (e) retrospective,
+(f) M22 planning skeleton, (g)
+IMPLEMENTATION_ROADMAP update
++ DoD amendment formalization,
+(h) M21.5 handoff, (i) entry
+point refresh, (j) coordinated
+close-out commit + **first M21
+push**.
 
 ---
 
@@ -277,48 +367,48 @@ handoff.
    (active — §0.a M21.1 scope
    lock recorded)
 6. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-7. `docs/handoffs/SESSION_168_m21_inc2_bhph_write.md`
-   (M21.2 shipped)
-8. `docs/handoffs/SESSION_167_m21_inc1_audit.md`
-9. `docs/CAPABILITY_MATRIX.md` §7u
+   (regenerate at M21.5 open)
+7. `docs/handoffs/SESSION_169_m21_inc3_be_back_cadence.md`
+   (M21.3 shipped)
+8. `docs/handoffs/SESSION_168_m21_inc2_bhph_write.md`
+9. `docs/handoffs/SESSION_167_m21_inc1_audit.md`
+10. `docs/handoffs/SESSION_166_m21_inc0_planning.md`
+11. `docs/CAPABILITY_MATRIX.md` §7u
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_168 — Milestone 21 · Increment 2 SHIPPED)
+## Operational state (post-SESSION_169 — Milestone 21 · Increment 3 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
   `0001`–`0048`. Test baseline:
-  **4,758 pass**, 1 skipped, 0
+  **4,761 pass**, 1 skipped, 0
   fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
   `:5173`. `tsc --noEmit` +
   `vite build` clean. **Vitest
-  baseline: 171 pass** (up from
-  153 at M21.1 close; +18 M21.2
+  baseline: 180 pass** (up from
+  171 at M21.2 close; +9 M21.3
   component tests).
 - **Frontend (prod):** NONE.
 - **Acceptance workspace
   (local):** Playwright 1.49 +
   TS 5.6 operational. **Six
   journeys** — BHPH re-expanded
-  from M20.4 read-only to full
-  write coverage; other five
-  unchanged. M21.2 journey
+  at M21.2, sales_manager
+  extended at M21.3, other four
+  unchanged. M21.3 journey
   verified locally 7/7 pass
-  (846ms).
-- **Acceptance (CI):** live on
-  `.github/workflows/acceptance.yml`
-  — last green run predates
-  M21 commits (M20-close). M21
-  coordinated push at M21
-  close (SESSION_170) will
-  trigger the first M21 CI
-  run.
+  (1.1s).
+- **Acceptance (CI):** last
+  green run predates M21
+  commits. First M21 CI run
+  triggers at M21.5 coordinated
+  push.
 - **Async runtime:** Celery
   5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1
@@ -327,26 +417,29 @@ research + code are facts.
   registered**.
 - **Milestones shipped:** M1 →
   **M20**. **M21 in progress
-  (M21.0 + M21.1 + M21.2
-  shipped locally).**
+  (M21.0 + M21.1 + M21.2 + M21.3
+  shipped locally). M21.5 close-
+  out next.**
 - **DRF admin surface:** 113
-  endpoints (unchanged — M21.2
-  adds zero endpoints).
+  endpoints (unchanged).
 - **Frontend operator routes:**
-  20 (unchanged — M21.2 attaches
-  in-place to
-  `DealerAiBhphNoteDetail.tsx`).
+  20 (unchanged).
 - **Public endpoints:** +1 M6.5
   showroom.
 - **Service surface:** all
   M1–M20 packages unchanged.
   M21 adds zero service verbs.
 - **Frontend surfaces:** M12.7
-  collector dashboard now
-  extended with write-side
-  panels (7 new components
+  BHPH collector dashboard +
+  M11.5/M11.6 sales pages
+  extended with M21 write
+  panels. 10 new components
   under
-  `frontend/src/components/bhph/`).
+  `frontend/src/components/bhph/`
+  (7) and
+  `frontend/src/components/sales/`
+  (3, counting bundled sub-
+  components).
 - **Tenancy carriers:** 52
   (unchanged).
 - **Permission classes:** 7
@@ -354,7 +447,7 @@ research + code are facts.
   twenty consecutive milestones
   (M10 → M20). M21 targets
   extension to twenty-one at
-  close.
+  M21.5 close.
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17
@@ -364,26 +457,26 @@ research + code are facts.
 - **Milestone 21 status:** IN
   PROGRESS. M21.0 (planning) +
   M21.1 (audit + scope lock) +
-  M21.2 (BHPH write-side UI +
-  journey extension) shipped
-  locally. Three commits ahead
-  of `origin/main`; coordinated
-  push at M21.5 close per
+  M21.2 (BHPH write-side UI) +
+  M21.3 (Be-back CREATE +
+  cadence CONFIG) shipped
+  locally. Four commits ahead
+  of `origin/main`; M21.5
+  will land the fifth and
+  coordinated push per
   M18/M19/M20 cadence.
 - **Audit tooling:**
   `backend/dealer_ai/scripts/audit_operational_surface.py`
-  operator-invoked. Rerun after
-  M21.3 to reflect further
-  coverage gains (be-back +
-  cadence config transitioning
-  from `wrapper-only` to
-  `covered`).
+  ready for regen at M21.5
+  open to reflect the coverage
+  gains from M21.2 + M21.3.
 - **Planning-time streak:**
   **87 as-recommended M5.1 →
   M21.0** across twelve
   consecutive milestones (M10 →
   M21). No new §5 decisions in
-  M21.2 or M21.3 (execution
+  M21.2, M21.3, or M21.5
+  (execution/close-out
   sessions); streak preserved.
 - **DoD amendment (formalized
   at M21.0 §5.f Option B):**
@@ -393,9 +486,12 @@ research + code are facts.
   operational journey, or
   explicitly document in §3 why
   no journey change is
-  required. M21.2 satisfies via
-  the re-expanded BHPH
-  collections journey.
+  required. M21.2 + M21.3 both
+  satisfied via journey
+  extensions. Formal amendment
+  text lands in
+  IMPLEMENTATION_ROADMAP at
+  M21.5.
 - **Governing contract
   (Candidate O):** every M21
   shipped surface maps to an

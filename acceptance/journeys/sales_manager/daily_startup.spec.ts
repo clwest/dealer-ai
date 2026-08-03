@@ -1,11 +1,18 @@
 // Milestone 20 · Increment 2 — canonical sales manager daily startup
 // journey.
+// Milestone 21 · Increment 3 — extended to cover be-back CREATE +
+// follow-up cadence CONFIG.
 //
 // Guiding principle: this suite is an operational acceptance
 // contract, not a UI automation project. This journey validates that
 // a sales manager arriving for the day can review overnight leads,
 // pick one up, and assign it to an advisor through the real UI, with
-// the assignment landing at the service layer.
+// the assignment landing at the service layer. M21.3 extends the
+// journey to also exercise the be-back CREATE form + the follow-up
+// cadence config panel (create + pause), which previously had no
+// operator UI (wrappers existed in salesApi.ts as of M11.4/M11.6 but
+// had no component consumers — flagged wrapper-only by the M21.1
+// audit).
 //
 // Seeded state (via seed_journey_sales_manager_daily_startup):
 // - `acceptance-sales-manager` user (sales_manager @ default
@@ -15,6 +22,8 @@
 //   target
 // - three unassigned overnight phone leads with varied urgency
 //   ("Overnight SM Lead 1"..3)
+// - one active 24hr `FollowUpCadence` on the first seeded lead
+//   (M21.3 fixture — journey uses it for the pause-by-id path)
 //
 // **Where assignment happens.** The shipped UI wires assignment
 // through the LeadDetailModal opened from /dealer-ai-admin's
@@ -175,6 +184,118 @@ test.describe(
         .toBe(ADVISOR_NAME);
 
       await expectLeadAssignedTo(request, seededLead.id, ADVISOR_NAME);
+
+      // -----------------------------------------------------------------
+      // M21.3 extension — be-back CREATE via /dealer-ai-sales/be-backs.
+      // -----------------------------------------------------------------
+      //
+      // Locate a distinct seeded lead (Lead 2) so we don't collide
+      // with the assignment step's lead. Capture the current be-back
+      // count via the admin list — business-outcome assertion targets
+      // count delta.
+
+      const beBackLead = await findSeededLead(request, "Overnight SM Lead 2", {
+        limit: 100,
+      });
+
+      const beBackListUrl = "/api/dealer-ai/admin/be-backs/list/";
+      const beBackCountBefore = await (async () => {
+        const res = await request.get(beBackListUrl);
+        expect(res.status()).toBe(200);
+        const body = (await res.json()) as {
+          count?: number;
+          results?: unknown[];
+        };
+        return body.count ?? body.results?.length ?? 0;
+      })();
+
+      await page.goto("/dealer-ai-sales/be-backs");
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Be-backs" }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId("record-be-back-form")).toBeVisible();
+
+      await page
+        .getByTestId("record-be-back-lead-id")
+        .fill(String(beBackLead.id));
+      await page
+        .getByTestId("record-be-back-reason")
+        .selectOption("bring_co_signer");
+      await page
+        .getByTestId("record-be-back-notes")
+        .fill("[M21.3 journey] Journey-recorded be-back.");
+      await page.getByTestId("record-be-back-submit").click();
+
+      await expect
+        .poll(async () => {
+          const res = await request.get(beBackListUrl);
+          const body = (await res.json()) as {
+            count?: number;
+            results?: unknown[];
+          };
+          return body.count ?? body.results?.length ?? 0;
+        })
+        .toBe(beBackCountBefore + 1);
+
+      // -----------------------------------------------------------------
+      // M21.3 extension — cadence CREATE via
+      // /dealer-ai-sales/follow-ups. Use lead 1 (which the seed already
+      // has a 24hr cadence on) but with a distinct template (1wk) so
+      // the create succeeds. Then inline-pause the freshly-created 1wk
+      // cadence via the recent-cadences panel row action.
+      // -----------------------------------------------------------------
+
+      const cadenceLead = await findSeededLead(request, "Overnight SM Lead 1", {
+        limit: 100,
+      });
+
+      await page.goto("/dealer-ai-sales/follow-ups");
+      await expect(
+        page.getByRole("heading", {
+          level: 1,
+          name: "Follow-up work-queue",
+        }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId("cadence-config-panel")).toBeVisible();
+
+      await page
+        .getByTestId("create-cadence-lead-id")
+        .fill(String(cadenceLead.id));
+      await page.getByTestId("create-cadence-template").selectOption("1wk");
+      await page.getByTestId("create-cadence-submit").click();
+
+      // The recent-cadences panel appears with the newly-created row.
+      // Its testid is `cadence-row-{id}` where id comes from the API
+      // response. We locate it dynamically since IDs vary per run.
+      await expect(page.getByTestId("cadence-config-recent")).toBeVisible({
+        timeout: 10_000,
+      });
+      const recentCadenceRow = page
+        .getByTestId("cadence-config-recent")
+        .locator('[data-testid^="cadence-row-"]')
+        .first();
+      await expect(recentCadenceRow).toBeVisible();
+
+      // Extract the cadence id from the row testid so we can target
+      // the inline pause button + assert state via the API.
+      const recentCadenceTestid = await recentCadenceRow.getAttribute(
+        "data-testid",
+      );
+      expect(recentCadenceTestid).toMatch(/^cadence-row-\d+$/);
+      const newCadenceId = Number(
+        (recentCadenceTestid ?? "").replace("cadence-row-", ""),
+      );
+
+      // The state before pause is "active".
+      await expect(
+        page.getByTestId(`cadence-state-${newCadenceId}`),
+      ).toHaveText(/active/);
+
+      // Inline pause.
+      await page.getByTestId(`pause-cadence-button-${newCadenceId}`).click();
+      await expect(
+        page.getByTestId(`cadence-state-${newCadenceId}`),
+      ).toHaveText(/paused/);
     });
   },
 );
