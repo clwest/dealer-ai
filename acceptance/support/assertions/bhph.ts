@@ -346,6 +346,63 @@ export async function fetchChildCounts(
  * so this asserts >= 1.
  */
 // ---------------------------------------------------------------------
+// M23.3 — payment intake assertion helper.
+// ---------------------------------------------------------------------
+
+interface BhphPaymentRow {
+  id: number;
+  note_id: number;
+  amount: string;
+  method: string;
+  paid_at: string;
+}
+
+async function fetchPaymentList(
+  request: APIRequestContext,
+  notePk: number,
+): Promise<BhphPaymentRow[]> {
+  const url = `/api/dealer-ai/admin/bhph-notes/${notePk}/payments/list/`;
+  const response = await request.get(url);
+  expect(response.status(), `GET ${url} returned non-200`).toBe(200);
+  const body = (await response.json()) as {
+    results?: BhphPaymentRow[];
+    bhph_payments?: { results?: BhphPaymentRow[] };
+  };
+  return body.bhph_payments?.results ?? body.results ?? [];
+}
+
+/**
+ * Assert that a BhphPayment with the given amount + method exists
+ * on the note. The M23.3 payment-intake journey uses this to prove
+ * the payment landed durably at the service layer after the form
+ * submit. Since the M23.3 seed's fresh-note fixture starts with
+ * zero payments, asserting "at least one payment exists with
+ * matching amount+method" is a stable business-outcome check that
+ * doesn't require baseline arithmetic.
+ */
+export async function expectBhphPaymentRecorded(
+  request: APIRequestContext,
+  notePk: number,
+  expected: {
+    amount: string;
+    method: "cash" | "check" | "debit" | "ach" | "other";
+  },
+): Promise<BhphPaymentRow> {
+  const payments = await fetchPaymentList(request, notePk);
+  const matches = payments.filter(
+    (p) =>
+      Number(p.amount) === Number(expected.amount) &&
+      p.method === expected.method,
+  );
+  expect(
+    matches.length,
+    `expected at least one BhphPayment on note ${notePk} with amount=${expected.amount} method=${expected.method}; found ${matches.length} in ${JSON.stringify(payments)}`,
+  ).toBeGreaterThanOrEqual(1);
+  return matches[0]!;
+}
+
+
+// ---------------------------------------------------------------------
 // M23.2 — note origination assertion helper.
 // ---------------------------------------------------------------------
 

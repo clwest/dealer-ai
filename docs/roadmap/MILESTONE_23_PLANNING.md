@@ -777,6 +777,117 @@ where noted. Non-negotiable:
   split-by-size posture
   correctly handled both.
 
+**SESSION_178 M23.3 close (2026-08-03):**
+
+- **Second anchor UI shipped.**
+  `RecordBhphPaymentForm.tsx`
+  attaches inline to the
+  existing Payments card on
+  `DealerAiBhphNoteDetail.tsx`
+  — matches the M21.2 sibling
+  pattern (RecordPromiseToPayForm
+  inline in Promises card).
+  Form fields match
+  `BhphPaymentCreateRequestSerializer`
+  verbatim: paid_at (datetime),
+  amount (decimal), method
+  (enum: cash / check / debit /
+  ach / other).
+- **`createBhphPayment` wrapper
+  shipped** in
+  `frontend/src/lib/bhphApi.ts`
+  posting to
+  `POST /admin/bhph-notes/<pk>/payments/`
+  per M12.2 contract. New
+  `BhphPaymentMethod` type
+  matches
+  `BHPH_PAYMENT_METHOD_CHOICES`
+  in models.py.
+- **Seed extension shipped.**
+  `seed_journey_bhph_collections_workflow.py`
+  provisions a distinct BhphNote
+  (stock `M23-BHPH-PAY`,
+  principal $5,400, APR 19.5%,
+  52w term) with non-zero
+  balance and NO payments yet.
+  Payment cleanup on re-
+  invocation matches M22.2
+  reversal + M23.2 note
+  cleanup patterns. SUCCESS
+  message prints
+  `m23_pay_note_pk=<N>` for the
+  journey to parse.
+- **Extended seed test module**
+  with 7 new M23.3 test cases
+  (fixture provisioning, no-
+  payments invariant, distinct
+  from M20.4 + M23.2, expected
+  principal, SUCCESS message
+  format, idempotency, payment
+  cleanup on re-invocation,
+  reset). Backend baseline
+  **4,773 → 4,780 (+7)**.
+- **Extended
+  `acceptance/support/assertions/bhph.ts`**
+  with
+  `expectBhphPaymentRecorded(request, notePk, expected)`
+  helper. Business-outcome
+  assertion verifies at least
+  one payment with matching
+  amount + method exists on
+  the note.
+- **New Playwright journey**
+  at
+  `acceptance/journeys/bhph/payment_intake.spec.ts`.
+  Walks: parse note pk from
+  seed stdout → land on note
+  detail → verify Payments
+  card + form render → fill
+  form → submit → verify
+  amount input clears (signal
+  of success) → business-
+  outcome assertion via API.
+  **First-run pass** — no
+  §5.d fixes required. Reused
+  M23.2's `_provision_collector`
+  session-preservation fix +
+  the invokeSeed + stdout-
+  parsing pattern.
+- **DealerAiBhphNoteDetail.tsx
+  Payments card extended** —
+  now includes the inline
+  `RecordBhphPaymentForm` +
+  `data-testid="payments-card"`
+  + `data-testid="payment-row-<id>"`
+  markers per §5.g
+  opportunistic-testid posture.
+  Optimistic list refresh via
+  `mergeById` matches sibling
+  cards' pattern.
+- **Verification.** Isolated
+  M23.3 journey: 7 passed (6
+  setup + 1) @ 13.1s. Full
+  clean-DB dry-run: **15
+  passed (9 journeys) @
+  20.3s**. Frontend Vitest:
+  **187 → 193 (+6)** payment
+  form tests. Zero
+  regressions.
+- **Milestone anchor UIs
+  complete.** Both M23 anchor
+  UIs (M23.2 note origination
+  + M23.3 payment intake)
+  shipped and Playwright-
+  validated. BHPH lifecycle
+  now operationally complete
+  through the product: M12
+  backend + M12.7 read UI +
+  M20.4 Playwright + M21.2
+  collections write-side +
+  M23.2 origination + M23.3
+  payment intake. Ready for
+  M23.4 close-out.
+
 ## 1. Business questions this milestone answers
 
 Five operator-workflow questions,
@@ -2135,10 +2246,16 @@ component tests).
 Acceptance suite: **7 →
 8**.
 
-### Increment 3 (M23.3) — Payment intake UI + journey
+### Increment 3 (M23.3) — Payment intake UI + journey ✅ SHIPPED
 
 **Scope.** SESSION_178.
-Second anchor UI.
+Second anchor UI. See §0.a
+M23.3 close entry for shipped
+outcome — first-run pass with
+zero §5.d fixes needed;
+reused M23.2's session-
+preservation fix + invokeSeed
+pattern.
 
 **Deliverable.**
 - `createBhphPayment`

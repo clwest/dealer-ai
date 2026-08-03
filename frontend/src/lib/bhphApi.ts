@@ -33,6 +33,18 @@
 // established. Attaches to DealerAiBhphPortfolio.tsx Notes card as
 // a persistent "Add note" CTA + modal per M23 §5.b Option A.
 //
+// Milestone 23 · Increment 3 (SESSION_178) — BHPH payment-intake
+// wrapper:
+//
+//   POST /admin/bhph-notes/<pk>/payments/                  (M12.2)
+//
+// Closes the payment-intake gap so a collector can record cash
+// payments against an existing note through the product rather
+// than via curl / Django shell. Attaches inline to the existing
+// Payments card on DealerAiBhphNoteDetail.tsx, matching the
+// M21.2 sibling pattern (RecordPromiseToPayForm inline in
+// Promises card).
+//
 // Money on the wire is Decimal-as-string per the M9.5 + M10.1
 // convention.
 
@@ -184,6 +196,30 @@ export function listBhphPayments(
 ): Promise<BhphPaymentListResponse> {
   return authGetJSON<BhphPaymentListResponse>(
     `/admin/bhph-notes/${notePk}/payments/list/`,
+  );
+}
+
+// M23.3 — Payment method vocab (matches BHPH_PAYMENT_METHOD_CHOICES
+// in backend/dealer_ai/models.py verbatim).
+export type BhphPaymentMethod = "cash" | "check" | "debit" | "ach" | "other";
+
+export interface CreateBhphPaymentPayload {
+  paid_at: string;   // ISO 8601 datetime
+  amount: string;    // Decimal-as-string (min 0.01)
+  method: BhphPaymentMethod;
+}
+
+export interface BhphPaymentCreateResponse {
+  bhph_payment: BhphPaymentProjection;
+}
+
+export function createBhphPayment(
+  notePk: number,
+  payload: CreateBhphPaymentPayload,
+): Promise<BhphPaymentCreateResponse> {
+  return authPostJSON<BhphPaymentCreateResponse>(
+    `/admin/bhph-notes/${notePk}/payments/`,
+    payload,
   );
 }
 

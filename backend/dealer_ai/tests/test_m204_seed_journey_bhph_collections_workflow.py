@@ -33,6 +33,8 @@ from dealer_ai.management.commands.seed_journey_bhph_collections_workflow import
     FIXTURE_STOCK,
     M23_ORIG_FIXTURE_BUYER_EMAIL,
     M23_ORIG_FIXTURE_STOCK,
+    M23_PAY_FIXTURE_PRINCIPAL,
+    M23_PAY_FIXTURE_STOCK,
 )
 from dealer_ai.models import (
     BHPH_PROMISE_STATE_BROKEN,
@@ -350,3 +352,105 @@ class SeedBhphCollectionsM23OriginationFixtureTests(TestCase):
             vehicle__stock_number=M23_ORIG_FIXTURE_STOCK
         )
         self.assertEqual(sales.count(), 1)
+
+
+# ---------------------------------------------------------------------
+# Milestone 23 · Increment 3 — payment-intake fixture coverage.
+# ---------------------------------------------------------------------
+
+
+class SeedBhphCollectionsM23PaymentIntakeFixtureTests(TestCase):
+    def test_m23_pay_note_provisioned_bhph_marked_no_payments(self) -> None:
+        from dealer_ai.models import BhphPayment, SALE_FINANCE_TYPE_BHPH
+
+        _run_seed()
+        note = BhphNote.objects.get(
+            sale__vehicle__stock_number=M23_PAY_FIXTURE_STOCK
+        )
+        self.assertEqual(note.sale.finance_type, SALE_FINANCE_TYPE_BHPH)
+        self.assertFalse(
+            BhphPayment.objects.filter(note=note).exists(),
+            "M23.3 payment-intake fixture note must have no attached "
+            "BhphPayment — the journey records the first payment.",
+        )
+
+    def test_m23_pay_note_distinct_from_m20_and_m23_orig(self) -> None:
+        _run_seed()
+        m20_note = BhphNote.objects.get(
+            sale__vehicle__stock_number=FIXTURE_STOCK
+        )
+        m23_pay_note = BhphNote.objects.get(
+            sale__vehicle__stock_number=M23_PAY_FIXTURE_STOCK
+        )
+        self.assertNotEqual(m20_note.pk, m23_pay_note.pk)
+        self.assertNotEqual(m20_note.sale_id, m23_pay_note.sale_id)
+
+    def test_m23_pay_note_has_expected_principal(self) -> None:
+        _run_seed()
+        note = BhphNote.objects.get(
+            sale__vehicle__stock_number=M23_PAY_FIXTURE_STOCK
+        )
+        self.assertEqual(
+            note.principal_financed, M23_PAY_FIXTURE_PRINCIPAL
+        )
+
+    def test_success_message_prints_m23_pay_note_pk(self) -> None:
+        output = _run_seed()
+        self.assertIn("m23_pay_note_pk=", output)
+
+    def test_second_invocation_does_not_duplicate_m23_pay_note(self) -> None:
+        _run_seed()
+        _run_seed()
+        self.assertEqual(
+            BhphNote.objects.filter(
+                sale__vehicle__stock_number=M23_PAY_FIXTURE_STOCK
+            ).count(),
+            1,
+        )
+
+    def test_seed_sweeps_payment_recorded_against_m23_pay_note(self) -> None:
+        from dealer_ai.models import BHPH_PAYMENT_METHOD_CASH, BhphPayment
+        from dealer_ai.services.bhph_payments.bhph_payment import (
+            record_payment,
+        )
+        from django.utils import timezone
+
+        _run_seed()
+        note = BhphNote.objects.get(
+            sale__vehicle__stock_number=M23_PAY_FIXTURE_STOCK
+        )
+        # Simulate what the M23.3 journey does — record a payment
+        # via the M12 service verb (matches the DRF endpoint's
+        # composition path).
+        payment = record_payment(
+            dealership=note.dealership,
+            note=note,
+            paid_at=timezone.now(),
+            amount=Decimal("100.00"),
+            method=BHPH_PAYMENT_METHOD_CASH,
+        )
+        self.assertTrue(
+            BhphPayment.objects.filter(pk=payment.pk).exists(),
+            "payment should exist before re-seed",
+        )
+
+        _run_seed()
+
+        # Payment should have been swept; note + fixture chain remain.
+        self.assertFalse(
+            BhphPayment.objects.filter(pk=payment.pk).exists(),
+            "payment should be cleared by the second seed invocation",
+        )
+        self.assertTrue(
+            BhphNote.objects.filter(pk=note.pk).exists(),
+            "M23.3 fixture note must survive the payment cleanup",
+        )
+
+    def test_reset_deletes_m23_pay_note_chain(self) -> None:
+        _run_seed()
+        _run_seed("--reset")
+        # After reset, the M23.3 fixture re-provisions as fresh rows.
+        notes = BhphNote.objects.filter(
+            sale__vehicle__stock_number=M23_PAY_FIXTURE_STOCK
+        )
+        self.assertEqual(notes.count(), 1)

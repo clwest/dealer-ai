@@ -58,6 +58,21 @@ fabricate a sale mid-journey:
 - SUCCESS message includes ``m23_orig_sale_pk=<N>`` so the
   journey can parse it via ``invokeSeed()`` stdout.
 
+Milestone 23 · Increment 3 additions — enable the payment-intake
+journey to walk the "collector records a cash payment against a
+BHPH note" workflow end-to-end without contaminating the M20.4
+fixture note's existing payment:
+
+- One **third Vehicle** (stock ``M23-BHPH-PAY``) + buyer + BHPH-
+  marked Sale + BhphNote pair. The BhphNote has non-zero
+  outstanding balance and NO payments yet.
+- **Payment cleanup on re-invocation**: any BhphPayment linked to
+  the M23.3 fixture note in a previous journey run gets deleted
+  so the fixture stays reversible without ``--reset``. Same
+  pattern as M22.2 reversal cleanup + M23.2 note cleanup.
+- SUCCESS message includes ``m23_pay_note_pk=<N>`` so the
+  journey can parse it via ``invokeSeed()`` stdout.
+
 Per M20 planning §5.d Option B: composes M12 service verbs
 (``record_bhph_note`` cannot be used because it requires an
 existing Sale + also enforces a uniqueness guard that fights
@@ -149,6 +164,18 @@ M23_ORIG_FIXTURE_BUYER_NAME = "M23 Origination Buyer"
 M23_ORIG_FIXTURE_BUYER_EMAIL = "m23-bhph-orig-buyer@example.com"
 M23_ORIG_FIXTURE_SOLD_PRICE = Decimal("8250.00")
 
+# M23.3 additive fixture — a distinct BHPH note with non-zero
+# balance AWAITING its first payment. The payment-intake journey
+# records a payment against this note. Distinct from M20.4's fixture
+# note (which already has a historical payment) so the journey's
+# assertions don't overlap.
+M23_PAY_FIXTURE_STOCK = "M23-BHPH-PAY"
+M23_PAY_FIXTURE_BUYER_NAME = "M23 Payment Buyer"
+M23_PAY_FIXTURE_BUYER_EMAIL = "m23-bhph-pay-buyer@example.com"
+M23_PAY_FIXTURE_PRINCIPAL = Decimal("5400.00")
+M23_PAY_FIXTURE_APR = Decimal("19.50")
+M23_PAY_FIXTURE_TERM_WEEKS = 52
+
 
 def _existing_note(dealership: Dealership) -> BhphNote | None:
     return BhphNote.objects.filter(
@@ -161,6 +188,13 @@ def _existing_m23_orig_sale(dealership: Dealership) -> Sale | None:
     return Sale.objects.filter(
         dealership=dealership,
         vehicle__stock_number=M23_ORIG_FIXTURE_STOCK,
+    ).order_by("pk").first()
+
+
+def _existing_m23_pay_note(dealership: Dealership) -> BhphNote | None:
+    return BhphNote.objects.filter(
+        dealership=dealership,
+        sale__vehicle__stock_number=M23_PAY_FIXTURE_STOCK,
     ).order_by("pk").first()
 
 
@@ -204,6 +238,16 @@ class Command(BaseCommand):
                     f"cleared {dropped} pre-existing note(s) "
                     f"targeting the M23.2 origination fixture sale."
                 )
+            m23_pay_note = self._provision_m23_pay_note(dealership)
+            # Sweep any BhphPayment a previous journey run recorded
+            # against the M23.3 fixture note. Same pattern as M23.2's
+            # note-cleanup + M22.2's reversal-cleanup.
+            dropped_pay = self._drop_payments_targeting(m23_pay_note)
+            if dropped_pay:
+                self.stdout.write(
+                    f"cleared {dropped_pay} pre-existing payment(s) "
+                    f"targeting the M23.3 payment-intake fixture note."
+                )
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -212,7 +256,8 @@ class Command(BaseCommand):
                 f"(sales_manager @ {dealership.slug}), "
                 f"note_pk={note.pk}, "
                 f"vehicle_stock={FIXTURE_STOCK}, "
-                f"m23_orig_sale_pk={m23_orig_sale.pk}."
+                f"m23_orig_sale_pk={m23_orig_sale.pk}, "
+                f"m23_pay_note_pk={m23_pay_note.pk}."
             )
         )
 
@@ -263,11 +308,30 @@ class Command(BaseCommand):
             m23_vehicle.delete()
             if m23_buyer is not None:
                 m23_buyer.delete()
+        # M23.3 — also sweep the payment-intake fixture chain (any
+        # payment recorded against the fixture note + the note +
+        # its sale + vehicle + buyer).
+        m23_pay_payments_deleted = 0
+        m23_pay_note = _existing_m23_pay_note(dealership)
+        if m23_pay_note is not None:
+            m23_pay_payments_deleted, _ = BhphPayment.objects.filter(
+                note=m23_pay_note
+            ).delete()
+            m23_pay_sale = m23_pay_note.sale
+            m23_pay_vehicle = m23_pay_sale.vehicle
+            m23_pay_buyer = m23_pay_sale.buyer
+            m23_pay_note.delete()
+            m23_pay_sale.delete()
+            m23_pay_vehicle.delete()
+            if m23_pay_buyer is not None:
+                m23_pay_buyer.delete()
         self.stdout.write(
             f"reset: deleted repos={n_repos} contacts={n_contacts} "
             f"promises={n_promises} payments={n_payments} "
             f"reports={n_reports} + note chain + "
             f"m23_notes={m23_notes_deleted} + m23 sale chain + "
+            f"m23_pay_payments={m23_pay_payments_deleted} + "
+            f"m23 pay chain + "
             "cleared collector membership."
         )
 
@@ -529,5 +593,83 @@ class Command(BaseCommand):
         """
         deleted, _ = BhphNote.objects.filter(
             dealership=target_sale.dealership, sale=target_sale
+        ).delete()
+        return deleted
+
+    def _provision_m23_pay_note(self, dealership: Dealership) -> BhphNote:
+        """Ensure the M23.3 payment-intake fixture note exists — a
+        BhphNote with non-zero outstanding balance and no payments
+        yet. Idempotent via the stable ``M23-BHPH-PAY`` vehicle
+        stock number.
+        """
+        existing = _existing_m23_pay_note(dealership)
+        if existing is not None:
+            self.stdout.write(
+                f"reused existing M23.3 payment-intake note pk={existing.pk}."
+            )
+            return existing
+
+        vehicle = Vehicle.objects.create(
+            dealership=dealership,
+            stock_number=M23_PAY_FIXTURE_STOCK,
+            year=2015,
+            model="Corolla",
+            price=Decimal("7995.00"),
+        )
+        buyer = CustomerLead.objects.create(
+            dealership=dealership,
+            name=M23_PAY_FIXTURE_BUYER_NAME,
+            email=M23_PAY_FIXTURE_BUYER_EMAIL,
+            phone="+15559990033",
+            channel=LEAD_CHANNEL_WALK_IN,
+            urgency="immediate",
+            notes=(
+                "[M23.3-bhph-pay] Fixture buyer for the BHPH payment-"
+                "intake acceptance journey."
+            ),
+        )
+        sale_date = (timezone.now() - dt.timedelta(weeks=2)).date()
+        sale = Sale.objects.create(
+            dealership=dealership,
+            vehicle=vehicle,
+            buyer=buyer,
+            sale_date=sale_date,
+            sold_price=M23_PAY_FIXTURE_PRINCIPAL,
+            finance_type=SALE_FINANCE_TYPE_BHPH,
+            lender_name="",
+            gross_realized=Decimal("0.00"),
+        )
+        payment_amount = bhph_note_periodic_payment(
+            M23_PAY_FIXTURE_PRINCIPAL,
+            M23_PAY_FIXTURE_APR,
+            M23_PAY_FIXTURE_TERM_WEEKS,
+            BHPH_PAYMENT_FREQUENCY_WEEKLY,
+        )
+        note = BhphNote.objects.create(
+            dealership=dealership,
+            sale=sale,
+            principal_financed=M23_PAY_FIXTURE_PRINCIPAL,
+            apr=M23_PAY_FIXTURE_APR,
+            term_weeks=M23_PAY_FIXTURE_TERM_WEEKS,
+            payment_frequency=BHPH_PAYMENT_FREQUENCY_WEEKLY,
+            payment_amount=payment_amount,
+            first_payment_due=sale_date + dt.timedelta(days=7),
+        )
+        self.stdout.write(
+            f"created M23.3 payment-intake note pk={note.pk} "
+            f"(vehicle={vehicle.stock_number}, no payments)."
+        )
+        return note
+
+    def _drop_payments_targeting(self, target_note: BhphNote) -> int:
+        """Delete any BhphPayment linked to the given note. Called
+        after provisioning the M23.3 payment-intake note so any
+        payment the journey recorded in a previous run gets swept —
+        keeps the fixture note reversible across suite re-runs
+        without ``--reset``. Same pattern as M22.2 reversal-cleanup
+        + M23.2 note-cleanup.
+        """
+        deleted, _ = BhphPayment.objects.filter(
+            dealership=target_note.dealership, note=target_note
         ).delete()
         return deleted

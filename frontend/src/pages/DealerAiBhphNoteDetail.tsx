@@ -32,6 +32,7 @@ import {
   MarkBrokenPromiseButton,
   MarkKeptPromiseButton,
 } from "@/components/bhph/PromiseRowActions";
+import { RecordBhphPaymentForm } from "@/components/bhph/RecordBhphPaymentForm";
 import { RecordPromiseToPayForm } from "@/components/bhph/RecordPromiseToPayForm";
 import {
   MarkRecoveredButton,
@@ -172,22 +173,29 @@ export default function DealerAiBhphNoteDetail() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-testid="payments-card">
         <CardHeader>
           <CardTitle>Payments ({payments.length})</CardTitle>
           <CardDescription>
             {schedule.length} scheduled installments.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
           {payments.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No payments recorded yet.
             </p>
           ) : (
-            <ul className="text-sm">
+            <ul
+              className="flex flex-col gap-1 text-sm"
+              data-testid="payments-list"
+            >
               {payments.map((p) => (
-                <li key={p.id} className="py-1">
+                <li
+                  key={p.id}
+                  className="py-1"
+                  data-testid={`payment-row-${p.id}`}
+                >
                   {p.paid_at} · {formatMoney(p.amount)} · {p.method} ·
                   int {formatMoney(p.applied_to_interest)} · prin{" "}
                   {formatMoney(p.applied_to_principal)}
@@ -195,6 +203,12 @@ export default function DealerAiBhphNoteDetail() {
               ))}
             </ul>
           )}
+          <RecordBhphPaymentForm
+            notePk={notePk}
+            onRecorded={(payment) =>
+              setPayments((prev) => mergeById(prev, payment))
+            }
+          />
         </CardContent>
       </Card>
 
