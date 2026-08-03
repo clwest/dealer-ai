@@ -20,14 +20,21 @@ django-storages[s3]==1.14.6
 # recurring background work to run (floor-plan interest accrual, aging
 # snapshots, vendor SLA warnings, photo tombstone reaper). Pins locked
 # against Django 5.0.x + Python 3.11:
-#   - ``celery[redis]==5.5.3`` — mature Django integration; redis
-#     transport bundled via the ``[redis]`` extra.
+#   - ``celery==5.5.3`` — mature Django integration. The redis
+#     transport is provided by the ``redis`` package pinned below;
+#     we drop celery's ``[redis]`` extra per §0.a M20.5 amendment
+#     (SESSION_165 CI-cleanup) because kombu's ``[redis]`` bundle
+#     pins ``redis<=5.2.1`` and conflicts with the explicit
+#     ``redis==6.4.0`` pin on a fresh pip resolution (first surfaced
+#     by the M20.1 GitHub Actions acceptance job).
 #   - ``django-celery-beat==2.8.1`` — DatabaseScheduler for the Beat
 #     schedule; extends the M7.1 Celery app so scheduled entries can be
 #     managed via Django admin without touching source.
 #   - ``redis==6.4.0`` — Python client used both by Celery transport
-#     and by any future direct-cache reads. Pinned separately from the
-#     ``[redis]`` extra so upgrades are visible in the diff.
-celery[redis]==5.5.3
+#     and by any future direct-cache reads. Runtime compatibility with
+#     celery/kombu 5.5.x is proven by the local dev + CI runs; the
+#     kombu extra's <=5.2.1 upper bound is a conservative constraint,
+#     not a hard incompatibility.
+celery==5.5.3
 django-celery-beat==2.8.1
 redis==6.4.0
