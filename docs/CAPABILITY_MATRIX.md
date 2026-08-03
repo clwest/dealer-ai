@@ -2601,6 +2601,177 @@ Milestone 22 close:**
 
 ---
 
+## 7x. BHPH Origination + Payment Intake (Milestone 23, shipped)
+
+Milestone 23 (SESSION_175 → SESSION_179)
+delivered the **BHPH lifecycle bookends**
+that M12 backend + M12.7 read UI + M20.4
+Playwright coverage + M21.2 collections
+write-side established. Both operator
+workflows (originating a BHPH note
+against a BHPH-marked sale + recording
+cash payments against an existing note)
+previously required curl / Django shell;
+M23 closes both gaps and validates each
+via Playwright end-to-end. **The BHPH
+lifecycle is now operationally
+complete** — every M12 verb is
+reachable through the product with
+regression-detecting acceptance
+coverage. Milestone inherits M21
+Candidate O UI-creation contract:
+maps to shipped backend + closes
+missing UI + adds Playwright journey +
+not generic UX polish. **Zero-drift
+permission-class posture extends to
+twenty-three consecutive milestones**
+(M10 → M23). Deferrals cataloged in
+`MILESTONE_23_RETROSPECTIVE.md` §3 +
+§4. See
+`docs/roadmap/MILESTONE_23_PLANNING.md`
++ `docs/roadmap/MILESTONE_23_RETROSPECTIVE.md`
+for the empirical-verification-driven
+scope logic.
+
+**Guiding principle** (inherited from
+M21 Candidate O UI-creation contract):
+every M23 shipped surface (a) maps to
+an already-shipped backend capability,
+(b) closes a missing operator-facing
+UI, (c) adds or extends a Playwright
+operational journey, (d) is not
+generic UX polish. Every M23 anchor
+UI attaches in-place to an existing
+page (`DealerAiBhphPortfolio` for
+origination; `DealerAiBhphNoteDetail`
+for payment intake) — no new frontend
+routes.
+
+**Cross-milestone pattern reinforced**
+per §5.d Option B split-by-size:
+M22.2 (new dialog on shipped page)
+shipped 0 §5.d fixes; M23.2 (first
+journey to re-invoke seed mid-suite)
+shipped 1 §5.d fix (session-
+invalidation seed bug); M23.3
+(sibling-pattern discipline in
+Payments card) shipped 0 §5.d fixes.
+First-of-a-kind changes surface latent
+bugs once; inherited fixes prevent
+recurrence.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M23.1 audit tooling correction (HTTP-verb-agnostic URL-prefix matching) | Three targeted changes to `backend/dealer_ai/scripts/audit_operational_surface.py`: (1) new `methods: frozenset[str]` field on `BackendEndpoint` dataclass (default empty for backwards-compat); (2) new `extract_view_methods()` helper walks `views*.py` and extracts `{view_name: frozenset(methods)}` from `@api_view([...])` decorator + `def` header pairs via regex; (3) new `_HELPER_TO_VERB` module-level dict maps `authGetJSON` → GET, `authPostJSON`/`authPostForm` → POST, `authPatchJSON` → PATCH, `authPutJSON` → PUT, `authDelete` → DELETE, `fetch` → GET. `cross_reference()` filters candidate consumers by `_HELPER_TO_VERB[c.helper] ∈ ep.methods` before de-duplication (skips when `ep.methods` empty). Root-cause reframe: pre-M23.1, the querystring-variant candidate pattern (added at M21.1 for `${qs ? ${qs} : ""}` idiom, extended at M22.1 for nested templates) matched wrappers using pk-suffixed URLs — so a GET wrapper hitting `.../<pk>/` got falsely claimed as consuming the sibling POST endpoint at the base URL. M23.1 orthogonally filters by HTTP verb. **Coverage 110 → 108 (-2)**; **backend-only 43 → 45 (+2)**. Two rows fully reclassify `covered` → `defer-candidate-O2`: row 123 `admin-bhph-note-create` (confirms M23.2 target) + row 139 `admin-journal-entry-create` (**NEW genuine gap surfaced** — JE creation UI is missing; recorded as M24 candidate). Five rows have wrapper-list pruned but stay `covered` (correct-verb wrapper remains): rows 41, 51, 62, 101, 145. Budget guard held (~30-40 min vs ~2-hour §5.d guard). | Second audit-tooling fix milestone-over-milestone (M22.1 = variable-first URL assembly false-negative class; M23.1 = HTTP-verb-agnostic URL-prefix matching false-positive class). Both bounded, both under budget. Reinforces "audit correctness as supporting infrastructure" durable-guidance memory established at M22 close. |
+| M23.2 BHPH note origination UI | New `createBhphNote` wrapper in `frontend/src/lib/bhphApi.ts` posting to `POST /admin/bhph-notes/` (M12.1); payload matches `BhphNoteCreateRequestSerializer` verbatim (sale_id, principal_financed, apr, term_weeks, payment_frequency, first_payment_due). New `RecordBhphNoteForm.tsx` component with 7 fields + inline validation + `humanizeError` covering 400/404/409 responses (409 = "sale already has a note"). Attached to `DealerAiBhphPortfolio.tsx` Notes card as persistent "Add note" CTA + shadcn Dialog per §5.b Option A. Empty-state message updated to reference the new CTA (previous text documented the POST curl workaround). Seed extended with distinct BHPH-marked Sale fixture (stock `M23-BHPH-ORIG`, sold-price $8,250, no attached note); `_drop_notes_targeting()` cleanup on re-invocation matches M22.2 reversal-cleanup pattern; SUCCESS message prints `m23_orig_sale_pk=<N>` for the journey to parse. New `expectBhphNoteOriginated(request, saleId, expected)` assertion helper. New Playwright journey at `acceptance/journeys/bhph/note_origination.spec.ts` walking parse-pk → land-portfolio → click-CTA → fill-form → submit → verify-dialog-closes → business-outcome-assertion. **§5.d in-scope fix landed:** session-invalidation bug in `_provision_collector` — unconditional `set_password` on every invocation invalidated Django session hashes (which incorporate password hash); wrapped in `if created:` guard. Pre-existing latent bug — no prior journey re-invoked seeds so pattern never surfaced. **Sale-picker UX limitation** surfaced: no admin sale-list endpoint ships so form uses manual sale_id numeric input; sale-picker/deep-link improvement recorded per §3 deferral 1. 7 new backend seed tests + 7 new Vitest form tests + 1 new journey. | Backend baseline 4,766 → 4,773 (+7). Frontend Vitest 180 → 187 (+7). Route URL correction during authoring: memo pre-committed `/dealer-ai-bhph-portfolio`; actual route is `/dealer-ai-bhph/portfolio` (main.tsx line 170). Verified journey passes on clean DB (full-suite: 14 passed @ 18.8s). |
+| M23.3 BHPH payment intake UI | New `createBhphPayment` wrapper in `frontend/src/lib/bhphApi.ts` posting to `POST /admin/bhph-notes/<pk>/payments/` (M12.2); payload matches `BhphPaymentCreateRequestSerializer` verbatim (paid_at, amount, method). New `BhphPaymentMethod` union type matches `BHPH_PAYMENT_METHOD_CHOICES` in models.py (cash / check / debit / ach / other). New `RecordBhphPaymentForm.tsx` component with 3 fields + inline validation + `humanizeError` covering 400/404. Attached inline to the existing Payments card on `DealerAiBhphNoteDetail.tsx` — matches M21.2 sibling pattern (RecordPromiseToPayForm inline in Promises card). Adds `data-testid="payments-card"`, `data-testid="payments-list"`, `data-testid="payment-row-<id>"` markers per §5.g opportunistic-testid posture. Optimistic list refresh via `mergeById` on submit success. Seed extended with distinct BhphNote fixture (stock `M23-BHPH-PAY`, principal $5,400, APR 19.5%, 52w weekly term, no payments); `_drop_payments_targeting()` cleanup on re-invocation; SUCCESS message prints `m23_pay_note_pk=<N>` for the journey to parse. New `expectBhphPaymentRecorded(request, notePk, expected)` assertion helper. New Playwright journey at `acceptance/journeys/bhph/payment_intake.spec.ts` walking parse-pk → land-note-detail → verify-Payments-card-renders → fill-form → submit → verify-amount-clears → business-outcome-assertion. **First-run pass — no §5.d fixes required.** Sibling-pattern discipline + inherited M23.2 lessons (session-preservation fix, URL-slug verification, testid conventions) meant journey authoring proceeded cleanly. 7 new backend seed tests + 6 new Vitest form tests + 1 new journey. | Backend baseline 4,773 → 4,780 (+7). Frontend Vitest 187 → 193 (+6). Verified journey passes on clean DB (full-suite: 15 passed @ 20.3s). |
+| M23.4 close-out | CI validation on all M23 shipped surface + capability matrix §7x (this section) + `MILESTONE_23_RETROSPECTIVE.md` with §9 evidence-based M24 candidates + `MILESTONE_24_PLANNING.md` skeleton + `IMPLEMENTATION_ROADMAP.md` M23 shipped-status section + coordinated close-out commit + **first M23 push** landing all 5 M23 commits to origin/main together per M18.6/M19.6/M20.5/M21.5/M22.4 cadence. | First M23 CI run fires on the M23.4 push; status verified at M24.0 open. |
+| Test baseline | Backend **4,766 → 4,780 pass** (+14 across M23.2 + M23.3 seed idempotency + cleanup tests; M23.1 audit fix added no tests per §0.a discretionary call). Frontend Vitest **180 → 193 pass** (+13 across two new component test files: RecordBhphNoteForm 7 + RecordBhphPaymentForm 6). Acceptance suite **7 → 9 journeys** (M23.2 note_origination + M23.3 payment_intake); full local dry-run **15 passed (~20.3s)** on clean DB. Zero regressions. Zero migrations shipped in M23 (`0001`–`0048` unchanged). `manage.py check` + `makemigrations --check` clean at every M23 close. Per-increment delta: M23.0 = 0 (planning); M23.1 = 0 (audit script has no tests); M23.2 = +7 backend + +7 frontend + 1 journey + 1 §5.d fix; M23.3 = +7 backend + +6 frontend + 1 journey + 0 §5.d fixes; M23.4 = 0 (docs only). | Zero-drift permission-class streak extends **twenty-two → twenty-three** consecutive milestones (M10 → M23). Planning-time streak extends **88 → 89 as-recommended M5.1 → M23.0** across fourteen consecutive milestones — all eight §5 decisions at M23.0 open confirmed as-recommended. |
+
+**What is NOT shipped in Milestone
+23** (deferred per
+`MILESTONE_23_RETROSPECTIVE.md` §3 +
+§4):
+
+- **Sale picker UI / deep-link
+  from VehicleSalePage** — §3
+  deferral 1. Would replace the
+  manual sale_id numeric input on
+  `RecordBhphNoteForm`. Requires
+  either a new admin sale-list
+  endpoint (violates M23 governing
+  contract: no new backend
+  endpoints) OR deep-link parameter
+  handling on the portfolio route.
+  Deferred to future OSC iteration.
+- **JE creation UI** — surfaced
+  at M23.1 as previously-hidden
+  audit false-positive. `admin-
+  journal-entry-create` (POST
+  `/admin/accounting/journal-
+  entries/`) genuinely has no
+  operator UI. Recorded as M24
+  evidence-based candidate.
+- **Session-invalidation seed
+  pattern sweep** — M23.2's
+  `_provision_collector` fix
+  generalizes to any other seed
+  doing unconditional
+  `set_password`. Not surveyed
+  at M23.2; future work.
+- **Full AST-based audit rewrite**
+  — explicit non-scope per M23
+  §5.d Option A. Targeted regex +
+  parser fix sufficed. Additional
+  false-positive/negative classes
+  may surface as future OSC scope.
+- **Route URL discovery friction**
+  — M23.2 surfaced that route
+  slugs aren't discoverable
+  without grepping main.tsx.
+  Candidate for a "generated
+  planning artifact" experiment
+  per M22 durable-lesson memory.
+- **All M22 §3 deferrals still
+  valid** per
+  `MILESTONE_22_RETROSPECTIVE.md`
+  §3 (vite preview in CI, cross-
+  browser CI matrix, npm audit
+  remediation, CI artifact upload
+  verification, systematic audit
+  refresh schedule).
+
+**What operators experienced at
+Milestone 23 close:**
+
+- **BHPH lifecycle is
+  operationally complete.**
+  Dealership staff can now
+  perform every M12 BHPH verb
+  through the shipped product:
+  originate a note against a
+  BHPH-marked sale (M23.2);
+  record cash payments (M23.3);
+  record promises-to-pay + mark
+  kept/broken (M21.2); log
+  collection contacts (M21.2);
+  initiate + track + recover +
+  re-intake repossessions
+  (M21.2); browse the portfolio
+  (M12.7); drill into any note's
+  detail (M12.1). Zero remaining
+  BHPH workflows require curl /
+  Django shell.
+- **Audit tooling now correctly
+  reflects BHPH origination +
+  payment intake as `covered`**
+  post-M23.4 audit regeneration.
+  Any future BHPH-adjacent scope
+  proposal builds on accurate
+  audit dispositions.
+- **JE creation UI gap is now
+  visible.** M23.1's audit fix
+  revealed `admin-journal-entry-
+  create` as genuinely missing
+  operator UI — a finding that
+  was hidden by the pre-M23.1
+  false-positive. Future
+  accounting-completeness
+  milestone has clean evidence
+  for scope.
+- **No visible new
+  functionality** on any non-
+  BHPH surface. M23 was tightly
+  scoped to the BHPH lifecycle
+  gap. All M14+ accounting
+  workflows, M11 sales-manager
+  workflows, M20+ acceptance
+  substrate, and M22 shipped
+  operator surfaces continue
+  unchanged.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full
