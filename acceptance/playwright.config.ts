@@ -26,7 +26,9 @@ const IS_CI = Boolean(process.env.CI);
 // Server ports. Backend uses a dedicated port so the acceptance suite
 // never touches the local dev DB on :8000.
 const BACKEND_PORT = 8101;
-const FRONTEND_PORT = IS_CI ? 4173 : 5173; // vite preview vs vite dev
+// Vite dev in both local + CI per §0.a M20.5 amendment (see webServer
+// block below). Single port for both modes.
+const FRONTEND_PORT = 5173;
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const FRONTEND_URL = `http://127.0.0.1:${FRONTEND_PORT}`;
 
@@ -171,15 +173,17 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      // Frontend: vite preview against a production build in CI,
-      // vite dev locally for faster iteration. Explicit `--host
-      // 127.0.0.1` bind so Playwright's readiness poll on
-      // http://127.0.0.1:${FRONTEND_PORT} succeeds — vite's default
-      // "localhost" bind on macOS resolves to ::1 only, which
-      // Playwright's IPv4 poll misses (§0.a M20.2 decision 2).
-      command: IS_CI
-        ? `npm run build && npm run preview -- --host 127.0.0.1 --port ${FRONTEND_PORT} --strictPort`
-        : `npm run dev -- --host 127.0.0.1 --port ${FRONTEND_PORT} --strictPort`,
+      // Frontend: vite dev in both local + CI (§0.a M20.5 amendment).
+      // Original §5.f Option A used `vite preview` in CI to catch
+      // build-only regressions, but on the first real CI run the
+      // preview-mode proxy for /api/* didn't work reliably even
+      // after adding `preview.proxy` to vite.config.ts — auth
+      // bootstrap hung indefinitely because the SPA couldn't reach
+      // the backend. Defer preview-mode CI to a future increment;
+      // vite dev in CI keeps the acceptance contract executable
+      // today. Explicit `--host 127.0.0.1` bind so Playwright's
+      // IPv4 readiness poll succeeds per §0.a M20.2 decision 2.
+      command: `npm run dev -- --host 127.0.0.1 --port ${FRONTEND_PORT} --strictPort`,
       cwd: FRONTEND_DIR,
       url: FRONTEND_URL,
       reuseExistingServer: !IS_CI,

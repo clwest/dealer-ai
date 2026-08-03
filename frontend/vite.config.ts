@@ -62,5 +62,19 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    // Mirror the dev-server proxy on the preview server so the built
+    // SPA can reach the backend when served via `vite preview` (used
+    // by the M20 acceptance suite in CI). Without this, `/api/*`
+    // requests hit the preview server's SPA fallback + hang in auth
+    // bootstrap. §0.a M20.5 CI-cleanup (SESSION_165).
+    preview: {
+      port: 4173,
+      proxy: {
+        "/api": {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
+      },
+    },
   };
 });
