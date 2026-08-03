@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-03
-last_session_shipped: SESSION_170
+last_session_shipped: SESSION_171
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -23,86 +23,79 @@ milestone_18_status: shipped
 milestone_19_status: shipped
 milestone_20_status: shipped
 milestone_21_status: shipped
-next_session: SESSION_171
+milestone_22_status: in-progress
+next_session: SESSION_172
 next_milestone: 22
-next_milestone_name: "(target selection pending — locked at M22.0 open)"
-next_increment: 0
-next_increment_name: "M22.0 — Planning refinement + target selection"
+next_milestone_name: "Accounting Operational Validation"
+next_increment: 1
+next_increment_name: "M22.1 — Audit tooling correction + artifact refresh"
 ---
 
-# Next session — SESSION_171 · Milestone 22 · Increment 0 (M22.0 — planning refinement + target selection)
+# Next session — SESSION_172 · Milestone 22 · Increment 1 (M22.1 — audit tooling correction + artifact refresh)
 
-> **Milestone 21 — Operational Surface
-> Completion — SHIPPED at SESSION_170.**
-> Five-increment milestone across
-> SESSION_166 → SESSION_170 (M21.4
-> collapsed per audit evidence). Audit
-> tooling + artifact + 10 new
-> components + 7 new bhphApi.ts write
-> wrappers + 2 seed extensions + 2
-> journey extensions. **Backend
-> baseline 4,755 → 4,761 pass** (+6,
-> zero regressions). Frontend Vitest
-> **153 → 180 pass** (+27). Full local
-> acceptance dry-run: **12 passed
-> (~18s)** — 6 setup + 6 journeys.
+> **Milestone 22 · Increment 0 —
+> Accounting Operational Validation
+> planning refinement — SHIPPED at
+> SESSION_171.** Full memo expansion
+> from M21.5 skeleton + seven §5
+> load-bearing decisions resolved as-
+> recommended at open. **Empirical
+> M22.0 discovery reshaped Candidate
+> A** from "ship missing UI" (per
+> the M21 retrospective §9
+> recommendation, now known to have
+> been grounded in unreliable audit
+> numbers) to **Accounting
+> Operational Validation** —
+> validate the shipped accounting
+> workflows end-to-end via Playwright
+> rather than rebuild what already
+> ships.
 >
-> **Zero-drift permission-class streak
-> extended from twenty → twenty-one
-> consecutive milestones** (M10 →
-> M21). **Planning-time as-recommended
-> streak extends 86 → 87** across
-> twelve consecutive milestones.
+> **Planning-time as-recommended
+> streak extends 87 → 88 across
+> thirteen consecutive milestones**
+> (M10 → M22). **Zero-drift
+> permission-class streak target for
+> M22 close: 21 → 22 consecutive
+> milestones.**
 >
-> **First M21 push executed at M21.5**
-> (SESSION_170) — all five M21 commits
-> surface to `origin/main` in one
-> coordinated push per M18/M19/M20
-> cadence. **First real M21 CI run
-> fires on that push — verify status
-> at M22.0 open.**
+> **SESSION_172 opens M22.1 —
+> audit tooling correction +
+> artifact refresh.** Supporting
+> work per §5.e Option B (targeted
+> regex fix). Not the milestone
+> centerpiece; the anchor JE
+> reversal journey ships at M22.2.
+> Budget guard: if targeted fix
+> exceeds ~2 hours, stop and defer
+> deeper refactor to a future audit-
+> tooling milestone per §5.e.
 >
-> **DoD amendment formalized in
-> `docs/roadmap/IMPLEMENTATION_ROADMAP.md`**
-> — every future customer-facing
-> milestone MUST add or update at
-> least one Playwright operational
-> journey, or explicitly document in
-> §3 why no journey change is
-> required. Applies from M22 forward.
->
-> **SESSION_171 opens M22.0 —
-> planning refinement + target
-> selection.** No target locked yet
-> — the candidate list surfaces at
-> open (elevated: Candidate A +
-> Candidate O2; gated: T / U / L /
-> M; deferred pending evidence: D /
-> C; deferred but stable: P / G).
-> The assistant recommends one
-> option with rationale; the user
-> confirms or redirects. Once §5.a
-> locks, §5.b–§5.h planning-time
-> decisions get drafted with
-> confirm-as-recommended posture
-> expected (streak 87 → 88 across
-> thirteen consecutive milestones).
+> **DoD compliance verified by
+> construction** for M22 — every
+> implementation increment (M22.2
+> anchor + conditional M22.3) adds
+> a Playwright operational journey.
+> The M21.0 §5.f Option B DoD
+> amendment is trivially satisfied.
 
-## First thing SESSION_171 must do
+## First thing SESSION_172 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean.
 - `git log --oneline -6` — top
   should be the M21.5 close-out
-  commit; `origin/main` should now
-  be at the same head (push
-  already executed at M21.5).
+  commit (`6103aea Milestone 21
+  shipped`); no new commits at
+  origin/main (M22.0 was planning-
+  only, no push).
 - `python3 manage.py test dealer_ai`
   → **4,761 pass, 1 skipped, 0
   fail**.
-- `cd frontend && npm test` →
-  **180 pass**.
+- `cd frontend && npm test` → **180
+  pass**.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations
   --check --dry-run` → "No changes
@@ -113,244 +106,180 @@ next_increment_name: "M22.0 — Planning refinement + target selection"
   clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. Monitor first M21 CI run
+### 2. Inspect the audit script's URL-normalizer regex
 
-The M21.5 push at SESSION_170 was
-the first push of the M21 commits.
-The acceptance job fires on that
-`main` push — verify its status
-via:
+Open
+`backend/dealer_ai/scripts/audit_operational_surface.py`
+and locate the URL-normalization
+path that walks
+`frontend/src/lib/*Api.ts` wrapper
+modules. Identify where nested
+template literals (`${qs ? \`?${qs}\` : ""}`)
+lose their consumer signal.
 
-```bash
-gh run list --workflow=acceptance --branch=main --limit 5
-gh run view <run-id> --log
-```
+Cross-check against the four known
+misclassifications by grepping the
+`accountingApi.ts` module for
+`fetchTrialBalance`,
+`fetchJournalEntries`,
+`fetchCostPostingFailures`,
+`listTrialBalanceSnapshots` — each
+wrapper's actual URL pattern is the
+test case.
 
-**If red:** address as §0.a M22.0
-amendments before opening §5.a
-target selection. The CI
-environment may surface an issue
-that didn't appear locally (e.g.
-Playwright browser cache, seed
-timing, env-var drift). Fix +
-push before proceeding.
+### 3. Ship the targeted regex fix
 
-**If green:** M21 is CI-verified
-shipped; proceed to §3.
+Per §5.e Option B — narrow scope.
+Enhance the URL normalizer to handle
+one additional level of template-
+literal nesting (`\`prefix${qs ? \`?${qs}\` : ""}\``
+style). Do NOT attempt a full AST
+rewrite. Do NOT expand scope to
+handle other classes of false-
+negative unless they surface as
+side-effects of the same fix.
 
-### 3. Regenerate the audit artifact
+**Budget guard.** If the targeted
+fix exceeds ~2 hours (from opening
+the script to green-passing test),
+stop. Document the remaining
+false-negative patterns as future
+audit-tooling milestone scope in
+§0.a M22.1 amendment, land a
+partial fix (or no fix), and
+proceed to M22.2 with the audit
+still partially unreliable.
+Preserves scope discipline over
+completionism.
 
-Before candidate presentation,
-rerun the audit tooling:
+### 4. Optional: add audit-script correctness test
+
+If the audit script has an existing
+test module, extend it with a
+regression test for the nested-
+template-literal case. If not, adding
+a new test is discretionary — the
+regenerated artifact itself is the
+functional test in the sense that
+the four misclassifications either
+reclassify to `covered` or they
+don't.
+
+### 5. Regenerate the audit artifact
 
 ```bash
 cd backend
 python3 -m dealer_ai.scripts.audit_operational_surface
 ```
 
-Any endpoint that shipped between
-M21.5 close and M22.0 open will
-show up. Fresh evidence prevents
-proposing scope that's already
-partially covered.
+Verify the M21 audit artifact updates
+with:
+- `admin-trial-balance` →
+  `covered` (was `defer-candidate-O2`).
+- `admin-journal-entry-list` →
+  `covered` (was `defer-candidate-O2`).
+- `admin-cost-posting-failures` →
+  `covered` (was `defer-candidate-O2`).
+- `admin-trial-balance-snapshot-list`
+  → `covered` (was `defer-domain-
+  milestone`).
+- Coverage count: 106 → **≥110**.
+- Backend-only count: 47 → **≤43**.
 
-### 4. Present the M22 candidate list
+If any of the four does NOT
+reclassify, the fix is incomplete
+— either extend the regex or
+document the residual limitation
+in §0.a M22.1 amendment.
 
-Per
-`docs/roadmap/MILESTONE_22_PLANNING.md`
-skeleton (§Candidate list):
+If additional endpoints reclassify
+(from any domain), catalog them in
+§0.a with brief context. These are
+audit-noise reductions that don't
+change M22 scope but strengthen
+future OSC candidates.
 
-**Elevated (highest
-recommendation strength at
-M22.0):**
+### 6. Update M22 planning memo §0.a with M22.1 outcome
 
-- **Candidate A — Return to
-  accounting stream (bounded
-  scope).** Four consecutive
-  milestones diverging from the
-  M18 §8 accounting designation.
-  The M21.1 audit surfaced three
-  accounting endpoints
-  (`journal-entry-reverse` +
-  `trial-balance-snapshot-create
-  / list / retrieve`) with
-  `defer-domain-milestone`
-  disposition — a bounded scope
-  target that maps to shipped
-  backend + missing UI and can
-  honor the M21 governing
-  contract.
-- **Candidate O2 — Next OSC
-  iteration.** Selects from the
-  44 `defer-candidate-O2`
-  endpoints. Sub-scope options:
-  F&I write substrate (16
-  endpoints — needs internal
-  narrowing to two anchor
-  workflows); lead-source-
-  specific intake forms (4);
-  BHPH note origination +
-  payment intake (2); deal-
-  writeup lifecycle (3).
+Add an `**SESSION_172 M22.1 close
+(YYYY-MM-DD):**` entry to the §0.a
+change log capturing: audit fix
+shipped (yes/partial/skipped),
+misclassifications corrected, any
+additional false-negatives
+surfaced, budget-guard triggered
+(yes/no), notes on the fix
+approach.
 
-**Gated candidates:**
+### 7. Ship the M22.1 handoff
 
-- **Candidate T** — process
-  real tester feedback
-  (M18.5). Gated on Chris
-  running tester sessions
-  between M21 close and
-  M22.0 open.
-- **Candidate U** — hosted-
-  demo substrate. Gated on
-  demo-scaling willingness.
-- **Candidate L** — first-
-  live-pilot staging dry-run.
-  Gated on real pilot dealer
-  + staging environment.
-- **Candidate M** — multi-
-  operator support. Gated on
-  second operator.
+- `docs/handoffs/SESSION_172_m22_inc1_audit_correction.md`.
+- Overwrite `00-START-NEXT-SESSION.md`
+  with M22.2 priority (first
+  anchor journey — JE reversal).
+- **Do NOT push** — M22 uses
+  coordinated close-out push per
+  M18.6 / M19.6 / M20.5 / M21.5
+  cadence at M22.4.
 
-**Deferred pending
-evidence:**
+## Non-goals for SESSION_172
 
-- **Candidate D** — LLM
-  router / cost caps.
-- **Candidate C** — F&I
-  chargeback substrate.
-
-**Deferred but stable:**
-
-- **Candidate P** —
-  onboarding UX polish.
-- **Candidate G** —
-  dashboard testid hardening.
-
-Present each with two-
-sentence scope + operator
-pain resolved + dependency
-notes, then present the
-recommendation.
-
-### 5. Recommend a target for §5.a
-
-Ground the recommendation in:
-
-- Operator pain resolved.
-- Dependencies on shipped
-  substrate.
-- Whether the candidate blocks
-  future milestones or is
-  blocked by them.
-- Whether the M21 CI run
-  surfaced any operational
-  friction that reshuffles
-  priority.
-- Whether accounting-stream
-  divergence (now four
-  consecutive milestones)
-  needs correction.
-
-### 6. Draft §5.b–§5.h load-bearing decisions
-
-Once §5.a locks, draft the
-standard six-to-eight load-
-bearing decisions with
-confirm-as-recommended posture.
-Streak target: **87 → 88**
-planning-time as-recommended
-M5.1 → M22.0 across thirteen
-consecutive milestones.
-
-### 7. DoD compliance check
-
-Per the M21.0 §5.f amendment
-now formalized in
-IMPLEMENTATION_ROADMAP: the
-M22 active memo §3 must either
-name a Playwright journey
-addition or extension OR
-explicitly document why no
-journey change is required
-(infrastructure-only
-milestones only). Non-
-adherence is a planning-memo
-review finding.
-
-### 8. Expand M22 planning skeleton
-
-`MILESTONE_22_PLANNING.md`
-exists as a draft skeleton.
-SESSION_171 expands to full
-active memo: frontmatter
-`status: draft` → `status:
-active`; `milestone_name`
-populated from §5.a lock; §1
-business context + §2
-primitives to extend + §3
-deferrals + §5 load-bearing
-decisions + §7 increment
-sequencing.
-
-### 9. Ship the M22.0 handoff
-
-- `docs/handoffs/SESSION_171_m22_inc0_planning.md`.
-- **Do NOT push** — M22.0 is
-  planning only; the
-  coordinated push happens at
-  M22 close per M18/M19/M20/M21
-  cadence.
-
-## Non-goals for SESSION_171
-
-- ❌ Do NOT ship any backend or
-  frontend code — planning-only
-  session.
-- ❌ Do NOT open any
-  implementation increment —
-  M22.1 is a separate session.
-- ❌ Do NOT force-push or amend
-  earlier commits (M21 close is
-  already on `origin/main`).
-- ❌ Do NOT modify M1-M21
-  shipped surface.
-- ❌ Do NOT modify the
-  acceptance suite unless CI
-  regression fixes land as
-  §0.a M22.0 amendments.
-- ❌ Do NOT skip the DoD
-  compliance check — the M22
-  active memo's §3 is now
-  required to address the
-  amendment.
+- ❌ Do NOT ship the JE reversal
+  journey (that's M22.2 scope).
+- ❌ Do NOT attempt a full AST-
+  based audit rewrite (explicit
+  non-goal per §5.e Option B).
+- ❌ Do NOT modify shipped
+  accounting UI (rebuilding what
+  already ships from M14/M17).
+- ❌ Do NOT let audit correction
+  bleed past the ~2-hour budget
+  guard.
+- ❌ Do NOT expand fix scope to
+  audit patterns unrelated to the
+  nested-template-literal class
+  unless they surface as side-
+  effects of the same fix.
+- ❌ Do NOT push M22.1 commits
+  individually.
 
 ## Baseline expected at close
 
-Backend + frontend unchanged
-from M21 close. Acceptance
-suite unchanged. Only planning
-docs change.
+- Backend baseline: 4,761 →
+  **~4,762–4,763** (possible
+  audit-script correctness tests).
+- Frontend Vitest: 180 (unchanged
+  — no frontend changes).
+- Acceptance suite: 6 journeys
+  (unchanged — M22.2 introduces
+  the first new M22 journey).
+- Migrations `0001`–`0048`
+  unchanged.
+- Tenancy carriers 52 unchanged.
+- Permission classes 7 unchanged
+  (zero-drift streak intact).
+- Audit artifact updated with ≥4
+  reclassifications; coverage
+  count increases by ≥4.
 
 ## NEXT TASK
 
-Start SESSION_171 with (a)
-starting-state verification,
-(b) monitor first real M21
-acceptance CI run + fix any
-regressions as §0.a M22.0
-amendments, (c) regenerate the
-audit artifact, (d) present the
-candidate list with
-recommendation + rationale,
-(e) await user confirmation of
-§5.a, (f) draft §5.b–§5.h with
-confirm-as-recommended posture,
-(g) DoD compliance check on §3
-draft, (h) expand the M22
-planning skeleton into a full
-active memo, (i) ship the
-M22.0 handoff.
+Start SESSION_172 with (a)
+starting-state verification, (b)
+inspect the audit script's URL-
+normalizer regex against the four
+known accounting misclassifications,
+(c) ship the targeted regex fix
+under the ~2-hour budget guard, (d)
+optional audit-script correctness
+test, (e) regenerate the audit
+artifact and verify at least the
+four accounting endpoints
+reclassify, (f) update M22 planning
+memo §0.a with M22.1 outcome, (g)
+ship the M22.1 handoff and refresh
+`00-START-NEXT-SESSION.md` for
+M22.2. Do NOT push.
 
 ---
 
@@ -363,30 +292,30 @@ M22.0 handoff.
    landed at M21.5)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_22_PLANNING.md`
-   (skeleton — expanded at
-   SESSION_171)
-6. `docs/roadmap/MILESTONE_21_RETROSPECTIVE.md`
-   §8 (M21 unblocks) + §9
-   (standing M22 question — is
-   M22 the return-to-accounting
-   milestone?)
-7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (audit-driven scope pool
-   for OSC candidates)
-8. `docs/roadmap/MILESTONE_21_PLANNING.md`
-   (governing contract that
-   OSC-shape M22 inherits)
-9. `docs/CAPABILITY_MATRIX.md`
-   §7v (M21 shipped surface)
-10. `docs/handoffs/SESSION_170_m21_inc5_close.md`
-    (M21 shipped)
+   (active memo — governing
+   contract for M22.1 audit
+   correction posture)
+6. `docs/handoffs/SESSION_171_m22_inc0_planning.md`
+   (M22.0 close — empirical
+   discovery record)
+7. `docs/roadmap/MILESTONE_21_RETROSPECTIVE.md`
+   §4 (documented nested-template-
+   literal audit limitation being
+   fixed at M22.1)
+8. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+   (audit artifact being
+   regenerated — known unreliable
+   for accounting until M22.1
+   correction lands)
+9. `docs/CAPABILITY_MATRIX.md` §7v
+   (M21 shipped surface)
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_170 — Milestone 21 SHIPPED)
+## Operational state (post-SESSION_171 — Milestone 22.0 planning shipped)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
@@ -405,18 +334,14 @@ research + code are facts.
   journeys** passing end-to-end.
   Full dry-run baseline: **12
   passed (~18s)** (6 setup + 6
-  journeys). BHPH re-expanded
-  from M20.4 read-only to full
-  write coverage at M21.2;
-  sales_manager extended at
-  M21.3.
+  journeys). No M22 journeys
+  ship until M22.2 open.
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`.
-  First real M21 CI run
-  triggered by the M21.5 push
-  at SESSION_170 — status
-  verified at SESSION_171
-  open.
+  First real M21 CI run verified
+  green at SESSION_171 M22.0
+  open (run `30822664811`,
+  2m3s).
 - **Async runtime:** Celery
   5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1
@@ -424,8 +349,9 @@ research + code are facts.
   scheduled task families
   registered**.
 - **Milestones shipped:** M1 →
-  **M21**. M22 target selection
-  pending (SESSION_171).
+  **M21**. M22 in-progress
+  (M22.0 planning shipped;
+  M22.1 next at SESSION_172).
 - **DRF admin surface:** **113**
   endpoints.
 - **Frontend operator routes:**
@@ -433,61 +359,93 @@ research + code are facts.
 - **Public endpoints:** +1 M6.5
   showroom.
 - **Service surface:** all
-  M1–M20 packages unchanged.
-  M21 added zero service verbs.
-- **Frontend surfaces:** M12.7
-  BHPH collector dashboard +
-  M11.5/M11.6 sales pages
-  extended with 10 M21 write
-  components across two
-  domains (7 BHPH + 3 sales).
+  M1–M21 packages unchanged.
+  M22 will add zero service
+  verbs.
+- **Frontend surfaces:** M14
+  accounting pages
+  (`AccountingTrialBalancePage`,
+  `AccountingJournalEntriesPage`,
+  `AccountingJournalEntryDetailPage`)
+  + M17.2 trial-balance snapshot
+  lifecycle UI + M21 BHPH write
+  surfaces + M21 sales-manager
+  extensions. M22 will add zero
+  new components.
 - **Tenancy carriers:** **52**.
 - **Permission classes:** **7
   actual** — zero-drift streak
   **twenty-one consecutive
   milestones** (M10 → M21).
+  Target at M22 close: 22.
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17
   scrub stages (unchanged).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 21 status:**
-  SHIPPED (SESSION_170 close-
-  out landed all documentation
-  + status flips + M22 skeleton
-  + DoD amendment formalization
-  + coordinated close-out
-  commit + first M21 push).
+- **Milestone 22 status:**
+  IN-PROGRESS. M22.0 planning
+  shipped at SESSION_171 with
+  seven §5 load-bearing
+  decisions resolved as-
+  recommended at open. Full
+  active memo landed at
+  `docs/roadmap/MILESTONE_22_PLANNING.md`.
 - **Audit tooling:** operator-
   invoked from `backend/`
   (`python3 -m dealer_ai.scripts.audit_operational_surface`).
-  Rerun at M22.0 open to
-  reflect any drift since
-  M21.5 regen.
-- **Planning-time streak:**
-  **87 as-recommended M5.1 →
-  M21.0** across twelve
-  consecutive milestones.
-  Target for M22.0: 87 → 88
-  across thirteen.
-- **DoD amendment (M21.0
-  §5.f Option B, formalized
-  in IMPLEMENTATION_ROADMAP
-  at M21.5):** every future
+  Known unreliable for
+  accounting until M22.1
+  targeted regex fix lands.
+- **Planning-time streak:** **88
+  as-recommended M5.1 → M22.0**
+  across thirteen consecutive
+  milestones (M10 → M22).
+- **DoD amendment (M21.0 §5.f
+  Option B, formalized in
+  IMPLEMENTATION_ROADMAP at
+  M21.5):** every future
   customer-facing milestone
   must add or update at least
   one Playwright operational
   journey, or explicitly
   document in §3 why no
   journey change is required.
-  Applies from M22 forward.
-- **M21 audit coverage at
-  close:** 106 / 153 endpoints
-  covered; 47 backend-only
-  findings distributed across
-  `defer-candidate-O2` (~41),
-  `defer-domain-milestone` (3),
-  `intentional-omission` (7).
-  Elevated M22 candidates
-  drawn from these buckets.
+  M22 satisfies by construction
+  — every implementation
+  increment adds a journey.
+- **M22 governing contract
+  (refined from M21 Candidate
+  O):** (1) maps to shipped
+  frontend surface + shipped
+  backend capability; (2)
+  establishes operational-
+  completion evidence through
+  Playwright end-to-end
+  journey; (3) uses journey-
+  as-verifier; (4) splits
+  discovered gaps by size —
+  small in-scope fix vs. large
+  deferred as next candidate
+  evidence.
+- **M22 anchor implementations:**
+  M22.1 audit tooling correction
+  (supporting), M22.2 JE
+  reversal journey + seed
+  extension (first anchor),
+  M22.3 additional journeys per
+  §5.b enumeration
+  (conditional), M22.4 close-
+  out.
+- **M22 audit correction scope
+  (M22.1):** targeted regex fix
+  for nested template literals;
+  reclassifies at minimum four
+  known accounting endpoints
+  (`admin-trial-balance`,
+  `admin-journal-entry-list`,
+  `admin-cost-posting-failures`,
+  `admin-trial-balance-snapshot-list`)
+  from backend-only to covered.
+  Budget guard: ~2 hours.
