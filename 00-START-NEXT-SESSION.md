@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-03
-last_session_shipped: SESSION_185
+last_session_shipped: SESSION_187
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -26,242 +26,294 @@ milestone_21_status: shipped
 milestone_22_status: shipped
 milestone_23_status: shipped
 milestone_24_status: shipped
-milestone_25_status: in-progress
-milestone_25_open_increment: 0
-milestone_25_open_increment_shipped: true
-next_session: SESSION_186
-next_milestone: 25
-next_milestone_name: "Lead-to-Test-Drive Operational Completion"
-next_increment: 1
-next_increment_name: "M25.1 — Attribution display + JSONField backend addition"
+milestone_25_status: shipped
+next_session: SESSION_188
+next_milestone: 26
+next_milestone_name: "(target selection pending — locked at M26.0 open)"
+next_increment: 0
+next_increment_name: "M26.0 — Planning refinement + target selection"
 ---
 
-# Next session — SESSION_186 · Milestone 25 · Increment 1 (M25.1 — attribution display + JSONField backend addition)
+# Next session — SESSION_188 · Milestone 26 · Increment 0 (M26.0 — planning refinement + target selection)
 
-> **Milestone 25 planning shipped at SESSION_185.** All eight §5
-> load-bearing decisions locked; two mid-planning refinements
-> captured honestly. Full active memo at
-> `docs/roadmap/MILESTONE_25_PLANNING.md`. Handoff at
-> `docs/handoffs/SESSION_185_m25_inc0_planning.md`.
+> **Milestone 25 — Lead-to-Test-Drive Operational Completion —
+> SHIPPED at SESSION_187.** Three-increment milestone across
+> SESSION_185 → SESSION_187 (M25.3 close-out folded into M25.2
+> per §5.h Option B evidence-sized posture). **Backend baseline
+> 4,780 → 4,793 (+13; M25.1 +2 admin_lead_detail tests + M25.2
+> +11 admin_vehicle_list tests).** Frontend Vitest **209 → 226
+> (+17 across LeadDetailModal source-line + RecordTestDriveForm).**
+> Acceptance suite **13 → 14 journeys.** Full clean-DB dry-run:
+> **20 passed (~30s)**.
 >
-> **§5.a locked:** A3 (lead-source attribution display) + A4
-> (test-drive creation UI) bundled under **"Lead-to-Test-Drive
-> Operational Completion."** Anchor business question: *Can a
-> salesperson receive a lead, understand exactly where it came
-> from, assign it, and schedule the customer's test drive
-> entirely through the normal product workflow?*
+> **M24.1-open §3 deferrals 12 + 13 + 14 all closed.** The sales
+> front-of-funnel is now operationally complete not just at the
+> assign level but at the schedule-test-drive level — a
+> salesperson can receive a lead, see its source (referrer or
+> platform), assign it, and schedule the test drive entirely
+> through the modal. `DealerAiSalesTestDrives` remains the
+> canonical read-only visibility surface.
 >
-> **§5.b locked as Option A · JSONField variant.** Empirical
-> discovery at M25.0 open: `platform` is not persisted on
-> `CustomerLead` (webhook adapter dispatches then discards).
-> M25.1 adds `CustomerLead.source_metadata = JSONField(blank=
-> True, default=dict)` + typed accessor + adapter wiring.
-> Chosen over CharField for durability — future attribution
-> attributes (ad_source, campaign_id, listing_url, platform_
-> lead_id) land as additive JSON keys without further
-> migrations. Matches codebase precedent (`ChatSession.
-> extracted_profile`, `TestDrive.objections_captured`).
+> **Zero-drift permission-class streak extends 24 → 25**
+> consecutive milestones (M10 → M25).
 >
-> **§5.d locked as modal-only.** New durable design principle
-> from M25.0: *one operational workflow beats two partially-
-> overlapping ones.* Secondary "+ Record test drive" launch
-> point on `DealerAiSalesTestDrives` deferred to M26+ pending
-> operator evidence.
+> **Planning-time as-recommended streak reached 3** across the
+> M25 increments (fresh counter reset at M24.0; historical run
+> of 89 across M10 → M23 preserved for the record). Two mid-
+> planning refinements at M25.0 (§5.b JSONField selection over
+> CharField, §5.d modal-only over dual entry points) and one at
+> M25.2-open (§5.e admin/vehicles/ endpoint addition) all
+> presented as empirical-discovery refinements with options +
+> recommendation + user confirmation — counted as as-recommended
+> increments because the recommendation process was transparent.
 >
-> **Planning-time streak → 1** at M25.0 close (fresh counter,
-> reset at M24.0). Zero-drift permission-class streak enters
-> M25 at 24; intended to extend to 25 across M25 (M25.1 uses
-> existing M4 permission class; M25.2 adds no new endpoints).
+> **Coordinated push at M25 close pending.** M25.3 completed
+> all documentation + status flips + M26 skeleton + close-out
+> handoff — awaits explicit user confirmation before push. Six
+> M25 commits (M25.0 + hash backfill + M25.1 + hash backfill +
+> M25.2 + hash backfill + M25.3 close-out + hash backfill) land
+> together in a single coordinated push per the M18 → M24
+> cadence.
 >
-> Baselines at SESSION_186 open: **4,780 backend pass, 209
-> frontend pass, 13 acceptance journeys.** M25.1 grows all
-> three baselines additively.
+> **Two durable design principles surfaced at M25:**
+> (a) *one operational workflow beats two partially overlapping
+> ones* — for customer-facing features, default to one canonical
+> entry point; defer secondary launch points until operator
+> evidence demands them. Captured as user-feedback memory.
+> (b) *Planning-open verification must cover the persistence
+> path, not just the UI path* — the M25.0 (`platform`-not-
+> persisted) and M25.2 (`admin/vehicles/`-not-shipped)
+> empirical discoveries validated this reflex; both were caught
+> before scope commit.
+>
+> **NEW M26 candidate surfaced at M25.3 audit regen:**
+> audit-script refinement for trailing-optional-querystring
+> template patterns. Two shipped UI-consumed endpoints
+> (`admin/test-drives/list/` M11.6 + `admin/vehicles/` M25.2)
+> currently audit as `defer-candidate-O2` due to a parser gap
+> in the audit script. Reality is 116 covered / 154 total; audit
+> reports 114 / 154. Small bounded fix per the "audit
+> correctness as supporting infrastructure" durable principle.
+>
+> **SESSION_188 opens M26.0 — planning refinement + target
+> selection.** No target locked yet — the candidate list
+> surfaces at open (elevated: H test-hygiene [reinforced M24.1
+> close], A2 JE creation UI [unchanged since M23 close], NEW
+> audit-script refinement [M25.3 discovery], plus any O2 sub-
+> scopes; gated: T/U/L/M; deferred pending evidence: D/C;
+> deferred stable: G). The assistant recommends one option with
+> rationale grounded in the primary operational-coverage lens;
+> the user confirms or redirects.
 
-## First thing SESSION_186 must do
+## First thing SESSION_188 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean (or single working commit for the
-  M25.0 planning commit if the M25.0 commit lands at
-  SESSION_186 open rather than SESSION_185 close).
-- `git log --oneline -8` — top should be the M25.0
-  planning commit.
-- `python3 manage.py test dealer_ai` → **4,780 pass, 1
+- `git status` — clean; local `HEAD` matches `origin/main`
+  (post-push).
+- `git log --oneline -10` — top should be the M25.3 close-out
+  commit; `origin/main` should now be at the same head (push
+  executed at M25.3 close after explicit user confirmation
+  at SESSION_187).
+- `python3 manage.py test dealer_ai` → **4,793 pass, 1
   skipped, 0 fail**.
-- `cd frontend && npm test` → **209 pass**.
+- `cd frontend && npm test` → **226 pass**.
 - `python3 manage.py check` clean.
-- `python3 manage.py makemigrations --check --dry-run`
-  → "No changes detected."
+- `python3 manage.py makemigrations --check --dry-run` → "No
+  changes detected."
 - `cd frontend && npx tsc --noEmit` clean.
 - `cd acceptance && npx tsc --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. Add `CustomerLead.source_metadata` field + migration + accessor
+### 2. Monitor first M25 CI run
 
-- `backend/dealer_ai/models.py` — append to `CustomerLead`:
+The M25.3 push at SESSION_187 was the first push of the M25
+commits. The acceptance job fires on that `main` push —
+verify its status via:
 
-  ```python
-  source_metadata = models.JSONField(blank=True, default=dict)
+```bash
+gh run list --workflow=acceptance --branch=main --limit 5
+gh run view <run-id> --log
+```
 
-  def get_source_platform(self) -> str:
-      return (self.source_metadata or {}).get("platform", "")
-  ```
+**If red:** address as §0.a M26.0 amendments before opening
+§5.a.
 
-- `python3 manage.py makemigrations dealer_ai` — expect a
-  single `AddField` migration (`0049_customerlead_source_metadata`
-  or next available number).
-- `python3 manage.py migrate` — apply.
-- No backfill migration required (`default=dict` handles
-  historical rows on first read).
+**If green:** M25 is CI-verified shipped; proceed to §3.
 
-### 3. Extend `CustomerLeadSerializer`
+### 3. Regenerate the audit artifact
 
-Additive extension in `backend/dealer_ai/serializers.py`
-(lines 221-254):
+Before candidate presentation, rerun the audit tooling:
 
-- Add `referrer` as `PrimaryKeyRelatedField(read_only=True)`
-  (or nested — verify shape that renders cleanly in JSON).
-- Add `referrer_name = serializers.SerializerMethodField()`
-  with `get_referrer_name(obj) -> str: return obj.referrer.
-  name if obj.referrer else ""`.
-- Add `source_metadata` to `fields` list (exposed as-is;
-  JSONField serializes to dict).
+```bash
+cd backend
+python3 -m dealer_ai.scripts.audit_operational_surface
+```
 
-### 4. Wire adapter → `source_metadata` in `record_webhook_lead`
+Post-M25 the audit script reports **114 / 154** covered / 40
+backend-only. Reality is 116 / 154 (two false-positive
+`defer-candidate-O2` classifications on M11.6
+`admin/test-drives/list/` and M25.2 `admin/vehicles/` — both
+consumed by shipped UI but tripped by the trailing-optional-
+querystring template pattern per M25.3 §Deferrals). The
+audit-script refinement is a NEW M26 candidate — if elevated,
+this discrepancy resolves post-M26 shipping.
 
-`backend/dealer_ai/services/leads/channel_intake.py:
-record_webhook_lead` — pass `source_metadata={"platform":
-platform}` through `_create_lead`. Extend `_create_lead`
-to accept `source_metadata: dict = None` (defaulting to
-`{}`) and write it to `CustomerLead.objects.create(...,
-source_metadata=source_metadata or {}, ...)`.
+### 4. Present the M26 candidate list
 
-### 5. Extend tests
+Per `MILESTONE_26_PLANNING.md` skeleton (create at M25.3 close
+if time permits, or draft fresh at SESSION_188 open):
 
-- **Backend:** M11.1 webhook tests
-  (`test_m111_*_webhook*.py`) — assert
-  `lead.source_metadata["platform"] == "generic"` (or
-  whichever platform the test uses) after creation. Add
-  assertion for `lead.get_source_platform()` accessor.
-- **Backend:** M6.5 lead-detail tests (or wherever
-  `admin_lead_detail` response shape is asserted) — assert
-  the new serialized fields (`referrer`, `referrer_name`,
-  `source_metadata`) present in the response.
-- **Backend:** New unit test for
-  `CustomerLeadSerializer` if not already covered.
-- Expected new backend baseline: ~4,785-4,790 pass.
+**Elevated (highest recommendation strength at M26.0):**
 
-### 6. Add "Source" section to `LeadDetailModal`
+- **Candidate H — test-hygiene remediation** (reinforced
+  M24.1 close, carried unchanged through M25). Three
+  shared-DB non-idempotent journeys
+  (`sales_manager/daily_startup`, `recon/workflow`,
+  `office/accounting_workflow`) break full-suite runs on
+  state-dirty DB. Clean-DB runs pass all 14. High compound
+  value for CI baseline stability as the suite grows.
+  M22.§9 original scope + M23.2 session-invalidation sweep
+  expansion + M24.1 close reinforcement.
+- **NEW Candidate — Audit-script refinement** (M25.3
+  discovery). Small bounded fix to the audit script's
+  TypeScript template-literal parser so it handles
+  trailing-optional-querystring patterns
+  (`\`/path/${qs ? \\\`?${qs}\\\` : ""}\``). Two currently-
+  false-positive `defer-candidate-O2` classifications flip
+  to `covered` post-fix. Compounds every future audit read.
+  Matches "audit correctness as supporting infrastructure"
+  durable principle.
+- **Candidate A2 — JE creation UI** (unchanged since M23
+  close). Small scope; audit-verified genuine gap for
+  accounting operators.
 
-`frontend/src/components/LeadDetailModal.tsx` — render a
-"Source" attribution section near the existing lead-id
-header per §5.c rules:
+**Gated candidates:**
 
-- `chat` / `walk_in` / `phone` / `other` → omit
-  Source section.
-- `listing_form` → "Source: {display_case(source_
-  metadata.platform)}" or "Listing form" fallback.
-- `referral` → "Referred by: {referrer_name}" or
-  "Referral (referrer not linked)" fallback.
+- **Candidate T** — process real tester feedback.
+- **Candidate U** — hosted-demo substrate.
+- **Candidate L** — first-live-pilot staging.
+- **Candidate M** — multi-operator support. **Breaks
+  zero-drift streak with intent.**
 
-Reads via `detail.lead.referrer_name` +
-`detail.lead.source_metadata?.platform`. TypeScript
-update needed in `frontend/src/lib/api.ts`
-`LeadDetailResponse.lead` interface:
+**Deferred pending evidence:**
 
-- Add `channel: string`
-- Add `referrer: number | null`
-- Add `referrer_name: string`
-- Add `source_metadata: Record<string, unknown>`
+- **Candidate D** — LLM router / cost caps.
+- **Candidate C** — F&I chargeback substrate.
 
-### 7. Vitest coverage
+**Deferred but stable:**
 
-`frontend/src/components/LeadDetailModal.test.tsx` —
-new file (or extend existing). Assert Source section
-renders correctly for each channel value + fallback
-behavior. Expected new frontend baseline: ~215-220
-pass.
+- **Candidate G** — dashboard testid hardening.
 
-### 8. Extend acceptance journeys
+**Deferred at M25 §4 (all valid for later re-entry):**
 
-- **M24.3 referral journey**
-  (`acceptance/journeys/sales/referral_lead.spec.ts` or
-  equivalent filename — verify at M25.1 open) — after
-  creating referral lead + opening modal, assert
-  "Referred by: {name}" is visible.
-- **M24.4 webhook journey**
-  (`acceptance/journeys/sales/webhook_lead.spec.ts` or
-  equivalent) — after webhook POST + operator opens
-  the resulting lead, assert "Source: {platform_label}"
-  is visible. If this requires a fresh operator-flow
-  extension beyond M24.4's integration-only assertion,
-  add a small companion assertion in the same file.
-- Expected acceptance baseline stays at 13 journeys
-  (assertions extend within existing journeys).
+- Secondary "+ Record test drive" launch point on
+  `DealerAiSalesTestDrives` (M25 §5.d durable — needs
+  operator evidence).
+- Clickable "Referred by" attribution navigation (M25 §5.c
+  durable — needs operator evidence).
+- Named-platform webhook adapters (Autotrader / Cars.com /
+  etc.) — JSONField substrate ready.
+- Attribution analytics / rollups.
+- Vehicle picker advanced filters.
 
-### 9. Run full baselines clean
+Present each with two-sentence scope + operator pain
+resolved + dependency notes, then present the recommendation.
 
-- `python3 manage.py test dealer_ai` → all pass.
-- `cd frontend && npm test` → all pass.
-- `cd acceptance && npm test` (or equivalent Playwright
-  invocation) → all 13 journeys pass on clean DB.
-- `python3 manage.py check` clean.
-- `python3 manage.py makemigrations --check --dry-run`
-  → clean.
-- `cd frontend && npx tsc --noEmit` clean.
-- `cd acceptance && npx tsc --noEmit` clean.
+### 5. Recommend a target for §5.a
 
-### 10. Ship the M25.1 handoff
+Ground the recommendation in the **primary operational-
+coverage lens** ("which candidate most increases operational
+coverage for a dealership employee?").
 
-- `docs/handoffs/SESSION_186_m25_inc1_attribution.md`.
-- **Do NOT push** — coordinated push at M25 close per
-  §5.h.
+Elevated candidates evaluated under the lens:
 
-## Non-goals for SESSION_186
+- **H (test-hygiene)** — indirect operational-coverage
+  delta (CI stability), but high compound value as the
+  acceptance suite grows. Not operator-facing directly.
+- **NEW audit-script refinement** — indirect (accuracy of
+  the roadmap-planning substrate). Very small scope.
+- **A2 (JE creation UI)** — direct operator-facing;
+  small population (1-2 accounting users weekly) × moderate
+  frequency; small scope.
 
-- ❌ Do NOT ship `<RecordTestDriveForm>` or any
-  test-drive UI. That's M25.2.
-- ❌ Do NOT add a secondary launch point on
-  `DealerAiSalesTestDrives` — modal-only per §5.d.
-- ❌ Do NOT make attribution lines clickable /
-  navigable. Display-only per §5.c.
-- ❌ Do NOT introduce named-platform adapters
-  (Autotrader / Cars.com / etc.). Generic adapter
-  unchanged.
-- ❌ Do NOT modify existing M1–M24 endpoints or
-  serializers beyond the additive
-  `CustomerLeadSerializer` extension.
-- ❌ Do NOT push — coordinated push at close.
+Ranking under the lens: A2 > H > audit-refinement on
+direct operator coverage, but H > A2 > audit-refinement on
+compound infrastructure value. Judgment call for M26 —
+present both framings and let the user pick.
+
+**Alternatively:** if the M25 CI run surfaces regression
+work at M26.0, address as §0.a amendments first.
+
+### 6. Draft §5.b–§5.h load-bearing decisions
+
+Once §5.a locks, draft the standard six-to-eight
+load-bearing decisions.
+
+### 7. Verify BOTH intake AND downstream UI surfaces before locking §5.b + §5.d
+
+**M24.1-open durable lesson, reinforced at M25.0 + M25.2
+open.** Two M25 empirical discoveries (`platform` not
+persisted; `admin/vehicles/` not shipped) validated this
+reflex — both caught before scope commit. Continue at
+every M26 planning-open surface verification.
+
+### 8. DoD compliance check
+
+Per the M21.0 §5.f amendment: the M26 active memo §3 must
+either name a Playwright journey addition or extension OR
+explicitly document why no journey change is required.
+
+Note: Candidate H (test-hygiene) is an
+infrastructure-focused candidate — if selected, §3 can
+document the exception path (no operational journey
+change; the milestone hardens existing journey seeds).
+
+### 9. Expand M26 planning skeleton
+
+If a skeleton exists (drafted at M25.3 close), expand at
+SESSION_188. Otherwise draft fresh per the standard
+active-memo shape.
+
+### 10. Ship the M26.0 handoff
+
+- `docs/handoffs/SESSION_188_m26_inc0_planning.md`.
+- **Do NOT push** — M26.0 is planning only; coordinated
+  push at M26 close.
+
+## Non-goals for SESSION_188
+
+- ❌ Do NOT ship any backend or frontend code — planning-
+  only session.
+- ❌ Do NOT open any M26 implementation increment.
 - ❌ Do NOT force-push or amend earlier commits.
-- ❌ Do NOT skip the DoD compliance check —
-  attribution assertions must extend both M24.3 and
-  M24.4 journeys.
+- ❌ Do NOT modify M1–M25 shipped surface.
+- ❌ Do NOT modify the acceptance suite unless CI
+  regression fixes land as §0.a M26.0 amendments.
+- ❌ Do NOT skip the DoD compliance check.
+- ❌ Do NOT skip the downstream UI surface verification
+  (M24.1-open + M25.0/M25.2-open durable lesson —
+  planning-open must cover the persistence path, not
+  just the UI path).
 
-## Baseline expected at M25.1 close
+## Baseline expected at close
 
-- Backend: ~4,785-4,790 pass (added webhook
-  metadata + serializer field tests).
-- Frontend: ~215-220 pass (added
-  LeadDetailModal Source section coverage).
-- Acceptance: 13 journeys (assertions extend
-  within M24.3 + M24.4).
-- Migrations: 0049 (or next available).
+Backend + frontend unchanged from M25 close. Acceptance
+suite unchanged. Only planning docs change.
 
 ## NEXT TASK
 
-Start SESSION_186 with (a) starting-state
-verification, (b) commit the M25.0 planning
-artifacts if not already committed at SESSION_185
-close, (c) add `CustomerLead.source_metadata`
-field + migration + accessor, (d) extend
-`CustomerLeadSerializer` additively, (e) wire
-`record_webhook_lead` adapter to persist
-platform into `source_metadata`, (f) extend
-backend tests, (g) add Source section to
-`LeadDetailModal` + Vitest coverage, (h) extend
-M24.3 referral + M24.4 webhook Playwright
-assertions, (i) run full baselines clean, (j)
-ship the M25.1 handoff. **No push.**
+Start SESSION_188 with (a) starting-state verification,
+(b) monitor first real M25 acceptance CI run + fix any
+regressions as §0.a M26.0 amendments, (c) regenerate the
+audit artifact, (d) present the candidate list with
+recommendation + rationale under primary operational-
+coverage lens, (e) await user confirmation of §5.a, (f)
+draft §5.b–§5.h with intake AND downstream UI substrate
+verification per M24.1-open + M25 durable lesson, (g) DoD
+compliance check on §3 draft, (h) expand the M26 planning
+skeleton into a full active memo, (i) ship the M26.0
+handoff.
 
 ---
 
@@ -270,101 +322,132 @@ ship the M25.1 handoff. **No push.**
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+   (M25 shipped section landed at M25.3)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_25_PLANNING.md` (M25.0
-   active memo, governing contract through M25
-   close)
-6. `docs/roadmap/MILESTONE_24_RETROSPECTIVE.md` §9
-7. `docs/roadmap/MILESTONE_24_PLANNING.md` §3
-   (M24.1-open deferrals 12, 13, 14)
-8. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-9. `docs/CAPABILITY_MATRIX.md` §7y
-10. `docs/research/SALES_DEPARTMENT_MAPPING.md`
-    §workflow step 6 + §lead acquisition
-11. `docs/handoffs/SESSION_185_m25_inc0_planning.md`
-    (M25.0 shipped)
+5. `docs/roadmap/MILESTONE_25_RETROSPECTIVE.md`
+   §8 (M25 corrections) + §9 (standing M26 question)
+6. `docs/roadmap/MILESTONE_25_PLANNING.md`
+   (M25 governing contract + M25.0 §5.b JSONField
+   selection + M25.2-open admin/vehicles/ empirical
+   discovery record)
+7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+   (audit-driven scope pool — 154 endpoints /
+   114 covered per script / 116 covered in reality
+   with two false-positive `defer-candidate-O2`
+   classifications documented in M25 §4)
+8. `docs/CAPABILITY_MATRIX.md` §7z (M25 shipped
+   surface)
+9. `docs/handoffs/SESSION_187_m25_inc2_test_drive_ui.md`
+   (M25.2 shipped + M25.3 close-out fold)
 
-Narrative docs are claims. Rules + research +
-code are facts.
+Narrative docs are claims. Rules + research + code are
+facts.
 
 ---
 
-## Operational state (post-SESSION_185 — M25.0 planning shipped)
+## Operational state (post-SESSION_187 — Milestone 25 SHIPPED)
 
 - **Backend (local):** Django on `:8001`.
-  Migrations `0001`–`0048`. Test baseline:
-  **4,780 pass**, 1 skipped, 0 fail.
+  Migrations `0001`–`0049`. Test baseline: **4,793
+  pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`.
   `tsc --noEmit` + `vite build` clean.
-  **Vitest baseline: 209 pass**.
+  **Vitest baseline: 226 pass** across 32 test
+  files.
 - **Frontend (prod):** NONE.
-- **Acceptance workspace (local):** Playwright
-  1.49 + TS 5.6 operational; **13 journeys**
-  passing end-to-end on clean DB.
+- **Acceptance workspace (local):** Playwright 1.49
+  + TS 5.6 operational; **14 journeys** passing
+  end-to-end on clean DB. Full dry-run baseline:
+  **20 passed (~30s)** (6 setup + 14 journeys).
 - **Acceptance (CI):** live on
-  `.github/workflows/acceptance.yml`. First
-  real M24 CI run passed in 2m33s at
-  SESSION_185 open verification.
-- **Async runtime:** Celery 5.5.3 + Redis
-  6.4.0 + `django-celery-beat` 2.8.1
-  DatabaseScheduler. 10 scheduled task
-  families registered.
-- **Milestones shipped:** M1 → M24. M25
-  planning locked (M25.0 shipped at
-  SESSION_185); M25.1 opens next session.
-- **DRF admin surface:** 113 endpoints.
+  `.github/workflows/acceptance.yml`. First real
+  M25 CI run triggered by the M25.3 push at
+  SESSION_187 — status verified at SESSION_188
+  open.
+- **Async runtime:** Celery 5.5.3 + Redis 6.4.0 +
+  `django-celery-beat` 2.8.1 DatabaseScheduler.
+  10 scheduled task families registered.
+- **Milestones shipped:** M1 → **M25**. M26
+  target selection pending (SESSION_188).
+- **DRF admin surface:** **114** endpoints (+1
+  `admin/vehicles/` at M25.2).
 - **Frontend operator routes:** 20.
 - **Public endpoints:** +1 M6.5 showroom.
-- **Service surface:** all M1–M24 packages
-  unchanged. M25.1 will add zero verbs and
-  extend the webhook intake verb with one
-  kwarg.
-- **Frontend surfaces:** unchanged from M24
-  close. M25.1 will extend `LeadDetailModal`
-  with a Source section; M25.2 will add
-  `<RecordTestDriveForm>` in
-  `frontend/src/components/sales/`.
+- **Service surface:** all M1–M25 packages
+  unchanged. M25 added zero service verbs;
+  `record_webhook_lead` gained one additive
+  kwarg for `source_metadata`.
+- **Frontend surfaces:** M25 added one component
+  (`<RecordTestDriveForm>` in
+  `frontend/src/components/sales/`), one API
+  wrapper (`listAdminVehicles`), and two additive
+  sections in `LeadDetailModal` ("Source" +
+  "Schedule test drive" collapsible). No new
+  routes.
 - **Tenancy carriers:** 52.
-- **Permission classes:** 7 actual —
-  zero-drift streak twenty-four consecutive
-  milestones (M10 → M24). Intended posture:
-  extend to 25 across M25.
+- **Permission classes:** **7 actual** —
+  zero-drift streak **twenty-five consecutive
+  milestones** (M10 → M25).
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages
   (unchanged).
 - **Deterministic rules:** unchanged.
-- **Milestone 24 status:** SHIPPED (CI-
-  verified at SESSION_185 open — first real
-  M24 acceptance run green in 2m33s).
-- **Milestone 25 status:** in-progress.
-  M25.0 planning shipped at SESSION_185;
-  M25.1 opens at SESSION_186.
-- **Audit tooling:** post-M24 = 113 covered
-  / 40 backend-only. Regenerated at
-  SESSION_185; uncommitted diff (walk-in /
-  phone / referral flipped covered) lands
-  with the M25.0 planning commit.
-- **Planning-time streak: 1** (at M25.0
-  close). Historical run of 89 across M10
-  → M23 preserved for the record.
-- **DoD amendment (M21.0 §5.f Option B):**
-  every future customer-facing milestone
-  must add or update at least one
-  Playwright operational journey. M25
-  compliance path: M25.1 extends M24.3 +
-  M24.4 assertions; M25.2 adds
-  `sales/lead_to_test_drive.spec.ts`.
-- **Durable lessons from M25.0:** (a) one
-  operational workflow beats two partially-
-  overlapping ones — for customer-facing
-  features, default to one canonical entry
-  point; defer secondary launch points
-  until operator evidence demands them; (b)
-  M25.0 empirical verification surfaced
-  that `platform` was not persisted despite
-  the M24.1-open scope note implying a
-  "small UI extension" — verification at
-  planning open catches these gaps before
-  scope commits. Continues the M24.1-open
-  durable lesson.
+- **Milestone 25 status:** SHIPPED (SESSION_187
+  close-out landed all documentation + status
+  flips + M26 handoff + coordinated close-out
+  commit + first M25 push).
+- **Sales front-of-funnel operationally
+  complete:** walk-in (M24.1) + phone (M24.2) +
+  referral (M24.3) + webhook (M24.4)
+  operator-side intake + assign + (M25.1) source
+  attribution visible + (M25.2) schedule test
+  drive through the modal. **M24.1-open §3
+  deferrals 12 + 13 + 14 all closed by M25.**
+- **Audit tooling:** authoritative for BHPH +
+  accounting + sales intake + attribution + test-
+  drive-create post-M25. Post-M25.2 audit
+  discovery: two shipped UI-consumed endpoints
+  (`admin/test-drives/list/` + `admin/vehicles/`)
+  audit as `defer-candidate-O2` due to
+  trailing-optional-querystring template parser
+  gap. Documented in M25 §4; NEW M26 candidate for
+  the small bounded fix.
+- **§9 evidence for M26:** Candidate H (test-
+  hygiene, carried unchanged from M25), Candidate
+  A2 (JE creation UI, unchanged since M23 close),
+  NEW audit-script refinement (M25.3 discovery,
+  small bounded), plus gated T/U/L/M, deferred
+  pending evidence D/C, deferred stable G, plus
+  all M25 §4 deferrals recorded for later re-
+  entry.
+- **Planning-time streak: 3** (at M25.2 close;
+  reset at M24.0 open, historical run of 89 across
+  M10 → M23 preserved for the record).
+- **DoD amendment (M21.0 §5.f Option B):** every
+  future customer-facing milestone must add or
+  update at least one Playwright operational
+  journey, or explicitly document in §3 why no
+  journey change is required. Applies to M26
+  forward. Note: Candidate H is
+  infrastructure-focused; if selected, §3 can
+  document the exception path.
+- **M25 audit coverage at close:** 114 / 154
+  endpoints covered per script (116 / 154 in
+  reality — see M25 §4 audit-script gap
+  documentation).
+- **Durable lessons from M25:** (a) one
+  operational workflow beats two partially
+  overlapping ones (M25.0 §5.d origin); (b)
+  planning-open verification must cover the
+  persistence path, not just the UI path (M25.0
+  §5.b + M25.2 §5.e origin); (c) additive-forever
+  JSONField beats CharField for capturing adapter
+  extras (M25.0 §5.b origin); (d) record
+  empirical-discovery refinements honestly —
+  they preserve streak integrity (M25.0 + M25.2
+  origin); (e) modal-attached collapsible +
+  success badge > toast for post-action
+  confirmation (M25.2 origin); (f) dependency-
+  injectable helpers over network mocks in unit
+  tests (M25.2 origin).

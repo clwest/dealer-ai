@@ -3014,6 +3014,112 @@ Milestone 24 close:**
 
 ---
 
+## 7z. Lead-to-Test-Drive Operational Completion (Milestone 25, shipped)
+
+Milestone 25 (SESSION_185 → SESSION_187, close-out folded per
+§5.h) delivered **operator-visible lead attribution** (source
+platform for webhook-origin leads, referring-customer name for
+referral leads) and **modal-attached test-drive scheduling** with
+a full tenant-inventory picker. Before M25, the salesperson
+opening a webhook-origin lead saw only `channel="listing_form"`
+with no way to distinguish Autotrader from Cars.com; opening a
+referral lead showed no referrer identity in the modal despite
+the FK persisting since M11.1; and scheduling a test drive
+required curl / Django shell — the M11.2 endpoint had shipped
+with typed wrapper since M11.6 but no UI consumed it. M25
+closes all three M24.1-open genuine gaps (§3 deferrals 12 + 13
++ 14) and answers the anchor business question end-to-end for
+all four M24 intake channels: **a salesperson can now receive
+a lead, understand exactly where it came from, assign it, and
+schedule the customer's test drive entirely through the modal
+without leaving context**.
+
+Milestone inherits the M21 Candidate O UI-creation contract
+plus a small additive backend surface: one migration adding
+`CustomerLead.source_metadata JSONField` (chosen over CharField
+for extension-without-migration durability), one additive
+`GET /admin/vehicles/` endpoint (surfaced by M25.2-open
+empirical discovery and confirmed as Option A), additive
+serializer fields on `CustomerLeadSerializer`, and one adapter
+wiring change in `record_webhook_lead`. Every M25 UI surface
+ships with a Playwright journey (M24.3 + M24.4 extended, one
+new `lead_to_test_drive` journey). **Zero-drift permission-
+class posture extends to twenty-five consecutive milestones**
+(M10 → M25). Deferrals cataloged in `MILESTONE_25_
+RETROSPECTIVE.md` §4.
+
+Two durable design principles surfaced at M25 and are carried
+forward: (a) *one operational workflow beats two partially
+overlapping ones* — for customer-facing features, default to
+one canonical entry point; defer secondary launch points until
+operator evidence demands them (captured at §5.d modal-only
+lock, applied when the initial "modal + DealerAiSalesTestDrives
+button" recommendation was tightened to modal-only). (b)
+*Planning-open verification must cover the persistence path,
+not just the UI path* — two M25 empirical discoveries (§5.b
+platform-not-persisted at M25.0; §5.e admin/vehicles/-not-
+shipped at M25.2) were caught before scope commit and refined
+into the milestone as user-confirmed Option-A additions.
+Verification at open worked as intended.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M25.0 planning refinement + target selection | Full active memo expansion at `MILESTONE_25_PLANNING.md` — all eight §5 locks resolved at SESSION_185 open. §5.a locked as A3 + A4 bundle framed as "Lead-to-Test-Drive Operational Completion" (redirected from initial "Sales UI completeness" phrasing which invited feature creep). §5.b locked as Option A · JSONField variant (`CustomerLead.source_metadata`) after empirical discovery surfaced that `platform` was not persisted — the webhook adapter dispatched then discarded it. §5.d locked as modal-only (initial recommendation had a secondary launch point on `DealerAiSalesTestDrives`; user rejected per new "one workflow beats two overlapping" principle, captured as user-feedback memory). §5.e vehicle picker: suggested + full-inventory zones. §5.f 3-increment shape with §5.h evidence-sized close-out fold. §5.g DoD journey plan: extend M24.3 + M24.4 in M25.1, add `lead_to_test_drive` in M25.2. Handoff at `docs/handoffs/SESSION_185_m25_inc0_planning.md`. | Audit artifact regenerated (post-M24 baseline: 113 covered / 40 backend-only). Two mid-planning refinements captured honestly per M24 durable "record planning corrections honestly" rule — both were empirical-discovery refinements presented at open with options + recommendation + user confirmation, not mid-implementation corrections. |
+| M25.1 attribution display + JSONField backend | Backend: `CustomerLead.source_metadata = JSONField(blank=True, default=dict)` + typed accessor `get_source_platform() -> str` — additive-forever contract for future attribution attributes (ad_source, campaign_id, listing_url, platform_lead_id) without further migrations. Migration `0049_customerlead_source_metadata` (single `AddField`, no backfill required — `default=dict` handles historical rows). `CustomerLeadSerializer` extended additively with `channel` + `referrer` + `referrer_name` (SerializerMethodField deriving from `self.referrer.name`) + `source_metadata` matching the M11.6 `AdminLeadListSerializer` additive precedent. `record_webhook_lead` now writes `source_metadata={"platform": platform}` at persistence time — before M25.1 the platform string was used only to dispatch the adapter and then discarded. Frontend: `LeadDetailResponse.lead` TS interface extended with the four new attribution fields. `LeadDetailModal` renders a new "Source" section per §5.c channel-specific rules (referral → "Referred by: {name}"; listing_form → "Source: {platform_label}" with title-case display; chat/walk_in/phone/other → omitted). Pure helpers `displayPlatform` + `computeSourceLine` exported for direct Vitest coverage. `data-testid="lead-source-section"` + `lead-source-line` for stable Playwright targeting. Tests: +2 admin_lead_detail attribution tests (referral + webhook channels asserting all four new serialized fields). +10 frontend source-line unit tests (3 displayPlatform + 7 computeSourceLine covering the full channel × attribution decision table). M24.3 referral + M24.4 webhook Playwright journeys extended with modal Source-line assertions (targeting `lead-source-line` testid for stability). Closes M24.1-open §3 deferrals 13 + 14. | Backend 4,780 → 4,782 pass (+2). Frontend 209 → 219 pass (+10 across new LeadDetailModal.test.tsx file). Acceptance 13 journeys (assertions extend within M24.3 + M24.4; no new journey files). Planning-time as-recommended streak → 2. First-run pass — zero authoring or operator-surface fixes. |
+| M25.2 test-drive UI + admin vehicle list endpoint | **Empirical discovery at M25.2 open:** no admin tenant-wide vehicle-list endpoint existed on the shipped surface. Every `admin/vehicles/*` route was stock-scoped; the M25.2 picker's "All inventory" fallback would shut out walk-in/phone/referral leads (which land with empty `interested_vehicles`), defeating the workflow-completion narrative. User confirmed Option A at open: additive `GET /admin/vehicles/` following the M11.6 `admin/test-drives/list/` precedent. Backend: new `admin_vehicle_list` view in `views.py` — thin QuerySet wrapper, tenant-scoped filter, optional `search`/`condition`/`is_available` querystrings, cap at 100 rows, compact projection (id + stock/year/make/model/trim + condition + price + image_url + is_available + display_name). Reuses M4 `IsSalesManagerOrOwnerAtActiveDealership` — zero-drift permission-class streak preserved. `admin-vehicle-list` URL registered before the stock-scoped ledger routes. `seed_journey_sales_operational_entry` extended with one deterministic Vehicle fixture (`stock=M25-TEST-DRIVE-01`, 2025 Ford Bronco Wildtrak) for the M25.2 Playwright journey picker. Idempotent via `get_or_create`. Frontend: `salesApi.ts::listAdminVehicles` typed wrapper with `AdminVehicleRow` / `AdminVehicleListResponse` / `AdminVehicleListFilters` interfaces. New `<RecordTestDriveForm>` component (`frontend/src/components/sales/`) matching the M24.1 `<LeadIntakeForm>` substrate pattern. Two-zone vehicle picker per §5.e: "Suggested for this lead" reads `detail.interested_vehicles` (chat-origin leads pre-populate; walk-in/phone/referral/webhook default empty); "All inventory" lazy-loads via `listAdminVehicles` with debounced (200ms) search. Optional `duration_minutes` / `route_notes` / `customer_reaction` / `objections_captured` (comma-separated) / `next_action` fields. `driven_at` defaults server-side to `timezone.now()` per M11.2. Injectable `loadInventory` + `submit` props for testability. `LeadDetailModal` collapsible "Schedule test drive" section between "Interested vehicles" and "AI summary" — collapsed by default, expands on operator click. On successful submit → collapses with "Recorded" success badge in header (persistent until re-open) + form unmounts. Modal-only per §5.d — `DealerAiSalesTestDrives` remains read-only. `data-testid`: `schedule-test-drive-section`, `schedule-test-drive-toggle`, `schedule-test-drive-success`, `record-test-drive-form`, `record-test-drive-vehicle-<id>`, `record-test-drive-*` for form fields. Tests: +11 backend in new `test_m252_vehicle_list_endpoint.py` (auth matrix, tenant scoping, projection shape, search across stock/year/make/model/trim, condition + is_available filters, garbage-filter tolerance, 100-row cap, ordering). +7 frontend in new `RecordTestDriveForm.test.tsx` (inventory load-on-mount, suggested-zone render, submit-disabled-until-vehicle, submit-with-optional-fields + reset, 404 error humanization, inventory-load error, search refetches + filters). +1 new Playwright journey `sales/lead_to_test_drive.spec.ts`: preflight fixture-vehicle-id resolution via M25.2 endpoint → walk-in intake → modal opens → assign advisor → expand collapsible → search "Bronco" → click fixture row → submit → assert Recorded badge + form unmounts → close modal → business-outcome API assertion via `admin/test-drives/list/?lead_id=` (lead / vehicle / dealership / driven_by_user / driven_at recent / duration / reaction all correct) → navigate to DealerAiSalesTestDrives → assert row visible with expected reaction text. Closes M24.1-open §3 deferral 12. | Backend 4,782 → 4,793 pass (+11). Frontend 219 → 226 pass (+7 across new RecordTestDriveForm.test.tsx). Acceptance 13 → 14 journeys; full clean-DB run 20 passed (~30s) including 6 setup steps. Planning-time as-recommended streak → 3. First-run pass on both new backend + new frontend + new journey — zero operator-surface fixes required at close (evidence-sized §5.h Option B condition met, close-out folded into M25.2 session). |
+| M25.3 close-out (folded with M25.2) | Regenerated audit artifact — post-M25 total 154 endpoints / 114 covered / 40 backend-only per audit script (reality is 116 / 154 — pre-existing audit-script trailing-optional-querystring template gap surfaces `admin/test-drives/list/` + `admin/vehicles/` as `defer-candidate-O2` even though the shipped UI consumes both; recorded as M26 candidate). Capability matrix §7z (this section). `MILESTONE_25_RETROSPECTIVE.md` with §8 corrections + §9 evidence-based M26 candidates (H test-hygiene, A2 JE creation UI, NEW audit-script refinement). `IMPLEMENTATION_ROADMAP.md` M25 shipped-status section. `00-START-NEXT-SESSION.md` overwritten with M26.0 priority. SESSION_188 close-out handoff. Coordinated push of all M25 commits to `origin/main` per M18 → M24 cadence (awaits explicit user confirmation per CLAUDE.md safety protocol). | First M25 CI run fires on the close-out push; status verified at M26.0 open. |
+| Test baseline | Backend **4,780 → 4,793 pass** (+13 across M25: +2 M25.1 admin_lead_detail tests + +11 M25.2 admin_vehicle_list tests). Frontend Vitest **209 → 226 pass** (+17 across M25: +10 M25.1 LeadDetailModal source-line tests + +7 M25.2 RecordTestDriveForm tests). Acceptance suite **13 → 14 journeys** (+1 M25.2 `lead_to_test_drive`); +2 assertion extensions on M24.3 referral + M24.4 webhook; full local dry-run **20 passed (~30s)** on clean DB. Zero regressions. **1 migration** shipped in M25 (`0049_customerlead_source_metadata`). `manage.py check` + `makemigrations --check` clean at every M25 close. Per-increment delta: M25.0 = 0 (planning); M25.1 = +2 backend + +10 frontend + 0 new journeys (2 assertion extensions); M25.2 = +11 backend + +7 frontend + 1 new journey; M25.3 = 0 (docs + audit only). | Zero-drift permission-class streak extends **twenty-four → twenty-five** consecutive milestones (M10 → M25). Planning-time as-recommended streak **1 → 2 → 3** across M25.0 → M25.1 → M25.2 close. Historical run of 89 across M10 → M23 preserved for the record. |
+
+**What is NOT shipped in Milestone 25** (deferred per
+`MILESTONE_25_RETROSPECTIVE.md` §4):
+
+- **Secondary "+ Record test drive" launch point on
+  `DealerAiSalesTestDrives`.** Deferred per §5.d "one
+  operational workflow beats two overlapping ones" durable
+  principle. Modal-only is the canonical creation surface;
+  `DealerAiSalesTestDrives` remains read-only. Re-entry
+  requires operator evidence.
+- **Clickable / navigable "Referred by" attribution link.**
+  Deferred per §5.c display-only lock. Re-entry requires
+  operator evidence that navigation between linked leads is
+  a real workflow need.
+- **Test-drive edit / delete UI.** Deferred; records are
+  immutable per the M11.2 subsidiary-log design.
+- **Named-platform webhook adapters** (Autotrader / Cars.com
+  / CarGurus / Facebook Marketplace). JSONField substrate
+  ready when needed; M25 does not populate new adapters.
+- **Analytics / rollup surfaces on attribution** (e.g. "all
+  Autotrader leads this month"). JSONField query support
+  enables such surfaces later; M25 does not ship any.
+- **Vehicle picker advanced filters** (year / make / model
+  dropdowns). Search substring suffices in M25.2; advanced
+  filters are M26+ pending operator evidence.
+- **Structured objection vocabulary lookup.** M11.2 ships
+  `objections_captured` as a free-text list; M25.2 preserves
+  that shape in the form.
+- **Test-drive scheduling in advance** (as opposed to
+  recording post-drive). M11.2 `driven_at` defaults to
+  `timezone.now()`; the form allows override but the primary
+  use case is recording immediately post-drive.
+- **Salesperson / advisor role distinction on test-drive
+  create.** M11.2 permission is
+  `IsSalesManagerOrOwnerAtActiveDealership`; the salesperson-
+  writes-their-own-drive advisor gate is a deferred M11.2
+  follow-on.
+- **Audit-script trailing-optional-querystring template
+  handling.** Discovered at M25.3 audit regen: two shipped
+  UI-consumed endpoints (`admin/test-drives/list/` from
+  M11.6 and `admin/vehicles/` from M25.2) audit as
+  `defer-candidate-O2` due to template parser gap. Recorded
+  as M26 candidate per the "audit correctness as supporting
+  infrastructure" durable principle.
+- **No visible new functionality on any non-sales surface.**
+  M25 was tightly scoped to closing the lead-to-test-drive
+  operational-completion narrative. All BHPH / accounting /
+  recon / F&I / pilot surfaces continue unchanged.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

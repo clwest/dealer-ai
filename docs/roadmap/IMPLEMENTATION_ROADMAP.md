@@ -3536,6 +3536,99 @@ generic UX polish.
 - All M23 §3 carry-forward deferrals
   still valid.
 
+### Milestone 25 — Lead-to-Test-Drive Operational Completion — SHIPPED at SESSION_187
+
+**Sessions:** SESSION_185 → SESSION_187 (M25.3 close-out folded
+into M25.2 per §5.h evidence-sized Option B).
+**Anchor business question:** *Can a salesperson receive a lead,
+understand exactly where it came from, assign it, and schedule
+the customer's test drive entirely through the normal product
+workflow?*
+
+**Increments:**
+
+- **M25.0 (SESSION_185)** — planning refinement + all eight §5
+  locks. Full active memo at `MILESTONE_25_PLANNING.md`.
+  Commit `4e0a958`.
+- **M25.1 (SESSION_186)** — attribution display + JSONField
+  backend addition. `CustomerLead.source_metadata` +
+  `get_source_platform()` accessor + migration 0049.
+  `CustomerLeadSerializer` additive extension (channel /
+  referrer / referrer_name / source_metadata).
+  `record_webhook_lead` writes source_metadata at intake.
+  `LeadDetailModal` Source section. Extended M24.3 + M24.4
+  Playwright journeys. Closes M24.1-open §3 deferrals 13 +
+  14. Commit `368fe37`.
+- **M25.2 (SESSION_187)** — test-drive UI + admin vehicle list
+  endpoint. New `GET /admin/vehicles/` endpoint (M11.6
+  precedent). `<RecordTestDriveForm>` component modal-only
+  per §5.d. New Playwright journey `lead_to_test_drive.
+  spec.ts`. Closes M24.1-open §3 deferral 12. Commit
+  `27cbe87`.
+- **M25.3 close-out folded** into M25.2 session
+  (retrospective + audit rerun + roadmap update + M26
+  handoff + coordinated push).
+
+**Ships:**
+
+- One additive backend migration (`0049_customerlead_
+  source_metadata`).
+- One new backend endpoint (`admin/vehicles/`).
+- One new backend serializer method
+  (`get_referrer_name`) + four additive serializer fields.
+- One additive service-verb kwarg (`record_webhook_lead`
+  writes `source_metadata`).
+- One new frontend component
+  (`frontend/src/components/sales/RecordTestDriveForm.tsx`).
+- One new frontend API wrapper (`listAdminVehicles`).
+- Two additive frontend type surfaces (`AdminVehicleRow`
+  interfaces + `LeadDetailResponse.lead` attribution
+  fields).
+- One new deterministic acceptance seed fixture
+  (`M25-TEST-DRIVE-01` Vehicle).
+- One new Playwright journey +
+  two extended journey assertions.
+
+**Baselines at close:**
+
+- Backend: **4,793 pass** (+13 across M25).
+- Frontend: **226 pass** (+17 across M25).
+- Acceptance: **14 journeys** (13 → 14); full clean-DB run
+  20 passed (~30s).
+- Migrations: **0049**.
+- Zero-drift permission-class streak: **25** (M10 → M25).
+- Planning-time as-recommended streak: **3** at M25.2 close
+  (fresh counter from M24.0).
+- Audit artifact: 154 endpoints, 114 covered / 40
+  backend-only (reality is 116 / 154 — see M25
+  retrospective §4 for the pre-existing audit-script
+  trailing-optional-querystring template gap surfaced
+  during M25.3).
+
+**Non-goals for M25 (all held):**
+
+- Secondary "+ Record test drive" launch on
+  `DealerAiSalesTestDrives` — deferred per §5.d
+  "one operational workflow beats two overlapping ones"
+  durable principle.
+- Clickable/navigable "Referred by" attribution link —
+  deferred per §5.c display-only lock.
+- Test-drive edit/delete UI — deferred per M11.2
+  subsidiary-log design.
+- Named-platform adapters (Autotrader/Cars.com/etc.) —
+  JSONField substrate ready when needed.
+- Analytics/rollup surfaces on attribution — JSONField
+  query support enables later.
+- Vehicle picker advanced filters (year/make/model
+  dropdowns) — search substring suffices in M25.2.
+- Structured objection vocabulary lookup — free-text list
+  per M11.2.
+- Test-drive scheduling in advance vs post-drive
+  recording — M11.2 driven_at defaults to timezone.now();
+  form override supported.
+- All M24 §3 carry-forward deferrals still valid except
+  12 + 13 + 14 (closed by M25).
+
 ---
 
 ## 5. Explicit non-goals and deferrals
