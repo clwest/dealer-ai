@@ -653,6 +653,17 @@ export interface LeadDetailResponse {
     conversation_summary: string;
     recommended_next_action: string;
     credit_range: string;
+    // M25.1 attribution fields exposed by CustomerLeadSerializer per
+    // MILESTONE_25_PLANNING.md §5.b + §5.c. `channel` was previously
+    // only surfaced by the admin-list endpoint; the detail payload now
+    // matches. `referrer_name` is a serializer-derived convenience so
+    // LeadDetailModal renders "Referred by: {name}" without a second
+    // fetch. `source_metadata` is the JSONField slot the webhook
+    // adapter writes to at intake.
+    channel: string;
+    referrer: number | null;
+    referrer_name: string;
+    source_metadata: Record<string, unknown>;
   };
   interested_vehicles: Vehicle[];
   session_profile: Record<string, unknown>;

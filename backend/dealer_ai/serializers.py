@@ -224,6 +224,15 @@ class CustomerLeadSerializer(serializers.ModelSerializer):
         queryset=Vehicle.objects.all(),
         required=False,
     )
+    # Milestone 25 · Increment 1 (SESSION_186) — attribution surface for
+    # LeadDetailModal per MILESTONE_25_PLANNING.md §5.b + §5.c. Additive
+    # only; matches the M11.6 AdminLeadListSerializer precedent (which
+    # already exposes ``channel`` + ``referrer``). ``referrer_name`` is
+    # derived so the modal renders "Referred by: {name}" without a
+    # second fetch. ``source_metadata`` is exposed as-is; the modal
+    # reads platform via ``source_metadata.platform`` on the client
+    # side (server-side accessor lives on the model).
+    referrer_name = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomerLead
@@ -244,6 +253,11 @@ class CustomerLeadSerializer(serializers.ModelSerializer):
             "notes",
             "handed_off",
             "created_at",
+            # M25.1 attribution fields.
+            "channel",
+            "referrer",
+            "referrer_name",
+            "source_metadata",
         ]
         read_only_fields = [
             "id",
@@ -251,7 +265,14 @@ class CustomerLeadSerializer(serializers.ModelSerializer):
             "handed_off",
             "conversation_summary",
             "recommended_next_action",
+            "channel",
+            "referrer",
+            "referrer_name",
+            "source_metadata",
         ]
+
+    def get_referrer_name(self, obj: CustomerLead) -> str:
+        return obj.referrer.name if obj.referrer_id else ""
 
 
 # ---- Admin / dashboard serializers -----------------------------------------

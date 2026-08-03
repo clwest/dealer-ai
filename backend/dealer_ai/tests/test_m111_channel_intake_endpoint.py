@@ -177,6 +177,12 @@ class ChannelIntakeHappyPathTests(TestCase):
             response.json(), expected_channel=LEAD_CHANNEL_LISTING_FORM
         )
         self.assertEqual(lead["name"], "Wendy Web")
+        # M25.1 — verify the platform identifier was persisted on the
+        # CustomerLead so the operator UI can render "Source: {platform}"
+        # per MILESTONE_25_PLANNING.md §5.b.
+        created = CustomerLead.objects.get(pk=lead["id"])
+        self.assertEqual(created.source_metadata, {"platform": "generic"})
+        self.assertEqual(created.get_source_platform(), "generic")
 
 
 class ChannelIntakeErrorMappingTests(TestCase):

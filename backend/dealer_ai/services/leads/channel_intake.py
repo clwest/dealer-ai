@@ -65,6 +65,7 @@ def _create_lead(
     credit_range: str = "",
     urgency: str = "",
     referrer: Optional[CustomerLead] = None,
+    source_metadata: Optional[dict] = None,
 ) -> CustomerLead:
     return CustomerLead.objects.create(
         dealership=dealership,
@@ -79,6 +80,7 @@ def _create_lead(
         credit_range=credit_range or "",
         urgency=urgency or "",
         referrer=referrer,
+        source_metadata=dict(source_metadata) if source_metadata else {},
     )
 
 
@@ -231,9 +233,20 @@ def record_webhook_lead(
         ) from exc
 
     normalized = adapter.normalize(payload)
+    # Milestone 25 · Increment 1 (SESSION_186) — persist the platform
+    # identifier alongside adapter-normalized kwargs so the operator UI
+    # can render "Source: {platform_label}" per MILESTONE_25_PLANNING.md
+    # §5.b + §5.c. Before M25.1 the platform string was used only to
+    # dispatch the adapter and then discarded; the operator saw only the
+    # generic ``channel="listing_form"`` label with no way to distinguish
+    # Autotrader vs Cars.com vs any other listing platform. The JSONField
+    # shape means future adapters can add additional keys (ad_source,
+    # campaign_id, listing_url, platform_lead_id) without a further
+    # migration.
     with transaction.atomic():
         return _create_lead(
             dealership=dealership,
             channel=LEAD_CHANNEL_LISTING_FORM,
+            source_metadata={"platform": platform},
             **normalized,
         )

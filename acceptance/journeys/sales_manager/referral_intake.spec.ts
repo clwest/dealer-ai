@@ -156,6 +156,21 @@ test.describe("Sales operator can record a referral customer with backend attrib
     expect(Number.isInteger(newLeadId) && newLeadId > 0).toBe(true);
 
     // ---------------------------------------------------------------
+    // Step 8b (M25.1) — assert the modal Source section shows
+    //                    "Referred by: Priya Prior-Customer".
+    //                    Before M25.1 this display did not exist
+    //                    (§3 deferral 13). Backend attribution was
+    //                    verified via API-side assertion only; now
+    //                    the operator sees it in the UI.
+    // ---------------------------------------------------------------
+    const sourceLine = modalRegion.getByTestId("lead-source-line");
+    await expect(
+      sourceLine,
+      "M25.1 Source section should render for referral leads",
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(sourceLine).toHaveText(`Referred by: ${REFERRER_NAME}`);
+
+    // ---------------------------------------------------------------
     // Step 9 — assign Acceptance Advisor via AssignmentDropdown.
     // ---------------------------------------------------------------
     const assignmentTrigger = modalRegion

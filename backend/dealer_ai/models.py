@@ -908,6 +908,17 @@ class CustomerLead(models.Model):
         blank=True,
         related_name="referred_leads",
     )
+    # Milestone 25 · Increment 1 (SESSION_186) — additive JSON slot for
+    # channel-captured attribution extras. The generic webhook adapter
+    # writes ``{"platform": platform}`` here at intake so the operator
+    # UI can render "Source: Autotrader" instead of the bare
+    # ``channel="listing_form"`` label. Future adapters (named-platform
+    # or non-webhook) can drop additional keys (ad_source, campaign_id,
+    # listing_url, platform_lead_id) without a further migration per
+    # MILESTONE_25_PLANNING.md §5.b Option A · JSONField variant.
+    # Read through ``get_source_platform()`` — do not access
+    # ``source_metadata["platform"]`` directly at read sites.
+    source_metadata = models.JSONField(blank=True, default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -916,6 +927,18 @@ class CustomerLead(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.urgency or 'no urgency'})"
+
+    def get_source_platform(self) -> str:
+        """Return the persisted intake platform, or an empty string.
+
+        Typed accessor per MILESTONE_25_PLANNING.md §5.b —
+        centralizes the ``source_metadata`` key lookup so read sites
+        stay decoupled from the JSON shape. Returns an empty string
+        for legacy rows (``default=dict`` on the field means
+        historical leads land with ``{}``) and for non-webhook
+        channels that do not populate a platform.
+        """
+        return (self.source_metadata or {}).get("platform", "")
 
 
 class DealerOnboardingProfile(models.Model):

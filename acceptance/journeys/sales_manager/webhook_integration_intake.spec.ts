@@ -50,11 +50,11 @@
 // 8. Business-outcome assertion via admin API: assigned to
 //    Acceptance Advisor + channel="listing_form".
 //
-// Explicit non-goals per M24 §3 deferrals:
-// - Platform value display in LeadDetailModal is a genuinely-missing
-//   UI surface (deferred to M25 per §3 deferral 14) — the journey
-//   does NOT assert the specific platform ("generic") is visible in
-//   the modal, only that the channel attribution is correct.
+// M25.1 (SESSION_186) extended this journey with a Source-line
+// assertion — platform value now surfaces in LeadDetailModal via the
+// `source_metadata` JSONField that record_webhook_lead writes at
+// ingestion time. See MILESTONE_25_PLANNING.md §5.b + §5.c. §3
+// deferral 14 from M24.1 is closed by this increment.
 
 import { test, expect } from "@playwright/test";
 
@@ -188,6 +188,24 @@ test.describe("Webhook integration-to-operator: listing platform POST → operat
       modalRegion.getByText("Sales handoff packet", { exact: true }).first(),
       "LeadDetailModal should open for the webhook-ingested lead",
     ).toBeVisible({ timeout: 15_000 });
+
+    // ---------------------------------------------------------------
+    // Step 5b (M25.1) — assert the modal Source section renders the
+    //                    platform captured at ingestion. The generic
+    //                    adapter's source_metadata is
+    //                    {"platform": "generic"} per
+    //                    record_webhook_lead
+    //                    (services/leads/channel_intake.py); the
+    //                    display helper title-cases it. Before M25.1
+    //                    the operator saw only channel="listing_form"
+    //                    with no way to distinguish platforms.
+    // ---------------------------------------------------------------
+    const sourceLine = modalRegion.getByTestId("lead-source-line");
+    await expect(
+      sourceLine,
+      "M25.1 Source section should render for webhook-origin leads",
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(sourceLine).toHaveText("Source: Generic");
 
     // ---------------------------------------------------------------
     // Step 6 — assign Acceptance Advisor via AssignmentDropdown.

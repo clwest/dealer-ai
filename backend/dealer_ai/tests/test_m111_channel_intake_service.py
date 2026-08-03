@@ -175,6 +175,11 @@ class WebhookIntakeTests(TestCase):
         self.assertEqual(lead.target_monthly_payment, Decimal("500"))
         self.assertEqual(lead.down_payment, Decimal("2000"))
         self.assertEqual(lead.trade_in, "2016 Camry")
+        # M25.1 — webhook must persist the platform identifier so the
+        # operator UI can render "Source: {platform_label}" per
+        # MILESTONE_25_PLANNING.md §5.b.
+        self.assertEqual(lead.source_metadata, {"platform": "generic"})
+        self.assertEqual(lead.get_source_platform(), "generic")
 
     def test_webhook_unknown_platform_raises(self) -> None:
         with self.assertRaises(UnknownWebhookPlatformError):

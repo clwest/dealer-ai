@@ -165,6 +165,47 @@ class AdminLeadDetailEndpointTests(TestCase):
         self.assertEqual(data["messages"], [])
         self.assertEqual(data["session_profile"], {})
 
+    # M25.1 — attribution fields must surface in the admin_lead_detail
+    # payload so LeadDetailModal can render the "Source" section per
+    # MILESTONE_25_PLANNING.md §5.b + §5.c. Before M25.1 the modal
+    # could not see channel, referrer, or source_metadata because
+    # CustomerLeadSerializer omitted them; only AdminLeadListSerializer
+    # exposed channel + referrer (M11.6). Additive-only extension.
+    def test_exposes_channel_referrer_and_source_metadata(self):
+        referrer = CustomerLead.objects.create(name="Referrer Rachel")
+        referred = CustomerLead.objects.create(
+            name="Referred Ronald",
+            channel="referral",
+            referrer=referrer,
+        )
+        url = reverse("dealer_ai:admin-lead-detail", args=[referred.id])
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        lead_payload = res.json()["lead"]
+        self.assertEqual(lead_payload["channel"], "referral")
+        self.assertEqual(lead_payload["referrer"], referrer.id)
+        self.assertEqual(lead_payload["referrer_name"], "Referrer Rachel")
+        # Empty source_metadata for a non-webhook lead.
+        self.assertEqual(lead_payload["source_metadata"], {})
+
+    def test_exposes_source_metadata_for_webhook_lead(self):
+        lead = CustomerLead.objects.create(
+            name="Webhook Wendy",
+            channel="listing_form",
+            source_metadata={"platform": "autotrader"},
+        )
+        url = reverse("dealer_ai:admin-lead-detail", args=[lead.id])
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        lead_payload = res.json()["lead"]
+        self.assertEqual(lead_payload["channel"], "listing_form")
+        self.assertEqual(
+            lead_payload["source_metadata"], {"platform": "autotrader"}
+        )
+        # Referral fields empty for a webhook-origin lead.
+        self.assertIsNone(lead_payload["referrer"])
+        self.assertEqual(lead_payload["referrer_name"], "")
+
 
 # ---- /admin/lead/<id>/handoff/ ---------------------------------------------
 

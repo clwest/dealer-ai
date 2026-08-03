@@ -33,6 +33,36 @@ const URGENCY_LABEL: Record<string, string> = {
   researching: "Researching",
 };
 
+// M25.1 attribution helpers per MILESTONE_25_PLANNING.md §5.c.
+// Rendering rules:
+//   chat / walk_in / phone / other → omit Source section entirely.
+//   listing_form → "Source: {platform_label}" or "Listing form" fallback.
+//   referral → "Referred by: {referrer_name}" or "Referral (referrer not linked)".
+// Exported for direct unit testing.
+export function displayPlatform(raw: unknown): string {
+  if (typeof raw !== "string" || !raw) return "";
+  return raw
+    .split(/[-_ ]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+export function computeSourceLine(
+  lead: LeadDetailResponse["lead"],
+): string | null {
+  if (lead.channel === "referral") {
+    return lead.referrer_name
+      ? `Referred by: ${lead.referrer_name}`
+      : "Referral (referrer not linked)";
+  }
+  if (lead.channel === "listing_form") {
+    const platform = displayPlatform(lead.source_metadata?.platform);
+    return platform ? `Source: ${platform}` : "Source: Listing form";
+  }
+  return null;
+}
+
 export default function LeadDetailModal({
   leadId,
   onClose,
@@ -319,6 +349,30 @@ export default function LeadDetailModal({
             <div className="grid gap-6 p-6 md:grid-cols-[1fr_320px]">
               {/* Left column: handoff */}
               <div className="space-y-5">
+                {/* Source (M25.1) — attribution surface for referral +
+                    listing_form leads. Omitted for chat / walk_in /
+                    phone / other channels where no attribution
+                    exists. */}
+                {(() => {
+                  const sourceLine = computeSourceLine(detail.lead);
+                  if (!sourceLine) return null;
+                  return (
+                    <section
+                      data-testid="lead-source-section"
+                      className="card border border-slate-200 p-4"
+                    >
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Source
+                      </div>
+                      <div
+                        data-testid="lead-source-line"
+                        className="mt-1 text-sm text-brand-ink"
+                      >
+                        {sourceLine}
+                      </div>
+                    </section>
+                  );
+                })()}
                 {/* Customer */}
                 <section className="card border border-slate-200 p-4">
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
