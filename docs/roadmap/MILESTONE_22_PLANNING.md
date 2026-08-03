@@ -558,6 +558,138 @@ noted. Non-negotiable:
   rewrite. Not addressed at
   M22.1 per budget.
 
+**SESSION_173 M22.2 close (2026-08-03):**
+
+- **First anchor journey
+  shipped** at
+  `acceptance/journeys/office/accounting_je_reversal.spec.ts`
+  per §5.a governing contract.
+  Walks: locate the M22.2
+  reversible fixture via the
+  M14.1 list endpoint → navigate
+  to JE detail → open reversal
+  dialog → fill reason → confirm
+  → business-outcome assertion
+  via API (reversal exists with
+  `reverses_id` linkage, non-
+  empty reason, sign-flipped
+  line totals). **Verified
+  locally: 7 [office_accounting]
+  passes (450ms).** Full suite
+  dry-run against clean DB:
+  **13 passed (~18s)** (6 setup
+  + 7 journeys).
+- **Extended
+  `seed_journey_office_accounting_workflow.py`**
+  additively per §5.g Option A
+  with the M22.2 reversible-JE
+  fixture (`[M22.2-office-je-
+  reversal]` tag; distinct
+  amount $250 vs. M20.3
+  fixture $100 so the two are
+  unambiguously separate in
+  the trial-balance view).
+  Seed now also drops any
+  reversal targeting the M22.2
+  fixture on re-invocation —
+  keeps the fixture reversible
+  across suite re-runs without
+  requiring `--reset`.
+- **Extended
+  `test_m203_seed_journey_office_accounting_workflow.py`**
+  with 5 new M22.2 test cases
+  covering: M22.2 fixture
+  provisioning alongside M20.3
+  fixture; M22.2 fixture shape
+  + amount + line structure;
+  M22.2 fixture idempotency
+  across re-invocations; seed's
+  reversal cleanup for
+  reversals targeting the M22.2
+  fixture; reset deletes both
+  fixtures. Backend baseline
+  **4,761 → 4,766 (+5)**.
+- **Extended
+  `acceptance/support/assertions/accounting.ts`**
+  with `findJournalEntryByDescriptionPrefix`
+  + `expectJournalEntryReversed`
+  helpers. `expectJournalEntryReversed`
+  fetches the JE list to find
+  reversals targeting the
+  original, fetches the
+  reversal's detail, and asserts
+  the sign-flip invariant
+  (reversal debits total ==
+  original credits total; and
+  vice versa) plus the
+  linkage + non-empty-reason
+  contract. Business-outcome
+  focused per M20 fail-loud
+  guiding principle.
+- **Frontend Vitest unchanged
+  at 180** — M22.2 introduces
+  zero frontend components per
+  §5.a refined framing.
+- **§5.b page/persona walk
+  outcome — M22.3 SKIPPED per
+  §5.h Option B evidence-sized
+  posture.** Walked
+  `AccountingTrialBalancePage`
+  + `AccountingJournalEntriesPage`
+  + `AccountingJournalEntryDetailPage`
+  from the office-manager
+  persona perspective during
+  authoring. Findings:
+  (a) trial-balance freeze
+  workflow covered by M20.3;
+  (b) as-of picker interaction
+  for historical trial balance
+  is uncovered but low-frequency
+  analytical work, not
+  workflow-critical for daily
+  operations — deferred as
+  future evidence; (c) cost-
+  posting failures rendering
+  path is conditional (only
+  fires when failures exist)
+  and requires additional seed
+  scaffolding — deferred as
+  future evidence; (d) JE list
+  navigation + drill-in is
+  endpoint-reclassified
+  `covered` at M22.1 and has
+  shipped Vitest coverage for
+  rendering — small marginal
+  value in adding a dedicated
+  browser-navigation journey
+  since operators arrive at
+  detail through multiple paths
+  (list, deep-links, notification
+  actions) all of which would
+  need coverage in a full
+  navigation-audit milestone —
+  deferred as future evidence;
+  (e) JE reversal workflow
+  covered by M22.2. No
+  additional distinct-workflow
+  gaps warrant dedicated
+  journey files. M22.4 close-
+  out becomes SESSION_174.
+- **No small operator-surface
+  gap fixes surfaced.** Journey
+  authoring proceeded without
+  requiring §5.d Option B one-
+  file changes to the shipped
+  UI. The M14.3/M14.4 detail
+  page + reversal dialog is
+  operationally complete as
+  shipped — `getByRole` +
+  `getByText` selectors match
+  cleanly against the existing
+  markup with no testid
+  additions required for
+  stability.
+
 ## 1. Business questions this milestone answers
 
 Five operator-workflow questions,
@@ -1746,52 +1878,67 @@ hour §5.e guard. No deferral to
 a future audit-tooling milestone
 required.
 
-### Increment 2 (M22.2) — JE reversal journey + seed extension
+### Increment 2 (M22.2) — JE reversal journey + seed extension ✅ SHIPPED
 
 **Scope.** SESSION_173. First
 anchor journey.
 
-**Deliverable.**
+**Shipped.**
+- New Playwright journey at
+  `acceptance/journeys/office/accounting_je_reversal.spec.ts`
+  walking the M14.3/M14.4
+  reversal workflow end-to-end
+  from JE detail → dialog →
+  reason → confirm → business-
+  outcome assertion via API.
 - Extended
-  `seed_journey_office_accounting_workflow`
-  with a reversible-JE fixture
-  (stable description tag;
-  idempotent) + backend tests
-  covering idempotency +
-  tenant scoping.
+  `seed_journey_office_accounting_workflow.py`
+  additively with the M22.2
+  reversible-JE fixture
+  (`[M22.2-office-je-reversal]`
+  tag; $250 amount to
+  distinguish from M20.3
+  fixture $100). Seed also
+  drops any reversal targeting
+  the M22.2 fixture on each
+  invocation to keep re-runs
+  reversible without `--reset`.
+- Extended
+  `test_m203_seed_journey_office_accounting_workflow.py`
+  with 5 new test cases —
+  fixture provisioning,
+  idempotency, shape/amount,
+  seed-side reversal cleanup,
+  reset.
 - Extended
   `acceptance/support/assertions/accounting.ts`
-  with `expectJournalEntryReversed(request, originalId)`
-  helper.
-- New
-  `acceptance/journeys/office/accounting_je_reversal.spec.ts`
-  walking: navigate to JE
-  detail for seeded reversible
-  entry → open reversal
-  dialog → fill reason → click
-  confirm → verify status
-  message → verify page reload
-  shows reversal linkage.
-  Business-outcome assertion:
-  reversal entry exists with
-  swapped lines and correct
-  `reverses_id` linkage.
-- Concurrent §5.b page/persona
-  walk during authoring —
-  document any additional
-  accounting workflows
-  surfaced that warrant
-  distinct M22.3 journeys.
-- Small operator-surface gap
-  fixes per §5.d if any
-  discovered (in-scope) with
-  §0.a M22.2 amendments.
+  with
+  `findJournalEntryByDescriptionPrefix`
+  +
+  `expectJournalEntryReversed`
+  helpers. Reversal assertion
+  verifies linkage + non-empty
+  reason + sign-flipped line
+  totals per M13.1 invariant.
+- §5.b page/persona walk
+  outcome documented in §0.a
+  M22.2 amendment: M22.3
+  SKIPPED per §5.h Option B
+  evidence-sized posture. No
+  additional distinct-workflow
+  gaps warrant dedicated
+  journey files. M22.4 close-
+  out becomes SESSION_174.
+- No small operator-surface
+  gap fixes required per §5.d
+  — journey authoring
+  proceeded cleanly against
+  the shipped markup with no
+  testid additions needed.
 - Session handoff at
   `docs/handoffs/SESSION_173_m22_inc2_je_reversal.md`.
 - `00-START-NEXT-SESSION.md`
-  refreshed for M22.3 or
-  M22.4 depending on §5.b
-  findings.
+  refreshed for M22.4.
 
 **Backend baseline target at
 M22.2 close:** ~4,763 → **~4,765**
@@ -1801,56 +1948,31 @@ unchanged unless §5.d small
 fixes add test cases. Acceptance
 suite: **6 → 7**.
 
-### Increment 3 (M22.3) — Additional journeys per §5.b enumeration (conditional)
+### Increment 3 (M22.3) — SKIPPED per M22.2 §5.b evidence
 
-**Scope.** SESSION_174.
-Conditional per M22.2 §5.b
-findings. Ships zero or more
-additional per-workflow
-journeys (JE list navigation,
-cost-posting failures rendering
-extension, as-of picker
-interaction, other §5.b-
-surfaced workflows). Skipped
-entirely if the M22.2 walk
-demonstrates JE reversal is
-the only journey-worthy gap.
-
-**Deliverable.**
-- For each additional journey:
-  seed fixture extension +
-  business-outcome assertion
-  helper extension + spec
-  file per §5.c Option B.
-- Small operator-surface gap
-  fixes per §5.d.
-- Session handoff at
-  `docs/handoffs/SESSION_174_m22_inc3_additional_journeys.md`.
-- `00-START-NEXT-SESSION.md`
-  refreshed for M22.4.
-
-**Backend baseline target at
-M22.3 close:** depends on
-scope. Frontend Vitest:
-depends on §5.d fixes.
-Acceptance suite: **7 → 7+N**
-where N is the count of
-distinct additional journeys
-authored.
-
-**Skip criterion.** If the
-M22.2 page/persona walk
-surfaces no additional
-distinct journey-worthy
-workflows (all workflow steps
-covered by the JE reversal or
-existing freeze journey's
-implicit navigation), M22.3
-is explicitly SKIPPED with
-§0.a amendment recording the
-enumeration outcome. M22.4
-close-out becomes the next
-session in that case.
+**Locked at M22.2 close.** The
+§5.b page/persona walk conducted
+concurrently with M22.2 journey
+authoring surfaced no additional
+distinct-workflow gaps warranting
+dedicated Playwright coverage.
+Findings recorded in §0.a M22.2
+amendment: (a) as-of picker
+interaction is low-frequency
+analytical work, deferred as
+future evidence; (b) cost-posting
+failures rendering path is
+conditional and needs additional
+seed scaffolding, deferred as
+future evidence; (c) JE list
+navigation covered by wrapper
+consumption per M22.1 audit
+reclassification + shipped Vitest
+coverage, small marginal value in
+adding a dedicated browser
+navigation journey. Increment slot
+returned to the milestone; M22.4
+close-out becomes SESSION_174.
 
 ### Increment 4 (M22.4) — CI hardening + retrospective + close-out
 
