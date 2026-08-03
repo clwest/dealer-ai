@@ -3,6 +3,8 @@ import {
   Bot,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clipboard,
   Loader2,
   User,
@@ -10,6 +12,7 @@ import {
 } from "lucide-react";
 
 import AssignmentDropdown from "@/components/AssignmentDropdown";
+import { RecordTestDriveForm } from "@/components/sales/RecordTestDriveForm";
 import {
   buildLeadHandoff,
   fetchAdminLeads,
@@ -81,6 +84,11 @@ export default function LeadDetailModal({
   const [assignment, setAssignment] = useState<SalespersonAssignment | null>(
     null,
   );
+  // M25.2 — Schedule test drive collapsible. Collapsed by default per
+  // MILESTONE_25_PLANNING.md §5.d. `justRecorded` triggers a success
+  // indicator that clears when the operator reopens the collapsible.
+  const [testDriveOpen, setTestDriveOpen] = useState(false);
+  const [testDriveJustRecorded, setTestDriveJustRecorded] = useState(false);
 
   useEffect(() => {
     if (leadId == null) return;
@@ -458,6 +466,65 @@ export default function LeadDetailModal({
                       ))}
                     </ul>
                   )}
+                </section>
+
+                {/* M25.2 — Schedule test drive collapsible. Modal-
+                    attached only per §5.d; DealerAiSalesTestDrives
+                    remains the canonical visibility surface. */}
+                <section
+                  data-testid="schedule-test-drive-section"
+                  className="rounded-lg border border-slate-200"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTestDriveOpen((prev) => !prev);
+                      if (!testDriveOpen) setTestDriveJustRecorded(false);
+                    }}
+                    data-testid="schedule-test-drive-toggle"
+                    aria-expanded={testDriveOpen}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Schedule test drive
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {testDriveJustRecorded ? (
+                        <span
+                          data-testid="schedule-test-drive-success"
+                          className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
+                        >
+                          Recorded
+                        </span>
+                      ) : null}
+                      {testDriveOpen ? (
+                        <ChevronUp className="h-4 w-4 text-slate-500" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-slate-500" />
+                      )}
+                    </span>
+                  </button>
+                  {testDriveOpen ? (
+                    <div className="border-t border-slate-100 p-3">
+                      <RecordTestDriveForm
+                        leadId={detail.lead.id}
+                        suggestedVehicles={detail.interested_vehicles.map(
+                          (v) => ({
+                            id: v.id,
+                            stock_number: v.stock_number,
+                            display_name: v.display_name,
+                            price: v.price,
+                            image_url: v.image_url,
+                          }),
+                        )}
+                        onCreated={() => {
+                          setTestDriveOpen(false);
+                          setTestDriveJustRecorded(true);
+                        }}
+                        onCancel={() => setTestDriveOpen(false)}
+                      />
+                    </div>
+                  ) : null}
                 </section>
 
                 {/* Summary */}

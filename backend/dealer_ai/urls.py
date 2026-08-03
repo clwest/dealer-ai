@@ -122,6 +122,17 @@ urlpatterns = [
     path("auth/login/", views.auth_login, name="auth-login"),
     path("auth/logout/", views.auth_logout, name="auth-logout"),
     path("auth/me/", views.auth_me, name="auth-me"),
+    # Milestone 25 · Increment 2 (SESSION_187) — tenant vehicle list.
+    # Additive endpoint added at M25.2 open to unblock the test-drive
+    # form's vehicle picker per MILESTONE_25_PLANNING.md §5.e. Every
+    # `admin/vehicles/*` route above M25.2 was stock-scoped; the picker
+    # needs a full-inventory fallback for walk-in / phone / referral
+    # leads that land with empty `interested_vehicles`.
+    path(
+        "admin/vehicles/",
+        views.admin_vehicle_list,
+        name="admin-vehicle-list",
+    ),
     # Milestone 2 · Increment 6 — vehicle investment ledger admin API.
     path(
         "admin/vehicles/<str:stock_number>/ledger/",

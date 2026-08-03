@@ -51,6 +51,8 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from decimal import Decimal
+
 from dealer_ai.models import (
     ROLE_ADVISOR,
     ROLE_SALES_MANAGER,
@@ -58,6 +60,7 @@ from dealer_ai.models import (
     Dealership,
     Salesperson,
     UserDealershipRole,
+    Vehicle,
 )
 from dealer_ai.services.leads.channel_intake import record_walk_in_lead
 from dealer_ai.services.tenancy import get_default_dealership
@@ -82,6 +85,13 @@ _REFERRING_LEAD_SPEC = {
     "email": "priya-prior@example.com",
     "urgency": "researching",
 }
+
+# Milestone 25 · Increment 2 (SESSION_187) — one deterministic Vehicle
+# for the M25.2 lead-to-test-drive journey's picker. Stable stock
+# number lets the journey pick a known-good target without querying
+# the (potentially empty) tenant inventory. Idempotent via the stock
+# number's uniqueness — get_or_create is safe across suite re-runs.
+M25_TEST_DRIVE_VEHICLE_STOCK = "M25-TEST-DRIVE-01"
 
 
 def _existing_referring_lead(dealership: Dealership):
@@ -118,6 +128,7 @@ class Command(BaseCommand):
             sales_operator = self._provision_sales_operator(dealership)
             advisor_user, advisor = self._provision_advisor(dealership)
             referring_lead = self._provision_referring_lead(dealership)
+            test_drive_vehicle = self._provision_test_drive_vehicle(dealership)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -125,7 +136,8 @@ class Command(BaseCommand):
                 f"sales_operator={sales_operator.username} "
                 f"(sales_manager @ {dealership.slug}), "
                 f"advisor={advisor.slug} (user={advisor_user.username}), "
-                f"referring_lead_pk={referring_lead.pk}."
+                f"referring_lead_pk={referring_lead.pk}, "
+                f"test_drive_vehicle=#{test_drive_vehicle.stock_number}."
             )
         )
 
@@ -226,6 +238,63 @@ class Command(BaseCommand):
                 f"(active={advisor.is_active})."
             )
         return advisor_user, advisor
+
+    def _provision_test_drive_vehicle(
+        self, dealership: Dealership
+    ) -> Vehicle:
+        """Milestone 25 · Increment 2 (SESSION_187) — deterministic
+        vehicle for the M25.2 lead-to-test-drive journey's picker.
+
+        Idempotent via ``get_or_create`` on the stable
+        ``M25_TEST_DRIVE_VEHICLE_STOCK`` stock number. The M25.2
+        journey targets this row via the
+        ``record-test-drive-vehicle-{id}`` testid + display-name
+        substring "Bronco Wildtrak" (both stable across suite
+        re-runs).
+        """
+        vehicle, created = Vehicle.objects.get_or_create(
+            stock_number=M25_TEST_DRIVE_VEHICLE_STOCK,
+            defaults={
+                "dealership": dealership,
+                "year": 2025,
+                "make": "Ford",
+                "model": "Bronco",
+                "trim": "Wildtrak",
+                "body_style": "suv",
+                "condition": "new",
+                "mileage": 12,
+                "price": Decimal("58500.00"),
+                "exterior_color": "Cactus Gray",
+                "interior_color": "Black Onyx",
+                "drivetrain": "4WD",
+                "transmission": "10-Speed Automatic",
+                "fuel_type": "Gasoline",
+                "engine": "2.7L EcoBoost V6",
+                "features": [
+                    "Sasquatch Package",
+                    "SYNC 4",
+                    "12-inch touchscreen",
+                ],
+                "description": (
+                    "Deterministic M25.2 acceptance fixture — "
+                    "Bronco Wildtrak for the lead-to-test-drive "
+                    "Playwright journey's vehicle picker."
+                ),
+                "is_available": True,
+                "source": "acceptance-fixture",
+            },
+        )
+        if created:
+            self.stdout.write(
+                f"created M25.2 test-drive fixture vehicle "
+                f"#{vehicle.stock_number} ({vehicle.display_name})."
+            )
+        else:
+            self.stdout.write(
+                f"reused existing M25.2 test-drive fixture vehicle "
+                f"#{vehicle.stock_number}."
+            )
+        return vehicle
 
     def _provision_referring_lead(
         self, dealership: Dealership

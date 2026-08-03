@@ -206,6 +206,59 @@ export async function listTestDrives(
 }
 
 // ---------------------------------------------------------------------------
+// Admin vehicle list (M25.2) — tenant vehicles for operator pickers.
+// ---------------------------------------------------------------------------
+//
+// Added at M25.2 open per MILESTONE_25_PLANNING.md §5.e when
+// empirical verification surfaced that no tenant-wide admin
+// vehicle-list endpoint existed. The M25.2 test-drive form picker
+// consumes this to render "Suggested" (from
+// `detail.interested_vehicles`) + "All inventory" (this endpoint's
+// results) selection zones. Compact projection — enough to render
+// year/make/model/trim + thumbnail + price without hitting per-stock
+// endpoints.
+
+export interface AdminVehicleRow {
+  id: number;
+  stock_number: string;
+  year: number;
+  make: string;
+  model: string;
+  trim: string;
+  condition: string;
+  price: string;
+  image_url: string;
+  is_available: boolean;
+  display_name: string;
+}
+
+export interface AdminVehicleListResponse {
+  count: number;
+  results: AdminVehicleRow[];
+}
+
+export interface AdminVehicleListFilters {
+  search?: string;
+  condition?: "new" | "used" | "certified";
+  is_available?: boolean;
+}
+
+export async function listAdminVehicles(
+  filters: AdminVehicleListFilters = {},
+): Promise<AdminVehicleListResponse> {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.condition) params.set("condition", filters.condition);
+  if (filters.is_available !== undefined) {
+    params.set("is_available", filters.is_available ? "true" : "false");
+  }
+  const qs = params.toString();
+  return authGetJSON<AdminVehicleListResponse>(
+    `/admin/vehicles/${qs ? `?${qs}` : ""}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Follow-up cadence + tasks (M11.4)
 // ---------------------------------------------------------------------------
 

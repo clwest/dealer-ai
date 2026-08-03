@@ -1287,6 +1287,101 @@ def _me_payload(request) -> dict:
     }
 
 
+# ---- Milestone 25 · Increment 2 (SESSION_187) — tenant vehicle list ------
+#
+# Additive `GET /admin/vehicles/` endpoint added at M25.2 open to
+# unblock the M25.2 test-drive form's vehicle picker per
+# MILESTONE_25_PLANNING.md §5.e. Empirical discovery at open (see
+# SESSION_187 handoff §Empirical discovery): no tenant-wide admin
+# vehicle-list endpoint existed on the shipped surface — every
+# `admin/vehicles/*` route was stock-scoped. The M25.2 picker
+# required a full-inventory fallback for walk-in / phone / referral
+# leads (which land with empty `interested_vehicles`), so the
+# endpoint is genuinely load-bearing for the M25 workflow completion
+# narrative.
+#
+# Shape mirrors the M11.6 `admin/test-drives/list/` list-endpoint
+# precedent: thin QuerySet wrapper, tenant-scoped filter, optional
+# querystring narrowing, cap at 100 rows (matches M10.7 admin list
+# convention). Reuses `IsSalesManagerOrOwnerAtActiveDealership`
+# (M4) — zero new permission classes; zero-drift streak preserved.
+# Returns a compact projection (id, stock_number, year/make/model,
+# trim, condition, price, image_url, is_available) — the picker
+# needs enough to render "2024 Ford F-150 XLT · #F150-01" plus a
+# thumbnail; heavier fields (VIN, features, description) load via
+# per-stock endpoints when the operator drills into a vehicle.
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
+def admin_vehicle_list(request):
+    """GET: list tenant vehicles for operator picker surfaces.
+
+    Optional query params (all garbage values silently ignored per
+    the M11.6 list-endpoint precedent):
+
+    - ``search`` — case-insensitive substring match against
+      ``stock_number`` / ``year`` / ``make`` / ``model`` / ``trim``.
+    - ``condition`` — narrow to a single choice (``new`` / ``used``
+      / ``certified``).
+    - ``is_available`` — ``true`` / ``false`` to narrow by
+      availability. Omitting the param returns all rows (available
+      + sold / unavailable) so operator flows that reference a sold
+      vehicle (e.g. recording a completed test drive after the
+      sale) still work.
+
+    Cap at 100 rows. Ordering matches Meta (``-year, model``).
+    """
+    dealership = get_current_dealership(request)
+    qs = Vehicle.objects.filter(dealership=dealership)
+
+    raw_condition = request.query_params.get("condition")
+    if raw_condition in {"new", "used", "certified"}:
+        qs = qs.filter(condition=raw_condition)
+
+    raw_available = request.query_params.get("is_available")
+    if raw_available in {"true", "false"}:
+        qs = qs.filter(is_available=(raw_available == "true"))
+
+    raw_search = (request.query_params.get("search") or "").strip()
+    if raw_search:
+        from django.db.models import Q
+
+        needle = raw_search
+        filters = (
+            Q(stock_number__icontains=needle)
+            | Q(make__icontains=needle)
+            | Q(model__icontains=needle)
+            | Q(trim__icontains=needle)
+        )
+        if needle.isdigit():
+            filters = filters | Q(year=int(needle))
+        qs = qs.filter(filters)
+
+    rows = list(qs[:100])
+    return Response(
+        {
+            "count": len(rows),
+            "results": [
+                {
+                    "id": v.pk,
+                    "stock_number": v.stock_number,
+                    "year": v.year,
+                    "make": v.make,
+                    "model": v.model,
+                    "trim": v.trim,
+                    "condition": v.condition,
+                    "price": str(v.price),
+                    "image_url": v.image_url,
+                    "is_available": v.is_available,
+                    "display_name": v.display_name,
+                }
+                for v in rows
+            ],
+        }
+    )
+
+
 # ---- Milestone 2 · Increment 6 — Vehicle investment ledger admin API -----
 #
 # Three tenant-scoped admin endpoints under
