@@ -27,8 +27,14 @@
 // start a 24hr cadence for the new lead's ID) per §5.d Option C
 // phone row.
 //
-// Referral CTA lands at M24.3 (adds `<ReferralLeadFormExtras>` in
-// the shared form's extras slot).
+// M24.3 additions (SESSION_183): `+ Referral` Dialog CTA reuses the
+// shared `<LeadIntakeForm>` with `channel="referral"` and composes
+// `<ReferralLeadFormExtras>` in the extras slot for the "Referring
+// customer (existing lead)" picker. The picker selection folds into
+// the createReferralLead payload as `referrer_lead_id`; backend
+// self-FK (models.py:904) preserved unchanged. Optional per backend
+// nullability. Referrer display in LeadDetailModal remains deferred
+// to M25 per M24 §3 deferral 13.
 //
 // Role gating: backend enforces IsSalesManagerOrOwnerAtActiveDealership.
 // Advisors / other roles receive 403 and the page renders the error.
@@ -37,6 +43,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import LeadDetailModal from "@/components/LeadDetailModal";
 import { LeadIntakeForm } from "@/components/sales/LeadIntakeForm";
+import { ReferralLeadFormExtras } from "@/components/sales/ReferralLeadFormExtras";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -53,7 +60,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { fetchAdminLeads, type AdminLead } from "@/lib/api";
-import { createPhoneLead, createWalkInLead } from "@/lib/salesApi";
+import {
+  createPhoneLead,
+  createReferralLead,
+  createWalkInLead,
+} from "@/lib/salesApi";
 
 type ChannelFilter =
   | ""
@@ -84,6 +95,8 @@ export default function DealerAiSalesLeads() {
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
   const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
+  const [referralDialogOpen, setReferralDialogOpen] = useState(false);
+  const [referrerLeadId, setReferrerLeadId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoadState("loading");
@@ -130,6 +143,12 @@ export default function DealerAiSalesLeads() {
             data-testid="sales-leads-add-phone"
           >
             + Phone
+          </Button>
+          <Button
+            onClick={() => setReferralDialogOpen(true)}
+            data-testid="sales-leads-add-referral"
+          >
+            + Referral
           </Button>
         </div>
       </div>
@@ -257,6 +276,48 @@ export default function DealerAiSalesLeads() {
               setSelectedLeadId(lead.id);
               void load();
             }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={referralDialogOpen}
+        onOpenChange={(open) => {
+          setReferralDialogOpen(open);
+          if (!open) setReferrerLeadId(null);
+        }}
+      >
+        <DialogContent data-testid="sales-leads-referral-dialog">
+          <DialogHeader>
+            <DialogTitle>Record a referral lead</DialogTitle>
+            <DialogDescription>
+              A friend or family member sent this customer in. If the
+              referrer is already in the system as an existing lead,
+              pick them below to link the referral — otherwise leave
+              the picker blank and capture the referrer identity in
+              notes.
+            </DialogDescription>
+          </DialogHeader>
+          <LeadIntakeForm
+            channel="referral"
+            onSubmit={(payload) =>
+              createReferralLead({
+                ...payload,
+                referrer_lead_id: referrerLeadId,
+              })
+            }
+            onCreated={(lead) => {
+              setReferralDialogOpen(false);
+              setReferrerLeadId(null);
+              setSelectedLeadId(lead.id);
+              void load();
+            }}
+            extras={
+              <ReferralLeadFormExtras
+                value={referrerLeadId}
+                onSelect={setReferrerLeadId}
+              />
+            }
           />
         </DialogContent>
       </Dialog>

@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-03
-last_session_shipped: SESSION_182
+last_session_shipped: SESSION_183
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -26,39 +26,39 @@ milestone_21_status: shipped
 milestone_22_status: shipped
 milestone_23_status: shipped
 milestone_24_status: in-progress
-next_session: SESSION_183
+next_session: SESSION_184
 next_milestone: 24
 next_milestone_name: "Sales Operational Entry"
-next_increment: 3
-next_increment_name: "M24.3 — Referral UI + referring-customer picker + journey"
+next_increment: 4
+next_increment_name: "M24.4 — Webhook integration-to-operator journey"
 ---
 
-# Next session — SESSION_183 · Milestone 24 · Increment 3 (M24.3 — referral UI + referring-customer picker + journey)
+# Next session — SESSION_184 · Milestone 24 · Increment 4 (M24.4 — webhook integration-to-operator journey)
 
 > **Milestone 24 · Increment
-> 2 (M24.2) — SHIPPED at
-> SESSION_182.** Phone Dialog
-> CTA on `DealerAiSalesLeads`
-> reusing the M24.1
-> `<LeadIntakeForm>` substrate
-> unchanged +
-> `phone_intake.spec.ts`
-> journey with downstream
-> cadence step via existing
-> `CadenceConfigPanel`.
+> 3 (M24.3) — SHIPPED at
+> SESSION_183.**
+> `<ReferralLeadFormExtras>`
+> component with tenant-
+> scoped referring-customer
+> picker + `+ Referral`
+> Dialog CTA on
+> `DealerAiSalesLeads` +
+> `referral_intake.spec.ts`
+> journey with API-side
+> referrer FK attribution
+> assertion (modal-side
+> display deferred to M25).
 >
-> **Backend baseline unchanged
-> at 4,780 pass** (no code
-> changes; existing suite
-> reverified at M24.1).
-> **Vitest baseline 201 pass**
-> (no additions; existing
-> M24.1 tests already cover
-> phone). **Acceptance suite
-> 10 → 11 journeys** — clean-
-> DB dry-run: **17 passed @
-> 24.6s** (6 setup + 11
-> journeys).
+> **Backend baseline
+> unchanged at 4,780 pass.**
+> **Vitest baseline 201 →
+> 209 (+8
+> `<ReferralLeadFormExtras>`
+> tests).** **Acceptance
+> suite 11 → 12 journeys** —
+> clean-DB dry-run: **18
+> passed @ 25.9s**.
 >
 > **Zero-drift permission-
 > class streak** still at 23
@@ -71,31 +71,42 @@ next_increment_name: "M24.3 — Referral UI + referring-customer picker + journe
 > (unchanged since M24.0
 > reset).
 >
-> **M24.3 is the third
-> anchor UI increment.**
-> Referral adds
-> `<ReferralLeadFormExtras>`
-> component (referring-
-> customer picker) as a
-> small delta over the
-> shared form + a journey
-> that validates backend
-> referrer FK attribution
-> via API-side assertion
-> (modal-side referrer
-> display deferred per §3
-> deferral 13).
+> **M24.4 is the fourth and
+> final journey increment.**
+> Webhook integration-to-
+> operator journey — NO new
+> UI component (webhook is
+> system-to-system per M24.0
+> → M24.1-open redirect).
+> Playwright setup POSTs to
+> the real
+> `/admin/leads/webhook/`
+> endpoint with
+> `platform="generic"` +
+> realistic dealer-owned
+> envelope; browser then
+> handles the ingested lead
+> through the shipped sales-
+> side UI (list channel
+> filter → modal → assign).
+> **Small-scope increment;
+> may fold into M24.5
+> close-out if journey-only
+> work exceeds no in-scope
+> §5.d fixes** (per §5.h
+> Option B evidence-sized
+> collapse posture).
 
-## First thing SESSION_183 must do
+## First thing SESSION_184 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean.
 - `git log --oneline -6` —
-  top should be the M24.2
+  top should be the M24.3
   commit; `origin/main`
   still at `6dfdb5c` (M23
-  close-out; 4 commits
+  close-out; 5 commits
   behind — no push until
   M24.5).
 - `python3 manage.py test
@@ -103,7 +114,7 @@ next_increment_name: "M24.3 — Referral UI + referring-customer picker + journe
   pass, 1 skipped, 0
   fail**.
 - `cd frontend && npm test`
-  → **201 pass**.
+  → **209 pass**.
 - `python3 manage.py check`
   clean.
 - `python3 manage.py
@@ -117,203 +128,257 @@ next_increment_name: "M24.3 — Referral UI + referring-customer picker + journe
 - `redis-cli ping` →
   `PONG`.
 
-### 2. Sanity-check M24.2 shipped surface
+### 2. Sanity-check M24.3 shipped surface
 
 - Grep-verify
-  `sales-leads-add-phone`
+  `sales-leads-add-referral`
   testid on
   `DealerAiSalesLeads.tsx`.
 - Grep-verify
-  `phone_intake.spec.ts`
+  `<ReferralLeadFormExtras>`
+  at
+  `frontend/src/components/sales/ReferralLeadFormExtras.tsx`.
+- Grep-verify
+  `referral_intake.spec.ts`
   in
   `acceptance/journeys/sales_manager/`.
 
-### 3. Ship `<ReferralLeadFormExtras>` component
+### 3. Re-verify shipped webhook adapter
+
+- `grep _ADAPTERS
+  backend/dealer_ai/services/leads/webhook_adapters/__init__.py`
+  → should show
+  `"generic": generic`
+  (unchanged; no new
+  named-platform adapters
+  shipped in M24).
+- Confirm the `generic`
+  adapter's documented
+  envelope
+  (`webhook_adapters/generic.py:14`)
+  still accepts:
+  `full_name` (required),
+  `phone`, `email`,
+  `message`,
+  `target_monthly_payment`,
+  `down_payment`,
+  `trade_in`,
+  `credit_range`.
+
+### 4. Ship the webhook integration-to-operator journey
 
 Per MILESTONE_24_PLANNING.md
-§5.b + §7 M24.3:
+§5.d Option C webhook row +
+§7 M24.4:
 
-- Create
-  `frontend/src/components/sales/ReferralLeadFormExtras.tsx`.
-- "Referring customer
-  (existing lead)"
-  picker: search box +
-  dropdown showing tenant-
-  scoped lead matches
-  from `fetchAdminLeads`.
-- Optional field —
-  operator may skip
-  (matches backend
-  nullability).
-- On select, calls a
-  callback with the
-  selected lead's id.
-- Exposes state via a
-  controlled component
-  pattern OR a simple
-  callback that the
-  parent Dialog handler
-  captures.
-- Vitest coverage: ~5–7
-  tests (picker search,
-  tenant scope, optional
-  handling, submission
-  behavior).
-
-### 4. Wire the picker into the referral Dialog
-
-- Add `+ Referral` Button
-  next to `+ Walk-in` /
-  `+ Phone`. Testid:
-  `sales-leads-add-referral`.
-- Add
-  `useState<boolean>` for
-  `referralDialogOpen`.
-- Add
-  `useState<number |
-  null>` for
-  `selectedReferrerId`
-  (or similar
-  state depending on
-  component pattern).
-- Dialog wraps
-  `<LeadIntakeForm
-  channel="referral"
-  onSubmit={
-    (payload) =>
-      createReferralLead({
-        ...payload,
-        referrer_lead_id: selectedReferrerId,
-      })
-  }
-  extras={<ReferralLeadFormExtras
-    onSelect={setSelectedReferrerId}
-  />} />`.
-- Reset picker state on
-  Dialog close.
-
-### 5. Ship the referral Playwright journey
-
-Per §5.c + §5.d Option C
-referral row:
-
-- `acceptance/journeys/sales_manager/referral_intake.spec.ts`:
-  1. Navigate to
+- `acceptance/journeys/sales_manager/webhook_integration_intake.spec.ts`:
+  1. `test.beforeEach`:
+     use APIRequestContext
+     to POST to
+     `/api/dealer-ai/admin/leads/webhook/`
+     with
+     `platform="generic"`
+     + realistic dealer-
+     owned envelope
+     (unique per-run
+     `full_name` +
+     phone/email so runs
+     don't collide). Body
+     shape:
+     ```
+     {
+       platform: "generic",
+       payload: {
+         full_name: "M24.4
+                     Webhook
+                     Winnie
+                     ${Date.now()}",
+         phone: "+15551244004",
+         email: "m244-webhook-winnie@example.com",
+         message: "Interested
+                   in the
+                   F-150",
+         target_monthly_payment: "450",
+         down_payment: "3000"
+       }
+     }
+     ```
+  2. Assert the POST
+     returned 201 + capture
+     the new lead id from
+     the response body's
+     `lead.id` (per
+     `views_leads.py:216`
+     projection).
+  3. Login as
+     salesperson (via
+     storage state).
+  4. Navigate to
      `/dealer-ai-sales/leads`.
-  2. Click `+ Referral`
-     CTA.
-  3. Fill form with
-     unique per-run
-     customer name.
-  4. In the picker,
-     search for and
-     select the seeded
-     referring-customer
-     lead (`Priya Prior-
-     Customer`).
-  5. Submit.
-  6. Assert
+  5. Change the channel
+     filter to
+     `listing_form` via
+     the existing
+     `Channel filter`
+     select (channel enum
+     for webhook-ingested
+     leads is
+     `LEAD_CHANNEL_LISTING_FORM`
+     per
+     `channel_intake.py`).
+  6. Assert the ingested
+     lead's row appears in
+     the filtered table
+     with the expected
+     name.
+  7. Click the row →
      `LeadDetailModal`
      opens.
-  7. Extract new lead id.
   8. Assign Acceptance
-     Advisor.
-  9. **Business-outcome
+     Advisor via
+     AssignmentDropdown.
+  9. Business-outcome
      assertion via admin
-     API:** fetch new
-     lead; assert
-     `referrer` (or the
-     API's field name)
-     matches the picker's
-     selected lead id;
-     `channel="referral"`;
-     `assigned_to` is
-     Acceptance Advisor.
-  10. Reload → assert
-      list row shows
-      `channel="referral"`.
-- **No modal-side
-  referrer-display
-  assertion** —
-  `LeadDetailModal` does
-  not display
-  `referrer_id`
-  (deferred per §3
-  deferral 13 to M25).
+     API: assigned +
+     `channel="listing_form"`.
 
-### 6. Optional assertion helper
+### 5. Small operator-surface gap fixes (in-scope per §5.d)
 
-If patterns are
-repeating enough,
-extract to
-`acceptance/support/assertions/sales.ts`.
+Rare — the browser-side
+flow uses shipped UI +
+M24.1 wire-in unchanged.
+Only the API-side setup
+step is new. Any surfaced
+gaps: fix in-scope per
+M23 §5.d durable posture.
 
-### 7. Small operator-surface gap fixes (in-scope per §5.d)
+### 6. Collapse decision
 
-Per §5.d durable posture.
+Per §5.h Option B
+evidence-sized posture: if
+the journey lands cleanly
+with zero in-scope §5.d
+fixes, M24.4 may fold
+into M24.5 close-out
+(single session).
+Otherwise, ship M24.4
+as its own increment
+handoff and open M24.5
+separately at SESSION_185.
 
-### 8. Ship the M24.3 handoff
+### 7. Ship the M24.4 handoff (or fold into M24.5)
 
-- `docs/handoffs/SESSION_183_m24_inc3_referral.md`
-  following M24.2 shape.
+Non-folded path:
+- `docs/handoffs/SESSION_184_m24_inc4_webhook.md`
+  following M24.3 shape.
 - **Do NOT push** —
   coordinated push at
   M24.5.
+- Refresh
+  `00-START-NEXT-SESSION.md`
+  for M24.5.
 
-### 9. Refresh 00-START-NEXT-SESSION.md for M24.4
+Folded path (M24.4 →
+M24.5 in one session):
+- Skip a M24.4-specific
+  handoff.
+- Proceed directly to the
+  M24.5 close-out
+  activities in the same
+  session:
+  * Coordinated close-out
+    commit.
+  * CI validation of all
+    four new M24
+    journeys.
+  * `docs/CAPABILITY_MATRIX.md`
+    §7y — M24 shipped
+    surface.
+  * `docs/roadmap/MILESTONE_24_RETROSPECTIVE.md`
+    with §8 corrections
+    (both M24.0 and
+    M24.1-open) + §9
+    next-candidate.
+  * `docs/roadmap/MILESTONE_25_PLANNING.md`
+    skeleton (draft),
+    elevating the three
+    §3 deferrals + test-
+    hygiene Candidate H.
+  * `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+    updated with M24
+    shipped.
+  * `00-START-NEXT-SESSION.md`
+    refreshed for M25.0.
+  * **Coordinated push**
+    of all M24 commits
+    to `main`.
 
-Point at SESSION_184
-M24.4 webhook integration
-journey.
-
-## Non-goals for SESSION_183
+## Non-goals for SESSION_184
 
 - ❌ Do NOT ship a
   `<WebhookIntakeForm>` or
-  `+ Webhook` CTA per §5.b
-  + §5.d.
+  `+ Webhook` operator CTA.
+  Per §5.b + §5.d M24.0
+  redirect (webhook is
+  system-to-system, not
+  operator-authored).
+- ❌ Do NOT create a
+  test-only backend
+  endpoint or fake
+  operator workflow to
+  make the webhook
+  journey fully browser-
+  driven. Per §5.d Option
+  B: use the real webhook
+  endpoint as the setup
+  boundary.
+- ❌ Do NOT ship named-
+  platform webhook
+  adapters (Autotrader /
+  Cars.com / CarGurus /
+  Facebook Marketplace).
+  Documented as future
+  work in
+  `webhook_adapters/__init__.py`.
 - ❌ Do NOT ship
   `<RecordTestDriveForm>`
-  (M25 §3 deferral 12).
-- ❌ Do NOT add
-  `referrer_id` or
-  `platform` display to
-  `LeadDetailModal` (M25
-  §3 deferrals 13 + 14).
-- ❌ Do NOT redesign the
-  `CustomerLead.referrer`
-  backend self-FK.
-  Preserve as-is; UI
-  picker label uses
-  truthful operator
-  language ("Referring
-  customer (existing
-  lead)").
-- ❌ Do NOT re-write
-  `<LeadIntakeForm>` —
-  reuse M24.1 substrate
-  via the extras slot.
-- ❌ Do NOT push
-  individual M24 commits
-  — coordinated close-out
+  or referrer/platform
+  display in modal —
+  deferred to M25 per §3
+  deferrals 12/13/14.
+- ❌ Do NOT add new
+  backend service verbs,
+  DRF endpoints,
+  tenancy carriers,
+  migrations, permission
+  classes, or frontend
+  routes.
+- ❌ Do NOT push M24
+  commits individually —
+  coordinated close-out
   push at M24.5.
 - ❌ Do NOT force-scope
-  test-hygiene
+  larger discovered gaps
+  into M24 — document as
+  retrospective §9
+  evidence.
+- ❌ Do NOT force-scope
+  test-hygiene fixes
   (Candidate H) into
   M24 — elevated as M25
   candidate.
 
-## Baseline expected at M24.3 close
+## Baseline expected at M24.4 close
 
 - Backend: 4,780 → 4,780
-  (unchanged).
-- Frontend Vitest: 201 →
-  **~207–212** (~5–7 new
-  `<ReferralLeadFormExtras>`
-  tests).
+  (unchanged; journey-
+  only work).
+- Frontend Vitest: 209
+  → 209 (unchanged; no
+  new component work).
 - Acceptance suite
-  (clean-DB): 17 →
-  **18**.
+  (clean-DB): 18 →
+  **19**.
 - Migrations `0001`–
   `0048` (unchanged).
 - Tenancy carriers 52
@@ -323,46 +388,42 @@ journey.
 - Frontend operator
   routes 20 (unchanged).
 - Permission classes 7
-  (unchanged).
+  (unchanged; streak
+  target at M24.5 close:
+  24).
 - Celery-beat task
   families 10
   (unchanged).
 
 ## NEXT TASK
 
-Start SESSION_183 with (a)
+Start SESSION_184 with (a)
 starting-state
 verification, (b)
-M24.2-shipped-surface
-sanity check, (c) new
-`<ReferralLeadFormExtras>`
-component with tenant-
-scoped picker + Vitest
-coverage, (d) `+
-Referral` Dialog CTA on
-`DealerAiSalesLeads.tsx`
-wrapping
-`<LeadIntakeForm
-channel="referral">`
-composed with the picker
-via extras slot, (e)
-new
-`referral_intake.spec.ts`
+M24.3-shipped-surface
+sanity check, (c)
+webhook adapter re-
+verification (grep
+`_ADAPTERS`; confirm
+`generic` envelope
+shape), (d) new
+`webhook_integration_intake.spec.ts`
 Playwright journey with
-API-side referrer
-attribution assertion
-(no modal-side display
-per M25 deferral), (f)
-optional assertion
-helper extraction if
-patterns repeat, (g)
-small in-scope §5.d
-fixes if surfaced, (h)
-ship
-`SESSION_183_m24_inc3_referral.md`
-handoff, (i) refresh
-`00-START-NEXT-SESSION.md`
-for M24.4.
+`test.beforeEach` real
+webhook POST + browser-
+side channel-filter-and-
+assign flow per revised
+§5.d shape, (e) small
+in-scope §5.d fixes if
+surfaced, (f) collapse
+decision — if journey
+lands cleanly, fold
+M24.4 into M24.5 close-
+out (single session);
+else ship M24.4
+handoff separately and
+open M24.5 at
+SESSION_185.
 
 ---
 
@@ -377,16 +438,10 @@ for M24.4.
 7. `docs/roadmap/MILESTONE_23_RETROSPECTIVE.md`
 8. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
 9. `docs/CAPABILITY_MATRIX.md`
-10. `docs/handoffs/SESSION_182_m24_inc2_phone.md`
-    (M24.2 shipped)
-11. `docs/handoffs/SESSION_181_m24_inc1_walk_in.md`
-    (M24.1 shipped +
-    test-hygiene Candidate H
-    reinforcement note)
-12. `docs/handoffs/SESSION_180_m24_inc0_planning.md`
-    (M24.0 record +
-    SESSION_181-open
-    correction section)
+10. `docs/handoffs/SESSION_183_m24_inc3_referral.md`
+11. `docs/handoffs/SESSION_182_m24_inc2_phone.md`
+12. `docs/handoffs/SESSION_181_m24_inc1_walk_in.md`
+13. `docs/handoffs/SESSION_180_m24_inc0_planning.md`
 
 Narrative docs are
 claims. Rules +
@@ -395,7 +450,7 @@ facts.
 
 ---
 
-## Operational state (post-SESSION_182 M24.2)
+## Operational state (post-SESSION_183 M24.3)
 
 - **Backend (local):**
   Django on `:8001`.
@@ -409,17 +464,17 @@ facts.
 - **Frontend (local):**
   Vite on `:5173`.
   **Vitest baseline:
-  201 pass**.
+  209 pass**.
 - **Frontend (prod):**
   NONE.
 - **Acceptance workspace
   (local):** Playwright
-  1.49 + TS 5.6. **11
+  1.49 + TS 5.6. **12
   journeys** end-to-end.
   **Clean-DB dry-run
-  baseline: 17 passed
-  (~24.6s)** (6 setup +
-  11 journeys).
+  baseline: 18 passed
+  (~25.9s)** (6 setup +
+  12 journeys).
 - **Acceptance (CI):**
   live on
   `.github/workflows/acceptance.yml`.
@@ -438,8 +493,11 @@ facts.
   PROGRESS — M24.0
   planning + M24.1
   walk-in + M24.2
-  phone shipped;
-  M24.3/M24.4 pending.
+  phone + M24.3
+  referral shipped;
+  M24.4 webhook +
+  M24.5 close-out
+  pending (may fold).
 - **DRF admin surface:**
   **113** endpoints (M24
   adds zero).
@@ -461,14 +519,16 @@ facts.
   shipped at M24.2:**
   `+ Phone` Dialog CTA
   reusing
-  `<LeadIntakeForm>`
-  (no new component
-  work).
+  `<LeadIntakeForm>`.
 - **Frontend surfaces
-  planned at M24.3:**
+  shipped at M24.3:**
   `<ReferralLeadFormExtras>`
-  + `+ Referral`
-  Dialog CTA.
+  component +
+  `+ Referral` Dialog
+  CTA composing
+  `<LeadIntakeForm
+  channel="referral">`
+  with extras slot.
 - **Frontend surfaces
   planned at M24.4:**
   NONE — webhook is
@@ -489,21 +549,29 @@ facts.
   status:** IN PROGRESS.
   M24.0 planning +
   M24.1 walk-in +
-  M24.2 phone shipped;
+  M24.2 phone +
   M24.3 referral
-  next.
+  shipped; M24.4
+  webhook journey
+  next (may fold into
+  M24.5 close-out).
 - **Sales intake gaps
   closed so far:**
-  walk-in (M24.1) +
-  phone (M24.2)
+  walk-in (M24.1),
+  phone (M24.2),
+  referral (M24.3)
   operator UI-native
   intake + reachable
   end-to-end through
-  the sales-side leads
+  sales-side leads
   page + post-create
   modal + assignment
-  (+ cadence downstream
-  for phone).
+  (+ cadence
+  downstream for
+  phone; + referrer
+  FK backend
+  attribution for
+  referral).
 - **Deferred to M25**
   per M24.1-open
   corrections + M24.1
@@ -521,9 +589,9 @@ facts.
 - **Audit tooling:**
   authoritative for
   BHPH + accounting
-  post-M23.1 fix.
-  Not regenerated at
-  M24.2 close (no new
+  post-M23.1 fix. Not
+  regenerated at
+  M24.3 close (no new
   endpoints; no new
   wrappers).
 - **Planning-time
@@ -533,16 +601,16 @@ facts.
   Historical run: 89.
 - **DoD amendment
   (M21.0 §5.f Option
-  B):** M24 ships
-  four new Playwright
+  B):** M24 ships four
+  new Playwright
   operational
-  journeys — 2 of 4
+  journeys — 3 of 4
   shipped
   (`walk_in_intake`,
-  `phone_intake`);
-  2 to go
-  (`referral_intake`,
-  `webhook_integration_intake`).
+  `phone_intake`,
+  `referral_intake`);
+  1 to go
+  (`webhook_integration_intake`).
 - **Governing
   contract:** M21
   Candidate O UI-
