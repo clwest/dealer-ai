@@ -2615,6 +2615,187 @@ transparency).**
 - All M19 §3 carry-forward deferrals; all M18
   §3 carry-forward deferrals still valid.
 
+### Milestone 21 — Operational Surface Completion — SHIPPED at SESSION_170
+
+*Full delivery record:
+`docs/roadmap/MILESTONE_21_PLANNING.md` §7 (annotated
+SHIPPED per increment; §0.a M21.1 scope-lock amendment
+recorded) and
+`docs/roadmap/MILESTONE_21_RETROSPECTIVE.md`. Shipped
+surface enumerated in `docs/CAPABILITY_MATRIX.md` §7v.
+Backend test baseline delta: 4,755 → 4,761 (+6 seed
+coverage tests across M21.2 BHPH + M21.3 sales-manager
+extensions; zero regressions). Frontend Vitest baseline
+delta: 153 → 180 (+27 new component tests across seven
+test files). Acceptance suite: 6 journeys (2 extended
++ 4 unchanged); full local dry-run 12 passed (~18s).
+Sessions: 166 → 170 (five increments — one shift vs.
+the six-increment planning shape; M21.4 collapsed per
+audit evidence). Commits `7ed5e1a` M21.0 planning +
+`96a6f4d` M21.1 audit + scope lock + `9a77b84` M21.2
+BHPH write-side UI + `0e14c2a` M21.3 be-back CREATE +
+cadence CONFIG + this close-out commit. **Zero new
+backend entities, zero new endpoints, zero new
+migrations, zero new tenancy carriers, zero new
+permission classes, zero new frontend routes.** Every
+M21 UI attaches in-place to an already-shipped page.
+The change surface is one operator-invoked audit
+script + one audit artifact + 10 new components across
+two domains (7 BHPH + 3 sales) + 7 new bhphApi.ts
+write wrappers + 2 seed extensions + 2 journey
+extensions. Zero-drift permission-class posture —
+extends to **twenty-one consecutive milestones** (M10
+→ M21). Celery-beat task families 10 (unchanged — no
+beat entry at M21). Zero new post-LLM scrub stages.
+**Eight §5 decisions confirmed as-recommended at M21.0
+open** — streak extends to 87 planning-time as-
+recommended M5.1 → M21.0 across **twelve consecutive
+milestones** (M10 → M21). One §0.a implementation-
+time amendment across M21.1 → M21.5 (§0.a M21.1
+scope-lock recording the audit findings) — does not
+count against the streak per M10 §9.*
+
+**Business objective.** M20 established the
+executable operational contract every future milestone
+extends via Playwright acceptance journeys. **The
+natural M21 follow-through is to consume that
+substrate by closing the highest-value missing UI
+workflows found by the M20 audit** — endpoints where
+the backend capability exists but dealership staff
+cannot operate it through the product. Every scope
+item drives from audit evidence, not intuition.
+
+**Guiding principle** (Candidate O governing
+contract): every M21 shipped surface must (a) map to
+an already-shipped backend capability, (b) close a
+missing operator-facing UI, (c) add or extend a
+Playwright operational journey, and (d) not be
+generic UX polish. Cosmetic friction feeds Candidate
+P (deferred); scope items that require a new backend
+verb are out-of-scope (domain-milestone territory).
+
+**Operational pain resolved.**
+- Before M21, BHPH collectors could only review the
+  portfolio through the product. Recording a
+  promise-to-pay, marking it broken, logging a
+  contact, initiating a repossession, and
+  transitioning it through recovered → re-intaked
+  all required curl / Postman / Django shell.
+- Before M21, sales managers could not record a
+  new be-back through the product — the
+  `createBeBack` wrapper existed in salesApi.ts as
+  of M11.6 but no component consumed it. Same for
+  follow-up cadence config (`createCadence` +
+  `pauseCadence` — both wrapper-only per the M21.1
+  audit).
+- Before M21, there was no systematic view of
+  "backend-shipped-but-UI-missing" capabilities.
+  Operational-surface priorities depended on what
+  Chris observed during his daily use — real
+  signal, but not systematic.
+
+**Existing reusable primitives.**
+- **M12 BHPH service verbs + endpoints** —
+  `record_promise` / `mark_kept` / `mark_broken` /
+  `record_contact` / `record_repossession` /
+  `mark_recovered` / `mark_re_intaked`. Consumed
+  by M21.2 UI unchanged.
+- **M11.5 BeBack service verb + endpoint** —
+  `record_be_back`. Consumed by M21.3 UI
+  unchanged.
+- **M11.4 FollowUpCadence service verbs +
+  endpoints** — `start_cadence` +
+  `pause_cadence`. Consumed by M21.3 UI
+  unchanged.
+- **M20 acceptance framework** —
+  `acceptance/support/assertions/bhph.ts` +
+  `dashboard.ts` extended (not modified). Journey
+  extensions land in existing spec files per §5.e
+  Option C.
+- **M20 seed delta commands** —
+  `seed_journey_bhph_collections_workflow` +
+  `seed_journey_sales_manager_daily_startup`
+  extended with M21-specific fixtures. No new
+  seed commands.
+- **shadcn/ui `<Dialog>` component** — used for
+  confirm modals (mark-broken, mark-recovered,
+  mark-re-intaked, pause-cadence-by-id).
+- **`bhphApi.ts` read wrappers (M12.7)** — pattern
+  matched for the seven new M21.2 write wrappers.
+- **`salesApi.ts` write wrappers (M11.4 / M11.6)**
+  — already existed as wrapper-only; M21.3 adds
+  the component consumers.
+
+**Gap.**
+- The M20 operational contract is durable only if
+  future milestones extend it. Without a binding
+  DoD amendment, journeys silently atrophy as new
+  operator-facing surfaces ship without acceptance
+  coverage. The M21.0 §5.f Option B DoD amendment
+  closes this gap — formalized in §5 below.
+
+**Definition of Done amendment (M21.0 §5.f Option
+B — now binding).** Every future customer-facing
+milestone MUST either:
+
+- **(a) add or update at least one Playwright
+  operational journey covering the shipped
+  operator surface**, OR
+- **(b) explicitly document in §3 of the planning
+  memo why no journey change is required.**
+
+Infrastructure-only milestones with no customer-
+facing surface changes satisfy via (b).
+Non-adherence is a planning-memo review finding.
+Amendment applies from M21 forward. M21.2 + M21.3
+both satisfied via journey extensions (BHPH re-
+expansion + sales-manager extension). This
+amendment sits alongside the standing scope-
+discipline rules per PROJECT_RULES.md.
+
+**M21 shipped increments:**
+- M21.0 (SESSION_166) — planning refinement +
+  target selection. All 8 §5 decisions confirmed
+  as-recommended.
+- M21.1 (SESSION_167) — systematic operational-
+  surface audit + M21 scope lock. Audit tooling
+  at `backend/dealer_ai/scripts/audit_operational_surface.py`
+  + audit artifact at
+  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+  (153 endpoints enumerated).
+- M21.2 (SESSION_168) — BHPH write-side UI (7
+  endpoints). 7 wrappers + 7 components + 18
+  Vitest tests + seed extension + journey re-
+  expansion.
+- M21.3 (SESSION_169) — Be-back CREATE +
+  Follow-up cadence CONFIG (3 endpoints). 2
+  panels + 9 Vitest tests + seed extension +
+  journey extension.
+- M21.4 — SKIPPED per §0.a M21.1 audit evidence.
+- M21.5 (SESSION_170) — audit regen (coverage
+  96 → 106) + capability matrix §7v +
+  retrospective + M22 skeleton + IMPLEMENTATION_ROADMAP
+  amendment (DoD formalization) + coordinated
+  push per M18.6 / M19.6 / M20.5 cadence.
+
+**Non-goals deferred from M21 (see
+`MILESTONE_21_RETROSPECTIVE.md` §3 + §4):**
+- 44 `defer-candidate-O2` endpoints for future
+  OSC iterations (F&I writes, lead-source-
+  specific intake, BHPH note origination + payment
+  intake, deal-writeup lifecycle, test-drive
+  creation, misc dashboards).
+- 3 `defer-domain-milestone` endpoints for the
+  accounting stream (journal-entry reverse +
+  trial-balance snapshot lifecycle) — elevated as
+  M22 Candidate A scope target.
+- Nested TypeScript template literal support in
+  the audit tooling (~3 false-positive backend-
+  only findings; TS-aware parsing deferred).
+- Full dashboard testid coverage (Candidate G) —
+  M21 landed opportunistic testids only.
+- All M20 §3 carry-forward deferrals still valid.
+
 ---
 
 ## 5. Explicit non-goals and deferrals

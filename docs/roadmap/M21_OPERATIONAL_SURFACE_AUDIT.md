@@ -19,9 +19,9 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 153
-- **Consumed by frontend components (`covered`):** 96
-- **Backend-only (audit findings):** 57
-  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **10**
+- **Consumed by frontend components (`covered`):** 106
+- **Backend-only (audit findings):** 47
+  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **7**
 - **Service verbs enumerated:** 312
 - **Distinct view modules importing service verbs:** 22
 
@@ -88,7 +88,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 38 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/` | `views.admin_condition_photo_attach` | `admin-condition-photo-attach` | api.ts:1302 `attachPhoto` | `covered` |
 | 39 | `admin/vehicles/<str:stock_number>/photos/<uuid:public_id>/` | `views.admin_condition_photo_delete` | `admin-condition-photo-delete` | api.ts:1309 `deletePhoto` | `covered` |
 | 40 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/local-upload/` | `views.admin_condition_photo_local_upload_receiver` | `admin-condition-photo-local-upload` | api.ts:1280 `uploadPhotoBytes` | `covered` |
-| 41 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1684 `fetchVendors`, api.ts:1688 `createVendor` ⚠ wrapper-only, api.ts:1692 `fetchVendor` ⚠ wrapper-only, api.ts:1698 `updateVendor` ⚠ wrapper-only | `covered` |
+| 41 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1692 `fetchVendor` ⚠ wrapper-only, api.ts:1698 `updateVendor` ⚠ wrapper-only, api.ts:1684 `fetchVendors`, api.ts:1688 `createVendor` ⚠ wrapper-only | `covered` |
 | 42 | `admin/vendors/<slug:slug>/` | `views_recon.admin_vendor_detail` | `admin-vendor-detail` | api.ts:1692 `fetchVendor` ⚠ wrapper-only, api.ts:1698 `updateVendor` ⚠ wrapper-only | `defer-candidate-O2` |
 | 43 | `admin/vehicles/<str:stock_number>/recon/` | `views_recon.admin_recon_dashboard` | `admin-recon-dashboard` | api.ts:1706 `fetchReconDashboard` | `covered` |
 | 44 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/recon-decision/` | `views_recon.admin_recon_decision_create` | `admin-recon-decision-create` | api.ts:1717 `recordReconDecision` | `covered` |
@@ -98,7 +98,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 48 | `admin/work-orders/<int:wo_id>/complete/` | `views_recon.admin_work_order_complete` | `admin-work-order-complete` | api.ts:1752 `completeWorkOrder` | `covered` |
 | 49 | `admin/work-orders/<int:wo_id>/cancel/` | `views_recon.admin_work_order_cancel` | `admin-work-order-cancel` | api.ts:1762 `cancelWorkOrder` | `covered` |
 | 50 | `admin/work-orders/<int:wo_id>/` | `views_recon.admin_work_order_patch` | `admin-work-order-patch` | api.ts:1769 `reviseEstimate` | `covered` |
-| 51 | `admin/work-orders/<int:wo_id>/findings/` | `views_recon.admin_work_order_attach_findings` | `admin-work-order-attach-findings` | api.ts:1776 `attachFindings`, api.ts:1783 `detachFinding` | `covered` |
+| 51 | `admin/work-orders/<int:wo_id>/findings/` | `views_recon.admin_work_order_attach_findings` | `admin-work-order-attach-findings` | api.ts:1783 `detachFinding`, api.ts:1776 `attachFindings` | `covered` |
 | 52 | `admin/work-orders/<int:wo_id>/findings/<int:finding_id>/` | `views_recon.admin_work_order_detach_finding` | `admin-work-order-detach-finding` | api.ts:1783 `detachFinding` | `covered` |
 | 53 | `admin/work-orders/<int:wo_id>/parts/` | `views_recon.admin_work_order_part_create` | `admin-work-order-part-create` | api.ts:1793 `addWorkOrderPart` | `covered` |
 | 54 | `admin/parts/<int:part_id>/` | `views_recon.admin_part_detail` | `admin-part-detail` | api.ts:1803 `updateWorkOrderPart`, api.ts:1810 `deleteWorkOrderPart` | `covered` |
@@ -109,7 +109,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 59 | `admin/vehicles/<str:stock_number>/lifecycle/` | `views_lifecycle.admin_lifecycle_dashboard` | `admin-lifecycle-dashboard` | api.ts:1960 `fetchLifecycleDashboard` | `covered` |
 | 60 | `admin/vehicles/<str:stock_number>/lifecycle/transition/` | `views_lifecycle.admin_lifecycle_manual_transition` | `admin-lifecycle-manual-transition` | api.ts:1969 `postLifecycleManualTransition` | `covered` |
 | 61 | `admin/vehicles/<str:stock_number>/lifecycle/transition/rule/` | `views_lifecycle.admin_lifecycle_rule_transition` | `admin-lifecycle-rule-transition` | api.ts:1979 `postLifecycleRuleTransition` | `covered` |
-| 62 | `admin/vehicles/<str:stock_number>/photos/` | `views_photos.admin_photo_list` | `admin-photo-list` | api.ts:2043 `fetchVehiclePhotos`, api.ts:1309 `deletePhoto` | `covered` |
+| 62 | `admin/vehicles/<str:stock_number>/photos/` | `views_photos.admin_photo_list` | `admin-photo-list` | api.ts:1309 `deletePhoto`, api.ts:2043 `fetchVehiclePhotos` | `covered` |
 | 63 | `admin/vehicles/<str:stock_number>/photos/upload/` | `views_photos.admin_photo_upload` | `admin-photo-upload` | api.ts:2062 `uploadVehiclePhoto` | `covered` |
 | 64 | `admin/vehicles/<str:stock_number>/photos/reorder/` | `views_photos.admin_photo_reorder` | `admin-photo-reorder` | api.ts:2072 `reorderVehiclePhotos` ⚠ wrapper-only | `defer-candidate-O2` |
 | 65 | `admin/vehicle-photos/<uuid:public_id>/set-primary/` | `views_photos.admin_photo_set_primary` | `admin-photo-set-primary` | api.ts:2079 `setPrimaryVehiclePhoto` | `covered` |
@@ -161,31 +161,31 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 111 | `admin/deal-writeups/` | `views_deal_writeups.admin_deal_writeup_create` | `admin-deal-writeup-create` | — | `defer-candidate-O2` |
 | 112 | `admin/deal-writeups/<int:pk>/approve/` | `views_deal_writeups.admin_deal_writeup_approve` | `admin-deal-writeup-approve` | — | `defer-candidate-O2` |
 | 113 | `admin/deal-writeups/<int:pk>/hand-off/` | `views_deal_writeups.admin_deal_writeup_hand_off` | `admin-deal-writeup-hand-off` | — | `defer-candidate-O2` |
-| 114 | `admin/follow-up-cadences/` | `views_follow_ups.admin_follow_up_cadence_create` | `admin-follow-up-cadence-create` | salesApi.ts:265 `createCadence` ⚠ wrapper-only | `M21-conditional` |
-| 115 | `admin/follow-up-cadences/<int:pk>/pause/` | `views_follow_ups.admin_follow_up_cadence_pause` | `admin-follow-up-cadence-pause` | salesApi.ts:275 `pauseCadence` ⚠ wrapper-only | `M21-conditional` |
+| 114 | `admin/follow-up-cadences/` | `views_follow_ups.admin_follow_up_cadence_create` | `admin-follow-up-cadence-create` | salesApi.ts:265 `createCadence` | `covered` |
+| 115 | `admin/follow-up-cadences/<int:pk>/pause/` | `views_follow_ups.admin_follow_up_cadence_pause` | `admin-follow-up-cadence-pause` | salesApi.ts:275 `pauseCadence` | `covered` |
 | 116 | `admin/follow-up-tasks/` | `views_follow_ups.admin_follow_up_task_list` | `admin-follow-up-task-list` | salesApi.ts:291 `listFollowUpTasks` | `covered` |
 | 117 | `admin/follow-up-tasks/<int:pk>/complete/` | `views_follow_ups.admin_follow_up_task_complete` | `admin-follow-up-task-complete` | salesApi.ts:300 `completeTask` | `covered` |
 | 118 | `admin/follow-up-tasks/<int:pk>/skip/` | `views_follow_ups.admin_follow_up_task_skip` | `admin-follow-up-task-skip` | salesApi.ts:311 `skipTask` | `covered` |
-| 119 | `admin/be-backs/` | `views_be_backs.admin_be_back_create` | `admin-be-back-create` | salesApi.ts:349 `createBeBack` ⚠ wrapper-only | `M21-anchor` |
+| 119 | `admin/be-backs/` | `views_be_backs.admin_be_back_create` | `admin-be-back-create` | salesApi.ts:349 `createBeBack` | `covered` |
 | 120 | `admin/be-backs/list/` | `views_be_backs.admin_be_back_list` | `admin-be-back-list` | — | `defer-candidate-O2` |
 | 121 | `admin/be-backs/<int:pk>/mark-returned/` | `views_be_backs.admin_be_back_mark_returned` | `admin-be-back-mark-returned` | salesApi.ts:383 `markBeBackReturned` | `covered` |
 | 122 | `admin/be-backs/<int:pk>/mark-no-show/` | `views_be_backs.admin_be_back_mark_no_show` | `admin-be-back-mark-no-show` | salesApi.ts:394 `markBeBackNoShow` | `covered` |
-| 123 | `admin/bhph-notes/` | `views_bhph_notes.admin_bhph_note_create` | `admin-bhph-note-create` | bhphApi.ts:99 `getBhphNote` | `covered` |
-| 124 | `admin/bhph-notes/list/` | `views_bhph_notes.admin_bhph_note_list` | `admin-bhph-note-list` | bhphApi.ts:85 `listBhphNotes` | `covered` |
-| 125 | `admin/bhph-notes/<int:pk>/` | `views_bhph_notes.admin_bhph_note_retrieve` | `admin-bhph-note-retrieve` | bhphApi.ts:99 `getBhphNote` | `covered` |
+| 123 | `admin/bhph-notes/` | `views_bhph_notes.admin_bhph_note_create` | `admin-bhph-note-create` | bhphApi.ts:109 `getBhphNote` | `covered` |
+| 124 | `admin/bhph-notes/list/` | `views_bhph_notes.admin_bhph_note_list` | `admin-bhph-note-list` | bhphApi.ts:95 `listBhphNotes` | `covered` |
+| 125 | `admin/bhph-notes/<int:pk>/` | `views_bhph_notes.admin_bhph_note_retrieve` | `admin-bhph-note-retrieve` | bhphApi.ts:109 `getBhphNote` | `covered` |
 | 126 | `admin/bhph-notes/<int:pk>/payments/` | `views_bhph_payments.admin_bhph_payment_create` | `admin-bhph-payment-create` | — | `defer-candidate-O2` |
-| 127 | `admin/bhph-notes/<int:pk>/payments/list/` | `views_bhph_payments.admin_bhph_payment_list` | `admin-bhph-payment-list` | bhphApi.ts:128 `listBhphPayments` | `covered` |
-| 128 | `admin/bhph-notes/<int:pk>/promises/` | `views_bhph_promises.admin_bhph_promise_create` | `admin-bhph-promise-create` | — | `M21-anchor` |
-| 129 | `admin/bhph-notes/<int:pk>/promises/list/` | `views_bhph_promises.admin_bhph_promise_list` | `admin-bhph-promise-list` | bhphApi.ts:155 `listBhphPromises` | `covered` |
-| 130 | `admin/bhph-promises/<int:pk>/mark-kept/` | `views_bhph_promises.admin_bhph_promise_mark_kept` | `admin-bhph-promise-mark-kept` | — | `M21-anchor` |
-| 131 | `admin/bhph-promises/<int:pk>/mark-broken/` | `views_bhph_promises.admin_bhph_promise_mark_broken` | `admin-bhph-promise-mark-broken` | — | `M21-anchor` |
-| 132 | `admin/bhph-notes/<int:pk>/contacts/` | `views_collection_contacts.admin_collection_contact_create` | `admin-collection-contact-create` | — | `M21-anchor` |
-| 133 | `admin/bhph-notes/<int:pk>/contacts/list/` | `views_collection_contacts.admin_collection_contact_list` | `admin-collection-contact-list` | bhphApi.ts:185 `listCollectionContacts` | `covered` |
-| 134 | `admin/bhph-notes/<int:pk>/repossessions/` | `views_repossessions.admin_repossession_create` | `admin-repossession-create` | — | `M21-anchor` |
-| 135 | `admin/bhph-notes/<int:pk>/repossessions/list/` | `views_repossessions.admin_repossession_list` | `admin-repossession-list` | bhphApi.ts:214 `listRepossessions` | `covered` |
-| 136 | `admin/bhph-repossessions/<int:pk>/mark-recovered/` | `views_repossessions.admin_repossession_mark_recovered` | `admin-repossession-mark-recovered` | — | `M21-anchor` |
-| 137 | `admin/bhph-repossessions/<int:pk>/mark-re-intaked/` | `views_repossessions.admin_repossession_mark_re_intaked` | `admin-repossession-mark-re-intaked` | — | `M21-anchor` |
-| 138 | `admin/bhph/analytics/summary/` | `views_bhph_analytics.admin_bhph_analytics_summary` | `admin-bhph-analytics-summary` | bhphApi.ts:51 `fetchBhphAnalyticsSummary` | `covered` |
+| 127 | `admin/bhph-notes/<int:pk>/payments/list/` | `views_bhph_payments.admin_bhph_payment_list` | `admin-bhph-payment-list` | bhphApi.ts:138 `listBhphPayments` | `covered` |
+| 128 | `admin/bhph-notes/<int:pk>/promises/` | `views_bhph_promises.admin_bhph_promise_create` | `admin-bhph-promise-create` | bhphApi.ts:258 `recordPromiseToPay` | `covered` |
+| 129 | `admin/bhph-notes/<int:pk>/promises/list/` | `views_bhph_promises.admin_bhph_promise_list` | `admin-bhph-promise-list` | bhphApi.ts:165 `listBhphPromises` | `covered` |
+| 130 | `admin/bhph-promises/<int:pk>/mark-kept/` | `views_bhph_promises.admin_bhph_promise_mark_kept` | `admin-bhph-promise-mark-kept` | bhphApi.ts:277 `markPromiseKept` | `covered` |
+| 131 | `admin/bhph-promises/<int:pk>/mark-broken/` | `views_bhph_promises.admin_bhph_promise_mark_broken` | `admin-bhph-promise-mark-broken` | bhphApi.ts:295 `markPromiseBroken` | `covered` |
+| 132 | `admin/bhph-notes/<int:pk>/contacts/` | `views_collection_contacts.admin_collection_contact_create` | `admin-collection-contact-create` | bhphApi.ts:332 `logCollectionContact` | `covered` |
+| 133 | `admin/bhph-notes/<int:pk>/contacts/list/` | `views_collection_contacts.admin_collection_contact_list` | `admin-collection-contact-list` | bhphApi.ts:195 `listCollectionContacts` | `covered` |
+| 134 | `admin/bhph-notes/<int:pk>/repossessions/` | `views_repossessions.admin_repossession_create` | `admin-repossession-create` | bhphApi.ts:354 `initiateRepossession` | `covered` |
+| 135 | `admin/bhph-notes/<int:pk>/repossessions/list/` | `views_repossessions.admin_repossession_list` | `admin-repossession-list` | bhphApi.ts:224 `listRepossessions` | `covered` |
+| 136 | `admin/bhph-repossessions/<int:pk>/mark-recovered/` | `views_repossessions.admin_repossession_mark_recovered` | `admin-repossession-mark-recovered` | bhphApi.ts:373 `markRepossessionRecovered` | `covered` |
+| 137 | `admin/bhph-repossessions/<int:pk>/mark-re-intaked/` | `views_repossessions.admin_repossession_mark_re_intaked` | `admin-repossession-mark-re-intaked` | bhphApi.ts:392 `markRepossessionReIntaked` | `covered` |
+| 138 | `admin/bhph/analytics/summary/` | `views_bhph_analytics.admin_bhph_analytics_summary` | `admin-bhph-analytics-summary` | bhphApi.ts:61 `fetchBhphAnalyticsSummary` | `covered` |
 | 139 | `admin/accounting/journal-entries/` | `views_accounting.admin_journal_entry_create` | `admin-journal-entry-create` | accountingApi.ts:236 `fetchJournalEntry` | `covered` |
 | 140 | `admin/accounting/journal-entries/<int:pk>/reverse/` | `views_accounting.admin_journal_entry_reverse` | `admin-journal-entry-reverse` | accountingApi.ts:260 `reverseJournalEntry` | `covered` |
 | 141 | `admin/accounting/journal-entries/<int:pk>/` | `views_accounting.admin_journal_entry_retrieve` | `admin-journal-entry-retrieve` | accountingApi.ts:236 `fetchJournalEntry` | `covered` |
@@ -204,23 +204,15 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**57 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**47 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
-### M21-anchor (8)
+### M21-anchor (0)
 
-- `admin/be-backs/` → `views_be_backs.admin_be_back_create` (`admin-be-back-create`). Imported service verbs: `get_current_dealership`
-- `admin/bhph-notes/<int:pk>/promises/` → `views_bhph_promises.admin_bhph_promise_create` (`admin-bhph-promise-create`). Imported service verbs: `get_current_dealership`
-- `admin/bhph-promises/<int:pk>/mark-kept/` → `views_bhph_promises.admin_bhph_promise_mark_kept` (`admin-bhph-promise-mark-kept`). Imported service verbs: `get_current_dealership`
-- `admin/bhph-promises/<int:pk>/mark-broken/` → `views_bhph_promises.admin_bhph_promise_mark_broken` (`admin-bhph-promise-mark-broken`). Imported service verbs: `get_current_dealership`
-- `admin/bhph-notes/<int:pk>/contacts/` → `views_collection_contacts.admin_collection_contact_create` (`admin-collection-contact-create`). Imported service verbs: `get_current_dealership`
-- `admin/bhph-notes/<int:pk>/repossessions/` → `views_repossessions.admin_repossession_create` (`admin-repossession-create`). Imported service verbs: `get_current_dealership`
-- `admin/bhph-repossessions/<int:pk>/mark-recovered/` → `views_repossessions.admin_repossession_mark_recovered` (`admin-repossession-mark-recovered`). Imported service verbs: `get_current_dealership`
-- `admin/bhph-repossessions/<int:pk>/mark-re-intaked/` → `views_repossessions.admin_repossession_mark_re_intaked` (`admin-repossession-mark-re-intaked`). Imported service verbs: `get_current_dealership`
+_None._
 
-### M21-conditional (2)
+### M21-conditional (0)
 
-- `admin/follow-up-cadences/` → `views_follow_ups.admin_follow_up_cadence_create` (`admin-follow-up-cadence-create`). Imported service verbs: `get_current_dealership`
-- `admin/follow-up-cadences/<int:pk>/pause/` → `views_follow_ups.admin_follow_up_cadence_pause` (`admin-follow-up-cadence-pause`). Imported service verbs: `get_current_dealership`
+_None._
 
 ### defer-candidate-O2 (41)
 
@@ -300,8 +292,8 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 ### views_be_backs
 
 - **Endpoints:** 4
-- **Backend-only:** 2
-- **Backend-only dispositions in this module:** `M21-anchor`, `defer-candidate-O2`
+- **Backend-only:** 1
+- **Backend-only dispositions in this module:** `defer-candidate-O2`
 
 ### views_bhph_analytics
 
@@ -322,14 +314,12 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 ### views_bhph_promises
 
 - **Endpoints:** 4
-- **Backend-only:** 3
-- **Backend-only dispositions in this module:** `M21-anchor`
+- **Backend-only:** 0
 
 ### views_collection_contacts
 
 - **Endpoints:** 2
-- **Backend-only:** 1
-- **Backend-only dispositions in this module:** `M21-anchor`
+- **Backend-only:** 0
 
 ### views_deal_writeups
 
@@ -357,8 +347,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 ### views_follow_ups
 
 - **Endpoints:** 5
-- **Backend-only:** 2
-- **Backend-only dispositions in this module:** `M21-conditional`
+- **Backend-only:** 0
 
 ### views_leads
 
@@ -396,8 +385,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 ### views_repossessions
 
 - **Endpoints:** 4
-- **Backend-only:** 3
-- **Backend-only dispositions in this module:** `M21-anchor`
+- **Backend-only:** 0
 
 ### views_sale
 

@@ -2223,6 +2223,164 @@ Milestone 20 close:**
 
 ---
 
+## 7v. Operational Surface Completion (Milestone 21, shipped)
+
+Milestone 21 (SESSION_166 → SESSION_170)
+delivered the **first M21 anchor
+implementation cycle** on top of the M20
+Playwright substrate. Ten operator-facing
+UIs shipped across BHPH collections and
+follow-up cadence config; previously
+those backend capabilities were reachable
+only via curl / Postman / Django shell,
+per the M21.1 systematic audit. **This is
+an evidence-driven umbrella milestone**
+grounded in the operational audit output
+— every shipped surface maps to a
+shipped M1–M20 backend verb + a missing
+UI + an extended Playwright journey.
+Governing contract (Candidate O): every
+M21 surface (a) maps to an already-
+shipped backend capability, (b) closes a
+missing operator-facing UI, (c) adds or
+extends a Playwright operational journey,
+(d) is not generic UX polish. Milestone
+introduces **zero new backend service
+verbs, zero new endpoints, zero new
+migrations, zero new tenancy carriers,
+and zero new frontend routes.**
+**Zero-drift permission-class posture
+extends to twenty-one consecutive
+milestones** (M10 → M21). Deferrals
+cataloged in `MILESTONE_21_RETROSPECTIVE.md`
+§3 + §4. See
+`docs/roadmap/MILESTONE_21_PLANNING.md` +
+`docs/roadmap/MILESTONE_21_RETROSPECTIVE.md`
++ `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+for the audit-driven scope logic.
+
+**Guiding principle** (M21.0 §5.a
+Candidate O): every M21 shipped surface
+maps to an already-shipped backend
+capability, closes a missing operator-
+facing UI, adds or extends a Playwright
+operational journey, and is not generic
+UX polish. Cosmetic friction discovered
+mid-milestone feeds Candidate P
+(deferred); scope items that require a
+new backend verb are out-of-scope
+(domain-milestone territory).
+
+**Definition of Done amendment**
+(formalized at M21.0 §5.f Option B):
+every future customer-facing milestone
+MUST either add or update at least one
+Playwright operational journey covering
+the shipped operator surface, OR
+explicitly document in §3 of the planning
+memo why no journey change is required.
+Infrastructure-only milestones satisfy
+via the exception path. Non-adherence is
+a planning-memo review finding.
+Amendment applies from M21 forward and
+lands in
+`docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+at M21.5 close.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M21.1 systematic operational-surface audit tooling | New operator-invoked `backend/dealer_ai/scripts/audit_operational_surface.py` (~500 lines, no Django app registration — not runtime code). Walks `backend/dealer_ai/urls.py` (function-based DRF views), all seven `frontend/src/lib/*Api.ts` wrapper modules (api.ts + bhphApi + salesApi + saleApi + fAndIApi + analyticsApi + accountingApi), AND every non-test `.tsx` / `.ts` under `frontend/src/` for component-level wrapper consumption. Regex-based extraction is sufficient — the codebase's URL surface is regular (Django `path()` entries; TypeScript `authGetJSON` / `authPostJSON` / helper base-path builders like `_ledgerBasePath`). Cross-reference produces per-endpoint disposition rows: `covered` (component consumes wrapper) / `wrapper-only` (typed helper exists but no component imports it — still counts as backend-only from an operator perspective) / uncovered (no wrapper at all). Rerunnable — regenerates the artifact for future OSC iterations. Combined methodology per §5.b Option C is belt-and-suspenders: service-verb walk catches internal capabilities; DRF walk catches endpoints without frontend consumers. | Not counted in the frontend or backend baselines (script has no tests — it's operator-invoked). Known limitation: nested TypeScript template literals (`${qs ? \`?${qs}\` : ""}`) confuse the URL normalizer; ~3 false-positive backend-only findings documented in the artifact. Fixing would require TS-aware parsing; deferred pending operator-friction evidence. |
+| M21.1 audit artifact | `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` — per-row schema (backend capability, missing operator surface, affected operational journey, recommended milestone disposition) per §5.c Option A. 153 endpoints enumerated at M21.1; **106 covered / 47 backend-only at M21.5 close** (up from 96 / 57 at M21.1 close reflecting the M21.2 + M21.3 coverage gains). Disposition legend: `M21-anchor` (pre-committed scope; confirmed by audit) / `M21-conditional` (audit-surfaced M21.4 candidate) / `defer-candidate-O2` (future OSC-shaped milestone; explicit re-entry) / `defer-domain-milestone` (distinct domain milestone e.g. accounting reversal → Candidate A) / `intentional-omission` (auth / demo / webhook receivers) / `covered` (operator UI exists). Regenerated at M21.5 open — M21-anchor and M21-conditional buckets both empty, confirming M21.2 + M21.3 closed the exact gaps they were scoped to close. | Distinct authoritative document (not a CAPABILITY_MATRIX column) per DOC_GOVERNANCE.md §2 separate-lifecycle posture — the matrix documents what capabilities exist; the audit documents whether they're surfaced through UI. Different lifecycles. |
+| M21.2 BHPH write-side UI (7 endpoints) | Seven new `frontend/src/lib/bhphApi.ts` typed write wrappers (module was read-only prior): `recordPromiseToPay`, `markPromiseKept`, `markPromiseBroken`, `logCollectionContact`, `initiateRepossession`, `markRepossessionRecovered`, `markRepossessionReIntaked`. Payloads match the backend serializers verbatim. Seven new frontend components under `frontend/src/components/bhph/` (consolidated into 5 files to keep tightly-coupled row actions together): `RecordPromiseToPayForm.tsx`, `PromiseRowActions.tsx` (bundles `MarkKeptPromiseButton` with `PaymentPickerModal` + `MarkBrokenPromiseButton` with confirm modal), `LogCollectionContactForm.tsx`, `InitiateRepossessionForm.tsx`, `RepossessionRowActions.tsx` (bundles `MarkRecoveredButton` + `MarkReIntakedButton`). All wired into `DealerAiBhphNoteDetail.tsx` in-place (M17 §6 lesson 6 attach-in-place posture); zero new routes. State updates optimistically merge the returned projection back into the corresponding sub-list. Mark-kept uses a `PaymentPickerModal` (lists the note's payments) per the M12.4 §5.d Option A operator-triggered reconciliation contract; mark-re-intake accepts a `ConditionReport` ID directly (no CondReport picker — creating a CondReport lives in the M3 recon workflow, out of scope for M21). | 18 new Vitest tests (submit + validation + error paths + button handlers + confirm dialogs + button-disabled states). Extended `seed_journey_bhph_collections_workflow` with three M21.2 fixtures (promised-state promise + recovered-state repossession + complete ConditionReport) so the journey can walk mark-broken + mark-re-intaked without fabricating state mid-journey. Re-expanded `bhph/collections_workflow.spec.ts` from the M20.4 read-only narrow to full 7-endpoint write coverage; verified locally 7/7 pass. |
+| M21.3 Be-back CREATE + Follow-up cadence CONFIG (3 endpoints) | `RecordBeBackForm.tsx` attached to `DealerAiSalesBeBacks.tsx` above the queue table. `CadenceConfigPanel.tsx` attached to `DealerAiSalesFollowUps.tsx` above the queue table; bundles `CreateCadenceForm` + `PauseCadenceByIdForm` (modal — M11.4 ships no cadence-list endpoint so operators enter the ID from the follow-up-task queue's `#N` badge) + inline `PauseCadenceButton` on each recent cadence in the panel's local recent-cadences list. Consumes existing `createBeBack` / `createCadence` / `pauseCadence` wrappers in `salesApi.ts` — all three shipped since M11.4/M11.6 but flagged **wrapper-only** by the M21.1 audit (no component imported them). Cadence-panel changes trigger a queue reload via `onChanged` callback so newly-spawned tasks appear in the queue immediately. | 9 new Vitest tests. Extended `seed_journey_sales_manager_daily_startup` with one active 24hr `FollowUpCadence` on the first seeded lead — journey uses it as a stable pause target while creating a distinct 1wk cadence via the form. Extended `sales_manager/daily_startup.spec.ts` per §5.e Option C (extend existing journey — workflow context is temporally the same "morning triage + configuration") with three new sub-steps: record be-back → assert count grows; create 1wk cadence via form → assert row appears; inline-pause → assert state badge transitions from `active` to `paused`. Verified locally 7/7 pass. |
+| M21.4 conditional scope | **SKIPPED** per §0.a M21.1 audit findings. The M21 planning skeleton reserved M21.4 for audit-surfaced additional scope; the M21.1 audit surfaced no additional scope-worthy items. The 44 `defer-candidate-O2` endpoints are legitimate future work (each is an entire domain UI: F&I dashboards, lead-source-specific intake forms, BHPH note origination, BHPH payment intake, deal writeup mutations) that would violate M21 scope discipline if bolted on. Deferred to future OSC-shaped milestones (Candidate O2 for M22+) with explicit re-entry paths preserved per discovery rule. Increment slot returned; milestone shape collapsed six → five (M21.0 + M21.1 + M21.2 + M21.3 + M21.5). | Consequence of the evidence-sized §5.h Option B posture — the audit is allowed to shrink scope when the substrate isn't there. |
+| Test baseline | Backend **4,755 → 4,761 pass** (+6 seed coverage tests across BHPH + sales_manager extensions). Frontend Vitest **153 → 180 pass** (+27 new tests across 7 component test files). Acceptance suite **6 journeys** (2 extended + 4 unchanged); full local dry-run **12 passed (~18s)** matching the M20 close baseline shape. Zero regressions. Zero migrations shipped in M21 (0043-0048 unchanged). `manage.py check` + `makemigrations --check` clean at every M21 close. Per-increment delta: M21.0 = 0 (planning); M21.1 = 0 (audit tooling — no tests); M21.2 = +3 backend + +18 frontend; M21.3 = +3 backend + +9 frontend; M21.5 = 0 (docs only). | Zero-drift permission-class streak extends **twenty → twenty-one** consecutive milestones (M10 → M21). Planning-time streak extends **86 → 87 as-recommended M5.1 → M21.0** across twelve consecutive milestones — all eight §5 decisions at M21.0 open confirmed as-recommended. |
+
+**What is NOT shipped in Milestone
+21** (deferred per
+`MILESTONE_21_RETROSPECTIVE.md` §3 +
+§4):
+
+- **44 `defer-candidate-O2`
+  endpoints** carried forward as
+  future OSC-shape scope: F&I write
+  UI (16), walk-in / phone /
+  referral / webhook lead creation
+  (4), deal-writeup mutations (3),
+  test-drive creation (2), BHPH
+  note origination + payment intake
+  (2), accounting journal create +
+  list + trial balance dashboards
+  (4), misc.
+- **3 `defer-domain-milestone`
+  endpoints** for the accounting
+  stream (journal-entry reverse +
+  trial-balance snapshot create /
+  list / retrieve) — Candidate A
+  scope for M22 consideration.
+- **Nested TypeScript template
+  literal support** in the audit
+  tooling (~3 false-positive
+  backend-only findings). Would
+  require TS-aware parsing;
+  deferred pending
+  operator-friction evidence.
+- **CI regeneration of the audit
+  artifact** — audit is operator-
+  invoked; no automated
+  regeneration on push. Regen
+  cadence expected at the open of
+  every OSC-shape milestone.
+- **All M20 deferrals still valid**
+  per `MILESTONE_20_RETROSPECTIVE.md`
+  §3 (cross-browser CI matrix,
+  mobile viewport journeys, etc.).
+
+**What operators experienced at
+Milestone 21 close:**
+
+- **BHPH collectors can do their
+  full daily book workflow through
+  the product.** Previously they
+  could only review the portfolio;
+  recording a PtP, marking it
+  broken, logging a contact,
+  initiating a repossession, and
+  transitioning it through
+  recovered → re-intaked all
+  required curl / Postman / Django
+  shell. Now every verb lives on
+  the M12.7 collector dashboard.
+- **Sales managers can record be-
+  backs and configure follow-up
+  cadences through the product.**
+  The M11 backend endpoints for
+  `record_be_back`, `create
+  cadence`, and `pause cadence`
+  had wrapper functions but no
+  component consumers — the M21.3
+  panels close that gap.
+- **The M20 acceptance substrate
+  is durable.** The Definition of
+  Done amendment (§5.f Option B)
+  binds every future customer-
+  facing milestone to journey-
+  addition-or-update; the two M21
+  journey extensions are the
+  reference examples.
+- **The audit artifact is a live
+  planning input.** Future
+  OSC-shape milestones select from
+  the regenerated artifact
+  (`M21_OPERATIONAL_SURFACE_AUDIT.md`)
+  rather than proposing scope from
+  intuition. Post-M21.5 regen:
+  106 endpoints covered / 47
+  backend-only remain for future
+  scope selection.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full
