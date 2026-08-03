@@ -9,8 +9,10 @@
 
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, "..", "..", "..");
 const BACKEND_DIR = path.join(REPO_ROOT, "backend");
 
 export interface SeedInvocationResult {

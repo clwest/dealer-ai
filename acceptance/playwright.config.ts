@@ -19,6 +19,7 @@
 
 import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const IS_CI = Boolean(process.env.CI);
 
@@ -29,15 +30,24 @@ const FRONTEND_PORT = IS_CI ? 4173 : 5173; // vite preview vs vite dev
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const FRONTEND_URL = `http://127.0.0.1:${FRONTEND_PORT}`;
 
+// ES module dirname equivalent (see §0.a M20.2 decision 1). `__dirname`
+// is not defined when Playwright loads playwright.config.ts as an ES
+// module; `import.meta.url` + `fileURLToPath` is the portable idiom.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
 // Repo layout: acceptance/ is sibling to backend/ and frontend/.
-const REPO_ROOT = path.resolve(__dirname, "..");
+const REPO_ROOT = path.resolve(HERE, "..");
 const BACKEND_DIR = path.join(REPO_ROOT, "backend");
 const FRONTEND_DIR = path.join(REPO_ROOT, "frontend");
 
 // Storage-state file for each persona. Regenerated per suite run by
-// the `setup` project.
+// the `setup` project. Adding a new persona requires (a) a new entry
+// here, (b) a new setup step in login.setup.ts, and (c) a new project
+// entry below that references the storage state.
 export const AUTH_STORAGE = {
-  platformOperator: path.join(__dirname, ".auth/platform_operator.json"),
+  platformOperator: path.join(HERE, ".auth/platform_operator.json"),
+  owner: path.join(HERE, ".auth/owner.json"),
+  salesManager: path.join(HERE, ".auth/sales_manager.json"),
 } as const;
 
 export default defineConfig({
@@ -70,11 +80,34 @@ export default defineConfig({
       testMatch: /support\/auth\/.*\.setup\.ts/,
     },
     {
+      // Pilot admin journeys run as the platform_operator persona.
       name: "platform_operator",
-      testMatch: /journeys\/(pilot|owner|sales_manager|recon|office|bhph)\/.*\.spec\.ts/,
+      testMatch: /journeys\/pilot\/.*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: AUTH_STORAGE.platformOperator,
+      },
+      dependencies: ["setup"],
+    },
+    {
+      // Owner-facing journeys (M20.2: morning review) run as the
+      // owner persona.
+      name: "owner",
+      testMatch: /journeys\/owner\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: AUTH_STORAGE.owner,
+      },
+      dependencies: ["setup"],
+    },
+    {
+      // Sales-manager journeys (M20.2: daily startup) run as the
+      // sales_manager persona.
+      name: "sales_manager",
+      testMatch: /journeys\/sales_manager\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: AUTH_STORAGE.salesManager,
       },
       dependencies: ["setup"],
     },
@@ -99,8 +132,14 @@ export default defineConfig({
     },
     {
       // Frontend: vite preview against a production build in CI,
-      // vite dev locally for faster iteration.
-      command: IS_CI ? `npm run build && npm run preview -- --port ${FRONTEND_PORT} --strictPort` : `npm run dev -- --port ${FRONTEND_PORT} --strictPort`,
+      // vite dev locally for faster iteration. Explicit `--host
+      // 127.0.0.1` bind so Playwright's readiness poll on
+      // http://127.0.0.1:${FRONTEND_PORT} succeeds — vite's default
+      // "localhost" bind on macOS resolves to ::1 only, which
+      // Playwright's IPv4 poll misses (§0.a M20.2 decision 2).
+      command: IS_CI
+        ? `npm run build && npm run preview -- --host 127.0.0.1 --port ${FRONTEND_PORT} --strictPort`
+        : `npm run dev -- --host 127.0.0.1 --port ${FRONTEND_PORT} --strictPort`,
       cwd: FRONTEND_DIR,
       url: FRONTEND_URL,
       reuseExistingServer: !IS_CI,

@@ -1,15 +1,17 @@
-// Milestone 20 · Increment 1 — persona registry for the acceptance
-// suite. Each persona corresponds to a role or set of roles that a
-// journey exercises. The `setup` project logs each persona in via the
-// real UI and saves storage state; journey projects reuse it.
+// Milestone 20 · Increment 1 (extended at M20.2) — persona registry
+// for the acceptance suite. Each persona corresponds to a role or set
+// of roles that a journey exercises. The `setup` project logs each
+// persona in via the real UI and saves storage state; journey
+// projects reuse it.
 //
-// M20.1 ships one persona (platform_operator) because the canonical
-// pilot onboarding journey is the only in-scope journey this
-// increment. Additional personas (owner, sales_manager, advisor,
-// recon_manager, office_manager, bhph_collector) land alongside their
-// journeys in M20.2–M20.4.
+// M20.1 shipped: platform_operator.
+// M20.2 adds:   owner, sales_manager.
+// M20.3–M20.4 add: recon_manager, office_manager, bhph_collector.
 
-export type PersonaName = "platform_operator";
+export type PersonaName =
+  | "platform_operator"
+  | "owner"
+  | "sales_manager";
 
 export interface Persona {
   name: PersonaName;
@@ -18,15 +20,26 @@ export interface Persona {
   postLoginPath: string;
 }
 
-// Credentials MUST match what the `seed_journey_pilot_onboarding`
-// management command provisions. The password is deliberately
-// deterministic-but-not-a-real-secret; it is only usable against the
-// acceptance test DB.
+// Credentials MUST match what the corresponding seed_journey_* command
+// provisions. Passwords are deliberately deterministic-but-not-real-
+// secrets; they only work against the acceptance test DB.
 export const PERSONAS: Record<PersonaName, Persona> = {
   platform_operator: {
     name: "platform_operator",
     username: "acceptance-operator",
     password: "acceptance-op-password",
     postLoginPath: "/dealer-ai-admin",
+  },
+  owner: {
+    name: "owner",
+    username: "acceptance-owner",
+    password: "acceptance-owner-password",
+    postLoginPath: "/dealer-ai-overview",
+  },
+  sales_manager: {
+    name: "sales_manager",
+    username: "acceptance-sales-manager",
+    password: "acceptance-sm-password",
+    postLoginPath: "/dealer-ai-overview",
   },
 };
