@@ -1,6 +1,8 @@
 // Milestone 11 · Increment 6 (SESSION_119) — sales-side channel-filtered leads.
 // Milestone 24 · Increment 1 (SESSION_181) — Walk-in intake CTA + Dialog +
 //   LeadDetailModal wire-in on the sales-side leads page.
+// Milestone 24 · Increment 2 (SESSION_182) — Phone intake CTA + Dialog
+//   (sibling to walk-in; reuses `<LeadIntakeForm>` unchanged).
 //
 // Consumes GET /admin/leads/ with the M11.6 channel filter added on
 // top of the existing handed_off / urgency / since / ordering
@@ -17,8 +19,16 @@
 // - Row click opens `LeadDetailModal` for any lead in the list.
 // - `AssignmentDropdown` reaches via the modal header (unchanged).
 //
-// Phone / referral CTAs land in M24.2 / M24.3 as sibling extensions
-// following the walk-in shape (per §5.h sequencing).
+// M24.2 additions (SESSION_182): `+ Phone` Dialog CTA follows the
+// exact walk-in shape — same shared `<LeadIntakeForm>` component
+// with `channel="phone"` and `createPhoneLead` as the dispatcher.
+// The phone journey adds a downstream cadence step (navigate to
+// /dealer-ai-sales/follow-ups + use existing CadenceConfigPanel to
+// start a 24hr cadence for the new lead's ID) per §5.d Option C
+// phone row.
+//
+// Referral CTA lands at M24.3 (adds `<ReferralLeadFormExtras>` in
+// the shared form's extras slot).
 //
 // Role gating: backend enforces IsSalesManagerOrOwnerAtActiveDealership.
 // Advisors / other roles receive 403 and the page renders the error.
@@ -43,7 +53,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { fetchAdminLeads, type AdminLead } from "@/lib/api";
-import { createWalkInLead } from "@/lib/salesApi";
+import { createPhoneLead, createWalkInLead } from "@/lib/salesApi";
 
 type ChannelFilter =
   | ""
@@ -73,6 +83,7 @@ export default function DealerAiSalesLeads() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
+  const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoadState("loading");
@@ -113,6 +124,12 @@ export default function DealerAiSalesLeads() {
             data-testid="sales-leads-add-walk-in"
           >
             + Walk-in
+          </Button>
+          <Button
+            onClick={() => setPhoneDialogOpen(true)}
+            data-testid="sales-leads-add-phone"
+          >
+            + Phone
           </Button>
         </div>
       </div>
@@ -214,6 +231,29 @@ export default function DealerAiSalesLeads() {
             onSubmit={createWalkInLead}
             onCreated={(lead) => {
               setWalkInDialogOpen(false);
+              setSelectedLeadId(lead.id);
+              void load();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={phoneDialogOpen} onOpenChange={setPhoneDialogOpen}>
+        <DialogContent data-testid="sales-leads-phone-dialog">
+          <DialogHeader>
+            <DialogTitle>Record a phone lead</DialogTitle>
+            <DialogDescription>
+              Capture the essentials while the customer is on the
+              phone. After you record the lead, the detail view opens
+              so you can assign and start a follow-up cadence from
+              the follow-up work-queue.
+            </DialogDescription>
+          </DialogHeader>
+          <LeadIntakeForm
+            channel="phone"
+            onSubmit={createPhoneLead}
+            onCreated={(lead) => {
+              setPhoneDialogOpen(false);
               setSelectedLeadId(lead.id);
               void load();
             }}
