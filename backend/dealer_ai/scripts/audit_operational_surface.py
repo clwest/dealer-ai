@@ -79,6 +79,16 @@ class BackendEndpoint:
     view_callable: str
     url_name: str
     source_line: int
+    # HTTP methods the endpoint accepts, extracted from the
+    # ``@api_view([...])`` decorator on the view function. M23.1 §5.d
+    # fix — cross_reference() uses this to filter false-positive
+    # coverage claims where a wrapper's URL prefix-matches an
+    # endpoint but its HTTP verb doesn't match (e.g. ``getBhphNote``
+    # was previously claimed as consuming POST ``admin/bhph-notes/``
+    # because both URLs share the ``admin/bhph-notes/`` prefix). If
+    # the view has no ``@api_view`` decorator, ``methods`` is empty
+    # and the verb filter is skipped (backwards-compat).
+    methods: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -237,7 +247,18 @@ _PATH_CALL_RE = re.compile(
 )
 
 
-def extract_backend_endpoints(urls_source: str) -> list[BackendEndpoint]:
+def extract_backend_endpoints(
+    urls_source: str,
+    view_methods: dict[str, frozenset[str]] | None = None,
+) -> list[BackendEndpoint]:
+    """Extract endpoints from urls.py. When ``view_methods`` is provided
+    (M23.1 §5.d fix), each endpoint carries the HTTP methods declared
+    on its view function via ``@api_view([...])``. Backwards-compat:
+    if ``view_methods`` is None or a view isn't in the map, methods
+    stays empty and cross_reference() skips the verb filter for that
+    endpoint (matches pre-M23.1 behavior).
+    """
+    view_methods = view_methods or {}
     endpoints: list[BackendEndpoint] = []
     for m in _PATH_CALL_RE.finditer(urls_source):
         pieces = re.findall(r"[\"']([^\"']+)[\"']", m.group(1))
@@ -245,6 +266,15 @@ def extract_backend_endpoints(urls_source: str) -> list[BackendEndpoint]:
         view_callable = m.group(2)
         url_name = m.group(3)
         source_line = urls_source[: m.start()].count("\n") + 1
+        # Look up methods by the leaf name of the view callable
+        # (``views_bhph_notes.admin_bhph_note_create`` → key
+        # ``admin_bhph_note_create``). Fall back to the full dotted
+        # path in case future views use nested modules.
+        leaf_name = view_callable.rsplit(".", 1)[-1]
+        methods = view_methods.get(
+            leaf_name,
+            view_methods.get(view_callable, frozenset()),
+        )
         endpoints.append(
             BackendEndpoint(
                 url_pattern=pattern,
@@ -252,9 +282,59 @@ def extract_backend_endpoints(urls_source: str) -> list[BackendEndpoint]:
                 view_callable=view_callable,
                 url_name=url_name,
                 source_line=source_line,
+                methods=methods,
             )
         )
     return endpoints
+
+
+# M23.1 §5.d fix — HTTP-verb discrimination.
+#
+# Maps our ``authXxxJSON`` helper wrappers to the HTTP method they
+# issue. Used by cross_reference() to filter out false-positive
+# coverage claims where a wrapper's URL pattern matches an endpoint
+# but its HTTP verb doesn't.
+_HELPER_TO_VERB: dict[str, str] = {
+    "authGetJSON": "GET",
+    "authPostJSON": "POST",
+    "authPatchJSON": "PATCH",
+    "authPutJSON": "PUT",
+    "authDelete": "DELETE",
+    "authPostForm": "POST",
+    "fetch": "GET",  # public fetch calls are all GETs in this codebase
+}
+
+
+# Match ``@api_view([...])`` decorators paired with the ``def name``
+# that follows. The decorator body is a list literal of method
+# strings; we extract each ``"METHOD"`` inside it. Non-greedy match
+# to the next ``def`` header ensures we don't skip past a nearby
+# view.
+_API_VIEW_DECORATOR_RE = re.compile(
+    r"@api_view\(\s*\[([^\]]*)\]\s*\)"
+    r"(?:\s*@[^\n]+)*"  # optional additional decorators (e.g. @permission_classes)
+    r"\s*def\s+([a-zA-Z_][\w]*)\s*\(",
+    re.MULTILINE | re.DOTALL,
+)
+
+
+def extract_view_methods(dealer_ai_root: Path) -> dict[str, frozenset[str]]:
+    """Walk every ``views*.py`` under dealer_ai/ and extract the HTTP
+    methods each view function accepts via ``@api_view([...])``.
+    Returns ``{view_function_name: frozenset(["POST", "PUT", ...])}``.
+    M23.1 §5.d fix — feeds cross_reference()'s verb-match filter.
+    """
+    out: dict[str, frozenset[str]] = {}
+    for path in sorted(dealer_ai_root.glob("views*.py")):
+        source = path.read_text()
+        for m in _API_VIEW_DECORATOR_RE.finditer(source):
+            methods_raw = m.group(1)
+            view_name = m.group(2)
+            methods = frozenset(
+                re.findall(r"[\"']([A-Z]+)[\"']", methods_raw)
+            )
+            out[view_name] = methods
+    return out
 
 
 # --------------------------------------------------------------------
@@ -635,6 +715,21 @@ def cross_reference(
         candidates: list[FrontendConsumer] = []
         for candidate_pattern in candidate_patterns:
             candidates.extend(by_pattern.get(candidate_pattern, []))
+        # M23.1 §5.d fix — filter out consumers whose HTTP verb
+        # doesn't match the endpoint's declared methods. Prevents
+        # false-positive coverage claims where a GET wrapper URL
+        # prefix-matches a POST endpoint (e.g. ``getBhphNote`` at
+        # ``admin/bhph-notes/<pk>/`` used to be claimed as consuming
+        # POST ``admin/bhph-notes/`` via the querystring-variant
+        # candidate pattern). Skip filtering when the endpoint's
+        # methods are unknown (view has no ``@api_view`` decorator)
+        # — preserves pre-M23.1 behavior for those cases.
+        if ep.methods:
+            candidates = [
+                c
+                for c in candidates
+                if _HELPER_TO_VERB.get(c.helper, "") in ep.methods
+            ]
         # De-duplicate by (helper, source_line)
         seen: set[tuple[str, int]] = set()
         unique: list[FrontendConsumer] = []
@@ -948,7 +1043,10 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     urls_source = urls_path.read_text()
 
-    endpoints = extract_backend_endpoints(urls_source)
+    # M23.1 §5.d fix — extract HTTP methods per view function so
+    # cross_reference() can filter false-positive coverage claims.
+    view_methods = extract_view_methods(dealer_ai_root)
+    endpoints = extract_backend_endpoints(urls_source, view_methods)
     verbs = extract_service_verbs(services_root)
     # Walk every ``*Api.ts`` / ``api.ts`` file under ``frontend/src/lib/``
     # — the frontend split its API-consumer surface across several

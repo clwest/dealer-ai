@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-03
-last_session_shipped: SESSION_175
+last_session_shipped: SESSION_176
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -25,299 +25,410 @@ milestone_20_status: shipped
 milestone_21_status: shipped
 milestone_22_status: shipped
 milestone_23_status: in-progress
-next_session: SESSION_176
+next_session: SESSION_177
 next_milestone: 23
 next_milestone_name: "BHPH Origination + Payment Intake"
-next_increment: 1
-next_increment_name: "M23.1 — Audit-tool false-positive fix + artifact refresh"
+next_increment: 2
+next_increment_name: "M23.2 — Note origination UI + journey"
 ---
 
-# Next session — SESSION_176 · Milestone 23 · Increment 1 (M23.1 — audit-tool false-positive fix + artifact refresh)
+# Next session — SESSION_177 · Milestone 23 · Increment 2 (M23.2 — note origination UI + journey)
 
-> **Milestone 23 · Increment 0 —
-> BHPH Origination + Payment Intake
-> planning refinement — SHIPPED at
-> SESSION_175.** Full memo expansion
-> from M22.4 skeleton + eight §5
-> load-bearing decisions resolved
-> as-recommended at open per the
-> operational-coverage primary lens.
-> §5.a chose O2 (BHPH note
-> origination + payment intake sub-
-> scope) — highest per-item
-> operational coverage delta at
-> smallest scope; completes the
-> BHPH lifecycle bookends from
-> M12 backend + M12.7 read UI +
-> M20.4 Playwright + M21.2 write-
-> side UI for collections.
+> **Milestone 23 · Increment 1 —
+> Audit tooling fix — SHIPPED at
+> SESSION_176.** Targeted three-
+> change fix to `audit_operational_surface.py`
+> reclassified two rows from
+> `covered` to `defer-candidate-O2`:
+> row 123 `admin-bhph-note-create`
+> (as expected — confirms M23.2
+> target) and row 139
+> `admin-journal-entry-create`
+> (**NEW genuine gap surfaced —
+> JE creation UI is missing;
+> M24 candidate evidence**).
+> Coverage 110 → 108 (-2);
+> backend-only 43 → 45 (+2).
+> Root-cause reframe: HTTP-verb-
+> agnostic URL-prefix matching
+> — GET wrappers on pk-suffixed
+> paths were being falsely
+> claimed as consuming sibling
+> POST endpoints via the
+> querystring-variant candidate
+> pattern. Fix orthogonally
+> filters by verb match.
+> Budget guard held — ~30-40
+> min of active work, well
+> under the ~2-hour §5.d
+> guard.
 >
-> **Empirical M23.0 verification
-> surfaced NEW audit false-positive
-> class** distinct from M22.1's
-> variable-first URL assembly:
-> **HTTP-verb-agnostic URL-prefix
-> matching**. Audit row 123
-> (`admin-bhph-note-create`) claims
-> coverage via a GET wrapper on a
-> different-verb + different-path
-> URL that shares only the prefix.
-> Ships M23.1 targeted fix under
-> ~2-hour budget guard.
+> **Backend baseline unchanged
+> at 4,766 pass.** Zero
+> regressions verified via full
+> test suite post-fix.
 >
-> **Planning-time as-recommended
-> streak extends 88 → 89 across
-> fourteen consecutive milestones**
-> (M10 → M23). **Zero-drift
-> permission-class streak target
-> at M23.4 close: 22 → 23**.
->
-> **SESSION_176 opens M23.1 —
-> audit-tool false-positive fix.**
-> Supporting work per §5.d Option
-> A (targeted regex + parser
-> enhancement to discriminate HTTP
-> verb). Not the milestone
-> centerpiece; the two anchor UIs
-> ship at M23.2 (note origination)
-> and M23.3 (payment intake).
-> Budget guard: if fix exceeds ~2
-> hours, ship partial + defer
-> residual to a future audit-
-> tooling milestone.
+> **SESSION_177 opens M23.2 —
+> first anchor UI.** BHPH note
+> origination form + wrapper +
+> journey. Journey-as-verifier
+> per §5.f — no manual pre-
+> verification.
 >
 > **DoD compliance satisfied by
-> construction** for M23 — every
-> anchor implementation increment
-> (M23.2 + M23.3) adds a Playwright
-> operational journey.
+> construction** for M23.2 —
+> the new
+> `bhph/note_origination.spec.ts`
+> journey directly satisfies
+> the M21.0 §5.f Option B
+> amendment.
 
-## First thing SESSION_176 must do
+## First thing SESSION_177 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean.
 - `git log --oneline -6` — top
-  should be the M23.0 close
-  commit; `origin/main` still at
-  the M22 durable-lessons head
-  (M23 has not pushed).
-- `python3 manage.py test dealer_ai`
-  → **4,766 pass, 1 skipped, 0
-  fail**.
+  should be the M23.1 close
+  commit; `origin/main` still
+  at the M22 durable-lessons
+  head (M23 has not pushed).
+- `python3 manage.py test
+  dealer_ai` → **4,766 pass,
+  1 skipped, 0 fail**.
 - `cd frontend && npm test` →
   **180 pass**.
-- `python3 manage.py check` clean.
-- `python3 manage.py makemigrations
-  --check --dry-run` → "No changes
+- `python3 manage.py check`
+  clean.
+- `python3 manage.py
+  makemigrations --check
+  --dry-run` → "No changes
   detected."
-- `cd frontend && npx tsc --noEmit`
-  clean.
-- `cd acceptance && npx tsc --noEmit`
-  clean.
+- `cd frontend && npx tsc
+  --noEmit` clean.
+- `cd acceptance && npx tsc
+  --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. Inspect the audit script's HTTP-verb matching
+### 2. Extend the BHPH seed with a vehicle fixture
 
-Open
-`backend/dealer_ai/scripts/audit_operational_surface.py`
-and locate `cross_reference()` +
-`_HELPER_CALL_RE`. Identify where
-wrapper URLs get matched against
-endpoint URLs. The current code
-matches by URL pattern alone — no
-HTTP verb comparison.
+Extend
+`backend/dealer_ai/management/commands/seed_journey_bhph_collections_workflow.py`
+with a **vehicle-for-origination
+fixture**:
 
-Cross-check against the known
-misclassification: row 123 in the
-audit shows `admin-bhph-note-create`
-(POST) as `covered` via
-`bhphApi.ts:109 getBhphNote` (GET
-wrapper for `admin/bhph-notes/<pk>/`).
-These are different verbs + different
-URL shapes (prefix match only).
+- Provision an available
+  inventory vehicle (stable
+  stock number tag —
+  suggested
+  `M23.2-BHPH-ORIG-VEH-1`;
+  idempotent per M22.2's
+  reversal-cleanup pattern
+  precedent) that the M23.2
+  origination journey targets.
+- Distinct from any vehicle
+  the existing collections
+  journey depends on so the
+  two workflows don't
+  interfere.
+- Any note created against
+  this vehicle during a
+  journey run gets deleted on
+  the next seed invocation
+  (analogous to M22.2's
+  reversal cleanup) so the
+  fixture stays reversible.
 
-### 3. Ship the targeted regex + parser fix
+Add a backend test covering
+idempotency + tenant scoping +
+note cleanup behavior per M22.2
+precedent.
 
-Per §5.d Option A — narrow scope.
-Extract HTTP verb from wrapper's
-helper-call name:
-- `authGetJSON` → GET
-- `authPostJSON` → POST
-- `authPatchJSON` → PATCH
-- `authPutJSON` → PUT
-- `authDelete` → DELETE
-- `authPostForm` → POST
+### 3. Add the `createBhphNote` wrapper
 
-Extract the endpoint's declared
-HTTP verb from the view callable
-(via `@api_view([...])` decorator
-inspection or view function shape).
-Store both verbs on the respective
-data model
-(`FrontendConsumer.helper_verb` +
-`BackendEndpoint.methods`); modify
-`cross_reference()` to only claim
-coverage when the wrapper's verb
-matches the endpoint's declared
-verbs.
+Extend `frontend/src/lib/bhphApi.ts`:
 
-Do NOT attempt a full AST rewrite.
-Do NOT expand scope to handle
-other classes of false-positive
-unless they surface as side-
-effects of the same fix.
+```typescript
+export interface CreateBhphNotePayload {
+  vehicle_id: number;
+  principal: string;         // Decimal-as-string per M12 convention
+  apr: string;               // Decimal-as-string
+  cadence: "weekly" | "biweekly" | "semimonthly" | "monthly";
+  first_payment_date: string; // ISO 8601 date
+  // Additional fields per the backend serializer (M12.1).
+  // Verify shape against
+  // backend/dealer_ai/views_bhph_notes.py before authoring.
+}
 
-**Budget guard.** If the targeted
-fix exceeds ~2 hours (from opening
-the script to green-passing test),
-stop. Document the remaining
-false-positive patterns as future
-audit-tooling milestone scope in
-§0.a M23.1 amendment, land a
-partial fix (or no fix), and
-proceed to M23.2 with the audit
-still partially unreliable.
-Preserves scope discipline over
-completionism.
-
-### 4. Optional: add audit-script correctness test
-
-If the audit script has an existing
-test module, extend it with a
-regression test for the HTTP-verb-
-match case. If not, adding a new
-test is discretionary — the
-regenerated artifact itself is the
-functional test in the sense that
-row 123 either reclassifies or it
-doesn't.
-
-### 5. Regenerate the audit artifact
-
-```bash
-cd backend
-python3 -m dealer_ai.scripts.audit_operational_surface
+export function createBhphNote(
+  payload: CreateBhphNotePayload,
+): Promise<BhphNoteDetailResponse> {
+  return authPostJSON<BhphNoteDetailResponse>(
+    "/admin/bhph-notes/",
+    payload,
+  );
+}
 ```
 
-Verify the M21 audit artifact
-updates with:
-- `admin-bhph-note-create` →
-  `defer-candidate-O2` (was
-  `covered` — reclassifies because
-  `getBhphNote` is a GET wrapper,
-  not POST). Same disposition as
-  row 126 (`admin-bhph-payment-
-  create`).
-- Coverage count: 110 → likely
-  **~105-109** (small drop as
-  false-positives get corrected;
-  other domains may have similar
-  patterns).
-- Backend-only count: 43 →
-  likely **~44-48**.
+Verify the payload shape against
+`backend/dealer_ai/views_bhph_notes.py`
+`admin_bhph_note_create` view + the
+underlying `create_bhph_note`
+service verb before authoring.
 
-If `admin-bhph-note-create` does
-NOT reclassify, the fix is
-incomplete — either extend the
-regex or document the residual
-limitation in §0.a M23.1
-amendment.
+### 4. Author the `RecordBhphNoteForm` component
 
-If additional endpoints reclassify
-(from any domain), catalog them
-in §0.a with brief context. These
-are audit-noise reductions that
-don't change M23 scope but
-strengthen future OSC candidates.
+New file:
+`frontend/src/components/bhph/RecordBhphNoteForm.tsx`.
 
-### 6. Update M23 planning memo §0.a with M23.1 outcome
+Attributes:
+- Vehicle picker (query
+  available inventory via the
+  existing inventory API or a
+  simple `<select>` populated
+  from the seed's known stock
+  numbers if inventory API is
+  not available).
+- Principal input
+  (currency-formatted).
+- APR input (percentage-
+  formatted).
+- Cadence picker
+  (`<Select>` with the four
+  cadence values).
+- First-payment-date picker
+  (`<Input type="date">` or
+  the shadcn date picker if
+  used elsewhere in BHPH
+  forms).
+- Submit button (disabled
+  until required fields
+  filled).
+- Error handling via
+  `ApiError` + inline
+  message per M21.2
+  precedent.
+- Optimistic list refresh via
+  `onCreated` callback that
+  the parent uses to
+  invalidate the notes list.
 
-Add an `**SESSION_176 M23.1 close
-(YYYY-MM-DD):**` entry to the §0.a
-change log capturing: audit fix
-shipped (yes/partial/skipped),
-misclassifications corrected, any
-additional false-positives
-surfaced, budget-guard triggered
-(yes/no), notes on the fix
-approach.
+Add Vitest coverage matching
+the M21.2 `RecordPromiseToPayForm.test.tsx`
+pattern.
 
-### 7. Ship the M23.1 handoff
+### 5. Attach to DealerAiBhphPortfolio
 
-- `docs/handoffs/SESSION_176_m23_inc1_audit_fix.md`.
+Modify `DealerAiBhphPortfolio.tsx`
+Notes card:
+- Replace the empty-state
+  message (currently
+  documenting the POST curl
+  workaround at line 193-194)
+  with a persistent "Add note"
+  CTA in the card header.
+- CTA opens a shadcn `<Dialog>`
+  containing `RecordBhphNoteForm`.
+- On successful submit,
+  refresh the notes list +
+  close the dialog.
+
+Add Vitest coverage for the
+CTA + dialog integration.
+
+### 6. Extend the accounting-style assertion helper
+
+Extend
+`acceptance/support/assertions/bhph.ts`
+(existing helpers from M20.4 /
+M21.2) with:
+
+```typescript
+export async function expectBhphNoteOriginated(
+  request: APIRequestContext,
+  vehicleId: number,
+): Promise<BhphNoteDetail> {
+  // Fetch notes list; find one attached to vehicle_id.
+  // Assert:
+  //   - note exists
+  //   - note.principal / apr / cadence match seed defaults or form input
+  //   - note carries the expected shape
+}
+```
+
+Use the existing `listBhphNotes`
+wrapper as reference for the
+list fetch shape.
+
+### 7. Author the note origination journey
+
+New file:
+`acceptance/journeys/bhph/note_origination.spec.ts`.
+
+Walk:
+1. BHPH collector (or owner
+   — verify which persona
+   fits the origination
+   permission gate; likely
+   sales_manager per M21.2
+   precedent) navigates to
+   `/dealer-ai-bhph-portfolio`.
+2. Verify Notes card renders
+   with existing seed notes.
+3. Click "Add note" — dialog
+   opens.
+4. Fill vehicle picker with
+   the seeded vehicle fixture.
+5. Fill principal, APR,
+   cadence, first-payment-
+   date with test values.
+6. Click submit — dialog
+   closes + success message.
+7. Verify new note appears in
+   Notes card.
+8. Business-outcome assertion
+   via
+   `expectBhphNoteOriginated(request, vehicleId)`.
+
+Follow the fail-loud contract
+per M20 §0 — journey test name
+identifies the operational
+workflow; failure messages
+target the business outcome
+that failed.
+
+### 8. Concurrent §5.d small operator-surface gap fixes
+
+If journey authoring reveals a
+one-file trivial change is
+needed to make the workflow
+completable (missing testid,
+broken link, label typo,
+form validation bug), fix it
+in-scope with a §0.a M23.2
+amendment recording the fix.
+
+If a larger gap surfaces
+(missing service verb, new
+UI structure, new form
+component), DO NOT fix in-
+scope. Document as future
+candidate evidence in the
+M23.2 handoff.
+
+### 9. Verify journey passes locally
+
+```bash
+cd acceptance
+rm -f ../backend/db.acceptance.sqlite3  # clean DB
+npx playwright test bhph/note_origination.spec.ts --project=bhph_collector
+```
+
+If persona is different, adjust
+`--project`. Then run full
+suite:
+
+```bash
+npx playwright test
+```
+
+Expected: **14 passed (~19s)**
+(6 setup + 8 journeys).
+
+### 10. Ship the M23.2 handoff
+
+- `docs/handoffs/SESSION_177_m23_inc2_note_origination.md`.
 - Overwrite `00-START-NEXT-SESSION.md`
-  with M23.2 priority (first
-  anchor UI — note origination).
+  with M23.3 priority.
 - **Do NOT push** — M23 uses
-  coordinated close-out push per
-  M18.6 / M19.6 / M20.5 / M21.5
-  / M22.4 cadence at M23.4.
+  coordinated close-out push
+  per M18.6 / M19.6 / M20.5 /
+  M21.5 / M22.4 cadence at
+  M23.4.
 
-## Non-goals for SESSION_176
+## Non-goals for SESSION_177
 
-- ❌ Do NOT ship the note
-  origination or payment intake
-  UI (that's M23.2 + M23.3
+- ❌ Do NOT ship the payment
+  intake UI (that's M23.3
   scope).
-- ❌ Do NOT attempt a full AST-
-  based audit rewrite (explicit
-  non-goal per §5.d Option A).
-- ❌ Do NOT modify shipped
-  accounting UI or BHPH UI
-  (M23 shipping surface is
-  audit script + M23.2/M23.3
-  anchors only).
-- ❌ Do NOT let audit correction
-  bleed past the ~2-hour budget
-  guard.
-- ❌ Do NOT expand fix scope to
-  audit patterns unrelated to
-  the HTTP-verb-agnostic class
-  unless they surface as side-
-  effects of the same fix.
-- ❌ Do NOT push M23.1 commits
-  individually.
+- ❌ Do NOT add new backend
+  service verbs, DRF endpoints,
+  tenancy carriers, migrations,
+  permission classes, or
+  frontend routes.
+- ❌ Do NOT extend the audit
+  script further — M23.1
+  shipped the targeted fix.
+- ❌ Do NOT manually verify
+  the origination workflow
+  before authoring the
+  journey — journey-as-
+  verifier per §5.f Option B.
+- ❌ Do NOT ship sale-time
+  origination trigger on
+  `VehicleSalePage.tsx` —
+  deferred per §3 deferral
+  1.
+- ❌ Do NOT ship JE creation
+  UI even though M23.1
+  surfaced the gap — out of
+  M23 scope; recorded as
+  M24 evidence.
+- ❌ Do NOT split the BHPH
+  seed into per-workflow
+  seeds pre-emptively.
+- ❌ Do NOT push M23.2
+  commits.
 
 ## Baseline expected at close
 
 - Backend baseline: 4,766 →
-  **~4,767** (possible audit-
-  script correctness test).
-- Frontend Vitest: 180 (unchanged
-  — no frontend changes).
-- Acceptance suite: 7 journeys
-  (unchanged — M23.2 introduces
-  the first new M23 journey).
+  **~4,770** (seed fixture
+  idempotency tests).
+- Frontend Vitest: 180 →
+  **~187-192** (new component
+  tests).
+- Acceptance suite: **7 →
+  8** (note origination
+  journey added).
 - Migrations `0001`–`0048`
   unchanged.
-- Tenancy carriers 52 unchanged.
-- Permission classes 7 unchanged
-  (zero-drift streak intact).
-- Audit artifact updated with
-  ≥1 reclassification (row 123);
-  possibly more if other domains
-  share the pattern.
+- Tenancy carriers 52
+  unchanged.
+- Permission classes 7
+  unchanged (zero-drift streak
+  intact).
 
 ## NEXT TASK
 
-Start SESSION_176 with (a)
-starting-state verification, (b)
-inspect the audit script's
-`cross_reference()` +
-`_HELPER_CALL_RE` for HTTP-verb
-matching, (c) ship the targeted
-regex + parser fix under the
-~2-hour budget guard, (d)
-optional audit-script correctness
-test, (e) regenerate the audit
-artifact and verify at least row
-123 reclassifies, (f) update M23
-planning memo §0.a with M23.1
-outcome, (g) ship the M23.1
-handoff and refresh
-`00-START-NEXT-SESSION.md` for
-M23.2. Do NOT push.
+Start SESSION_177 with (a)
+starting-state verification,
+(b) extend the BHPH seed with
+a vehicle-for-origination
+fixture + backend idempotency
+test, (c) add the
+`createBhphNote` wrapper to
+`bhphApi.ts` matching backend
+serializer verbatim, (d) author
+the `RecordBhphNoteForm`
+component + Vitest coverage,
+(e) attach to
+`DealerAiBhphPortfolio.tsx`
+Notes card as persistent CTA
+replacing the empty-state
+message, (f) extend the BHPH
+assertion helper with
+`expectBhphNoteOriginated`,
+(g) author the
+`bhph/note_origination.spec.ts`
+journey, (h) apply small
+operator-surface gap fixes
+per §5.d if any surfaced, (i)
+verify journey passes locally
+on clean DB, (j) ship the
+M23.2 handoff + refresh
+`00-START-NEXT-SESSION.md`
+for M23.3. Do NOT push.
 
 ---
 
@@ -330,31 +441,41 @@ M23.2. Do NOT push.
    at M22.4)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_23_PLANNING.md`
-   (active memo — governing
-   contract for M23.1 audit
-   correction posture)
-6. `docs/handoffs/SESSION_175_m23_inc0_planning.md`
+   (active memo — §0.a M23.1
+   amendment records shipped
+   audit fix + JE-creation-UI
+   finding)
+6. `docs/handoffs/SESSION_176_m23_inc1_audit_fix.md`
+   (M23.1 close — audit
+   correction root-cause
+   reframe + shipped changes
+   + JE-creation-UI evidence
+   for M24)
+7. `docs/handoffs/SESSION_175_m23_inc0_planning.md`
    (M23.0 close — empirical
    discovery record + §5
    decisions)
-7. `docs/handoffs/SESSION_172_m22_inc1_audit_correction.md`
-   (M22.1 close — audit
-   correction precedent for
-   M23.1 shape)
 8. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (audit artifact being
-   regenerated — known
-   unreliable for BHPH row 123
-   until M23.1 fix lands)
-9. `docs/CAPABILITY_MATRIX.md` §7w
-   (M22 shipped surface)
+   (audit artifact — now
+   authoritative for BHPH
+   post-M23.1 fix)
+9. `frontend/src/pages/DealerAiBhphPortfolio.tsx`
+   (M23.2 attach target;
+   line 193-194 empty-state
+   message replaced by CTA)
+10. `frontend/src/components/bhph/RecordPromiseToPayForm.tsx`
+    (M21.2 form pattern
+    reference for M23.2
+    authoring)
+11. `docs/CAPABILITY_MATRIX.md` §7w
+    (M22 shipped surface)
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_175 — Milestone 23.0 planning shipped)
+## Operational state (post-SESSION_176 — Milestone 23.1 audit fix shipped)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
@@ -371,19 +492,15 @@ research + code are facts.
   (local):** Playwright 1.49 +
   TS 5.6 operational; **seven
   journeys** passing end-to-end
-  on clean DB. Full dry-run
-  baseline: **13 passed
-  (~18s)**. No M23 journeys
-  ship until M23.2 open.
+  on clean DB.
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`.
-  First real M22 CI runs
-  verified green: `30830291129`
-  (M22 shipped push, 2m8s) +
+  Last verified green: run
   `30831196864` (M22 durable-
   lessons carry-forward push,
   2m3s). M23 has not pushed
-  yet.
+  yet — coordinated push at
+  M23.4.
 - **Async runtime:** Celery
   5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1
@@ -392,8 +509,9 @@ research + code are facts.
   registered**.
 - **Milestones shipped:** M1 →
   **M22**. M23 in-progress
-  (M23.0 planning shipped;
-  M23.1 next at SESSION_176).
+  (M23.0 planning + M23.1
+  audit fix shipped; M23.2
+  next at SESSION_177).
 - **DRF admin surface:** **113**
   endpoints.
 - **Frontend operator routes:**
@@ -405,10 +523,10 @@ research + code are facts.
   M23 adds zero service verbs.
 - **Frontend surfaces:** all
   M1–M22 components unchanged.
-  M23 will add
-  `RecordBhphNoteForm` +
-  `RecordBhphPaymentForm`
-  (M23.2 + M23.3).
+  M23.2 will add
+  `RecordBhphNoteForm`; M23.3
+  will add
+  `RecordBhphPaymentForm`.
 - **Tenancy carriers:** **52**.
 - **Permission classes:** **7
   actual** — zero-drift streak
@@ -422,24 +540,36 @@ research + code are facts.
 - **Deterministic rules:**
   unchanged.
 - **Milestone 23 status:** IN-
-  PROGRESS. M23.0 planning
-  shipped at SESSION_175 with
-  eight §5 load-bearing
-  decisions resolved as-
-  recommended at open. Full
-  active memo landed at
-  `docs/roadmap/MILESTONE_23_PLANNING.md`.
-- **Audit tooling:** operator-
-  invoked from `backend/`
-  (`python3 -m
-  dealer_ai.scripts.audit_operational_surface`).
-  Authoritative for accounting
-  post-M22.1 fix. Known
-  false-positive for BHPH row
-  123 (HTTP-verb-agnostic URL-
-  prefix matching) — M23.1
-  targeted fix lands at
-  SESSION_176.
+  PROGRESS. M23.0 planning +
+  M23.1 audit fix shipped.
+  M23.2 first anchor UI next.
+- **Audit tooling:**
+  authoritative for BHPH +
+  accounting endpoints post-
+  M23.1 fix. Coverage
+  **108/153**. Backend-only
+  **45**. Two false-positive
+  classes now closed: variable-
+  first URL assembly (M22.1)
+  + HTTP-verb-agnostic URL-
+  prefix matching (M23.1).
+- **Audit artifact:** current at
+  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`.
+  Trusted source material for
+  M23.2+ journey authoring +
+  future OSC candidate
+  selection.
+- **New M24 evidence-based
+  candidate surfaced at
+  M23.1:** JE creation UI
+  (row 139
+  `admin-journal-entry-create`
+  reclassified as backend-
+  only). Recorded in memo
+  §0.a M23.1 amendment + this
+  handoff for the M23.4
+  retrospective §9 M24
+  discussion.
 - **Planning-time streak:** **89
   as-recommended M5.1 → M23.0**
   across fourteen consecutive
@@ -448,7 +578,11 @@ research + code are facts.
   Option B):** M23 satisfies
   by construction — M23.2 +
   M23.3 each add a Playwright
-  operational journey.
+  operational journey. M23.2
+  will add
+  `bhph/note_origination.spec.ts`;
+  M23.3 will add
+  `bhph/payment_intake.spec.ts`.
 - **M23 governing contract
   (inherited from M21
   Candidate O UI-creation
@@ -460,22 +594,10 @@ research + code are facts.
   Playwright operational
   journey; (4) not generic UX
   polish.
-- **M23 anchor implementations:**
-  M23.1 audit tool fix
-  (supporting), M23.2 note
-  origination UI + journey
-  (first anchor), M23.3
-  payment intake UI + journey
-  (second anchor), M23.4
-  close-out.
-- **M23 audit fix scope
-  (M23.1):** targeted regex +
-  parser enhancement to
-  discriminate HTTP verb
-  between wrapper calls and
-  endpoint patterns.
-  Reclassifies at minimum row
-  123 (`admin-bhph-note-
-  create`) from `covered` to
-  `defer-candidate-O2`. Budget
-  guard: ~2 hours.
+- **M23 remaining increments:**
+  M23.2 note origination UI +
+  journey (first anchor,
+  SESSION_177); M23.3 payment
+  intake UI + journey (second
+  anchor, SESSION_178); M23.4
+  close-out (SESSION_179).

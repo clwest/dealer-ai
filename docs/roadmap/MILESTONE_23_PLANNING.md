@@ -502,6 +502,161 @@ where noted. Non-negotiable:
   consecutive milestones now
   (M10 → M23).
 
+**SESSION_176 M23.1 close (2026-08-03):**
+
+- **Audit tooling fix shipped**
+  per §5.d Option A. Three
+  targeted additions to
+  `backend/dealer_ai/scripts/audit_operational_surface.py`:
+  (1) new `methods: frozenset[str]`
+  field on `BackendEndpoint`
+  dataclass with default empty
+  frozenset; (2) new
+  `extract_view_methods()`
+  helper walks every
+  `views*.py` under
+  `dealer_ai/` and extracts
+  `{view_function_name: frozenset(methods)}`
+  from `@api_view([...])`
+  decorator + `def` header
+  pairs via regex; (3) new
+  `_HELPER_TO_VERB` module-
+  level dict mapping
+  `authGetJSON` → GET,
+  `authPostJSON` /
+  `authPostForm` → POST,
+  `authPatchJSON` → PATCH,
+  `authPutJSON` → PUT,
+  `authDelete` → DELETE,
+  `fetch` → GET. `extract_backend_endpoints`
+  extended with optional
+  `view_methods` param; when
+  provided, each endpoint
+  carries its declared
+  methods. `cross_reference`
+  filters candidate consumers
+  by `_HELPER_TO_VERB[c.helper]
+  ∈ ep.methods` before de-
+  duplication. Skips the
+  verb filter when the
+  endpoint's methods are
+  empty (view has no
+  `@api_view` decorator) —
+  backwards-compat preserved
+  for future / non-DRF
+  patterns.
+- **Artifact regenerated.**
+  Coverage **110 → 108 (-2)**;
+  backend-only **43 → 45
+  (+2)**.
+- **Two rows fully reclassified
+  `covered` → `defer-candidate-
+  O2`** (genuine backend-only
+  revealed):
+  - **Row 123
+    `admin-bhph-note-create`
+    (POST `admin/bhph-notes/`)**
+    — was falsely claimed as
+    consumed by `getBhphNote`
+    (a GET wrapper for the
+    pk-suffixed path). Now
+    correctly `defer-candidate-
+    O2`. Confirms the M23.2
+    target scope.
+  - **Row 139
+    `admin-journal-entry-create`
+    (POST `admin/accounting/journal-entries/`)**
+    — was falsely claimed as
+    consumed by
+    `fetchJournalEntry` (a
+    GET wrapper for the pk-
+    suffixed path). **NEW
+    genuine gap surfaced by
+    audit correction** — JE
+    creation UI is genuinely
+    missing from the frontend.
+    This is exactly the type
+    of finding the M22
+    retrospective §9 A2
+    candidate speculated about
+    but couldn't confirm.
+    Recorded here as evidence
+    for the M23.4
+    retrospective §9 M24
+    candidate discussion.
+- **Five rows with wrapper-
+  list pruned but staying
+  `covered`** (different-verb
+  wrappers dropped;
+  correct-verb wrapper
+  remains):
+  - Row 41 `admin-vendor-
+    list` (GET) — pruned
+    `updateVendor` (PUT); kept
+    `fetchVendors` + others.
+  - Row 51 `admin-work-order-
+    attach-findings` (POST) —
+    pruned `detachFinding`
+    (DELETE); kept
+    `attachFindings`.
+  - Row 62 `admin-photo-list`
+    (GET) — pruned
+    `deletePhoto` (DELETE);
+    kept `fetchVehiclePhotos`.
+  - Row 101 `admin-compliance-
+    create` (POST) — pruned
+    `updateCompliance`
+    (PUT/PATCH); kept
+    `createCompliance`.
+  - Row 145 `admin-trial-
+    balance-snapshot-create`
+    (POST) — pruned
+    `fetchTrialBalanceSnapshot`
+    (GET); kept
+    `freezeTrialBalance`.
+- **Backend baseline unchanged
+  at 4,766** — the audit
+  script has no tests
+  (regeneration IS the
+  functional test per M22.1
+  precedent). Full backend
+  suite re-verified post-
+  fix: zero regressions.
+- **Budget guard status.**
+  Fix completed in ~30-40
+  minutes of active work —
+  well under the ~2-hour §5.d
+  guard. Same envelope as
+  M22.1. No deferral to a
+  future audit-tooling
+  milestone required.
+- **Cross-M22 pattern
+  confirmation.** M22.1's
+  fix targeted the variable-
+  first URL assembly false-
+  negative class; M23.1's fix
+  targeted the HTTP-verb-
+  agnostic URL-prefix
+  matching false-positive
+  class. Two distinct audit
+  regex/parser limitation
+  classes, both fixable with
+  bounded targeted work
+  under a ~2-hour budget
+  guard. Suggests the audit
+  script's regex-based
+  approach has 2-3 more such
+  latent limitation classes;
+  each is separately
+  correctable when
+  operational evidence
+  surfaces them. Reinforces
+  the "audit correctness as
+  supporting infrastructure"
+  posture — compound
+  improvements land at low
+  per-milestone cost.
+
 ## 1. Business questions this milestone answers
 
 Five operator-workflow questions,
@@ -1722,11 +1877,14 @@ Vitest unchanged: 180 pass.
 Acceptance suite
 unchanged: 7 journeys.
 
-### Increment 1 (M23.1) — Audit-tool false-positive fix + artifact refresh
+### Increment 1 (M23.1) — Audit-tool false-positive fix + artifact refresh ✅ SHIPPED
 
 **Scope.** SESSION_176.
 Supporting work per §5.d
-Option A.
+Option A. See §0.a M23.1
+close entry for shipped
+outcome + evidence-based
+findings surfaced.
 
 **Deliverable.**
 - Targeted fix in
