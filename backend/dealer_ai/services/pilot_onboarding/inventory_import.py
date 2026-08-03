@@ -31,6 +31,7 @@ than rejecting). The dealer can correct a value + re-upload.
 from __future__ import annotations
 
 import csv
+import io
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -83,7 +84,10 @@ def _read_csv_rows(csv_source: CsvSource):
       ``utf-8-sig`` encoding so a UTF-8 BOM (common in Excel-saved
       CSVs) is transparently stripped.
     - File-like (anything with ``.read``) — passed directly to
-      :class:`csv.DictReader`. Test callers typically pass an
+      :class:`csv.DictReader` when the first read returns text;
+      wrapped in a :class:`io.TextIOWrapper` when the first read
+      returns bytes (Django ``UploadedFile`` from the M19.4 endpoint
+      layer reads as bytes). Test callers typically pass an
       :class:`io.StringIO`.
 
     Raises :class:`FileNotFoundError` for a non-existent path so
@@ -91,7 +95,19 @@ def _read_csv_rows(csv_source: CsvSource):
     with an empty row set.
     """
     if hasattr(csv_source, "read"):
-        reader = csv.DictReader(csv_source)  # type: ignore[arg-type]
+        # Peek the first chunk to detect bytes-mode file-like objects
+        # (Django UploadedFile). Reset position after the probe so
+        # DictReader sees the full stream.
+        probe = csv_source.read(0)  # type: ignore[attr-defined]
+        if isinstance(probe, bytes):
+            text_stream = io.TextIOWrapper(
+                csv_source,  # type: ignore[arg-type]
+                encoding="utf-8-sig",
+                newline="",
+            )
+            reader = csv.DictReader(text_stream)
+        else:
+            reader = csv.DictReader(csv_source)  # type: ignore[arg-type]
         for i, row in enumerate(reader, start=2):
             yield i, row
         return

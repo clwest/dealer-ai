@@ -37,7 +37,8 @@ from __future__ import annotations
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -52,12 +53,14 @@ from .models import (
 )
 from .services.pilot_onboarding import (
     ChecklistStepAlreadyCompletedError,
+    NonPilotImportError,
     NonPilotTerminationError,
     PilotAlreadyExistsError,
     PilotReadinessNotConfirmedError,
     UnknownChecklistStepError,
     advance_step,
     create_pilot_dealership,
+    import_pilot_inventory,
     list_pilot_dealerships,
     terminate_pilot,
 )
@@ -110,6 +113,17 @@ class ChecklistAdvanceRequestSerializer(serializers.Serializer):
                 f"{sorted(_VALID_STEP_SLUGS)!r}."
             )
         return value
+
+
+class InventoryImportRequestSerializer(serializers.Serializer):
+    """Body validator for ``POST /admin/pilots/<slug>/inventory/import/``.
+
+    Per §0.a M19.4 decision 1 — DRF ``FileField`` gives us
+    canonical multipart validation + 400 on missing file + composable
+    testing story.
+    """
+
+    csv = serializers.FileField()
 
 
 class TerminateRequestSerializer(serializers.Serializer):
@@ -329,6 +343,63 @@ def admin_pilot_checklist_advance(request, slug: str):
     checklist.refresh_from_db()
     return Response(
         {"pilot": _project_pilot_with_checklist(dealership)}
+    )
+
+
+@api_view(["POST"])
+@permission_classes(_M193_PERMS)
+@parser_classes([MultiPartParser])
+def admin_pilot_inventory_import(request, slug: str):
+    """``POST /admin/pilots/<slug>/inventory/import/``
+
+    Multipart CSV upload wrapping :func:`import_pilot_inventory`
+    (M19.2). Deferred from M19.3 to M19.4 per §0.a M19.3 decision 1
+    so the endpoint ships alongside its frontend consumer.
+
+    Contract:
+
+    - 200 with the serialized
+      :class:`PilotInventoryImportResult` (dealership_id +
+      accepted_row_stock_numbers + rejected_rows).
+    - 400 on missing / empty file field.
+    - 404 if ``<slug>`` does not match a pilot dealership.
+    - 500 on :class:`NonPilotImportError` (belt-and-suspenders
+      guard; the 404 filter should catch the non-pilot case first
+      — this remains as a defense-in-depth signal).
+
+    Partial-success semantics inherited from the M19.2 wrapper:
+    accepted rows commit; rejected rows are surfaced with per-row
+    reason strings.
+    """
+    dealership = get_object_or_404(
+        Dealership, slug=slug, is_pilot=True
+    )
+    body = InventoryImportRequestSerializer(data=request.data)
+    body.is_valid(raise_exception=True)
+    try:
+        result = import_pilot_inventory(
+            dealership=dealership,
+            csv_source=body.validated_data["csv"],
+            actor=request.user,
+        )
+    except NonPilotImportError as exc:
+        return Response(
+            {"detail": str(exc)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+    return Response(
+        {
+            "result": {
+                "dealership_id": result.dealership_id,
+                "accepted_row_stock_numbers": list(
+                    result.accepted_row_stock_numbers
+                ),
+                "rejected_rows": [
+                    {"row": row, "reason": reason}
+                    for row, reason in result.rejected_rows
+                ],
+            }
+        }
     )
 
 

@@ -2170,3 +2170,107 @@ export function unpublishVehicleListing(stock: string, reason: string) {
     { reason },
   );
 }
+
+// ---- Milestone 19 · Increment 4 — pilot onboarding admin ------------------
+//
+// Five endpoints wired at M19.3 + M19.4 per MILESTONE_19_PLANNING.md §7:
+// create (POST), list (GET), checklist advance (POST), inventory
+// import (POST multipart), terminate (POST). Consumed by
+// <PilotOnboardingSection> inside DealerAdmin per §0.a M19.4
+// decision 2 (extend existing admin route in place).
+
+export interface PilotDealershipDTO {
+  id: number;
+  slug: string;
+  name: string;
+  is_pilot: boolean;
+  is_demo: boolean;
+  outbound_enabled: boolean;
+  terminated_at: string | null;
+  termination_reason: string;
+  created_at: string;
+}
+
+export interface PilotChecklistStepDTO {
+  step_slug: string;
+  completed_at: string | null;
+  completed_by_username: string | null;
+  notes: string;
+}
+
+export interface PilotChecklistDTO {
+  id: number;
+  dealership_id: number;
+  is_ready: boolean;
+  steps: PilotChecklistStepDTO[];
+}
+
+export interface PilotWithChecklistDTO {
+  dealership: PilotDealershipDTO;
+  checklist: PilotChecklistDTO | null;
+}
+
+export interface PilotInventoryImportResultDTO {
+  dealership_id: number;
+  accepted_row_stock_numbers: string[];
+  rejected_rows: { row: Record<string, string>; reason: string }[];
+}
+
+export interface PilotCreateRequest {
+  slug: string;
+  name: string;
+  owner_username: string;
+  profile_kwargs?: Record<string, unknown>;
+}
+
+export interface ChecklistAdvanceRequest {
+  step_slug: string;
+  notes?: string;
+}
+
+export interface PilotTerminateRequest {
+  reason?: string;
+  mode?: "archive" | "cleanup";
+}
+
+export function fetchPilotDealerships() {
+  return authGetJSON<{ pilots: PilotWithChecklistDTO[] }>(
+    `${_adminBase()}/pilots/`,
+  );
+}
+
+export function createPilotDealership(payload: PilotCreateRequest) {
+  return authPostJSON<{ pilot: PilotWithChecklistDTO }>(
+    `${_adminBase()}/pilots/create/`,
+    payload,
+  );
+}
+
+export function advancePilotChecklistStep(
+  slug: string,
+  payload: ChecklistAdvanceRequest,
+) {
+  return authPostJSON<{ pilot: PilotWithChecklistDTO }>(
+    `${_adminBase()}/pilots/${encodeURIComponent(slug)}/checklist/advance/`,
+    payload,
+  );
+}
+
+export function importPilotInventory(slug: string, csv: File) {
+  const body = new FormData();
+  body.append("csv", csv);
+  return authPostForm<{ result: PilotInventoryImportResultDTO }>(
+    `${_adminBase()}/pilots/${encodeURIComponent(slug)}/inventory/import/`,
+    body,
+  );
+}
+
+export function terminatePilotDealership(
+  slug: string,
+  payload: PilotTerminateRequest,
+) {
+  return authPostJSON<{ dealership: PilotDealershipDTO }>(
+    `${_adminBase()}/pilots/${encodeURIComponent(slug)}/terminate/`,
+    payload,
+  );
+}

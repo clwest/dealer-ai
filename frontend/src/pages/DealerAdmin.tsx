@@ -13,6 +13,7 @@ import AuditPanel from "@/components/AuditPanel";
 import GenerateAdModal from "@/components/GenerateAdModal";
 import HandoffQueue from "@/components/HandoffQueue";
 import LeadDetailModal from "@/components/LeadDetailModal";
+import PilotOnboardingSection from "@/components/pilots/PilotOnboardingSection";
 import RecommendedActions from "@/components/RecommendedActions";
 import SalesPipeline from "@/components/SalesPipeline";
 import StatCard from "@/components/StatCard";
@@ -561,6 +562,12 @@ export default function DealerAdmin() {
           </div>
         </section>
       )}
+
+      {/* Milestone 19 · Increment 4 (SESSION_157) — pilot onboarding
+          admin sub-section per §0.a M19.4 decision 2 (extend existing
+          admin route in place). Wraps five endpoints
+          create/list/checklist/import/terminate from views_pilot_onboarding.py. */}
+      <PilotOnboardingSection />
 
       <LeadDetailModal
         // Force remount on leadId change so no stale detail/packet

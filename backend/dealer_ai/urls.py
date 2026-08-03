@@ -1044,6 +1044,14 @@ urlpatterns = [
         views_pilot_onboarding.admin_pilot_checklist_advance,
         name="admin-pilot-checklist-advance",
     ),
+    # Milestone 19 · Increment 4 (SESSION_157) — pilot inventory import
+    # endpoint deferred from M19.3 per §0.a M19.3 decision 1; ships
+    # with its M19.4 frontend consumer.
+    path(
+        "admin/pilots/<slug:slug>/inventory/import/",
+        views_pilot_onboarding.admin_pilot_inventory_import,
+        name="admin-pilot-inventory-import",
+    ),
     path(
         "admin/pilots/<slug:slug>/terminate/",
         views_pilot_onboarding.admin_pilot_terminate,
