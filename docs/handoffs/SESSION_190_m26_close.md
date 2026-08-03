@@ -9,7 +9,7 @@ milestone_status: shipped
 milestone_name: "Audit-Script Parser Refinement (Planning-Substrate Integrity)"
 increment: 1
 increment_status: shipped
-commit: TBD-M26.1-close
+commit: 228ec1d
 folded_close_out: true
 ---
 
