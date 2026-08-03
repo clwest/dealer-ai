@@ -1982,6 +1982,125 @@ Milestone 18 close:**
 
 ---
 
+## 7t. Founding Dealer Pilot Onboarding (Milestone 19, shipped)
+
+Milestone 19 (SESSION_153 → SESSION_159)
+delivered **founder-led pilot conversion
+substrate** — the controlled path from a
+demo tester who says "I want to try this
+with my store" to a safe, usable real-
+store pilot without ad hoc database work
+or code edits. **Follows the M18
+validation-infrastructure milestone**
+directly: M18 gave Chris the demo stores
++ daily briefs to run tester sessions;
+M19 gives Chris the substrate to convert
+committed testers into pilot customers.
+Five new endpoints, one embedded frontend
+sub-section (no new operator route), a
+codified end-to-end dry-run test, and
+two new operator reference docs (pilot
+inventory template + onboarding playbook).
+**Zero-drift permission-class posture
+extends to nineteen consecutive
+milestones** (M10 → M19.5). Deferrals
+cataloged in `MILESTONE_19_RETROSPECTIVE.md`
+§3. See `docs/roadmap/MILESTONE_19_PLANNING.md`
++ `docs/roadmap/MILESTONE_19_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| Substrate: schema + service package + guards (M19.1) | Migration `0048_m191_pilot_substrate.py` bundling four `AddField` on Dealership (`is_pilot` BooleanField(default=False), `outbound_enabled` BooleanField(default=False), `terminated_at` DateTimeField(null), `termination_reason` TextField(blank)) + three `CreateModel` (`PilotProspect` with no dealership FK + two optional `SET_NULL` FKs; `PilotOnboardingChecklist` OneToOne Dealership; `PilotOnboardingStep` FK checklist + FK dealership + unique constraint `(checklist, step_slug)`). Vocab constants: `PILOT_PROSPECT_STATE_*` (4-state machine), `PILOT_ONBOARDING_STEP_*` (7 steps + `PILOT_ONBOARDING_STEP_ORDER` tuple), `PILOT_TERMINATION_MODE_*` (archive / cleanup). **New `services/pilot_onboarding/` package** with six modules: `errors.py` (three domain errors: `PilotAlreadyExistsError` 409, `NonPilotTerminationError` 500, `NonPilotImportError` 500, `PilotReadinessNotConfirmedError` 409), `registry.py` (`create_pilot_dealership` + `list_pilot_dealerships` + `terminate_pilot` with belt-and-suspenders + M18.2 reverse-order cascade + demo-owned-User cleanup), `prospects.py` (`create_prospect` + `advance_prospect_state` state machine + `list_prospects`), `checklist.py` (`advance_step` with readiness precondition guard + `is_pilot_ready` predicate), `inventory_import.py` (`PilotInventoryImportResult` frozen dataclass + `import_pilot_inventory` wrapper — full body at M19.2), `__init__.py` (18 public symbols; extended to 19 at M19.2 for `NonPilotImportError` + `PILOT_IMPORT_SOURCE`). **Register `PilotOnboardingChecklist` + `PilotOnboardingStep` in `_TENANT_CARRIER_MODEL_NAMES`** (50 → **52**). `PilotProspect` intentionally NOT registered per §0.a M19.1 decision 1 — pre-tenant operator record without a `dealership` FK; the autofill signal would break on such a model. Two SET_NULL FKs (`source_demo_dealership`, `converted_dealership`) preserve the conversion audit trail without forcing tenant scope. Test helper `make_pilot_dealership(slug, name=None, outbound_enabled=False)` companion to `make_demo_dealership`. | Belt-and-suspenders guards on both `terminate_pilot` and `import_pilot_inventory`: domain error + `assert dealership.is_pilot` at write-verb top. `_cleanup_pilot_children` mirrors the M18.2 pattern. `PilotProspect.clean` invariant enforces `converted_dealership` FK iff `eligibility_state='converted'`. `PilotOnboardingStep.clean` enforces same-dealership across the checklist FK + step FK. |
+| Outbound guard refactor: policy field replaces identity predicate (M19.1) | `services/demo_store/outbound_guard.py` refactored per §0.a M19.1 decision 2. **New predicate** `is_outbound_enabled(dealership) -> bool` reading `Dealership.outbound_enabled`. **New canonical guard** `suppress_if_outbound_disabled(dealership, *, verb_name, **log_extra) -> Optional[SuppressedOutbound]`. **Deprecated alias** `suppress_if_demo` preserved as a shim delegating to the new guard + emitting `DeprecationWarning`. **Diagnostic-only helpers** `is_demo_dealership` (preserved) + `is_pilot_dealership` (new) — no longer the guard predicate, but callers that need tenant-type identification for other reasons continue to work. The M18.1 outbound-egress scanner contract holds unchanged — every future `services/` egress verb still MUST call the guard, but the guard's predicate is now the policy field. `SuppressedOutbound` marker class name references "outbound" not "demo-store" so the M19.1 refactor semantics read correctly. | Rationale documented in `outbound_guard.py` module docstring: orthogonality (tenant type vs. send policy), auditability (`outbound_enabled` at any point-in-time answers "was outbound enabled?"), per-tenant control (single-column flip for controlled enablement), live-dealer default (new Dealership rows default `outbound_enabled=False` too; fail-safe by construction). Demo dealerships continue to have outbound suppressed at M19.1 (`outbound_enabled=False` by default); the behavior change is architecturally imperceptible for M18-era demo dealerships. |
+| Inventory import wrapper + CSV schema doc (M19.2) | Full body for `services/pilot_onboarding/inventory_import.py::import_pilot_inventory(*, dealership, csv_source, actor=None) -> PilotInventoryImportResult`. **Thin wrapper delegating to the shipped M6.3 `services/inventory_import.py::import_rows` verb** per §0.a M19.2 decision 1 (reuse `CSV_FIELDS` 21-column vocab verbatim; no fork). Three pilot-specific policy overrides per §0.a M19.2 decision 2: (1) belt-and-suspenders `assert dealership.is_pilot` + `NonPilotImportError` (500) domain guard; (2) `mark_missing_unavailable=False` — pilots build inventory over time; a partial CSV re-upload must NOT mark earlier vehicles unavailable; (3) stable `source="pilot-inventory-import"` label (`PILOT_IMPORT_SOURCE` constant) so pilot rows are isolatable from franchise-scraper rows in operator queries. Accepts `str`/`Path`/file-like `csv_source` — tests use `StringIO`; the M19.4 endpoint layer passes an `UploadedFile`. `_read_csv_rows` helper handles both text-mode and bytes-mode file-likes (M19.4 additive fix for `UploadedFile.read()` returning bytes). Partial-success semantics + re-import-updates semantics both inherited from M6.3. Frozen `PilotInventoryImportResult` dataclass carries `dealership_id` + `accepted_row_stock_numbers` tuple + `rejected_rows` tuple of `(row_dict, reason_str)`. **New reference doc** `docs/PILOT_INVENTORY_TEMPLATE.md` documenting the shipping M6.3 vocab as the authoritative pilot schema (required vs. recommended vs. optional columns + type notes + alias tables + example CSV + partial-success semantics + rollback / recovery guidance). | The M19.2 wrapper adds no CSV parsing logic of its own — every M6.3 improvement (BOM tolerance, currency formatting, body-style aliases, condition aliases, features JSON/pipe/semicolon parsing) applies automatically to the pilot path. A future extension to the M6.3 substrate benefits both paths without a rewrite. |
+| Backend admin endpoints (M19.3) | New view module `dealer_ai/views_pilot_onboarding.py` (343 lines) with four lifecycle handlers. **`POST /admin/pilots/create/`** (201/400/409) — wraps `create_pilot_dealership`; body serializer validates `slug` + `name` + `owner_username` + optional `profile_kwargs`; catches `PilotAlreadyExistsError` → 409; catches `User.DoesNotExist` → 400. **`GET /admin/pilots/`** (200) — wraps `list_pilot_dealerships`; returns `{"pilots": [<pilot_with_checklist>...]}`; terminated pilots excluded (M19.1 filter). **`POST /admin/pilots/<slug>/checklist/advance/`** (200/400/404/409) — wraps `advance_step`; body serializer validates `step_slug` against `PILOT_ONBOARDING_STEP_CHOICES`; catches `UnknownChecklistStepError` → 400, `ChecklistStepAlreadyCompletedError` + `PilotReadinessNotConfirmedError` → 409; slug filter enforces `is_pilot=True` → 404 on demo / live / nonexistent. **`POST /admin/pilots/<slug>/terminate/`** (200/400/404/500) — wraps `terminate_pilot`; body serializer validates `reason` + `mode` (archive / cleanup); catches `NonPilotTerminationError` → 500 (belt-and-suspenders defense-in-depth after the URL slug filter). Three request-body serializers + three projection helpers including `_project_checklist` which surfaces steps in `PILOT_ONBOARDING_STEP_ORDER` order with placeholder rows for uncompleted steps (stable UI render regardless of insertion order). URL wiring adds four paths — **admin surface 108 → 112**. All four endpoints gate on **`IsAuthenticated` alone** per §0.a M19.3 decision 2. | The two existing role-gated permission classes (`IsDealerOwnerAtActiveDealership`, `IsSalesManagerOrOwnerAtActiveDealership`) both require the caller to hold a role at their *active* tenant — at pilot create time there is no target pilot to hold a role in. Adding a new `IsPlatformOperator` class would break the zero-drift permission-class streak without operational benefit while Chris is the only platform operator. |
+| Inventory-import endpoint + frontend admin surface (M19.4) | **Fifth pilot admin endpoint** `POST /admin/pilots/<slug>/inventory/import/` in `views_pilot_onboarding.py::admin_pilot_inventory_import` — multipart CSV upload wrapping `import_pilot_inventory`. DRF `FileField` on `InventoryImportRequestSerializer` per §0.a M19.4 decision 1 + `@parser_classes([MultiPartParser])`. 200 with serialized `PilotInventoryImportResult` (dealership_id + accepted_row_stock_numbers list + rejected_rows list of `{row, reason}` objects). 400 on missing file (from serializer). 404 on nonexistent / non-pilot slug (URL filter). 500 on `NonPilotImportError` (defense-in-depth). URL wiring adds one path — **admin surface 112 → 113**. **Additive fix** in `services/pilot_onboarding/inventory_import.py::_read_csv_rows` — detects bytes-mode file-likes (Django `UploadedFile.read()` returns bytes) and wraps them in `io.TextIOWrapper` with `utf-8-sig` encoding (preserves BOM tolerance); text-mode `StringIO` path unchanged. **New API client functions + DTO types** in `frontend/src/lib/api.ts` — `fetchPilotDealerships`, `createPilotDealership`, `advancePilotChecklistStep`, `importPilotInventory` (via `authPostForm(FormData)`), `terminatePilotDealership` + five DTO types matching the backend projections. **New component** `frontend/src/components/pilots/PilotOnboardingSection.tsx` (~530 lines) with four sub-panels: `PilotCreateForm` (slug + name + owner_username with disabled-until-filled submit + friendly 409/400 error surfaces), `PilotList` (clickable rows with ready / in-progress badges + empty / loading states), `PilotDetailPanel` wrapping `ChecklistStepper` (ordered steps per `PILOT_ONBOARDING_STEP_ORDER`; complete button per uncompleted step; readiness-precondition 409 error surface), `InventoryUploadPanel` (file input + submit + accepted / rejected counters + expandable rejected-rows details block), `TerminateForm` (mode picker archive / cleanup + reason textarea + two-step confirm gate). Embedded into `DealerAdmin.tsx` per §0.a M19.4 decision 2 — sub-section under existing `/dealer-ai-admin` route; **operator route count stays at 20**. `data-testid` selectors on every control (asserted by the M19.4 Vitest suite; referenced by the M19.5 playbook). | Two-step confirm gate on `TerminateForm` prevents accidental single-click termination — particularly important for `cleanup` mode which is destructive. Selectors named with the pilot slug (`pilot-row-<slug>`, `pilot-detail-<slug>`) support per-pilot assertions in future E2E tests. |
+| End-to-end dry-run test + operator playbook (M19.5) | **New end-to-end test suite** `backend/dealer_ai/tests/test_m195_pilot_dry_run.py` (~570 lines, 10 focused tests) per §0.a M19.5 decision 1 (ships as Django `TestCase` for per-push CI signal). `FullPilotJourneyDryRun.test_full_journey` — one coherent narrative test method walking thirteen phases: prospect intake → qualify → pilot create → convert prospect (pin `converted_dealership` FK) → configure store (`profile_configured` step) → import inventory via `BytesIO` (partial success: 2 accepted + 1 rejected) → advance user + capability steps → readiness gate (assert `is_pilot_ready==False` before `readiness_confirmed`, `==True` after) → outbound suppression verification (`is_outbound_enabled==False`; `suppress_if_outbound_disabled` returns `SuppressedOutbound` marker for both pilot AND source demo — M19.1 refactor: policy field, not tenant type) → cross-tenant isolation (a second dealership's Vehicles + memberships do not leak) → non-pilot safety guards (`NonPilotImportError`, `NonPilotTerminationError`) → terminate archive → verify pilot leaves `list_pilot_dealerships` + children survive + prospect FK still resolves. `EndpointE2EDryRunTests` drives all five M19.3+M19.4 admin endpoints through one authenticated `APIClient` session in the operator sequence: `POST create` → `GET list` → `POST checklist advance` → `POST inventory import` (multipart) → `POST terminate` → verify pilot removed from re-fetched list. `SafetyGuardDryRunTests` (5 tests): non-pilot import + terminate refusal; demo terminate refusal; deprecated `suppress_if_demo` alias routes through policy-field predicate; prospect `converted_dealership` FK survives archive termination. `M195ZeroDriftTests` (3 tests): tenancy carriers `>=` 52, admin endpoints `>=` 113, permission-class exact-set equality (streak now nineteen consecutive milestones M10 → M19.5). **New operator playbook** `docs/PILOT_ONBOARDING_PLAYBOOK.md` per §0.a M19.5 decision 2 — text + `data-testid` selectors, no screenshots (frontend test asserts on selectors so playbook stays honest). Covers all thirteen phases + rollback / recovery for common failure modes + references to the authoritative dry-run test as the source-of-truth contract. | The dry-run's value is codified contract verification across M19.1-M19.4 — every push proves the pilot substrate holds end-to-end. A management-command layer (`manage.py pilot_dry_run`) may ship later for staging/prod operator smoke checks; not blocked. |
+| Test-fixture reuse (M19.1) | `_auth_helpers.make_pilot_dealership(slug, name=None, outbound_enabled=False)` wraps `make_dealership` + sets `is_pilot=True` + optional `outbound_enabled` policy override. Delegates to `make_dealership` so COA seeding continues to apply. Note: this helper does NOT create a `PilotOnboardingChecklist` — tests that need one use `services.pilot_onboarding.create_pilot_dealership` for a fuller construction. | Zero test regressions across M19.1-M19.5. `make_pilot_dealership` is transparent infrastructure — every M19.x test uses this helper for pilot-tenant setup that doesn't require the full checklist substrate. |
+| Test baseline | +141 backend across M19 (M18 close **4,538** → M19 close **4,679**). Zero regressions. Frontend Vitest **140 → 153** (+13 tests at M19.4 for the new `PilotOnboardingSection` component). One migration shipped at M19.1 (`0048_m191_pilot_substrate.py`). `manage.py check` + `makemigrations --check` clean at every M19 close. Per-increment delta: M19.1 = +59 (substrate + guards + refactor); M19.2 = +31 net (32 new − 1 retired M19.1 stub); M19.3 = +31 (endpoints); M19.4 = +10 backend + +13 frontend (import endpoint + full frontend surface); M19.5 = +10 (dry-run + safety + zero-drift); M19.6 = 0 (docs). | Cross-milestone integrity check: full test suite passes on every commit; every M19 test verifies row counts, cross-domain integrity, guard-by-construction posture, projection shape, and idempotency where applicable. |
+
+**What is NOT shipped in Milestone
+19** (deferred per
+`MILESTONE_19_RETROSPECTIVE.md` §3):
+
+- **Prospect intake UI** — managed
+  via Django admin / Python shell.
+- **First live-pilot dry-run against
+  staging** — codified via the M19.5
+  `TestCase`; management-command
+  layer deferred.
+- **Demo-aware LLM router / cost
+  caps** — M18.1 §0.a decision 1
+  deferral continues.
+- **Multi-operator permission class
+  (`IsPlatformOperator`)** — breaks
+  the zero-drift streak; deferred
+  until a second platform operator
+  is introduced.
+- **Management-command diagnostic
+  for the dry-run** — TestCase-only
+  ships M19.5.
+- **Public / self-serve pilot
+  signup** — every pilot is
+  hand-created by Chris.
+- **Non-CSV inventory ingest** —
+  no pandas / openpyxl / xlrd;
+  no direct DMS integration; no
+  scraper adapter for pilots.
+- **Cross-operator PilotProspect
+  scoping** — `list_prospects`
+  returns every row; acceptable
+  while Chris is the sole
+  platform operator.
+- **All M18 deferrals still valid**
+  per `MILESTONE_18_RETROSPECTIVE.md`
+  §3.
+
+**What operators experienced at
+Milestone 19 close:**
+
+- **Founder-led pilot conversion**
+  is a controlled, codified flow.
+  Chris invokes `POST /admin/pilots/create/`
+  through the new admin sub-
+  section; the substrate creates
+  the Dealership + seeds COA +
+  attaches the owner + fires the
+  checklist atomically.
+- **Seven-step onboarding checklist**
+  gates on operator judgment.
+  Chris marks each step complete
+  via the frontend stepper;
+  `readiness_confirmed` refuses to
+  advance until every prior step
+  has a completed row.
+- **Inventory import** is a
+  multipart upload with partial-
+  success surfacing. Rejected
+  rows include the original raw
+  row + a reason string so Chris
+  can fix and re-upload.
+- **Termination** offers archive
+  (preserve children) or cleanup
+  (cascade delete). Two-step
+  confirm gate prevents
+  accidental clicks.
+- **Outbound suppression by
+  default.** Every new pilot has
+  `outbound_enabled=False`.
+  Explicitly flipping to True is
+  Chris's go-live decision, made
+  after end-to-end verification.
+- **The dry-run test proves the
+  substrate holds.** Every push
+  fires the thirteen-phase
+  journey — Chris sees the CI
+  signal, not just codified
+  contract sitting in a doc.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

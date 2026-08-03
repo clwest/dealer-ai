@@ -1,9 +1,11 @@
 ---
 title: "Milestone 19 — Founding Dealer Pilot Onboarding"
-status: active
+status: shipped
 type: planning-memo
 generated: 2026-08-02
 generated_at_session: SESSION_152 (skeleton), SESSION_153 (expansion)
+shipped_at_session: SESSION_159
+shipped_date: 2026-08-02
 milestone: 19
 milestone_name: "Founding Dealer Pilot Onboarding"
 sources:

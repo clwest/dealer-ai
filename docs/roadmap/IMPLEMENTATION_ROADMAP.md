@@ -2213,6 +2213,184 @@ milestone since M12; all shipped SESSION_146 → 152).**
   deposit / bank reconciliation; method-aware fund-flow;
   BhphFee entity; BHPH interest accrual detector).
 
+### Milestone 19 — Founding Dealer Pilot Onboarding — SHIPPED at SESSION_159
+
+*Full delivery record:
+`docs/roadmap/MILESTONE_19_PLANNING.md` §7 (annotated
+SHIPPED per increment; eleven §0.a change-log
+amendments recorded across M19.1 → M19.5
+implementation sessions) and
+`docs/roadmap/MILESTONE_19_RETROSPECTIVE.md`. Shipped
+surface enumerated in `docs/CAPABILITY_MATRIX.md` §7t.
+Backend test baseline delta: 4,538 → 4,679 (+141 tests
+across all M19 increments, zero regressions). Frontend
+Vitest baseline: 140 → 153 (+13 tests at M19.4 for the
+new `PilotOnboardingSection` component). Sessions: 153
+→ 159 (seven increments including planning + close-out;
+commits `8892447` M19.0 planning + `4ffb514` M19.1
+substrate + `23e92da` M19.2 inventory import + `c3b58ba`
+M19.3 endpoints + `ad9bf21` M19.4 frontend + import
+endpoint + `89a58c8` M19.5 playbook + dry-run + this
+close-out commit). Three new backend entities
+(`PilotProspect` pre-tenant record + `PilotOnboardingChecklist`
++ `PilotOnboardingStep`; tenancy carriers 50 → 52 —
+`PilotProspect` intentionally NOT registered per §0.a
+M19.1 decision 1). Four additive `Dealership` columns
+(`is_pilot` + `outbound_enabled` + `terminated_at` +
+`termination_reason`). One additive migration (`0048` —
+four `AddField` + three `CreateModel` + one unique
+constraint; zero data migration). Five new endpoints
+(`POST /admin/pilots/create/`, `GET /admin/pilots/`,
+`POST /admin/pilots/<slug>/checklist/advance/`, `POST
+/admin/pilots/<slug>/inventory/import/`, `POST
+/admin/pilots/<slug>/terminate/`; DRF admin surface
+108 → 113). One new service package
+(`services/pilot_onboarding/` with six modules). One
+new views module (`views_pilot_onboarding.py`). One new
+frontend component (`frontend/src/components/pilots/PilotOnboardingSection.tsx`
+~530 lines with four sub-panels) embedded in existing
+`/dealer-ai-admin` route per §0.a M19.4 decision 2 —
+**zero new operator routes**. Two new operator reference
+docs (`docs/PILOT_INVENTORY_TEMPLATE.md` +
+`docs/PILOT_ONBOARDING_PLAYBOOK.md`). Refactored M18.1
+outbound guard from identity-based (`is_demo`) to
+policy-field (`outbound_enabled`) predicate per §0.a
+M19.1 decision 2; deprecated `suppress_if_demo` alias
+preserved. Frontend Vitest 140 → 153 (+13 at M19.4).
+Frontend operator routes 20 (unchanged). Zero-drift
+permission-class posture — extends to nineteen
+consecutive milestones (M10 → M19.5). Celery-beat task
+families 10 (unchanged — no beat entry at M19). Zero
+new post-LLM scrub stages (M19 has no LLM path).
+**Eight §5 decisions confirmed as-recommended at M19.0
+open** — streak extends to 85 planning-time as-
+recommended M5.1 → M19.0 across ten consecutive
+milestones (M10 + M11 + M12 + M13 + M14 + M15 + M16 +
+M17 + M18 + M19). Eleven §0.a implementation-time
+micro-decisions across M19.1 → M19.5 — do not count
+against the streak per M10 §9.*
+
+**Business objective.** M18 gave Chris the demo stores +
+daily briefs to run tester sessions; the natural M19
+follow-through is **the controlled path from a demo
+tester who says "I want to try this with my store" to
+a safe, usable real-store pilot without ad hoc database
+work or code edits**. Testers Chris already knows in
+the car business now have a place to land as pilot
+customers.
+
+**Related research.**
+- `INDEPENDENT_DEALER_PIVOT.md` — the persona shape the
+  pilot substrate accommodates.
+- `INVENTORY_ACQUISITION_MAPPING.md` — pilot dealer
+  inventory intake patterns.
+- Every M18 archetype builder — reference for
+  cross-domain integrity expectations.
+
+**Operational pain resolved.**
+- Before M19, converting a demo tester into a live
+  pilot dealer required ad hoc database work: create
+  Dealership row, seed COA, attach owner user, populate
+  onboarding profile, import inventory manually.
+  Multi-step + error-prone + risky.
+- Before M19, no fail-safe posture for outbound
+  behavior on a fresh dealership. Any adapter that
+  egressed would fire against real destinations from a
+  first-day pilot.
+- Before M19, no seven-step operator checklist codified
+  the onboarding path. The pilot readiness bar was
+  Chris's memory.
+- Before M19, no rejected-row surfacing for pilot
+  inventory CSVs. A dealer's Excel export with one bad
+  row would fail-hard or silently drop rows.
+- Before M19, no codified end-to-end test proving the
+  pilot substrate held. Substrate regressions could
+  ship without CI signal.
+
+**Existing reusable primitives.**
+- **`Dealership` model** — gained four additive columns
+  without breaking any existing tenancy path.
+- **`_TENANT_CARRIER_MODEL_NAMES`** — extended by two
+  (checklist + step). `PilotProspect` intentionally
+  NOT registered per §0.a M19.1 decision 1.
+- **`_auth_helpers.make_dealership`** — companion
+  `make_pilot_dealership(slug, outbound_enabled)`
+  helper wraps it.
+- **M13.1 `seed_default_coa`** — called by the pilot
+  registry so future GL posts have accounts.
+- **M6.3 `services/inventory_import.py`** — reused
+  verbatim per §0.a M19.2 decision 1. The pilot
+  wrapper is a thin overlay.
+- **M18.1 outbound guard toolkit** — refactored to
+  policy-field predicate; deprecated alias preserves
+  every M18-era caller.
+- **M18.1 outbound-egress scanner** — contract
+  unchanged; enforces guard adoption on every future
+  `services/` egress verb.
+- **DRF `IsAuthenticated`** — reused per §0.a M19.3
+  decision 2 (no new permission class).
+- **Django `UploadedFile` + `MultiPartParser`** —
+  standard multipart contract per §0.a M19.4 decision
+  1.
+
+**Gap.**
+- Pilot tenant-type flag (`is_pilot`) so verbs can
+  distinguish pilot from demo / live tenants (M19.1
+  fills).
+- Send policy field (`outbound_enabled`) orthogonal to
+  tenant-type (M19.1 fills).
+- Pre-tenant operator record (`PilotProspect`) with
+  state machine for demo → qualified → converted
+  audit trail (M19.1 fills).
+- Seven-step onboarding checklist model + service
+  verbs (M19.1 fills).
+- Pilot-specific CSV wrapper preserving M6.3 semantics
+  (M19.2 fills).
+- DRF admin surface for the five pilot lifecycle verbs
+  (M19.3 + M19.4 fill).
+- Frontend admin sub-section embedded in `/dealer-ai-admin`
+  (M19.4 fills).
+- Codified end-to-end contract test (M19.5 fills).
+- Operator reference docs (M19.2 template + M19.5
+  playbook fill).
+
+**Scope (seven increments — first fully mixed
+substrate + backend + frontend + doc + validation-
+contract milestone since M10):**
+- M19.0 (SESSION_153): planning refinement + target
+  selection. Eight §5 decisions locked.
+- M19.1 (SESSION_154): backend substrate. Migration
+  0048 + three models + vocab constants + service
+  package + outbound-guard refactor. +59 tests.
+- M19.2 (SESSION_155): inventory import wrapper + CSV
+  schema doc. Thin overlay on M6.3. +31 net.
+- M19.3 (SESSION_156): four lifecycle admin endpoints
+  + serializers + URL wiring. Admin surface 108 →
+  112. +31 tests.
+- M19.4 (SESSION_157): inventory-import endpoint +
+  frontend admin sub-section embedded in DealerAdmin.
+  Admin surface 112 → 113. +10 backend + +13
+  frontend Vitest.
+- M19.5 (SESSION_158): playbook doc + end-to-end
+  dry-run TestCase covering the full M19.1-M19.4
+  substrate in one coherent journey. +10 tests.
+- M19.6 (SESSION_159): close-out (this retrospective
+  + capability matrix update + implementation
+  roadmap entry + planning doc frontmatter flip +
+  M20 planning skeleton + session-start refresh).
+
+**Non-goals (this milestone; documented for
+transparency).**
+- Prospect intake UI, first live-pilot dry-run
+  against staging, management-command dry-run
+  diagnostic, public / self-serve pilot signup,
+  non-CSV inventory ingest, cross-operator
+  `PilotProspect` scoping, multi-operator permission
+  class, demo-aware LLM router / cost caps (M18.1
+  §0.a decision 1 carry-forward), F&I chargeback
+  substrate (M18.2 §0.a decision 1 carry-forward),
+  all M18 §3 carry-forward deferrals.
+
 ---
 
 ## 5. Explicit non-goals and deferrals
