@@ -90,10 +90,19 @@ if USE_POSTGRES:
         }
     }
 else:
+    # Milestone 20 · Increment 1 — `M20_ACCEPTANCE_DB=1` opts the
+    # Playwright acceptance backend into an isolated SQLite file so
+    # the suite never touches the dev DB per M20 planning §5.f.
+    # File gitignored; recreated on every acceptance run.
+    _sqlite_name = (
+        BASE_DIR / "db.acceptance.sqlite3"
+        if os.getenv("M20_ACCEPTANCE_DB") == "1"
+        else BASE_DIR / "db.sqlite3"
+    )
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": _sqlite_name,
         }
     }
 

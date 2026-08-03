@@ -1,0 +1,109 @@
+# Milestone 20 · Increment 1 — Playwright operational acceptance job.
+#
+# Trigger: every pull_request and every push to main.
+# Behavior:
+#   - PR runs the `@pilot-critical` subset only (~90s target).
+#   - `main` push runs the full six-journey suite (M20.5 target
+#     ~5–8 min once all six journeys ship).
+#
+# Guiding principle (M20): this job proves that dealership employees
+# can perform the shipped operational workflows through the real UI
+# against deterministic seeded state. A failing run means a workflow
+# regression — not a click failure. Artifacts (HTML report + traces +
+# videos) are uploaded on failure so the failure can be inspected
+# without re-running locally.
+
+name: acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: Playwright acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            acceptance/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install acceptance dependencies
+        working-directory: acceptance
+        run: npm install
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('acceptance/package.json') }}
+          restore-keys: |
+            playwright-chromium-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        working-directory: acceptance
+        run: npx playwright install --with-deps chromium
+
+      - name: Run acceptance suite
+        working-directory: acceptance
+        env:
+          CI: "true"
+          # Pilot-critical subset on PR; full suite on main push.
+          # The tag filter is the M20 sequencing seam — as journeys
+          # land in M20.2–M20.4, they inherit @pilot-critical only
+          # when explicitly tagged (owner morning review in M20.2).
+          PLAYWRIGHT_GREP: ${{ github.event_name == 'push' && '' || '@pilot-critical' }}
+        run: |
+          if [ -n "$PLAYWRIGHT_GREP" ]; then
+            npx playwright test --grep "$PLAYWRIGHT_GREP"
+          else
+            npx playwright test
+          fi
+
+      - name: Upload HTML report
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: acceptance/playwright-report/
+          retention-days: 14
+
+      - name: Upload test-results (traces + videos)
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-${{ github.run_id }}-${{ github.run_attempt }}
+          path: acceptance/test-results/
+          retention-days: 14

@@ -1,0 +1,18 @@
+{
+  "name": "dealer-ai-acceptance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "M20 operational acceptance contract — Playwright suites executing real dealership workflows against shipped M1–M19 UI on deterministic seeded state.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:pilot-critical": "playwright test --grep @pilot-critical",
+    "codegen": "playwright codegen http://127.0.0.1:5173",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  }
+}
