@@ -9,7 +9,7 @@ milestone_status: in-progress
 milestone_name: "Lead-to-Test-Drive Operational Completion"
 increment: 0
 increment_status: shipped
-commit: TBD
+commit: 4e0a958
 ---
 
 # SESSION_185 — Milestone 25 · Increment 0 (M25.0 — planning refinement + target selection)
