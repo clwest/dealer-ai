@@ -19,6 +19,7 @@ from . import (
     views_lifecycle,
     views_listings,
     views_photos,
+    views_pilot_onboarding,
     views_recon,
     views_repossessions,
     views_sale,
@@ -1022,5 +1023,30 @@ urlpatterns = [
         "admin/demo-store/feedback/",
         views_demo_store.admin_demo_store_feedback_create,
         name="admin-demo-store-feedback-create",
+    ),
+    # Milestone 19 · Increment 3 (SESSION_156) — pilot onboarding admin.
+    # Per MILESTONE_19_PLANNING.md §7 M19.3 + §0.a M19.3 decisions:
+    # (1) inventory-import endpoint deferred to M19.4 alongside its
+    # frontend consumer; (2) gated on IsAuthenticated alone (zero-drift
+    # permission-class streak extends to seventeen consecutive milestones).
+    path(
+        "admin/pilots/create/",
+        views_pilot_onboarding.admin_pilot_create,
+        name="admin-pilot-create",
+    ),
+    path(
+        "admin/pilots/",
+        views_pilot_onboarding.admin_pilot_list,
+        name="admin-pilot-list",
+    ),
+    path(
+        "admin/pilots/<slug:slug>/checklist/advance/",
+        views_pilot_onboarding.admin_pilot_checklist_advance,
+        name="admin-pilot-checklist-advance",
+    ),
+    path(
+        "admin/pilots/<slug:slug>/terminate/",
+        views_pilot_onboarding.admin_pilot_terminate,
+        name="admin-pilot-terminate",
     ),
 ]

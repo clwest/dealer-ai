@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_155
+last_session_shipped: SESSION_156
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -21,69 +21,66 @@ milestone_16_status: shipped
 milestone_17_status: shipped
 milestone_18_status: shipped
 milestone_19_status: in-progress
-next_session: SESSION_156
+next_session: SESSION_157
 next_milestone: 19
 next_milestone_name: "Founding Dealer Pilot Onboarding"
-next_increment: 3
-next_increment_name: "M19.3 — DRF endpoints: pilot create/list/checklist/terminate (+optional import)"
+next_increment: 4
+next_increment_name: "M19.4 — Frontend admin surface + inventory-import endpoint"
 ---
 
-# Next session — SESSION_156 · Milestone 19 · Increment 3 (M19.3 — DRF endpoints)
+# Next session — SESSION_157 · Milestone 19 · Increment 4 (M19.4 — Frontend admin surface)
 
-> **SESSION_155 shipped M19.2 —**
-> pilot inventory import wrapper + CSV
-> schema doc. `import_pilot_inventory`
-> is a thin overlay on the shipped
-> M6.3 `services/inventory_import.py`
-> substrate — reuses the 21-column
-> vocab verbatim (no fork) with three
-> pilot-specific policy overrides
-> (belt-and-suspenders `is_pilot`
-> guard, `mark_missing_unavailable=False`,
-> stable `source="pilot-inventory-import"`
-> label). Partial-success + re-import-
-> updates semantics inherited from
-> M6.3. `docs/PILOT_INVENTORY_TEMPLATE.md`
-> documents the shipping vocab as the
-> authoritative pilot schema. Two §0.a
-> M19.2 implementation-time decisions
-> recorded — CSV vocab reuse + pilot
-> policy overlay. Both grounded in the
-> M6.3 substrate discovery at session
-> open.
+> **SESSION_156 shipped M19.3 —**
+> four pilot admin endpoints
+> (`POST /admin/pilots/create/`, `GET
+> /admin/pilots/`, `POST
+> /admin/pilots/<slug>/checklist/advance/`,
+> `POST /admin/pilots/<slug>/terminate/`)
+> + serializers + URL wiring + 31
+> focused tests. Two §0.a M19.3
+> implementation-time decisions
+> recorded — inventory-import endpoint
+> deferred to M19.4 alongside its
+> frontend consumer + endpoints gated
+> on `IsAuthenticated` alone (no new
+> permission class).
 >
-> **Backend baseline: 4,597 → 4,628
-> pass** (+32 new − 1 retired
-> stub = +31 net, 0 regressions).
+> **Backend baseline: 4,628 → 4,659
+> pass** (+31 tests, 0 regressions).
 > **Frontend Vitest: 140 pass**
 > (unchanged). Migrations `0043`–`0048`
 > (unchanged). Tenancy carriers 52
-> (unchanged). DRF admin surface 108
-> (unchanged — 4 endpoints land at
-> M19.3). Frontend operator routes 20
+> (unchanged). DRF admin surface **108
+> → 112** (+4 pilot endpoints).
+> Frontend operator routes 20
 > (unchanged). Permission classes 7
 > (unchanged — zero-drift streak now
-> **sixteen consecutive milestones**
-> M10 → M19.2). Celery-beat task
+> **seventeen consecutive milestones**
+> M10 → M19.3). Celery-beat task
 > families 10 (unchanged).
 >
-> **SESSION_156 opens M19.3 —
-> pilot admin endpoints.** Four
-> handlers wrapping the M19.1 service
-> verbs + potentially a fifth wrapping
-> the M19.2 `import_pilot_inventory`.
-> Single backend increment; ~25-35
-> focused tests.
+> **SESSION_157 opens M19.4 —
+> frontend admin surface.** Extends
+> the existing `/admin` route with a
+> pilot-onboarding section (list,
+> create, checklist stepper,
+> terminate, CSV upload) + ships the
+> deferred inventory-import endpoint
+> alongside its consumer. Single
+> mixed-stack increment;
+> backend +8-12 tests,
+> frontend +10-15 Vitest.
 
-## First thing SESSION_156 must do
+## First thing SESSION_157 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean.
 - `git log --oneline -5` — top
-  should be the M19.2 commit.
+  should be the M19.3 endpoints
+  commit.
 - `python3 manage.py test dealer_ai`
-  → **4,628 pass, 1 skipped, 0
+  → **4,659 pass, 1 skipped, 0
   fail**.
 - `cd frontend && npm test` →
   **140 pass**.
@@ -95,207 +92,200 @@ next_increment_name: "M19.3 — DRF endpoints: pilot create/list/checklist/termi
   --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. Surface §0.a M19.3 micro-decisions
+### 2. Surface §0.a M19.4 micro-decisions
 
-Two candidate micro-decisions
-surface at M19.3 open:
+Two candidates likely surface at
+M19.4 open:
 
-1. **Include the inventory-import
-   endpoint at M19.3.** The
-   planning memo §7 M19.3 lists
-   four handlers (create / list /
-   checklist / terminate). The
-   M19.2 `import_pilot_inventory`
-   wrapper is done; wiring it as a
-   5th endpoint keeps the admin
-   surface self-contained before
-   M19.4 frontend consumes.
-   **Recommendation:** yes, ship at
-   M19.3. Admin surface goes 108 →
-   113 instead of 108 → 112. Small
-   marginal cost + big cohesion
-   win. If declined, the endpoint
-   defers to M19.4 (frontend upload
-   with no backend receiver — bad
-   ergonomics) or M19.5 (playbook
-   uses the Django management
-   command instead — acceptable
-   fallback).
-2. **Permission-class posture.**
-   Chris is the "operator of the
-   platform," not a
-   `IsDealerOwnerAtActiveDealership`
-   at a pilot tenant (that role
-   only exists after
-   `create_pilot_dealership`
-   attaches him). Options:
-   (a) reuse
-   `IsAuthenticated` for M19.3
-   endpoints since only Chris has
-   admin console access;
-   (b) add a new
-   `IsPlatformOperator` permission
-   class scoped to a specific
-   role.
-   **Recommendation:**
-   `IsAuthenticated` for M19.3.
-   The M19.4 admin route already
-   gates on
-   `IsDealerOwnerAtActiveDealership`
-   at the DealerKit control tenant.
-   Adding a class here would
-   break the zero-drift streak
-   without operational benefit
-   pre-multi-operator.
+1. **File-upload contract.** The
+   inventory-import endpoint at
+   M19.4 accepts a multipart
+   file. Options:
+   (a) DRF `FileField` on a
+   serializer (canonical);
+   (b) raw `request.FILES`
+   inspection. **Recommendation:**
+   `FileField`. Uniform with
+   future upload endpoints;
+   validated at the boundary;
+   composable.
+2. **Frontend route placement.**
+   The pilot admin surface can
+   (a) live at
+   `/admin/pilots` as a
+   sub-section of the existing
+   `/admin` route, or (b) get
+   its own top-level `/pilots`
+   route. **Recommendation:**
+   sub-section under `/admin`.
+   Matches the intent that only
+   Chris (the platform operator)
+   sees this surface + keeps
+   route count 20 unchanged.
 
 Present both briefly at open;
 expect confirm-as-recommended per
 the 85-milestone streak posture.
-Record as §0.a M19.3 amendments.
+Record as §0.a M19.4 amendments.
 
-## What M19.3 delivers
+## What M19.4 delivers
 
 Per `MILESTONE_19_PLANNING.md` §7
-M19.3 + §0.a M19.3 recommendations:
+M19.4 + §0.a M19.3 decision 1
+(deferred inventory-import
+endpoint):
 
-### New view module
+### Backend
 
-**`dealer_ai/views_pilot_onboarding.py`**
-with four (or five per §0.a
-decision 1) handlers:
+**New endpoint**
+`POST /admin/pilots/<slug>/inventory/import/`
+in
+`dealer_ai/views_pilot_onboarding.py`
+wrapping `import_pilot_inventory`.
 
-- `POST admin/pilots/create/` →
-  `create_pilot_dealership` +
-  201 with serialized
-  `PilotOnboardingChecklist`.
-  Domain-error mapping:
-  `PilotAlreadyExistsError` →
-  409.
-- `GET admin/pilots/` →
-  `list_pilot_dealerships` +
-  200 with array of pilot
-  summaries. Terminated pilots
-  excluded per M19.1 posture.
-- `POST admin/pilots/<slug>/checklist/advance/`
-  → `advance_step` + 200 with
-  updated checklist state.
-  Domain-error mapping:
-  `UnknownChecklistStepError` →
-  400,
-  `ChecklistStepAlreadyCompletedError`
-  → 409,
-  `PilotReadinessNotConfirmedError`
-  → 409.
-- `POST admin/pilots/<slug>/terminate/`
-  → `terminate_pilot` + 200
-  with terminated Dealership
-  summary. Domain-error mapping:
-  `NonPilotTerminationError` →
-  500 (surfaces as internal
-  server error; broken-invariant
-  guard).
-- **(optional 5th per §0.a M19.3
-  decision 1)**
-  `POST admin/pilots/<slug>/inventory/import/`
-  → `import_pilot_inventory` +
-  200 with serialized
-  `PilotInventoryImportResult`.
-  Accepts multipart file upload.
-  Domain-error mapping:
-  `NonPilotImportError` → 500,
-  `FileNotFoundError` → 400.
+- Multipart file upload (DRF
+  `FileField` per §0.a M19.4
+  decision 1 recommendation).
+- 200 with serialized
+  `PilotInventoryImportResult`
+  (dealership_id + accepted +
+  rejected).
+- 404 on nonexistent /
+  non-pilot slug.
+- 500 on `NonPilotImportError`
+  (broken-invariant guard —
+  shouldn't reach if the slug
+  filter catches; belt-and-
+  suspenders).
+- 400 on missing file / bad
+  content-type.
 
-### URL wiring
+**URL wiring** adds a fifth
+pilot admin path; admin surface
+grows **112 → 113**.
 
-Register the four (or five)
-handlers in
-`dealer_ai/urls.py` under
-`/admin/pilots/*`. Endpoint count
-108 → **112** (or **113** with the
-optional inventory-import
-endpoint).
+### Frontend
 
-### Serializers
+**New sub-section** under the
+existing `/admin` route:
 
-Thin DRF serializers projecting:
+- Pilot list panel — table view
+  reading `GET /admin/pilots/`.
+  Per-row: slug, name, ready
+  badge, terminate button.
+- Create form — modal (or
+  inline) posting to
+  `POST /admin/pilots/create/`.
+- Checklist stepper —
+  per-pilot detail view
+  reading the checklist
+  projection + POSTing to
+  `checklist/advance/`.
+- CSV upload panel — file
+  input + submit posting
+  multipart to
+  `inventory/import/`.
+  Rejected rows table.
+- Terminate confirmation —
+  modal with mode picker
+  (archive / cleanup) +
+  reason field.
+- ~2-4 new components under
+  `frontend/src/features/admin/pilots/`.
+  Reuse shadcn primitives
+  (Card, Table, Dialog, Form,
+  Input, Button).
 
-- `Dealership` → pilot summary
-  (slug, name, is_pilot,
-  outbound_enabled, created_at).
-- `PilotOnboardingChecklist` +
-  `PilotOnboardingStep` → nested
-  checklist state (is_ready +
-  ordered step list with
-  completed_at / completed_by /
-  notes).
-- `PilotInventoryImportResult`
-  → JSON dict with
-  dealership_id + accepted +
-  rejected arrays.
+**No new frontend operator
+routes.** Sub-section under
+`/admin` per §0.a M19.4
+decision 2 recommendation.
 
 ### Tests
 
-**~25-35 focused tests** in new
-`tests/test_m193_pilot_endpoints.py`:
+**Backend ~8-12 tests** in new
+`tests/test_m194_inventory_import_endpoint.py`:
 
-- 200 happy path per endpoint.
-- Auth gating (unauth → 401).
-- Domain-error → HTTP status
-  mapping (per error class).
-- Serialization contract
-  (nested checklist shape).
-- Slug-in-URL validation
-  (`<slug>` matches an existing
-  pilot; 404 otherwise).
-- Growth-only endpoint count
-  assertion (108 → >=112 or
-  113).
-- Permission-class set
-  equality (zero-drift streak
-  seventeen consecutive
-  milestones).
+- Multipart happy path — 200
+  with dealership_id +
+  accepted stock numbers +
+  rejected rows in projection.
+- Nonexistent slug → 404.
+- Non-pilot slug → 404.
+- Missing file → 400.
+- Auth gating.
+- Partial-success shape
+  matches the M19.2 wrapper's
+  return contract.
+- Endpoint count `>=` 113
+  growth-only assertion.
+- Permission-class zero-drift
+  streak now **eighteen
+  consecutive milestones**.
 
-### Non-goals for M19.3
+**Frontend ~10-15 Vitest** in
+new
+`frontend/src/features/admin/pilots/__tests__/`:
 
-- ❌ No frontend (M19.4).
-- ❌ No new tenant-scoped models.
-- ❌ No new permission classes
-  (per §0.a M19.3 decision 2
-  recommendation).
-- ❌ No modifications to M19.1
-  service verbs.
-- ❌ No changes to M6.3 or
-  M19.2 inventory-import code.
+- Pilot list renders slug +
+  ready badge.
+- Create form validation.
+- Checklist stepper displays
+  ordered steps + placeholder
+  rows.
+- CSV upload triggers POST
+  with correct multipart
+  body.
+- Terminate modal fires
+  correct mode.
 
-## Backend baseline target
+### Non-goals for M19.4
 
-**4,628 → ~4,653-4,663 pass**
-(+25-35 tests, 0 regressions).
-Frontend Vitest: 140 (unchanged
-— no frontend at M19.3).
+- ❌ No new tenancy carriers.
+- ❌ No changes to M19.1 /
+  M19.2 / M19.3 backend
+  contracts.
+- ❌ No new operator routes.
+- ❌ No M19.5 playbook doc.
 
-## Explicit non-goals for SESSION_156
+## Baseline targets
 
-- ❌ Do NOT ship M19.4 frontend.
-- ❌ Do NOT modify M1-M18 or
-  M19.1-M19.2 business logic.
-- ❌ Do NOT add new tenancy
-  carriers.
-- ❌ Do NOT force-push or amend
-  earlier commits.
+- **Backend:** 4,659 → ~4,667-
+  4,671 pass (+8-12 tests, 0
+  regressions).
+- **Frontend Vitest:** 140 →
+  ~150-155 pass (+10-15
+  tests).
+- **Admin surface:** 112 →
+  **113** (+1 inventory-import
+  endpoint).
+- **Frontend routes:** 20
+  (unchanged).
+
+## Explicit non-goals for SESSION_157
+
+- ❌ Do NOT ship M19.5
+  playbook or dry-run doc.
+- ❌ Do NOT modify M1-M19.3
+  business logic.
+- ❌ Do NOT add new permission
+  classes.
+- ❌ Do NOT force-push or
+  amend earlier commits.
 
 ## NEXT TASK
 
-Start SESSION_156 with (a)
-surfacing the two §0.a M19.3
-micro-decisions (inventory-
-import endpoint inclusion +
-permission-class posture) with
-the user, (b) starting-state
-verification, (c) building the
-view module + URL wiring +
-serializers + tests per §7 M19.3.
-Ship the M19.3 handoff.
+Start SESSION_157 with (a)
+surfacing the two §0.a M19.4
+micro-decisions (file-upload
+contract + frontend route
+placement) with the user,
+(b) starting-state
+verification, (c) implementing
+the inventory-import endpoint
++ pilot admin sub-section +
+tests per §7 M19.4. Ship the
+M19.4 handoff.
 
 ---
 
@@ -307,25 +297,29 @@ Ship the M19.3 handoff.
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_19_PLANNING.md`
    (active memo)
-6. `docs/handoffs/SESSION_155_m19_inc2_inventory_import.md`
+6. `docs/handoffs/SESSION_156_m19_inc3_endpoints.md`
    (this session's handoff)
-7. `docs/handoffs/SESSION_154_m19_inc1_backend_substrate.md`
+7. `docs/handoffs/SESSION_155_m19_inc2_inventory_import.md`
 8. `docs/PILOT_INVENTORY_TEMPLATE.md`
 9. `docs/CAPABILITY_MATRIX.md` §7s
-10. `backend/dealer_ai/services/pilot_onboarding/`
-    (verbs the endpoints will wrap)
+10. `backend/dealer_ai/views_pilot_onboarding.py`
+    (endpoint pattern for the
+    M19.4 import handler)
+11. `backend/dealer_ai/services/pilot_onboarding/inventory_import.py`
+    (wrapper the M19.4 endpoint
+    invokes)
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_155 — M19.2 SHIPPED)
+## Operational state (post-SESSION_156 — M19.3 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
   `0001`–`0048`. Test baseline:
-  **4,628 pass**, 1 skipped, 0
+  **4,659 pass**, 1 skipped, 0
   fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
@@ -342,14 +336,14 @@ research + code are facts.
 - **Milestones shipped:** M1 →
   M18. M19 in progress: M19.0
   planning + M19.1 substrate +
-  M19.2 inventory import
-  shipped. M19.3 endpoints next
-  (SESSION_156).
-- **DRF admin surface:** **108**
-  endpoints. Grows to 112 (or
-  113 with the optional
-  inventory-import endpoint) at
-  M19.3.
+  M19.2 inventory import +
+  M19.3 endpoints shipped.
+  M19.4 frontend + import
+  endpoint next (SESSION_157).
+- **DRF admin surface:** **112**
+  endpoints (108 → 112 at
+  M19.3; grows to 113 at
+  M19.4).
 - **Frontend operator routes:**
   **20** — unchanged through
   M19 (M19.4 extends existing
@@ -365,19 +359,19 @@ research + code are facts.
   (ten modules including
   briefs package) +
   `services/pilot_onboarding/`
-  (six modules — full
-  `import_pilot_inventory`
-  body shipped at M19.2).
+  (six modules). New at M19.3:
+  `dealer_ai/views_pilot_onboarding.py`.
 - **Frontend accounting
   surface:** unchanged from
   M17.
 - **Tenancy carriers:**
-  **52** (unchanged at M19.2
-  — M19.2 is service-only).
+  **52** (unchanged at M19.3
+  — endpoints/views only).
 - **Permission classes:**
   **7 actual** — zero-drift
-  streak **sixteen consecutive
-  milestones** (M10 → M19.2).
+  streak **seventeen
+  consecutive milestones**
+  (M10 → M19.3).
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17
@@ -392,7 +386,9 @@ research + code are facts.
   (SESSION_154). M19.2
   inventory import SHIPPED
   (SESSION_155). M19.3
-  endpoints next (SESSION_156).
-  M19.4 frontend, M19.5
-  playbook + dry-run, M19.6
-  close-out to follow.
+  endpoints SHIPPED
+  (SESSION_156). M19.4
+  frontend + import endpoint
+  next (SESSION_157).
+  M19.5 playbook + dry-run,
+  M19.6 close-out to follow.
