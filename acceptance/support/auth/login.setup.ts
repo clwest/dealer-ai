@@ -30,6 +30,7 @@ const SEED_COMMANDS = [
   "seed_journey_sales_manager_daily_startup",
   "seed_journey_recon_workflow",
   "seed_journey_office_accounting_workflow",
+  "seed_journey_bhph_collections_workflow",
 ] as const;
 
 function runManagementCommand(command: string): void {
@@ -100,4 +101,8 @@ setup("authenticate as sales_manager", async ({ page }) => {
 
 setup("authenticate as recon_manager", async ({ page }) => {
   await loginPersona(page, PERSONAS.recon_manager, AUTH_STORAGE.reconManager);
+});
+
+setup("authenticate as bhph_collector", async ({ page }) => {
+  await loginPersona(page, PERSONAS.bhph_collector, AUTH_STORAGE.bhphCollector);
 });

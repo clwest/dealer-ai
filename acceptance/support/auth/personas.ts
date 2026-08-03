@@ -10,13 +10,19 @@
 //               `owner` persona — dealer_owner is a valid role for
 //               the M13/M14/M17 accounting endpoints, no new
 //               persona needed.)
-// M20.4 adds:   bhph_collector.
+// M20.4 adds:   bhph_collector — underlying role is sales_manager
+//               because the M12 collections endpoints gate on
+//               `IsSalesManagerOrOwnerAtActiveDealership`; the
+//               model-level ROLE_COLLECTIONS constant is defined
+//               but not wired to any endpoint. Persona name still
+//               reflects the operational role.
 
 export type PersonaName =
   | "platform_operator"
   | "owner"
   | "sales_manager"
-  | "recon_manager";
+  | "recon_manager"
+  | "bhph_collector";
 
 export interface Persona {
   name: PersonaName;
@@ -51,6 +57,12 @@ export const PERSONAS: Record<PersonaName, Persona> = {
     name: "recon_manager",
     username: "acceptance-recon-manager",
     password: "acceptance-recon-password",
+    postLoginPath: "/dealer-ai-overview",
+  },
+  bhph_collector: {
+    name: "bhph_collector",
+    username: "acceptance-bhph-collector",
+    password: "acceptance-bhph-password",
     postLoginPath: "/dealer-ai-overview",
   },
 };

@@ -49,6 +49,7 @@ export const AUTH_STORAGE = {
   owner: path.join(HERE, ".auth/owner.json"),
   salesManager: path.join(HERE, ".auth/sales_manager.json"),
   reconManager: path.join(HERE, ".auth/recon_manager.json"),
+  bhphCollector: path.join(HERE, ".auth/bhph_collector.json"),
 } as const;
 
 export default defineConfig({
@@ -133,6 +134,20 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         storageState: AUTH_STORAGE.owner,
+      },
+      dependencies: ["setup"],
+    },
+    {
+      // BHPH collections journeys (M20.4) run as the bhph_collector
+      // persona (which uses `sales_manager` role because the M12
+      // collections endpoints gate on
+      // `IsSalesManagerOrOwnerAtActiveDealership` — see §0.a M20.4
+      // decision 2).
+      name: "bhph_collector",
+      testMatch: /journeys\/bhph\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: AUTH_STORAGE.bhphCollector,
       },
       dependencies: ["setup"],
     },
