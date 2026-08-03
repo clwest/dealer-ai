@@ -15,6 +15,7 @@ sources:
   - docs/roadmap/MILESTONE_20_RETROSPECTIVE.md
   - docs/roadmap/MILESTONE_19_RETROSPECTIVE.md
   - docs/roadmap/MILESTONE_18_RETROSPECTIVE.md
+  - docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md
   - docs/CAPABILITY_MATRIX.md
 ---
 
@@ -424,6 +425,179 @@ noted. Non-negotiable:
   M5.1 → M21.0.** Twelve
   consecutive milestones now
   (M10 → M21).
+
+**SESSION_167 M21.1 close (2026-08-03):**
+
+- **Audit tooling shipped** at
+  `backend/dealer_ai/scripts/audit_operational_surface.py`
+  per §5.b Option C combined
+  methodology. Walks
+  `backend/dealer_ai/urls.py`
+  (function-based DRF views) +
+  all seven
+  `frontend/src/lib/*Api.ts`
+  wrapper modules, then
+  cross-references against
+  component-level consumption
+  by walking every non-test
+  `.tsx` / `.ts` file under
+  `frontend/src/`. Wrapper
+  functions that exist in an
+  `*Api.ts` module but are
+  never imported by a
+  component get a
+  `wrapper-only` tag (the
+  endpoint is reachable in
+  principle but not through
+  the operator UI). Not
+  runtime code — operator-
+  invoked script.
+- **Audit artifact shipped**
+  at
+  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+  per §5.c Option A schema.
+  153 endpoints enumerated;
+  96 covered; 57 backend-only
+  findings distributed
+  across `M21-anchor` (8),
+  `M21-conditional` (2),
+  `defer-domain-milestone`
+  (3), `defer-candidate-O2`
+  (44), `intentional-omission`
+  (5, mostly auth + demo
+  utilities). One known
+  false-positive class:
+  nested TypeScript template
+  literals (`${qs ? \`?${qs}\`
+  : ""}`) confuse the URL
+  normalizer, so ~3 endpoints
+  that ARE consumed by
+  components appear as
+  backend-only
+  (`admin/be-backs/list/` +
+  ~2 others). Documented in
+  the artifact; deferred as a
+  known limitation rather
+  than more regex complexity.
+- **Three reconciliations
+  against M20 planning
+  skeleton Input 1:**
+  - Be-back write path is
+    smaller than assumed. The
+    M20 skeleton said all
+    three verbs (create + mark-
+    returned + mark-no-show)
+    were missing UI. Reality:
+    both mark verbs ship in
+    `DealerAiSalesBeBacks.tsx`.
+    Only `POST /admin/be-backs/`
+    (record be-back) is
+    missing. Anchor 2 narrows
+    from three verbs to one.
+  - Follow-up cadence queue
+    is already partly UI-
+    consumed —
+    `DealerAiSalesFollowUps.tsx`
+    consumes list / complete /
+    skip. Only the cadence
+    CONFIG surface (create +
+    pause a cadence template)
+    is genuinely missing.
+  - BHPH write path
+    confirmed at exactly
+    seven verbs — promise
+    create / mark-kept /
+    mark-broken, contact
+    create, repossession
+    create / mark-recovered
+    / mark-re-intaked.
+- **§5.d Option B scope
+  recommendation drafted and
+  user-confirmed at
+  SESSION_167 close.**
+  Recommendation grounded in
+  the audit findings +
+  Candidate O governing
+  contract. Two-anchor
+  posture from §5.a
+  preserved with narrowed
+  M21.3 scope; M21.4 skipped
+  per audit evidence (no
+  additional scope-worthy
+  findings).
+- **M21.2 scope locked** —
+  BHPH write-side UI (7
+  endpoints). Attach to the
+  M12.7 collector dashboard
+  surface. Ship:
+  `RecordPromiseToPayForm`,
+  `MarkBrokenPromiseButton`,
+  `MarkKeptPromiseButton`,
+  `LogCollectionContactForm`,
+  `InitiateRepossessionForm`,
+  `MarkRecoveredButton`,
+  `MarkReIntakedButton`.
+  Also ship the missing
+  `bhphApi.ts` write wrappers
+  (module currently has zero
+  write helpers). Extend
+  `bhph/collections_workflow.spec.ts`
+  end-to-end.
+- **M21.3 scope locked** —
+  Be-back CREATE (1
+  endpoint) + Follow-up
+  cadence CONFIG (2
+  endpoints). Combined into
+  one increment per size
+  discipline. Ship:
+  `RecordBeBackForm`
+  attached to
+  `DealerAiSalesBeBacks.tsx`;
+  `CreateCadenceForm` +
+  `PauseCadenceButton`
+  attached to
+  `DealerAiSalesFollowUps.tsx`
+  or an adjacent cadence-
+  config panel. Journey
+  extension or addition per
+  §5.e Option C decision at
+  M21.3 open.
+- **M21.4 SKIPPED.** Audit
+  surfaced no additional
+  scope-worthy items. The 44
+  `defer-candidate-O2`
+  endpoints are legitimate
+  future work — most are
+  entire domain UIs (F&I
+  dashboards, lead-source-
+  specific intake forms,
+  BHPH note origination,
+  BHPH payment intake) that
+  each warrant their own
+  multi-verb feature scope.
+  Bolting any onto M21
+  would violate scope
+  discipline. Deferred to
+  future OSC-shaped
+  milestones (Candidate O2)
+  with explicit re-entry
+  path preserved per
+  discovery rule.
+- **§7 sequencing revised
+  to five increments total.**
+  M21.0 planning + M21.1
+  audit + M21.2 BHPH + M21.3
+  be-back-create + cadence-
+  config + M21.5 close-out.
+  M21.5 becomes SESSION_170
+  (not SESSION_171). Backend
+  baseline target at M21
+  close: 4,755 → ~4,770-4,780.
+  Frontend Vitest: 153 →
+  ~170-185. Acceptance
+  suite: 6 journeys → 6
+  extended OR 7 (§5.e
+  decision at M21.3 open).
 
 ## 1. Business questions this milestone answers
 
@@ -1584,14 +1758,18 @@ contract:**
 
 ## 7. Sequencing
 
-**Four to six increments,
-evidence-sized.** Confirmed as-
-recommended per §0.a §5.h.
-Combine increments if
-implementation evidence shows a
-smaller complete shape; do not
-split merely to match this
-draft.
+**Five increments total** — locked
+at SESSION_167 M21.1 close per
+the §0.a M21.1 amendment. Original
+§5.h Option B expected four-to-six
+increments; the M21.1 audit
+confirmed no M21.4 conditional
+scope, collapsing the shape from
+six to five. Combine increments
+if implementation evidence
+shows a smaller complete shape;
+do not split merely to match
+this draft.
 
 ### Increment 0 (M21.0) — Planning refinement + target selection
 
@@ -1621,51 +1799,63 @@ Frontend Vitest unchanged: 153
 pass. Acceptance suite
 unchanged: 6 journeys.
 
-### Increment 1 (M21.1) — Systematic operational-surface audit + M21 scope lock
+### Increment 1 (M21.1) — Systematic operational-surface audit + M21 scope lock ✅ SHIPPED
 
-**Scope.** SESSION_167. Land
+**Scope.** SESSION_167. Shipped
 the audit tooling + the audit
 artifact + user-confirmed scope
 selection for M21.2 onward.
 
-**Deliverable.**
+**Shipped.**
 - `backend/dealer_ai/scripts/audit_operational_surface.py`
-  (or split into two focused
-  scripts) implementing §5.b
-  Option C combined
-  methodology.
+  — single script implementing
+  §5.b Option C combined
+  methodology. Walks
+  `backend/dealer_ai/urls.py` +
+  all seven `frontend/src/lib/*Api.ts`
+  wrapper modules + all non-test
+  `.tsx`/`.ts` files under
+  `frontend/src/` for wrapper-
+  consumption tagging.
 - `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-  populated with per-row
-  dispositions per §5.c
-  Option A schema.
+  populated with 153 endpoints
+  and per-row disposition
+  recommendations. 96 covered
+  / 57 backend-only, breaking
+  down as 8 `M21-anchor` + 2
+  `M21-conditional` + 3
+  `defer-domain-milestone` +
+  44 `defer-candidate-O2` + 5
+  `intentional-omission`. One
+  known false-positive class
+  (nested TS template literals)
+  documented in the artifact.
 - **Assistant recommendation +
   user confirmation** on scope
-  for M21.2 onward per §5.d
-  Option B. Recommendation
-  includes: BHPH + be-back
-  anchor confirmation, follow-
-  up cadence disposition (fit
-  or defer), any additional
-  audit-surfaced items with
-  `M21-anchor` or
-  `M21-conditional`
-  disposition.
-- Scope lock recorded as §0.a
-  M21.1 amendment in this
-  planning memo (frontmatter
-  `sources` may extend; §7
-  increment shape may adjust).
+  per §5.d Option B. Three
+  reconciliations against M20
+  planning skeleton Input 1 —
+  be-back write path narrower
+  than assumed (only CREATE
+  missing at component level;
+  mark-verbs ship); follow-up
+  cadence CONFIG is genuine
+  gap (queue-side ships); BHPH
+  write confirmed at exactly 7
+  verbs.
+- Scope lock recorded as
+  §0.a M21.1 amendment.
 - Session handoff at
   `docs/handoffs/SESSION_167_m21_inc1_audit.md`.
+- `00-START-NEXT-SESSION.md`
+  refreshed for M21.2.
 
-**Backend baseline target at
-M21.1 close:** 4,755 (unchanged
-— audit scripts are operator-
-invoked, not tested; no seed
-delta commands land in this
-increment). Frontend Vitest:
-153 (unchanged). Acceptance
-suite: 6 journeys (unchanged).
+**Backend baseline unchanged:**
+4,755 pass (audit scripts are
+operator-invoked, not tested).
+Frontend Vitest: 153
+(unchanged). Acceptance suite:
+6 journeys (unchanged).
 
 ### Increment 2 (M21.2) — BHPH write-side UI + journey extension
 
@@ -1719,96 +1909,91 @@ Acceptance suite: 6 journeys
 (BHPH re-expanded, others
 unchanged).
 
-### Increment 3 (M21.3) — Be-back write-side UI + journey extension or addition
+### Increment 3 (M21.3) — Be-back CREATE + Follow-up cadence CONFIG + journey extensions
 
-**Scope.** SESSION_169. Second
-anchor implementation.
+**Scope.** SESSION_169. Narrowed
+per M21.1 audit reconciliation —
+be-back mark-verbs already ship,
+so anchor 2 collapses to just
+the CREATE verb. Combined with
+the M21-conditional follow-up
+cadence CONFIG into one
+increment per size discipline.
 
 **Deliverable.**
-- Frontend components:
-  - `RecordBeBackForm` (attach
-    location — dashboard vs.
-    lead detail modal —
-    finalized at M21.3 open
-    based on M21.1 audit
-    finding about where the
-    workflow originates).
-  - `MarkBeBackReturnedButton`
-    + `MarkBeBackNoShowButton`
-    row-level actions on the
-    be-back queue view.
-  - `BeBackQueueTable` if the
-    sales manager dashboard
-    lacks a dedicated queue
-    surface (M21.1 audit to
-    confirm).
+- Frontend components (be-back
+  CREATE):
+  - `RecordBeBackForm` attached
+    to `DealerAiSalesBeBacks.tsx`.
+    Attach location finalized
+    at M21.3 open (in-page vs.
+    modal).
+- Frontend components (cadence
+  CONFIG):
+  - `CreateCadenceForm` +
+    `PauseCadenceButton`
+    attached to
+    `DealerAiSalesFollowUps.tsx`
+    or an adjacent cadence-
+    config panel (component
+    layout decision at M21.3
+    open).
 - Vitest coverage for the new
-  form + buttons + queue table.
+  forms + buttons.
 - Extended
   `dealer_ai/management/commands/seed_journey_sales_manager_daily_startup.py`
   (or new
-  `seed_journey_sales_manager_be_back_triage.py`)
-  + backend tests.
+  `seed_journey_sales_manager_be_back_triage.py` /
+  `seed_journey_sales_manager_cadence_config.py`)
+  + backend tests, per journey-
+  shape decision.
 - Extended
   `acceptance/journeys/sales_manager/daily_startup.spec.ts`
-  or new
-  `acceptance/journeys/sales_manager/be_back_triage.spec.ts`
-  per §5.e Option C decision
-  made at M21.3 open.
+  or a new journey per §5.e
+  Option C decision made at
+  M21.3 open. Two acceptable
+  shapes: (a) extend the
+  daily-startup journey to
+  cover record-be-back + cadence
+  config; (b) add a distinct
+  `sales_manager/cadence_config.spec.ts`
+  if the cadence-management
+  workflow is temporally
+  separate from morning
+  triage.
 - Opportunistic testids per
   §5.g.
 
 **Backend baseline target at
 M21.3 close:** ~4,770–4,780.
-Frontend Vitest: ~170–180.
-Acceptance suite: 6 or 7
-journeys.
+Frontend Vitest: ~170–185.
+Acceptance suite: 6 journeys
+(extended) or 7 (if cadence
+config gets a distinct
+journey).
 
-### Increment 4 (M21.4) — Conditional follow-up cadence UI + audit-surfaced additions
+### Increment 4 (M21.4) — SKIPPED per M21.1 audit findings
 
-**Scope.** SESSION_170.
-**Conditional** — lands only
-if the M21.1 audit's scope
-selection at §5.d includes
-cadence and / or additional
-audit-surfaced items. If
-scope-selection excludes M21.4
-scope, this increment is
-skipped and M21.5 becomes
+**Locked at M21.1 close.** The
+audit surfaced no additional
+scope-worthy items beyond the
+two anchors + one conditional
+that landed in M21.2–M21.3. The
+44 `defer-candidate-O2`
+endpoints are legitimate future
+work (Candidate O2 for M22+) —
+each is an entire domain UI
+that would violate M21 scope
+discipline if bolted on.
+Increment slot returned to the
+milestone; M21.5 becomes
 SESSION_170.
-
-**Deliverable (if applicable).**
-- Frontend components for
-  follow-up cadence queue +
-  action surfaces per M21.1
-  audit findings.
-- Any additional audit-
-  surfaced UI items marked
-  `M21-anchor` or
-  `M21-conditional` at scope
-  lock.
-- Corresponding Vitest
-  coverage.
-- Extended or new seed delta
-  commands + backend tests.
-- Extended or new Playwright
-  journey per §5.e Option C.
-- Opportunistic testids per
-  §5.g.
-
-**Backend baseline target at
-M21.4 close (if applicable):**
-~4,780–4,790. Frontend Vitest:
-~180–195. Acceptance suite: 7
-or 8 journeys depending on
-scope + journey-shape
-decision.
 
 ### Increment 5 (M21.5) — CI hardening + retrospective + close-out
 
-**Scope.** SESSION_170 or
-SESSION_171 depending on M21.4
-outcome. Full-suite CI
+**Scope.** SESSION_170 (M21.4
+skipped per M21.1 audit
+findings). Full-suite CI
 validation + close-out
 documentation + capability
 matrix update + retrospective
@@ -1851,10 +2036,7 @@ matrix update + retrospective
   formalized in the roadmap
   contract section.
 - Session handoff at
-  `docs/handoffs/SESSION_170_m21_inc5_close.md`
-  or
-  `SESSION_171_m21_inc5_close.md`
-  depending on M21.4 outcome.
+  `docs/handoffs/SESSION_170_m21_inc5_close.md`.
 - `00-START-NEXT-SESSION.md`
   refreshed for M22.0.
 - Coordinated close-out commit

@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-03
-last_session_shipped: SESSION_166
+last_session_shipped: SESSION_167
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -23,330 +23,392 @@ milestone_18_status: shipped
 milestone_19_status: shipped
 milestone_20_status: shipped
 milestone_21_status: in-progress
-next_session: SESSION_167
+next_session: SESSION_168
 next_milestone: 21
 next_milestone_name: "Operational Surface Completion"
-next_increment: 1
-next_increment_name: "M21.1 — Systematic operational-surface audit + M21 scope lock"
+next_increment: 2
+next_increment_name: "M21.2 — BHPH write-side UI + journey extension"
 ---
 
-# Next session — SESSION_167 · Milestone 21 · Increment 1 (M21.1 — systematic operational-surface audit + M21 scope lock)
+# Next session — SESSION_168 · Milestone 21 · Increment 2 (M21.2 — BHPH write-side UI + journey extension)
 
-> **Milestone 21 opened at
-> SESSION_166** with §5.a Candidate O
-> confirmed — **Operational Surface
-> Completion**, an evidence-driven
-> umbrella milestone that closes the
-> highest-value missing UI workflows
-> found by the M20 operational
-> audit. Two anchor implementations
-> pre-committed at planning-time
-> (BHPH write-side UI + be-back
-> write-side UI); conditional third
-> anchor (follow-up cadence queue
-> UI) entering scope only if the
-> M21.1 systematic audit confirms
-> fit.
+> **Milestone 21.1 shipped at
+> SESSION_167** — systematic
+> operational-surface audit
+> tooling +
+> `M21_OPERATIONAL_SURFACE_AUDIT.md`
+> artifact + user-confirmed
+> scope lock for M21.2+.
 >
-> **All eight §5 decisions confirmed
-> as-recommended at M21.0 open.**
-> Streak extends to **87 planning-
-> time as-recommended M5.1 → M21.0
-> across twelve consecutive
-> milestones** (M10 → M21).
+> **Audit findings.** 153
+> endpoints enumerated; 96
+> covered; 57 backend-only.
+> Dispositions: 8 M21-anchor,
+> 2 M21-conditional, 3 defer-
+> domain-milestone, 44 defer-
+> candidate-O2, 5 intentional-
+> omission.
 >
-> **Governing contract established
-> (Candidate O).** Every M21 shipped
-> surface must satisfy four
-> conditions: (1) maps to an
-> already-shipped backend capability;
-> (2) closes a missing operator-
-> facing UI; (3) adds or extends a
-> Playwright operational journey;
-> (4) is not generic UX polish.
+> **Three reconciliations
+> against M20 skeleton Input
+> 1** — be-back write path
+> narrower than assumed (only
+> CREATE missing; mark-verbs
+> ship); follow-up cadence
+> queue partly UI-consumed
+> (only CONFIG missing); BHPH
+> write confirmed at exactly
+> seven verbs.
 >
-> **Definition of Done amendment
-> formalized (§5.f Option B).**
-> Every future customer-facing
-> milestone must either add or
-> update at least one Playwright
-> operational journey, or explicitly
-> document in §3 of the planning
-> memo why no journey change is
-> required. Amendment applies from
-> M21 forward.
+> **Milestone shape revised
+> to five increments** — M21.0
+> planning + M21.1 audit +
+> M21.2 BHPH + M21.3 be-back-
+> create + cadence-config +
+> M21.5 close-out. M21.4
+> collapsed per audit
+> evidence.
 >
-> **SESSION_167 opens M21.1 — the
-> systematic operational-surface
-> audit + M21 scope lock.** Lands
-> the audit tooling
-> (`backend/dealer_ai/scripts/audit_operational_surface.py`
-> per §5.b Option C combined
-> methodology) + the audit artifact
-> (`docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-> per §5.c Option A schema) + user-
-> confirmed scope selection for
-> M21.2 onward per §5.d Option B.
+> **SESSION_168 opens M21.2
+> — the first anchor
+> implementation.** Ship
+> seven `bhphApi.ts` write
+> wrappers + seven frontend
+> components attached to the
+> M12.7 collector dashboard
+> surface + extended
+> `seed_journey_bhph_collections_workflow`
+> + backend tests + full re-
+> expansion of
+> `bhph/collections_workflow.spec.ts`
+> to end-to-end write coverage.
 
-## First thing SESSION_167 must do
+## First thing SESSION_168 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean.
 - `git log --oneline -6` — top
-  should be the M21.0 planning
-  commit (this session).
-- `python3 manage.py test dealer_ai`
-  → **4,755 pass, 1 skipped, 0
-  fail** (baseline unchanged
-  from M20 close).
+  should be the M21.1 commit
+  (audit tooling + artifact +
+  scope-lock amendment +
+  handoff).
+- `python3 manage.py test
+  dealer_ai` → **4,755 pass, 1
+  skipped, 0 fail**.
 - `cd frontend && npm test` →
   **153 pass**.
-- `python3 manage.py check` clean.
-- `python3 manage.py makemigrations
-  --check --dry-run` → "No changes
+- `python3 manage.py check`
+  clean.
+- `python3 manage.py
+  makemigrations --check
+  --dry-run` → "No changes
   detected."
-- `cd frontend && npx tsc --noEmit`
-  clean.
-- `cd acceptance && npx tsc --noEmit`
-  clean.
+- `cd frontend && npx tsc
+  --noEmit` clean.
+- `cd acceptance && npx tsc
+  --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. Verify M20 acceptance CI still green
+### 2. Verify acceptance CI still green
 
-- `gh run list --workflow=acceptance
-  --branch=main --limit 5` — top
-  runs should all be green
-  (M21.0 planning-only push adds
-  no code that could break CI,
-  but confirm as a matter of
-  posture).
+- `gh run list
+  --workflow=acceptance
+  --branch=main --limit 5` —
+  top runs should still be
+  green (M21.0 and M21.1 are
+  local commits ahead of
+  `origin/main`; the CI
+  workflow runs on push to
+  main, so the latest green
+  run is still the pre-M21
+  M20-close state).
 
-### 3. Author the audit tooling
+### 3. Ship the seven `bhphApi.ts` write wrappers
 
-Per §5.b Option C combined
-methodology:
+`frontend/src/lib/bhphApi.ts`
+currently exports only read
+helpers. Add seven new exported
+async functions:
 
-- **Service-verb enumeration.** Walk
-  `backend/dealer_ai/services/**/*.py`;
-  extract every publicly-exported
-  callable. Cross-reference to
-  frontend consumption via
-  `axios.*` / `fetch` / `useMutation`
-  / `useQuery` call sites in
-  `frontend/src/**/*.{ts,tsx}` (by
-  URL pattern match — service verbs
-  power endpoints; endpoint URLs
-  are the join key).
-- **DRF endpoint enumeration.**
-  Walk
-  `backend/dealer_ai/**/urls.py`
-  + viewset definitions; extract
-  every action + method
-  combination. Cross-reference to
-  the same frontend call-site
-  surface.
-- **Emit a merged manifest** as
-  input to the audit artifact.
+- `recordPromiseToPay(noteId,
+  payload)` → `POST
+  /admin/bhph-notes/${noteId}/promises/`
+- `markPromiseKept(promiseId,
+  payload)` → `POST
+  /admin/bhph-promises/${promiseId}/mark-kept/`
+  (payload includes payment
+  reference per M12.4 §5.d
+  Option A operator-triggered
+  reconciliation).
+- `markPromiseBroken(promiseId,
+  payload)` → `POST
+  /admin/bhph-promises/${promiseId}/mark-broken/`
+- `logCollectionContact(noteId,
+  payload)` → `POST
+  /admin/bhph-notes/${noteId}/contacts/`
+- `initiateRepossession(noteId,
+  payload)` → `POST
+  /admin/bhph-notes/${noteId}/repossessions/`
+- `markRepossessionRecovered(reposId,
+  payload)` → `POST
+  /admin/bhph-repossessions/${reposId}/mark-recovered/`
+- `markRepossessionReIntaked(reposId,
+  payload)` → `POST
+  /admin/bhph-repossessions/${reposId}/mark-re-intaked/`
+  (payload includes
+  ConditionReport reference
+  per M12.6 lifecycle).
 
-Location:
-`backend/dealer_ai/scripts/audit_operational_surface.py`
-(single script preferred; may
-split into
-`enumerate_service_verbs.py` +
-`enumerate_drf_endpoints.py` +
-`join_and_report.py` if
-implementation complexity
-warrants).
+Follow existing bhphApi.ts
+type-export conventions. Add
+TypeScript response types
+based on the backend
+serializers.
 
-**Not runtime code** — scripts are
-operator-invoked during M21.1; no
-Django app registration, no
-management-command surface, no
-tests required in this increment.
+### 4. Ship the seven frontend components
 
-### 4. Populate the audit artifact
+Attach to the M12.7 collector
+dashboard surface
+(`DealerAiBhphNoteDetail.tsx`
+Promises card, Contacts card,
+Repossessions card):
 
-Per §5.c Option A schema. Create
-`docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`.
+- **Promises card:**
+  - `RecordPromiseToPayForm`
+    (attach to card action
+    area — fields: promised
+    amount, promised date,
+    channel, notes).
+  - `MarkKeptPromiseButton`
+    row action (opens a
+    lightweight payment-
+    reference picker before
+    posting).
+  - `MarkBrokenPromiseButton`
+    row action (opens a
+    reason-code + notes
+    dialog).
+- **Contacts card:**
+  - `LogCollectionContactForm`
+    (attach to card action
+    area — fields: channel,
+    outcome, notes; FDCPA
+    scrub applies via
+    backend).
+- **Repossessions card:**
+  - `InitiateRepossessionForm`
+    (attach to card action
+    area — fields: reason,
+    initiated-at, notes).
+  - `MarkRecoveredButton`
+    row action (recovered-at
+    + location dialog).
+  - `MarkReIntakedButton`
+    row action (opens a
+    ConditionReport picker
+    scoped to the recovered
+    vehicle).
 
-**Per-row schema:**
+Prefer operator vocabulary in
+component names per M17 §6
+lesson 3. All components
+attach in-place per M17 §6
+lesson 6 + M19.4 posture; no
+new routes.
 
-| Backend capability | Missing operator surface | Affected operational journey | Recommended disposition |
-| --- | --- | --- | --- |
-| service verb path + DRF endpoint | expected component path or "unreachable" | existing journey path or "new required" | `M21-anchor` / `M21-conditional` / `defer-candidate-O2` / `defer-domain-milestone` / `intentional-omission` |
+### 5. Ship Vitest coverage
 
-**Per-domain narrative sections**
-after the table summarizing
-patterns (e.g. "BHPH write path —
-5 verbs, 0 UI surfaces;
-recommended disposition:
-M21-anchor via §5.a scope";
-"Accounting reversal — 3 verbs, 0
-UI surfaces; recommended
-disposition: defer-domain-
-milestone under Candidate A for
-M22 consideration").
+For each new form:
+- Submit path (happy path
+  posts correct payload
+  shape).
+- Validation path (required
+  fields, min/max, format).
+- Error path (backend 400 /
+  409 / 404 renders correctly).
 
-**Disposition definitions
-(reference):**
+For each new button:
+- Click handler dispatches
+  the wrapper with correct
+  args.
+- Confirm dialog (if
+  applicable) appears + can
+  be dismissed / confirmed.
 
-- **`M21-anchor`** — pre-committed
-  M21 scope (BHPH writes, be-back
-  writes); confirmed by audit.
-- **`M21-conditional`** — audit-
-  surfaced item recommended for
-  M21.4 conditional scope.
-- **`defer-candidate-O2`** —
-  future OSC-shaped milestone
-  (M22+); explicit re-entry path.
-- **`defer-domain-milestone`** —
-  belongs in a distinct domain
-  milestone (e.g. accounting
-  reversal → Candidate A for
-  M22); explicit re-entry path.
-- **`intentional-omission`** —
-  capability is internal / not
-  meant to be user-facing;
-  document why.
+Target Vitest baseline
+movement: 153 → ~163-170.
 
-### 5. Draft M21.2+ scope recommendation
+### 6. Extend `seed_journey_bhph_collections_workflow`
 
-Per §5.d Option B. After the
-audit artifact lands, draft a
-scope recommendation for M21.2
-onward:
+Currently seeds a state where
+the M20.4 read-side journey
+can review the portfolio.
+Extend to seed:
+- A note with a PtP-ready
+  balance (for `record_promise`).
+- An existing active promise
+  (for `mark_broken` /
+  `mark_kept`).
+- Existing contact history
+  visible (so `log_contact`
+  demonstrably grows the
+  list).
+- A note in a state where
+  `initiate_repossession` is
+  valid (broken PtP + past-
+  due balance).
+- A repossession record in
+  `initiated` state (for
+  `mark_recovered`).
+- A recovered repossession
+  (for `mark_re_intaked` +
+  ConditionReport
+  attachment).
 
-- **Re-validate the two anchors**
-  (BHPH write-side UI + be-back
-  write-side UI) against the
-  audit findings. Confirm the
-  expected component surface
-  matches the observed backend
-  capability; flag any surprises
-  as §0.a M21.1 amendments.
-- **Disposition follow-up cadence
-  queue UI.** Recommend M21-
-  conditional (into M21.4) or
-  defer-candidate-O2 based on
-  audit evidence (does the
-  cadence backend surface exist
-  and is it complete? does the
-  queue fit remaining M21
-  capacity?).
-- **Disposition any additional
-  audit-surfaced items** with
-  `M21-anchor` or `M21-
-  conditional` recommendations.
-  Ground each in operator pain
-  + dependency notes.
-- **Present the recommendation +
-  await user confirmation.**
+Backend tests: idempotency
+(rerun leaves same state) +
+tenant scoping (writes are
+scoped to demo tenant only).
+Target backend baseline
+movement: 4,755 → ~4,760-4,770.
 
-### 6. Lock M21.2+ scope
+### 7. Re-expand `acceptance/journeys/bhph/collections_workflow.spec.ts`
 
-Once user confirms scope:
+M20.4 narrowed to the read
+side; M21.2 re-expands to the
+full workflow:
 
-- Update
-  `MILESTONE_21_PLANNING.md`
-  §0.a with an M21.1 amendment
-  recording the scope lock.
-  Frontmatter `sources` may
-  extend to reference the audit
-  artifact.
-- Adjust §7 sequencing if M21.4
-  is skipped (M21.5 becomes the
-  next increment) or if the
-  audit surfaces implementation-
-  splitting evidence.
+- Operator navigates to BHPH
+  portfolio → drills into a
+  note.
+- Records a promise-to-pay
+  (asserts new row appears
+  in Promises card).
+- On a separate note, marks
+  an existing promise as
+  broken (asserts state
+  transition, badge update).
+- Logs a collection contact
+  (asserts row appears in
+  Contacts card).
+- Initiates a repossession
+  (asserts state transition
+  + row in Repossessions
+  card).
+- Marks a recovered
+  repossession as re-intaked
+  with ConditionReport
+  (asserts final state).
 
-### 7. Ship the M21.1 handoff
+Business-outcome assertions at
+each step. If any step
+requires a testid that
+doesn't exist on the target
+component, add it opportunistically
+per §5.g Option B.
 
-- `docs/handoffs/SESSION_167_m21_inc1_audit.md`
-  matching M20.1 handoff shape.
+### 8. Ship the M21.2 handoff + refresh entry point
+
+- `docs/handoffs/SESSION_168_m21_inc2_bhph_write.md`.
 - Refresh
   `00-START-NEXT-SESSION.md`
-  for M21.2.
-- **Do NOT push** — M21.1
-  coordinated push happens at
-  M21 close per M18/M19/M20
-  cadence.
+  for SESSION_169 / M21.3.
+- **Do NOT push** — M21
+  coordinated push happens
+  at M21 close per M18.6 /
+  M19.6 / M20.5 cadence.
 
-## Non-goals for SESSION_167
+## Non-goals for SESSION_168
 
-- ❌ Do NOT ship any frontend UI
-  components in this increment
-  — M21.1 is audit + scope-lock
-  only.
-- ❌ Do NOT ship any backend
-  service verbs or endpoints —
-  M21 has zero new backend
-  surface per §0 preservation
-  posture.
+- ❌ Do NOT modify any
+  backend service verb —
+  every M21.2 UI action
+  invokes an existing verb
+  through an existing
+  endpoint.
+- ❌ Do NOT add or modify
+  any DRF endpoint — the
+  seven target endpoints
+  all ship as of M12.
+- ❌ Do NOT add new
+  frontend routes — attach
+  to
+  `DealerAiBhphNoteDetail.tsx`
+  in place.
+- ❌ Do NOT touch the be-
+  back or cadence surfaces —
+  those land in M21.3.
 - ❌ Do NOT modify existing
-  frontend routes — M21 adds
-  zero routes.
-- ❌ Do NOT modify shipped
-  service verbs, endpoints,
-  tenancy carriers, permission
-  classes, or migrations —
-  M21's zero-drift streak
-  extension (twenty → twenty-
-  one) depends on this.
-- ❌ Do NOT extend or modify the
-  M20 acceptance suite in this
-  increment — journey
-  extensions land in M21.2
-  onward alongside their
-  corresponding UI shipping.
-- ❌ Do NOT force-push or amend
-  earlier commits (M20 close is
-  already on `origin/main`).
+  BHPH read-side components
+  or the portfolio dashboard
+  unless a specific bug
+  surfaces during journey
+  extension (in which case
+  surface as an §0.a M21.2
+  amendment).
+- ❌ Do NOT force-push or
+  amend earlier commits.
 - ❌ Do NOT modify M1–M20
   shipped surface.
-- ❌ Do NOT bundle Candidate G's
-  full-coverage testid pass —
-  §5.g Option B binds M21 to
-  opportunistic testids only
-  (in M21.2+ implementation
-  increments).
+- ❌ Do NOT bundle Candidate
+  G full-coverage testids —
+  §5.g Option B binds M21
+  to opportunistic testids
+  only.
+- ❌ Do NOT ship any
+  additional endpoints from
+  the audit's `defer-
+  candidate-O2` list — those
+  are Candidate O2 for M22+
+  per §0.a M21.1 lock.
 
 ## Baseline expected at close
 
-Backend baseline: 4,755
-(unchanged — audit scripts are
-operator-invoked, not tested).
-Frontend Vitest: 153
-(unchanged). Acceptance suite: 6
-journeys (unchanged). Migrations
-`0001`–`0048` (unchanged).
-Tenancy carriers 52 (unchanged).
-Permission classes 7
-(unchanged). Frontend operator
-routes 20 (unchanged). DRF admin
-surface 113 (unchanged).
-
-**New surface at M21.1 close:**
-`backend/dealer_ai/scripts/audit_operational_surface.py`
-(or split scripts) +
-`docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-+ §0.a M21.1 scope-lock
-amendment in
-`MILESTONE_21_PLANNING.md`.
+- **Backend:** ~4,760-4,770
+  pass (up from 4,755 via
+  delta command tests).
+- **Frontend Vitest:** ~163-
+  170 pass (up from 153 via
+  new component tests).
+- **Acceptance suite:** 6
+  journeys (BHPH re-expanded
+  end-to-end).
+- **Migrations:** `0001`–`0048`
+  (unchanged).
+- **Tenancy carriers:** 52
+  (unchanged).
+- **Permission classes:** 7
+  (unchanged — zero-drift
+  streak targets extension
+  to twenty-one at M21
+  close).
+- **Frontend operator
+  routes:** 20 (unchanged).
+- **DRF admin surface:** 113
+  (unchanged — M21.2 adds
+  zero endpoints).
 
 ## NEXT TASK
 
-Start SESSION_167 with (a)
-starting-state verification, (b)
-M20 CI-green re-confirmation, (c)
-author the audit tooling per §5.b
-Option C, (d) populate the audit
-artifact per §5.c Option A, (e)
-draft M21.2+ scope recommendation
-per §5.d Option B, (f) await user
-confirmation, (g) record scope
-lock as §0.a M21.1 amendment, (h)
-ship the M21.1 handoff.
+Start SESSION_168 with (a)
+starting-state verification,
+(b) acceptance CI green
+re-confirmation, (c) ship
+seven `bhphApi.ts` write
+wrappers with typed responses,
+(d) ship seven frontend
+components on the M12.7
+collector dashboard surface,
+(e) Vitest coverage for
+forms + buttons, (f) extend
+`seed_journey_bhph_collections_workflow`
++ backend tests, (g) re-
+expand
+`bhph/collections_workflow.spec.ts`
+to full write coverage with
+business-outcome assertions,
+(h) ship the M21.2 handoff.
 
 ---
 
@@ -357,49 +419,56 @@ ship the M21.1 handoff.
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_21_PLANNING.md`
-   (active — expanded at
-   SESSION_166)
-6. `docs/handoffs/SESSION_166_m21_inc0_planning.md`
-   (M21.0 shipped)
-7. `docs/roadmap/MILESTONE_20_RETROSPECTIVE.md`
-   §8 + §9 (M20 unblocks +
-   standing M21 question that
-   became Candidate O)
-8. `docs/roadmap/MILESTONE_20_PLANNING.md`
-   (framework + journey patterns
-   M21 extends)
+   (active — §0.a M21.1
+   scope lock recorded)
+6. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+   (M21.1 audit artifact —
+   traces M21.2+ scope
+   decisions)
+7. `docs/handoffs/SESSION_167_m21_inc1_audit.md`
+   (M21.1 shipped)
+8. `docs/handoffs/SESSION_166_m21_inc0_planning.md`
+   (M21.0 shipped —
+   governing contract +
+   eight §5 decisions)
 9. `docs/CAPABILITY_MATRIX.md`
-   §7u (M20 shipped surface —
-   the substrate M21's audit
-   walks)
+   §7u (M20 shipped surface)
 
 Narrative docs are claims. Rules +
 research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_166 — Milestone 21 · Increment 0 SHIPPED)
+## Operational state (post-SESSION_167 — Milestone 21 · Increment 1 SHIPPED)
 
 - **Backend (local):** Django on
   `:8001`. Migrations
   `0001`–`0048`. Test baseline:
   **4,755 pass**, 1 skipped, 0
-  fail.
+  fail (unchanged; audit
+  scripts are operator-
+  invoked, not tested).
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
   `:5173`. `tsc --noEmit` +
   `vite build` clean. **Vitest
   baseline: 153 pass**.
 - **Frontend (prod):** NONE.
-- **Acceptance workspace (local):**
-  Playwright 1.49 + TS 5.6
-  operational; **six journeys**
-  passing end-to-end.
+- **Acceptance workspace
+  (local):** Playwright 1.49 +
+  TS 5.6 operational; **six
+  journeys** passing end-to-
+  end (unchanged).
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`
-  — green across the last three
-  pushes (M20.5 CI-cleanups +
-  M21 skeleton).
+  — green across the last
+  three pushes (M20.5 CI-
+  cleanups + M21 skeleton).
+  M21.0 and M21.1 commits are
+  local-ahead of
+  `origin/main`; coordinated
+  push at M21 close per
+  M18.6 / M19.6 / M20.5.
 - **Async runtime:** Celery
   5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1
@@ -407,27 +476,29 @@ research + code are facts.
   scheduled task families
   registered**.
 - **Milestones shipped:** M1 →
-  **M20**. **M21 in progress**
-  (M21.0 planning shipped at
-  SESSION_166; M21.1 audit + M21
-  scope lock next at
-  SESSION_167).
-- **DRF admin surface:** **113**
+  **M20**. **M21 in progress
+  (M21.0 planning + M21.1
+  audit shipped locally).**
+- **DRF admin surface:** 113
   endpoints.
 - **Frontend operator routes:**
-  **20**.
+  20.
 - **Public endpoints:** +1 M6.5
   showroom.
-- **Service surface:** all M1–M20
-  packages unchanged. M21 adds
-  zero service verbs.
-- **Frontend surfaces:** unchanged
-  since M19.4.
-- **Tenancy carriers:** **52**.
-- **Permission classes:** **7
-  actual** — zero-drift streak
-  **twenty consecutive
-  milestones** (M10 → M20).
+- **Service surface:** all
+  M1–M20 packages unchanged.
+  M21 adds zero service
+  verbs.
+- **Frontend surfaces:**
+  unchanged since M19.4;
+  M21.2 will extend
+  `DealerAiBhphNoteDetail.tsx`
+  in place (no new routes).
+- **Tenancy carriers:** 52.
+- **Permission classes:** 7
+  actual — zero-drift streak
+  twenty consecutive
+  milestones (M10 → M20).
   M21 targets extension to
   twenty-one at close.
 - **`Vehicle.is_available`:**
@@ -436,45 +507,57 @@ research + code are facts.
   scrub stages (unchanged).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 21 status:**
-  IN PROGRESS. M21.0 (planning
-  refinement + target selection)
-  shipped at SESSION_166 with
-  all eight §5 decisions
-  confirmed as-recommended.
-  Candidate O — Operational
-  Surface Completion — locked
-  as §5.a target. Two anchor
-  implementations pre-committed
-  (BHPH + be-back); conditional
-  third (follow-up cadence)
-  pending M21.1 audit.
-- **Planning-time streak:** **87
-  as-recommended M5.1 → M21.0**
-  across twelve consecutive
-  milestones (M10 + M11 + M12 +
-  M13 + M14 + M15 + M16 + M17 +
-  M18 + M19 + M20 + M21). Target
-  for M21.1: audit-execution
-  session — no §5 decisions
-  land here; scope-lock recorded
-  as §0.a amendment.
-- **DoD amendment:** formalized
-  at M21.0 §5.f Option B —
-  every future customer-facing
-  milestone must add or update
-  at least one Playwright
-  operational journey, or
-  explicitly document in §3 why
-  no journey change is required.
-  Applies from M21 forward.
-- **Guiding principle for M21+
-  Operational Surface
-  Completion:** every M21
-  shipped surface maps to an
-  already-shipped backend
-  capability, closes a missing
-  operator-facing UI, adds or
-  extends a Playwright
-  operational journey, and is
-  not generic UX polish.
+- **Milestone 21 status:** IN
+  PROGRESS. M21.0 (planning
+  refinement + target
+  selection) + M21.1
+  (systematic operational-
+  surface audit + M21 scope
+  lock) shipped locally.
+  Scope locked at M21.1
+  close: M21.2 BHPH write-
+  side UI (7 endpoints);
+  M21.3 be-back CREATE +
+  cadence CONFIG (3
+  endpoints); M21.4 skipped;
+  M21.5 close-out.
+- **Audit tooling:**
+  `backend/dealer_ai/scripts/audit_operational_surface.py`
+  operator-invoked from the
+  `backend/` directory
+  (`python3 -m dealer_ai.scripts.audit_operational_surface`).
+  Rerun after new endpoints
+  or component consumers
+  ship to refresh
+  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`.
+- **Planning-time streak:**
+  **87 as-recommended M5.1
+  → M21.0** across twelve
+  consecutive milestones
+  (M10 → M21). No new §5
+  decisions land in M21.1
+  or M21.2 (both are
+  execution sessions);
+  streak preserved.
+- **DoD amendment
+  (formalized at M21.0
+  §5.f Option B):** every
+  future customer-facing
+  milestone must add or
+  update at least one
+  Playwright operational
+  journey, or explicitly
+  document in §3 why no
+  journey change is
+  required. Applies from
+  M21 forward.
+- **Governing contract
+  (Candidate O):** every
+  M21 shipped surface maps
+  to an already-shipped
+  backend capability,
+  closes a missing
+  operator-facing UI, adds
+  or extends a Playwright
+  operational journey, and
+  is not generic UX polish.
