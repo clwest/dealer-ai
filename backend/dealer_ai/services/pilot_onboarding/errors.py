@@ -11,6 +11,9 @@ Domain-error → HTTP mapping (consumed by M19.3 endpoints):
 - :class:`NonPilotTerminationError` — 500 (broken-invariant guard;
   ``terminate_pilot`` should never be called against a non-pilot
   Dealership).
+- :class:`NonPilotImportError` — 500 (broken-invariant guard;
+  ``import_pilot_inventory`` should never be called against a
+  non-pilot Dealership). Added at M19.2 per §7 M19.2.
 - :class:`PilotReadinessNotConfirmedError` — 409 (advance-step guard;
   ``readiness_confirmed`` cannot be completed before every prior
   step's row exists with ``completed_at`` populated).
@@ -40,6 +43,21 @@ class NonPilotTerminationError(RuntimeError):
     Pairs with an ``assert dealership.is_pilot`` at the top of every
     pilot-write verb per M15/M16/M17/M18 broken-invariant-guard
     pattern.
+    """
+
+
+class NonPilotImportError(RuntimeError):
+    """Raised when ``import_pilot_inventory`` is called against a non-pilot Dealership.
+
+    Belt-and-suspenders guard from §7 M19.2 mirroring
+    :class:`NonPilotTerminationError`. Fires as ``RuntimeError`` because
+    reaching this state is a programming bug in a caller that should
+    have routed the CSV through the M6.3 franchise/demo path, not
+    caller input validation.
+
+    Pairs with an ``assert dealership.is_pilot`` at the top of
+    :func:`import_pilot_inventory` per M15/M16/M17/M18/M19.1
+    broken-invariant-guard pattern.
     """
 
 

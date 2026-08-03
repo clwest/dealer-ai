@@ -79,7 +79,6 @@ from dealer_ai.services.pilot_onboarding import (
     advance_step,
     create_pilot_dealership,
     create_prospect,
-    import_pilot_inventory,
     is_pilot_ready,
     list_pilot_dealerships,
     list_prospects,
@@ -801,17 +800,17 @@ class ProspectVerbsTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Inventory import stub
+# Inventory import result dataclass — shape survives M19.2 body
 # ---------------------------------------------------------------------------
 
 
-class PilotInventoryImportStubTests(TestCase):
-    def test_stub_raises_not_implemented(self) -> None:
-        d = make_pilot_dealership(slug="m191-import-stub")
-        with self.assertRaises(NotImplementedError):
-            import_pilot_inventory(
-                dealership=d, csv_source="not-a-real-csv"
-            )
+class PilotInventoryImportResultShapeTests(TestCase):
+    """M19.1 shipped the ``PilotInventoryImportResult`` dataclass +
+    a ``NotImplementedError`` stub for ``import_pilot_inventory``.
+    M19.2 replaced the stub with the real body (see
+    ``tests/test_m192_pilot_inventory_import.py`` for full behavior
+    coverage). The dataclass shape assertion below survives that
+    transition to lock the M19.1 return contract in place."""
 
     def test_result_dataclass_default_empty_tuples(self) -> None:
         r = PilotInventoryImportResult(dealership_id=1)

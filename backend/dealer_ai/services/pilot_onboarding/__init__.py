@@ -22,12 +22,17 @@ Public API:
   readiness precondition + immutability guard.
 - :func:`is_pilot_ready` — pure predicate over the checklist
   ``is_ready`` flag.
+- :func:`import_pilot_inventory` — atomic CSV import (M19.2 body)
+  with belt-and-suspenders ``is_pilot`` guard + M6.3 substrate
+  delegation + pilot-specific policy overlay (source label +
+  no-sweep of unlisted rows).
 - :class:`PilotInventoryImportResult` — frozen dataclass return
-  contract (M19.1 stub; full body at M19.2).
+  contract.
+- :data:`PILOT_IMPORT_SOURCE` — stable ``Vehicle.source`` label
+  for pilot-imported rows.
 - :class:`PilotAlreadyExistsError` — 409 (slug collision).
 - :class:`NonPilotTerminationError` — 500 (broken invariant).
-- :class:`PilotReadinessNotConfirmedError` — 409 (advance-step
-  precondition).
+- :class:`NonPilotImportError` — 500 (broken invariant).
 - :class:`InvalidProspectTransitionError` — 409 (state machine).
 - :class:`ConvertedRequiresDealershipError` — 409
   (conversion requires target Dealership FK).
@@ -46,11 +51,13 @@ from .checklist import (
     is_pilot_ready,
 )
 from .errors import (
+    NonPilotImportError,
     NonPilotTerminationError,
     PilotAlreadyExistsError,
     PilotReadinessNotConfirmedError,
 )
 from .inventory_import import (
+    PILOT_IMPORT_SOURCE,
     PilotInventoryImportResult,
     import_pilot_inventory,
 )
@@ -71,7 +78,9 @@ __all__ = [
     "ChecklistStepAlreadyCompletedError",
     "ConvertedRequiresDealershipError",
     "InvalidProspectTransitionError",
+    "NonPilotImportError",
     "NonPilotTerminationError",
+    "PILOT_IMPORT_SOURCE",
     "PilotAlreadyExistsError",
     "PilotInventoryImportResult",
     "PilotReadinessNotConfirmedError",
