@@ -19,9 +19,9 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 153
-- **Consumed by frontend components (`covered`):** 110
-- **Backend-only (audit findings):** 43
-  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **7**
+- **Consumed by frontend components (`covered`):** 113
+- **Backend-only (audit findings):** 40
+  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **4**
 - **Service verbs enumerated:** 312
 - **Distinct view modules importing service verbs:** 22
 
@@ -152,9 +152,9 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 102 | `admin/compliance-records/<int:pk>/` | `views_f_and_i.admin_compliance_update` | `admin-compliance-update` | fAndIApi.ts:201 `updateCompliance` | `covered` |
 | 103 | `admin/deal-jackets/<int:contract_pk>/` | `views_f_and_i.admin_deal_jacket_read` | `admin-deal-jacket-read` | fAndIApi.ts:150 `fetchDealJacket` | `covered` |
 | 104 | `admin/f-and-i/deals/` | `views_f_and_i.admin_f_and_i_deals_list` | `admin-f-and-i-deals-list` | fAndIApi.ts:61 `fetchDeals` | `covered` |
-| 105 | `admin/leads/walk-in/` | `views_leads.admin_lead_walk_in_create` | `admin-lead-walk-in-create` | salesApi.ts:105 `createWalkInLead` ⚠ wrapper-only | `defer-candidate-O2` |
-| 106 | `admin/leads/phone/` | `views_leads.admin_lead_phone_create` | `admin-lead-phone-create` | salesApi.ts:115 `createPhoneLead` ⚠ wrapper-only | `defer-candidate-O2` |
-| 107 | `admin/leads/referral/` | `views_leads.admin_lead_referral_create` | `admin-lead-referral-create` | salesApi.ts:122 `createReferralLead` ⚠ wrapper-only | `defer-candidate-O2` |
+| 105 | `admin/leads/walk-in/` | `views_leads.admin_lead_walk_in_create` | `admin-lead-walk-in-create` | salesApi.ts:105 `createWalkInLead` | `covered` |
+| 106 | `admin/leads/phone/` | `views_leads.admin_lead_phone_create` | `admin-lead-phone-create` | salesApi.ts:115 `createPhoneLead` | `covered` |
+| 107 | `admin/leads/referral/` | `views_leads.admin_lead_referral_create` | `admin-lead-referral-create` | salesApi.ts:122 `createReferralLead` | `covered` |
 | 108 | `admin/leads/webhook/` | `views_leads.admin_lead_webhook_create` | `admin-lead-webhook-create` | salesApi.ts:132 `createWebhookLead` ⚠ wrapper-only | `defer-candidate-O2` |
 | 109 | `admin/test-drives/` | `views_test_drives.admin_test_drive_create` | `admin-test-drive-create` | salesApi.ts:177 `createTestDrive` ⚠ wrapper-only | `defer-candidate-O2` |
 | 110 | `admin/test-drives/list/` | `views_test_drives.admin_test_drive_list` | `admin-test-drive-list` | — | `defer-candidate-O2` |
@@ -204,7 +204,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**43 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**40 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -214,7 +214,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (38)
+### defer-candidate-O2 (35)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -242,9 +242,6 @@ _None._
 - `admin/funding/` → `views_f_and_i.admin_funding_create` (`admin-funding-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/funding/<int:pk>/` → `views_f_and_i.admin_funding_update` (`admin-funding-update`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/chargebacks/` → `views_f_and_i.admin_chargeback_create` (`admin-chargeback-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
-- `admin/leads/walk-in/` → `views_leads.admin_lead_walk_in_create` (`admin-lead-walk-in-create`). Imported service verbs: `get_current_dealership`, `registered_platforms`
-- `admin/leads/phone/` → `views_leads.admin_lead_phone_create` (`admin-lead-phone-create`). Imported service verbs: `get_current_dealership`, `registered_platforms`
-- `admin/leads/referral/` → `views_leads.admin_lead_referral_create` (`admin-lead-referral-create`). Imported service verbs: `get_current_dealership`, `registered_platforms`
 - `admin/leads/webhook/` → `views_leads.admin_lead_webhook_create` (`admin-lead-webhook-create`). Imported service verbs: `get_current_dealership`, `registered_platforms`
 - `admin/test-drives/` → `views_test_drives.admin_test_drive_create` (`admin-test-drive-create`). Imported service verbs: `get_current_dealership`
 - `admin/test-drives/list/` → `views_test_drives.admin_test_drive_list` (`admin-test-drive-list`). Imported service verbs: `get_current_dealership`
@@ -348,7 +345,7 @@ _None._
 ### views_leads
 
 - **Endpoints:** 4
-- **Backend-only:** 4
+- **Backend-only:** 1
 - **Backend-only dispositions in this module:** `defer-candidate-O2`
 
 ### views_lifecycle
