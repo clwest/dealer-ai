@@ -1,9 +1,11 @@
 ---
 title: "Milestone 20 — Operational Journey Validation (Playwright acceptance testing)"
-status: active
+status: shipped
 type: planning-memo
 generated: 2026-08-02
 generated_at_session: SESSION_159 (skeleton), SESSION_160 (expansion)
+shipped_at_session: SESSION_165
+shipped_date: 2026-08-02
 milestone: 20
 milestone_name: "Operational Journey Validation (Playwright acceptance testing)"
 sources:

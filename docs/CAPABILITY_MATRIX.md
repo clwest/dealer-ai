@@ -2101,6 +2101,128 @@ Milestone 19 close:**
 
 ---
 
+## 7u. Operational Journey Validation (Playwright acceptance testing) (Milestone 20, shipped)
+
+Milestone 20 (SESSION_160 → SESSION_165)
+delivered the **executable operational
+contract every future milestone extends** —
+durable Playwright acceptance suites that
+walk real dealership workflows through the
+shipped M1–M19 UI against deterministic
+seeded state. **This is a tooling-axis
+milestone, not a domain milestone.** M20
+ships zero new backend service verbs, zero
+new endpoints, zero new migrations, zero
+new tenancy carriers, zero new permission
+classes, and zero new frontend routes.
+The change surface is a new top-level
+`acceptance/` workspace, six seed delta
+management commands, a settings.py
+`M20_ACCEPTANCE_DB=1` env branch (matching
+the M2.1 `migration_check` DB alias pattern),
+and a new `.github/workflows/acceptance.yml`
+CI job. **Zero-drift permission-class
+posture extends to twenty consecutive
+milestones** (M10 → M20). Deferrals
+cataloged in `MILESTONE_20_RETROSPECTIVE.md`
+§3. See `docs/roadmap/MILESTONE_20_PLANNING.md`
++ `docs/roadmap/MILESTONE_20_RETROSPECTIVE.md`
+for what shipped vs. deferred.
+
+**Guiding principle** (M20 planning): the
+Playwright suite is an operational
+acceptance contract, not a UI automation
+project. Every journey validates business
+outcomes through the real application
+using deterministic seeded state. If a
+journey passes, the conclusion is that a
+dealership employee can successfully
+perform that operational workflow — not
+merely that buttons were clicked
+successfully.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| Framework substrate (M20.1) | New top-level `acceptance/` workspace sibling to `backend/` + `frontend/` per §5.c Option C. `package.json` with `@playwright/test` 1.49 + TypeScript 5.6 devDeps only (isolated from frontend runtime bundle). `playwright.config.ts` with `webServer` array launching backend (`python3 manage.py runserver 127.0.0.1:8101 --noreload` with `M20_ACCEPTANCE_DB=1` opting into isolated SQLite at `backend/db.acceptance.sqlite3`) + frontend (`vite dev` locally, `vite build && vite preview` in CI; explicit `--host 127.0.0.1` per §0.a M20.2 decision 2). `reuseExistingServer: true` locally, `false` in CI. Reporter: HTML (always) + list + github (in CI). Artifact config per §5.g Option A: `trace: 'on-first-retry'`, `video: 'retain-on-failure'`, `screenshot: 'only-on-failure'`. Tag filter support for `@pilot-critical`. `tsconfig.json` strict + `@support/*` path alias. `.gitignore` covers `.auth/`, `playwright-report/`, `test-results/`, `node_modules/`. `README.md` one-page contributor onboarding. `AUTH_STORAGE` type + persona-project pattern: one `setup` project + one project per persona (`platform_operator`, `owner`, `sales_manager`, `recon_manager`, `bhph_collector`, `office_accounting`). ES module `dirname` via `path.dirname(fileURLToPath(import.meta.url))` per §0.a M20.2 decision 1. | Zero new external services: no Docker, no dedicated staging DB. Playwright's own `webServer` orchestration + isolated SQLite file = zero new infrastructure for the milestone. `workers: 1` + `fullyParallel: false` per §0.a M20.1 decision 2 since journey seeds mutate shared DB state; revisit if suite time exceeds ~8 min. |
+| Support layer (M20.1–M20.4) | `acceptance/support/auth/personas.ts` — `PERSONAS` registry with five personas. `acceptance/support/auth/login.setup.ts` — one setup step runs all six seed commands via `spawnSync("python3", ["manage.py", <cmd>])`; one login step per persona via `page.goto('/login')` + form fill + submit + storage-state save to `.auth/{persona}.json` (real UI login per §5.e Option B, not a test-only endpoint). Belt-and-suspenders `/auth/me/` check catches persona-registry drift at setup, not deep inside a journey. `acceptance/support/seed/invoke.ts` — helper to invoke a Django management command from a Playwright test (spawn + stderr propagation). Five business-outcome assertion helpers: `pilot.ts` (`expectPilotExists`, `expectStepCompleted`, `expectPilotReady`, `PILOT_ONBOARDING_STEP_ORDER`), `dashboard.ts` (`expectLeadListHasAtLeast`, `findSeededLead`, `expectLeadAssignedTo`), `recon.ts` (`expectFinding`, `expectDecisionRecorded`), `accounting.ts` (`expectSnapshotCountAtLeast`, `expectSnapshotBalanced` — envelope-aware per §0.a M20.3 decision 3), `bhph.ts` (`findSeededNoteId` by loan-term signature, `expectNoteDetailPopulated`). | Every helper reads the shipped admin API and asserts on service-layer state. No helper reaches into the ORM directly. Response-shape mismatches surface as type errors at edit time, not runtime "0 items returned" mysteries. |
+| Six seed delta management commands (M20.1–M20.4) | New `dealer_ai/management/commands/seed_journey_*.py`, one per journey: `seed_journey_pilot_onboarding` (M20.1), `seed_journey_owner_morning_review` (M20.2), `seed_journey_sales_manager_daily_startup` (M20.2), `seed_journey_recon_workflow` (M20.3), `seed_journey_office_accounting_workflow` (M20.3), `seed_journey_bhph_collections_workflow` (M20.4). Each is idempotent via a stable identifier (username / stock number / fixture-tag prefix on notes / stable description). Each supports `--reset` to wipe the fixture chain + re-seed. Each composes existing M1–M19 service verbs (`record_phone_lead`, `create_prospect` + `advance_prospect_state`, `post_journal_entry` + `seed_default_coa`, `record_payment` + `record_promise` + `mark_broken` + `record_contact` + `record_repossession`) — no parallel write paths. Object fixtures (Vehicle / CustomerLead / Sale / ConditionReport / ConditionFinding / BhphNote) use direct `.objects.create()` matching the demo-store archetype pattern where no public write-verb exists (§0.a M20.3 decision 2 + §0.a M20.4 decision 4). Each seed provisions its persona user + role membership; persona names reflect operational roles even where the underlying auth role differs (§0.a M20.4 decision 2 for `bhph_collector` → `sales_manager` role). | 76 focused backend tests (5 + 15 + 12 + 15 + 13 + 7 + 14 = 76 exact) cover fresh-run provisioning, credentials-authenticate, tenant-scoping, idempotency, `--reset` recovery, and (where relevant) terminal-state recovery. Backend baseline 4,679 → 4,755 pass (+76). Zero regressions. |
+| Six journey specs (M20.1–M20.4) | Organized by persona under `acceptance/journeys/`: `pilot/onboarding.spec.ts` (M20.1 `@pilot-critical`), `owner/morning_review.spec.ts` (M20.2 `@pilot-critical`), `sales_manager/daily_startup.spec.ts` (M20.2), `recon/workflow.spec.ts` (M20.3), `office/accounting_workflow.spec.ts` (M20.3), `bhph/collections_workflow.spec.ts` (M20.4). Each journey opens with an API pre-flight (business-outcome assertion helper confirms the seed produced the expected state), navigates through the shipped UI as the persona, and closes with a service-layer business-outcome assertion. Selectors prefer `data-testid` where the shipped UI carries them (M19.4 pilot admin surface); text/role selectors elsewhere per §0.a M20.2 decision 5 (`CardTitle` renders as `<div>`, not a semantic heading) with class-signature scoping for non-Radix modals (`div.fixed.inset-0.z-50` for `LeadDetailModal` per §0.a M20.2 decision 4). Two journeys carry `@pilot-critical` — the pilot onboarding + owner morning review scenarios that must not regress silently on a PR. **Total local dry-run: 12 passed (~19s)** across 6 setup steps + 6 journeys. | M20.4 journey scope narrowed to READ SIDE only per §0.a M20.4 decision 1 — the four write-side BHPH operations (record PtP, mark broken, log contact, initiate repossession) have no shipped frontend UI as of M12.7. Missing UI recorded as M21+ candidate "M12.8 BHPH collections write-side UI". |
+| GitHub Actions CI job (M20.1) | New `.github/workflows/acceptance.yml`. Triggers on `pull_request` + `push` to `main`. Sets up Python 3.12 + Node 20 + installs backend deps (via `pip install -r backend/requirements.txt`) + frontend deps (`npm ci`) + acceptance deps (`npm install`) + Playwright Chromium (with `actions/cache@v4` on `~/.cache/ms-playwright` keyed by `acceptance/package.json` hash). Runs Playwright with tag filter: `--grep '@pilot-critical'` on PR (pilot-critical subset, ~90s target); no filter on `main` push (full six-journey suite, ~5–8 min target). Uploads HTML report + traces + videos as artifacts on failure (`if: failure() \|\| cancelled()`) with 14-day retention. Concurrency group: `acceptance-<workflow>-<ref>` with `cancel-in-progress: true` so a fresh push cancels a stale run. Fault-injection verified locally at M20.5: intentional selector break produces `playwright-report/index.html` + `test-results/.../test-failed-1.png` + `test-results/.../video.webm` + `test-results/.../error-context.md`. | First real CI run happens on the M20.5 coordinated push (this milestone's shipping push). Prior to that the workflow is wired but has never fired. |
+| Backend settings extension (M20.1) | Additive `backend/dealer_kit/settings.py` branch (§0.a M20.1 decision 1): `M20_ACCEPTANCE_DB=1` env var points the default DB at `backend/db.acceptance.sqlite3` (gitignored). Matches the M2.1 `migration_check` DB alias pattern — isolated SQLite file, additive to existing settings, no impact on dev or production DB paths. Playwright `webServer` sets the env var; local dev unaffected. | Alternative considered + rejected: separate `dealer_kit/settings_acceptance.py` module. Env branch is smaller, matches existing precedent, and requires no `DJANGO_SETTINGS_MODULE` override in the webServer config. |
+| Test baseline | +76 backend across M20 (M19 close **4,679** → M20 close **4,755**). Zero regressions. Frontend Vitest unchanged at **153 pass** (M20 does not extend Vitest — acceptance is a separate test surface). Zero migrations shipped in M20 (0043-0048 unchanged). `manage.py check` + `makemigrations --check` clean at every M20 close. Per-increment delta: M20.1 = +15 (pilot onboarding seed tests); M20.2 = +27 (12 owner + 15 sales_manager); M20.3 = +20 (13 recon + 7 accounting); M20.4 = +14 (BHPH); M20.5 = 0 (docs + retrospective). | Cross-milestone integrity: full suite passes on every commit; every M20.x seed test verifies idempotency, tenant scoping, credentials authenticate, and `--reset` recovery. |
+
+**What is NOT shipped in Milestone
+20** (deferred per
+`MILESTONE_20_RETROSPECTIVE.md` §3):
+
+- **Write-side BHPH collections UI**
+  (record PtP, mark broken, log
+  contact, initiate repossession) —
+  M12 endpoints exist; frontend UI
+  never shipped. Re-entry as M21+
+  candidate "M12.8 BHPH collections
+  write-side UI".
+- **Dashboard `data-testid`
+  hardening** — text/role selectors
+  work today but are brittle.
+- **Full cross-browser CI matrix** —
+  Chromium-only in CI; Firefox +
+  WebKit available locally.
+- **Mobile / responsive viewport
+  journeys** — desktop-only viewport.
+- **Performance / load testing** —
+  explicit non-goal.
+- **Third-party integration
+  stubs / mocks** — not needed
+  (M18.1 outbound guard already
+  suppresses).
+- **Nightly-cron acceptance runs**
+  — `main` push trigger is
+  sufficient.
+- **All M19 deferrals still valid**
+  per `MILESTONE_19_RETROSPECTIVE.md`
+  §3.
+
+**What operators experienced at
+Milestone 20 close:**
+
+- **The Playwright suite proves
+  the platform still works from
+  the user's seat.** Every PR gets
+  a pilot-critical subset run; every
+  `main` push gets a full six-
+  journey run. A workflow
+  regression fails a CI job on the
+  PR that introduces it — not
+  weeks later when a real operator
+  hits it.
+- **Six operational contracts
+  are executable.** Pilot
+  onboarding, owner morning
+  review, sales manager daily
+  startup, recon decision, office
+  accounting freeze, BHPH
+  collections book review — each
+  is a durable Playwright spec
+  Chris (or a contributor) can
+  read to understand "what does
+  the platform actually do?"
+  without navigating to it.
+- **Every future milestone
+  inherits the substrate.** New
+  operator-facing behavior can
+  ship a Playwright journey
+  alongside the code. The M20
+  seed pattern + assertion helper
+  pattern are the templates.
+- **The write-side BHPH gap is
+  named.** Chris knows what's
+  missing (M12.8) rather than
+  discovering it during a live
+  pilot's collection cycle.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

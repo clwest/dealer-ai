@@ -2391,6 +2391,230 @@ transparency).**
   substrate (M18.2 §0.a decision 1 carry-forward),
   all M18 §3 carry-forward deferrals.
 
+### Milestone 20 — Operational Journey Validation (Playwright acceptance testing) — SHIPPED at SESSION_165
+
+*Full delivery record:
+`docs/roadmap/MILESTONE_20_PLANNING.md` §7 (annotated
+SHIPPED per increment; twelve §0.a change-log
+amendments recorded across M20.1 → M20.5
+implementation sessions) and
+`docs/roadmap/MILESTONE_20_RETROSPECTIVE.md`. Shipped
+surface enumerated in `docs/CAPABILITY_MATRIX.md` §7u.
+Backend test baseline delta: 4,679 → 4,755 (+76 tests
+across the six seed delta commands, zero regressions).
+Frontend Vitest baseline unchanged at 153 (M20 does
+not extend Vitest — acceptance is a separate test
+surface). Sessions: 160 → 165 (six increments including
+planning + close-out; commits `69b8214` M20.0 planning
++ `66ee652` M20.1 framework + canonical pilot journey
++ `e634c34` M20.2 dashboard journeys + `59dc43d` M20.3
+back-office journeys + `d7e92c2` M20.4 BHPH read-side
+journey + this close-out commit). **Zero new backend
+entities, zero new endpoints, zero new migrations, zero
+new tenancy carriers, zero new permission classes,
+zero new frontend routes.** The change surface is a new
+top-level `acceptance/` workspace (Playwright 1.49 +
+TypeScript 5.6) with six journey specs + five persona
+storage-state files + five business-outcome assertion
+helper modules; six new backend management commands
+in `dealer_ai/management/commands/seed_journey_*.py`
+(each idempotent + `--reset`-capable); a settings.py
+`M20_ACCEPTANCE_DB=1` env branch pointing the default
+DB at `backend/db.acceptance.sqlite3` (gitignored;
+matches M2.1 `migration_check` pattern); and a new
+`.github/workflows/acceptance.yml` CI job with tiered
+execution (`@pilot-critical` subset on PR ~90s; full
+suite on `main` ~5–8 min) + artifact upload on failure
+(HTML report + trace + video + screenshot; 14-day
+retention). Zero-drift permission-class posture —
+extends to **twenty consecutive milestones** (M10 →
+M20). Celery-beat task families 10 (unchanged — no
+beat entry at M20). Zero new post-LLM scrub stages
+(M20 has no LLM path). **Eight §5 decisions confirmed
+as-recommended at M20.0 open** — streak extends to
+86 planning-time as-recommended M5.1 → M20.0 across
+**eleven consecutive milestones** (M10 → M20). Twelve
+§0.a implementation-time micro-decisions across
+M20.1 → M20.5 — do not count against the streak per
+M10 §9.*
+
+**Business objective.** M18 established realistic
+demo dealerships; M19 shipped repeatable pilot
+onboarding. **The natural M20 follow-through is to
+establish the executable operational contract every
+future milestone extends** — durable Playwright
+acceptance suites walking real dealership workflows
+through the shipped UI against deterministic seeded
+state. Prevent workflow regressions from shipping to
+operators by catching them at PR review time.
+
+**Guiding principle.** The Playwright suite is an
+operational acceptance contract, not a UI automation
+project. Every journey validates business outcomes
+through the real application using deterministic
+seeded state. If a journey passes, the conclusion is
+that a dealership employee can successfully perform
+that operational workflow — not merely that buttons
+were clicked successfully. Assertions target business
+state (a lead is assigned, a pilot advances to
+`readiness_confirmed`, a trial-balance snapshot is
+balanced), not DOM state.
+
+**Related research.** M20 references M18/M19 research
++ implementation as its substrate. No new research
+corpus additions — Playwright acceptance testing is
+a tooling-choice with an established literature.
+
+**Operational pain resolved.**
+- Before M20, every operator-facing workflow was
+  regression-checkable only via manual exploratory
+  testing between milestones. Silent regressions
+  could ship to Chris without CI signal and only
+  surface when an operator hit them in the shipped
+  UI.
+- Before M20, contributors reading the code could
+  not tell "what does the platform actually do?" for
+  operational workflows — the unit + integration
+  suites prove verbs behave, but the connective
+  tissue ("here's how an owner uses this in a normal
+  day") lived only in Chris's head + the M18 demo
+  briefs.
+- Before M20, the M19.5 pilot onboarding playbook
+  was a doc that could drift silently from the
+  M19.4 admin UI. Only Chris's next dry-run would
+  surface a mismatch.
+- Before M20, the missing write-side BHPH
+  collections UI (M12.7) was unnamed — a gap that
+  would have been discovered during a live pilot's
+  first collection cycle, not before.
+
+**Existing reusable primitives.**
+- **`_TENANT_CARRIER_MODEL_NAMES`** — unchanged.
+  M20 adds zero tenancy carriers.
+- **`_auth_helpers.make_dealership` +
+  `make_pilot_dealership`** — used indirectly by
+  the seed delta commands to plant fixture
+  Dealership rows.
+- **M13.1 `seed_default_coa`** — invoked by the
+  M20.3 accounting seed command.
+- **M18/M19 seed patterns** — the M20 seed delta
+  commands compose existing M1–M19 service verbs
+  (`record_phone_lead`, `create_prospect` +
+  `advance_prospect_state`, `post_journal_entry`,
+  `record_payment`, `record_promise` + `mark_broken`,
+  `record_contact`, `record_repossession`). No
+  parallel write paths.
+- **M17.1 trial-balance snapshot service verbs** —
+  exercised by the M20.3 accounting journey.
+- **M12 BHPH read/write endpoints** — read side
+  exercised by M20.4 BHPH journey.
+- **M19.3 pilot admin endpoints** — exercised by
+  the M20.1 canonical pilot onboarding journey.
+- **M11 Phase 4 lead assignment endpoint** —
+  exercised by the M20.2 sales manager daily
+  startup journey.
+- **M4.7 recon endpoints** — exercised by the
+  M20.3 recon workflow journey.
+- **shadcn/ui `<CardTitle>` component** — used as
+  the anchor for text-based selectors where the
+  dashboard components don't carry `data-testid`
+  patterns (per §0.a M20.2 decision 5).
+- **`div.fixed.inset-0.z-50` class signature** —
+  used to scope selectors to the `LeadDetailModal`
+  since it isn't a Radix Dialog (per §0.a M20.2
+  decision 4).
+
+**Gap.**
+- Executable operational contract for every
+  operator-facing workflow (M20.1–M20.4 fill for
+  six representative journeys — pilot onboarding
+  + owner morning review + sales manager daily
+  startup + recon workflow + office/accounting
+  workflow + BHPH collections read-side).
+- Framework substrate (Playwright workspace +
+  webServer + persona storage-state + seed delta
+  commands + assertion helpers) — M20.1 fills.
+- CI wiring so acceptance journeys fire on every
+  PR + `main` push — M20.1 fills; first real CI
+  run happens on the M20.5 coordinated push.
+- Named write-side BHPH collections UI gap —
+  M20.4 identifies as an M21+ candidate.
+- Dashboard `data-testid` hardening across the
+  DealerOverview + DealerAdmin + LeadsPage +
+  LeadDetailModal + AssignmentDropdown surfaces
+  — M20 identifies as an M21+ candidate.
+
+**Scope (six increments — first tooling-axis
+milestone with zero domain surface changes since
+the framework was established):**
+- M20.0 (SESSION_160): planning refinement +
+  target selection. Eight §5 decisions locked.
+  Candidate W folded into Candidate J per
+  DOC_GOVERNANCE.md §2. Zero code changes.
+- M20.1 (SESSION_161): framework substrate +
+  canonical pilot onboarding journey.
+  `acceptance/` workspace scaffolded; five-persona
+  storage-state pattern; five assertion helper
+  modules; six seed delta management commands
+  (with one initially — pilot onboarding — the
+  other five ship in M20.2–M20.4); GitHub Actions
+  workflow; settings.py env branch. +15 backend
+  tests.
+- M20.2 (SESSION_162): owner morning review
+  (`@pilot-critical`) + sales manager daily
+  startup journeys. Two new personas; two new
+  seed delta commands; three §0.a
+  implementation-time decisions surfaced by
+  first dry-run + resolved. +27 backend tests
+  (12 owner + 15 sales_manager).
+- M20.3 (SESSION_163): recon workflow +
+  office/accounting workflow journeys. One new
+  persona (recon_manager); office journey
+  reuses owner persona. Two new seed delta
+  commands. Four §0.a decisions (envelope-aware
+  helpers, direct ORM creation matching demo
+  archetype). +20 backend tests (13 recon + 7
+  accounting).
+- M20.4 (SESSION_164): BHPH collections read-
+  side workflow journey (scope narrowed from
+  the planning-time write+read scope per §0.a
+  M20.4 decision 1 — write-side UI not shipped).
+  One new persona (bhph_collector). One new
+  seed delta command + assertion helper. Four
+  §0.a decisions. +14 backend tests.
+- M20.5 (SESSION_165): close-out (this
+  retrospective + capability matrix §7u update +
+  implementation roadmap entry + M20 planning
+  memo frontmatter unchanged + M21 planning
+  skeleton + session-start refresh + coordinated
+  close-out commit + first push). Intentional-
+  failure verification of CI artifact flow.
+  Zero new tests.
+
+**Non-goals (this milestone; documented for
+transparency).**
+- Write-side BHPH collections UI (record PtP,
+  mark broken, log contact, initiate
+  repossession) — endpoints exist, frontend UI
+  never shipped; recorded as M21+ candidate
+  "M12.8 BHPH collections write-side UI".
+- Dashboard `data-testid` hardening — recorded
+  as M21+ candidate.
+- Full cross-browser CI matrix (Chromium-only
+  in CI; Firefox + WebKit local).
+- Mobile / responsive viewport journeys.
+- Performance / load testing via Playwright.
+- Third-party integration stubs / mocks (not
+  needed — M18.1 outbound guard suppresses).
+- Nightly-cron acceptance runs (`main` push
+  trigger sufficient).
+- Automatic journey generation from user
+  telemetry (explicit non-goal).
+- Additional pilot-critical journeys beyond the
+  two currently tagged.
+- All M19 §3 carry-forward deferrals; all M18
+  §3 carry-forward deferrals still valid.
+
 ---
 
 ## 5. Explicit non-goals and deferrals
