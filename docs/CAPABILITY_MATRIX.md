@@ -2772,6 +2772,248 @@ Milestone 23 close:**
 
 ---
 
+## 7y. Sales Operational Entry (Milestone 24, shipped)
+
+Milestone 24 (SESSION_180 → SESSION_184)
+delivered **UI-native intake for the three
+operator-created lead sources** (walk-in,
+phone, referral) and validated the **fourth
+integration-to-operator flow** (listing-
+platform webhook) via a Playwright journey
+that exercises the real webhook endpoint.
+Before M24, all four non-chat intake
+endpoints (shipped since M11.1 with typed
+wrappers since M11.6) had zero UI consumers
+— every non-chat lead intake required curl /
+Django shell. M24 closes the operator-side
+gap for three channels and establishes the
+operational contract for the fourth. **The
+sales front-of-funnel is now operationally
+complete at the assign level** — every intake
+source reaches the salesperson, opens the
+lead detail modal, and enables an
+assignment; phone additionally reaches the
+follow-ups page + 24hr cadence creation.
+Milestone inherits M21 Candidate O UI-
+creation contract: maps to shipped backend
++ closes missing UI + adds Playwright
+journey + not generic UX polish. **Zero-
+drift permission-class posture extends to
+twenty-four consecutive milestones** (M10
+→ M24). Deferrals cataloged in
+`MILESTONE_24_RETROSPECTIVE.md` §3 + §4.
+See `docs/roadmap/MILESTONE_24_PLANNING.md`
++ `docs/roadmap/MILESTONE_24_RETROSPECTIVE.md`
+for the empirical-verification-driven scope
+logic + two documented mid-milestone
+planning corrections (M24.0 webhook posture
+redirect + M24.1-open downstream-verb UI
+substrate revision).
+
+**Guiding principle** (inherited from M21
+Candidate O UI-creation contract): every
+M24 shipped surface (a) maps to an already-
+shipped backend capability, (b) closes a
+missing operator-facing UI OR validates a
+missing integration-to-operator flow, (c)
+adds a Playwright operational journey, (d)
+is not generic UX polish. Every M24 anchor
+UI attaches in-place to `DealerAiSalesLeads`
+(three Dialog CTAs + `LeadDetailModal` +
+`AssignmentDropdown` wire-in) — no new
+frontend routes.
+
+**Framing distinction — three operator +
+one integration path.** M24 sharpened the
+distinction between operator-authored
+intake (walk-in / phone / referral —
+salesperson types into a Dialog form) and
+system-to-system integration intake
+(webhook — external listing platform POSTs
+to the shipped endpoint; operator handles
+the ingested lead through the real UI).
+The webhook path deliberately ships NO
+operator UI for payload entry —
+`webhook_adapters/generic.py:14` documents
+the envelope as one that "platform
+integrations map into," and there is zero
+repository or research-corpus evidence
+for operators authoring webhook payloads.
+The M24.4 journey POSTs at the real
+integration boundary in `test.beforeEach`
+using the shipped `generic` adapter, then
+runs the operator flow (list filter →
+modal → assign) via the real UI. No test-
+only backend surface, no fabricated
+operator workflow.
+
+**Planning corrections recorded honestly.**
+Two mid-milestone planning corrections
+landed on M24 (M24.0 webhook operator-UI
+redirect + M24.1-open downstream-verb UI
+substrate revision). Both were
+meaningful, evidence-based revisions —
+neither was reclassified to preserve the
+planning-time as-recommended streak.
+Streak reset to 0 at M24.0 open and
+stayed at 0 through M24.1-open correction.
+Historical run of 89 across fourteen
+consecutive milestones (M10 → M23)
+preserved for the record. The M24.1-open
+correction strengthened a durable lesson:
+planning-open verification must cover
+both intake AND downstream UI surfaces
+before locking §5.b + §5.d for any UI-
+creation milestone.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M24.0 planning + M24.0 correction | Full memo expansion at SESSION_180 + rewrite at SESSION_181 open per user direction. Original recommendation included `+ Webhook` operator CTA + `<WebhookIntakeForm>` with curated demo payloads; user redirected before lock (webhook is system-to-system, not operator-authored). Then at M24.1 open, empirical UI substrate verification surfaced route path mismatch (`/dealer-ai/sales/leads/<id>` did not exist; real route `/dealer-ai-sales/leads`) + downstream verb UI substrate gap (test-drive UI absent per M11.6; referrer_id display absent in `LeadDetailModal`; platform display absent). §5.b + §5.d + §5.h revised; three §3 deferrals added (test-drive UI, referrer display, platform display) as M25 candidates. Committed separately as `75752f1` before any M24.1 implementation. | Doc governance rule 5 preserved — SESSION_180 handoff appended with "Correction at SESSION_181 open" section documenting the delta rather than rewriting the historical record. |
+| M24.1 shared intake substrate + walk-in UI + LeadDetailModal wire-in | New `<LeadIntakeForm>` component (`frontend/src/components/sales/`) parameterized by `channel` prop, covering all three operator channels (walk-in / phone / referral) with 9 base fields matching backend `_BaseIntakeSerializer` verbatim. Optional `extras` slot for referral picker. `onSubmit` callback lets parent dispatch to the channel-specific wrapper. New Vitest suite (8 tests). `+ Walk-in` Dialog CTA on `DealerAiSalesLeads.tsx` (`data-testid="sales-leads-add-walk-in"`); post-create closes intake Dialog + opens `LeadDetailModal` for new lead + reloads list. `LeadDetailModal` + `AssignmentDropdown` wired into `DealerAiSalesLeads` as a small in-scope extension (~30-line addition: `useState<number \| null>` for `selectedLeadId`, row-click handler, modal render at page bottom) per M24.1-open correction — the modal wasn't previously wired into the sales-side leads page (only the older `/dealer-ai-leads` admin surface). Row-click handler opens modal for any lead. New `seed_journey_sales_operational_entry` provisioning acceptance-sales-operator + acceptance-sales-operator-advisor + Priya Prior-Customer referring lead (for M24.3); session-safe `set_password` guarding per M23.2 durable memory; `--reset` deletes fixture + clears role + deactivates advisor. New journey `walk_in_intake.spec.ts`: navigate → click + Walk-in → fill form → submit → assert `LeadDetailModal` opens → extract new lead id from modal header → assign Acceptance Advisor → business-outcome API assertion (assigned + `channel="walk_in"`) → reload → list row shows channel. Journey-authoring adjustment: `page.reload()` instead of click-close-modal to avoid strict-mode Close-button collision (`AssignmentDropdown` has its own Close in addition to modal's outer Close). | Backend baseline unchanged (4,780; new seed has no Django test). Frontend Vitest 193 → 201 (+8 LeadIntakeForm tests). Acceptance suite 9 → 10 journeys. Test-hygiene Candidate H reinforcement: state-dirty full-suite runs surface 3 pre-existing non-idempotent journeys (`sales_manager/daily_startup`, `recon/workflow`, `office/accounting_workflow`); clean-DB runs pass all. Not M24 regression — elevated as M25 candidate. |
+| M24.2 phone UI + cadence journey | `+ Phone` Dialog CTA on `DealerAiSalesLeads.tsx` (`data-testid="sales-leads-add-phone"`) sibling to walk-in. Reuses `<LeadIntakeForm>` with `channel="phone"` + `createPhoneLead` — no new component work. Same post-create handler as walk-in. New journey `phone_intake.spec.ts`: intake → modal → assign → business-outcome API → reload → list row shows `channel="phone"` → navigate to `/dealer-ai-sales/follow-ups` → fill `CadenceConfigPanel` `CreateCadenceForm` with new lead's id + `24hr` template → submit → extract new cadence id from `cadence-row-<id>` testid → business-outcome API assertion: at least one follow-up task spawned for the new cadence (proves cadence engine ran, not just row rendered). Sibling-pattern discipline paid off — no §5.d fixes needed. | Backend baseline unchanged. Frontend Vitest unchanged (M24.1 tests already cover phone). Acceptance suite 10 → 11 journeys. First-run pass — zero authoring or operator-surface fixes. |
+| M24.3 referral UI + referring-customer picker + journey | New `<ReferralLeadFormExtras>` component (`frontend/src/components/sales/`) — controlled component with tenant-scoped picker; fetches leads on mount via `fetchAdminLeads({ limit: 200 })`; filters client-side by name/phone/email substring; top 10 matches render as clickable rows keyed by lead id; optional per backend nullability; "Unselect" button clears selection to null. New Vitest suite (8 tests). `+ Referral` Dialog CTA on `DealerAiSalesLeads.tsx` (`data-testid="sales-leads-add-referral"`) composing `<LeadIntakeForm channel="referral" onSubmit={(payload) => createReferralLead({...payload, referrer_lead_id: referrerLeadId})} extras={<ReferralLeadFormExtras value={referrerLeadId} onSelect={setReferrerLeadId} />} />`. Dialog `onOpenChange` resets `referrerLeadId` to null on close. New journey `referral_intake.spec.ts`: look up Priya's id via `findSeededLead` (id shifts across runs) → click + Referral → search "Priya" in picker → click her match → assert selected chip → fill form → submit → modal → assign → **business-outcome API assertion: `referrer` FK matches Priya's id** + `channel="referral"` + assigned to Acceptance Advisor. **No modal-side referrer-display assertion** per M24.1-open direction — deferred per §3 deferral 13 as genuinely-missing UI. One Vitest test-data bug fixed during authoring (default email leaked through un-overridden test leads; explicit overrides added). | Backend baseline unchanged. Frontend Vitest 201 → 209 (+8 ReferralLeadFormExtras tests). Acceptance suite 11 → 12 journeys. First-attempt pass on the operator-facing journey — zero §5.d operator-surface fixes. |
+| M24.4 webhook integration-to-operator journey | **No new UI component. No `+ Webhook` operator CTA.** No `<WebhookIntakeForm>`. New journey `webhook_integration_intake.spec.ts`: `test.beforeEach` POSTs to real `/api/dealer-ai/admin/leads/webhook/` with `platform="generic"` + realistic dealer-owned envelope (`full_name`, `phone`, `email`, `message`, budget hints — matches shipped adapter's documented envelope). Captures new lead id from 201 response. Journey then navigates as salesperson to `/dealer-ai-sales/leads` → changes channel filter to `listing_form` → asserts ingested lead row appears with correct `channel="listing_form"` → clicks row → `LeadDetailModal` opens → assigns Acceptance Advisor → business-outcome API assertion (assigned + channel). **Journey-authoring adjustment:** initial POST returned 403; DRF's SessionAuthentication enforces CSRF on unsafe methods. Fix reused the shipped frontend pattern (`frontend/src/lib/authFetch.ts:84-86`) — read `csrftoken` cookie out of the persona's storage state (populated by `login.setup.ts`) + pass as `X-CSRFToken` header. Test-authoring choice, not an operator-surface bug. Ships zero new backend surface — uses shipped `generic` adapter (`_ADAPTERS = {"generic": generic}`) + shipped webhook endpoint (M11.1) + shipped operator UI + M24.1 modal wire-in. | Backend baseline unchanged. Frontend Vitest unchanged. Acceptance suite 12 → 13 journeys. Folded into M24.5 close-out per §5.h Option B evidence-sized posture (journey-only work; no in-scope §5.d fixes surfaced). |
+| M24.5 close-out (folded with M24.4) | CI validation on all M24 shipped surface + capability matrix §7y (this section) + `MILESTONE_24_RETROSPECTIVE.md` with §9 evidence-based M25 candidates + `MILESTONE_25_PLANNING.md` skeleton + `IMPLEMENTATION_ROADMAP.md` M24 shipped-status section + coordinated close-out commit + **first M24 push** landing all 6 M24 commits to `origin/main` together per M18.6 / M19.6 / M20.5 / M21.5 / M22.4 / M23.4 cadence. | First M24 CI run fires on the M24.5 push; status verified at M25.0 open. |
+| Test baseline | Backend **4,780 → 4,780 pass** (unchanged — M24 added zero backend logic; new seed command has no Django test). Frontend Vitest **193 → 209 pass** (+16 across two new component test files: LeadIntakeForm 8 + ReferralLeadFormExtras 8). Acceptance suite **9 → 13 journeys** (M24.1 walk_in_intake + M24.2 phone_intake + M24.3 referral_intake + M24.4 webhook_integration_intake); full local dry-run **19 passed (~26.8s)** on clean DB. Zero regressions. Zero migrations shipped in M24 (`0001`–`0048` unchanged). `manage.py check` + `makemigrations --check` clean at every M24 close. Per-increment delta: M24.0 = 0 (planning); M24.0 correction = 0 (planning-only); M24.1 = 0 backend + +8 frontend + 1 journey; M24.2 = 0 backend + 0 frontend + 1 journey; M24.3 = 0 backend + +8 frontend + 1 journey; M24.4 = 0 backend + 0 frontend + 1 journey; M24.5 = 0 (docs only). | Zero-drift permission-class streak extends **twenty-three → twenty-four** consecutive milestones (M10 → M24). Planning-time as-recommended streak **RESET TO 0** at M24.0 open on the webhook operator-UI redirect; stayed at 0 through M24.1-open correction. Historical run of 89 across fourteen consecutive milestones (M10 → M23) preserved for the record. |
+
+**What is NOT shipped in Milestone 24**
+(deferred per
+`MILESTONE_24_RETROSPECTIVE.md` §3 + §4):
+
+- **Manual webhook payload entry UI** —
+  §3 deferral 1. No `+ Webhook` operator
+  CTA; no `<WebhookIntakeForm>`. Deferred
+  without scheduled re-entry — requires
+  repository or research-corpus evidence
+  that a real dealership employee needs
+  to manually submit webhook payloads.
+- **`<RecordTestDriveForm>` component +
+  attachment** — §3 deferral 12.
+  `createTestDrive` wrapper exists since
+  M11.6 but no UI consumes it;
+  `DealerAiSalesTestDrives.tsx` is read-
+  only. Recorded as M25 Candidate O2 sub-
+  scope (bundle with any future walk-in-
+  extension work to strengthen the walk-
+  in operational-entry story).
+- **`referrer_id` / "Referred by"
+  display in `LeadDetailModal`** — §3
+  deferral 13. Backend contract IS
+  preserved (referrer FK set correctly
+  per M24.3 API-side assertion), but
+  the operator cannot see the
+  attribution in the detail modal.
+  Recorded as M25 small UI extension
+  (~20-line addition).
+- **`platform` display in
+  `LeadDetailModal` for webhook-origin
+  leads** — §3 deferral 14. Operator
+  sees `channel="listing_form"` in the
+  list column but does not see the
+  specific `platform` value.
+  Recorded as M25 small UI extension.
+  Bundle with #13 as a single "Lead
+  source attribution display" M25
+  candidate.
+- **Named-platform webhook adapters**
+  (Autotrader / Cars.com / CarGurus /
+  Facebook Marketplace) — §3 deferral 3.
+  Documented as future work in
+  `webhook_adapters/__init__.py:12-15`.
+  Ship only when operator evidence
+  surfaces platform-specific envelope
+  shapes.
+- **Test-hygiene remediation across
+  pre-existing shared-DB non-idempotent
+  journeys** (Candidate H reinforcement
+  from M24.1 close) — three journeys
+  (`sales_manager/daily_startup`,
+  `recon/workflow`,
+  `office/accounting_workflow`) fail on
+  state-dirty full-suite runs due to
+  non-idempotent assertions on shared
+  DB state. Clean-DB runs pass all.
+  Elevated as M25 candidate for the
+  operational-coverage-compounding
+  value of a stable full-suite baseline.
+- **Referral incentive payout logic**
+  — deferred from M11 per M11 §2.
+  `CustomerLead.referrer` self-FK is
+  `SET_NULL` on delete precisely
+  because payout logic is not yet in
+  scope.
+- **All M23 §3 deferrals still valid**
+  per `MILESTONE_23_RETROSPECTIVE.md`
+  §3.
+
+**What operators experienced at
+Milestone 24 close:**
+
+- **Non-chat lead intake is
+  operationally reachable through the
+  product for the first time.**
+  Dealership staff can now record a
+  walk-in customer, capture a phone-
+  intake lead, log a referral with
+  backend attribution to an existing
+  customer, and pick up webhook-
+  ingested listing-platform leads —
+  all through the shipped
+  `/dealer-ai-sales/leads` page. Zero
+  non-chat intake workflows require
+  curl / Django shell.
+- **`LeadDetailModal` is reachable
+  from the sales-side leads page.**
+  Post-M24 the salesperson can click
+  any lead row to open the detail
+  modal + assign a salesperson
+  directly. Before M24, the modal
+  was only reachable from the older
+  `/dealer-ai-leads` admin surface.
+- **Phone lead → 24hr cadence in one
+  session.** Post-M24.2 a salesperson
+  taking a phone lead can create the
+  lead, assign it, navigate to
+  `/dealer-ai-sales/follow-ups`, and
+  start a 24hr follow-up cadence via
+  the existing `CadenceConfigPanel` —
+  all through shipped UI. Cadence
+  engine spawns follow-up tasks
+  automatically.
+- **Webhook-ingested leads surface
+  correctly.** Post-M24.4 (validated
+  via the Playwright journey) any
+  listing-platform POST to the
+  webhook endpoint using the shipped
+  `generic` adapter's envelope
+  correctly persists as
+  `channel="listing_form"` and
+  appears in the salesperson's
+  filtered lead list. No test-only
+  backend surface required to prove
+  this.
+- **Genuinely-missing UI surfaces
+  documented for M25.** Test-drive
+  creation UI, referrer display in
+  modal, platform display in modal
+  are all real gaps the salesperson
+  will encounter post-M24 — but each
+  is deferred with an explicit re-
+  entry path per M24 §3, not
+  silently ignored or force-scoped
+  into M24.
+- **No visible new functionality**
+  on any non-sales surface. M24 was
+  tightly scoped to the sales
+  front-of-funnel gap. All M14+
+  accounting workflows, M12+ BHPH
+  workflows, M20+ acceptance
+  substrate, and M22–M23 shipped
+  operator surfaces continue
+  unchanged.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full
