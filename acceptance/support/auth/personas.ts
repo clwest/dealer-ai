@@ -6,12 +6,17 @@
 //
 // M20.1 shipped: platform_operator.
 // M20.2 adds:   owner, sales_manager.
-// M20.3–M20.4 add: recon_manager, office_manager, bhph_collector.
+// M20.3 adds:   recon_manager. (The accounting journey reuses the
+//               `owner` persona — dealer_owner is a valid role for
+//               the M13/M14/M17 accounting endpoints, no new
+//               persona needed.)
+// M20.4 adds:   bhph_collector.
 
 export type PersonaName =
   | "platform_operator"
   | "owner"
-  | "sales_manager";
+  | "sales_manager"
+  | "recon_manager";
 
 export interface Persona {
   name: PersonaName;
@@ -40,6 +45,12 @@ export const PERSONAS: Record<PersonaName, Persona> = {
     name: "sales_manager",
     username: "acceptance-sales-manager",
     password: "acceptance-sm-password",
+    postLoginPath: "/dealer-ai-overview",
+  },
+  recon_manager: {
+    name: "recon_manager",
+    username: "acceptance-recon-manager",
+    password: "acceptance-recon-password",
     postLoginPath: "/dealer-ai-overview",
   },
 };

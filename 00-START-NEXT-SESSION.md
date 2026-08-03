@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-02
-last_session_shipped: SESSION_162
+last_session_shipped: SESSION_163
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -22,72 +22,74 @@ milestone_17_status: shipped
 milestone_18_status: shipped
 milestone_19_status: shipped
 milestone_20_status: in-progress
-next_session: SESSION_163
+next_session: SESSION_164
 next_milestone: 20
 next_milestone_name: "Operational Journey Validation (Playwright acceptance testing)"
-next_increment: 3
-next_increment_name: "M20.3 — Recon workflow + office/accounting workflow journeys"
+next_increment: 4
+next_increment_name: "M20.4 — BHPH collections workflow journey"
 ---
 
-# Next session — SESSION_163 · Milestone 20 · Increment 3 (M20.3 — recon workflow + office/accounting workflow)
+# Next session — SESSION_164 · Milestone 20 · Increment 4 (M20.4 — BHPH collections workflow)
 
-> **M20.2 shipped at SESSION_162.** Two
-> new dashboard-centric journeys layered
-> onto the M20.1 framework: **owner
-> morning review** (tagged
-> `@pilot-critical`) + **sales manager
-> daily startup**. Two new personas
-> (`owner` + `sales_manager`) with real-
-> UI login + per-persona storage state.
-> Two new seed delta commands +27
-> backend tests. Two new dashboard
-> business-outcome assertion helpers.
+> **M20.3 shipped at SESSION_163.** Two
+> back-office journeys added: recon
+> workflow + office/accounting workflow.
+> New persona: `recon_manager`. Office
+> journey reuses the existing `owner`
+> persona (dealer_owner is sufficient
+> for M13/M14/M17 accounting endpoints).
+> Two new seed delta commands + **20**
+> backend tests. Two new assertion
+> helpers (recon + accounting).
 >
-> **First M20.1 dry-run happened at
-> SESSION_162 open** — surfaced two
-> framework-substrate defects that were
-> resolved as §0.a M20.2 decisions
-> (import.meta.dirname portability + vite
-> `--host 127.0.0.1` bind) before layering
-> M20.2 code. Two additional §0.a
-> decisions captured selector-strategy
-> adjustments for the dashboard journeys
-> (LeadDetailModal is a plain fixed
-> div, not a Radix Dialog; CardTitle is
-> a `<div>`, not a semantic heading;
-> assignment lives on `/dealer-ai-admin`,
-> not the read-only `/dealer-ai-leads`).
+> **Local acceptance dry-run:
+> 10 passed (16.4s)** — 5 setup steps +
+> 5 journeys. Framework is proven end-
+> to-end across four distinct persona
+> workflows on the shipped M1–M19 UI.
 >
-> **Local acceptance dry-run: 7 passed
-> (12.6s)** — 4 setup steps + 3
-> journeys. Framework is proven end-to-
-> end against the shipped M1–M19 UI.
->
-> **Backend baseline:** 4,694 → **4,721
-> pass** (+27). Frontend Vitest: **153
+> **Backend baseline:** 4,721 → **4,741
+> pass** (+20). Frontend Vitest: **153
 > pass** (unchanged). Zero drift on
 > migrations (0048), tenancy carriers
-> (52), permission classes (7 — zero-
-> drift streak intact at nineteen),
+> (52), permission classes (7 —
+> zero-drift streak intact at nineteen),
 > DRF admin (113), frontend routes
 > (20).
 >
-> **SESSION_163 opens M20.3** — two
-> operator back-office journeys: recon
-> workflow + office/accounting workflow.
-> Neither is tagged `@pilot-critical`
-> — both run only in the full-suite
-> CI on `main` push.
+> **Four §0.a M20.3 decisions** captured
+> implementation-time choices: (1)
+> accounting journey reuses `owner`
+> persona; (2) recon seed uses direct
+> ORM object creation matching the
+> established test-fixture pattern; (3)
+> API response envelopes need
+> unwrapping in helpers; (4) recon
+> journey UI settle signal via
+> reconsideration button.
+>
+> **SESSION_164 opens M20.4** — the BHPH
+> collections workflow journey. This
+> is a standalone journey exercising
+> M12 promise-to-pay + repossession
+> lifecycle. **Scope caveat: verify
+> shipped frontend UI first before
+> designing the full journey. If some
+> steps of the promise-to-pay →
+> broken-promise → repossession-
+> initiation flow don't have shipped
+> UI, narrow the journey scope + record
+> as §0.a decisions.**
 
-## First thing SESSION_163 must do
+## First thing SESSION_164 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean.
-- `git log --oneline -5` — top should
-  be the M20.2 shipped commit.
+- `git log --oneline -6` — top should
+  be the M20.3 shipped commit.
 - `python3 manage.py test dealer_ai`
-  → **4,721 pass, 1 skipped, 0 fail**.
+  → **4,741 pass, 1 skipped, 0 fail**.
 - `cd frontend && npm test` →
   **153 pass**.
 - `python3 manage.py check` clean.
@@ -102,120 +104,111 @@ next_increment_name: "M20.3 — Recon workflow + office/accounting workflow jour
 
 ### 2. Confirm acceptance suite still green
 
-Local acceptance dry-run before
-adding M20.3 code:
+Local dry-run before adding M20.4:
 
 ```bash
 cd acceptance
 rm -f ../backend/db.acceptance.sqlite3
-rm -rf .auth
+rm -rf .auth playwright-report test-results
+mkdir -p .auth
 npm test
 ```
 
-Expect **7 passed**. If red, fix
-before layering M20.3 code.
+Expect **10 passed**. If red, fix
+before layering M20.4 code.
 
-### 3. Explore the recon + accounting surfaces
+### 3. Explore the BHPH collections surface
 
-Before authoring seeds + journeys, map
-the shipped surfaces:
+Before authoring the seed + journey,
+map the shipped surfaces:
 
-- **Recon workflow** — the operator-
-  facing recon UI. Check
-  `frontend/src/pages/` for recon-
-  related routes; backend
-  `services/recon/` verbs; existing
-  seed patterns for
-  `VehicleAcquisition` /
-  `ReconDecision` / vendor dispatch.
-- **Office/accounting workflow** —
-  end-of-day trial balance surface.
-  Check `services/accounting/`
-  package, particularly the M17.1
-  trial-balance-snapshot endpoints;
-  frontend routes at `/dealer-ai-
-  accounting/*` or similar.
+- Which routes render BHPH collections?
+  Check `frontend/src/pages/` for
+  `DealerAiBhphNoteDetail`,
+  `DealerAiBhphNotes`, etc.
+- Which components render:
+  - The BHPH notes list?
+  - Note detail with payment history?
+  - Recording a promise-to-pay?
+  - Marking a promise-to-pay as
+    kept or broken?
+  - Initiating repossession?
+- Backend endpoints in `views.py`
+  or `views_bhph*.py`.
+- Service verbs in
+  `services/bhph_*/` — signatures
+  for `record_promise_to_pay`,
+  `mark_promise_broken`,
+  `initiate_repossession`.
+- ROLE_* constant gating access
+  (probably `ROLE_COLLECTIONS`
+  per M12 auth).
 
-Both journeys should exercise real
-UI paths + validate business outcomes
-via the M17.1 + M11 admin API
-surfaces.
+**Verify shipped UI coverage** for
+every step the M20 planning §5.h
+lists ("promise-to-pay → broken
+promise → repossession initiation").
+Any missing UI narrows the journey
+scope to what's actually clickable.
 
-### 4. Ship two seed delta commands + backend tests
+### 4. Ship the BHPH seed delta command + backend tests
 
-- `dealer_ai/management/commands/seed_journey_recon_workflow.py`
-  — plants a fresh
-  `VehicleAcquisition` awaiting a
-  condition report on a demo/pilot
-  dealership. Idempotent via a
-  fixture-tag or stable stock
-  number.
-- `dealer_ai/management/commands/seed_journey_office_accounting_workflow.py`
-  — advances yesterday's accounting
-  to a state where an end-of-day
-  trial balance query is meaningful
-  (or plants a specific
-  `JournalEntry` fixture).
-- Backend tests (~10-20 focused):
-  fresh-run provisioning +
-  idempotency + `--reset` + tenant
-  scoping.
+`seed_journey_bhph_collections_workflow.py`:
+- Provisions the `acceptance-bhph-
+  collector` user with
+  `ROLE_COLLECTIONS` (or the
+  closest available role) at the
+  default dealership.
+- Plants a BHPH note with a
+  payment coming due today +
+  (optionally) a promise-to-pay
+  ready to be broken.
+- Idempotent + `--reset`.
+- ~5-10 focused backend tests.
 
-### 5. Ship two journey specs
+### 5. Ship the BHPH journey spec
 
-- `acceptance/journeys/recon/workflow.spec.ts`
-  — receive a new acquisition,
-  author the condition report,
-  advance ReconDecision, dispatch
-  to vendor, mark work complete.
-  Assertions via recon admin API.
-- `acceptance/journeys/office/accounting_workflow.spec.ts`
-  — end-of-day trial balance
-  review, `as_of` picker
-  manipulation, drill into a
-  specific posting. Assertions
-  via M17.1 trial balance
-  snapshot API.
+`acceptance/journeys/bhph/collections_workflow.spec.ts`:
+- BHPH collector lands on the
+  collections surface.
+- Reviews the day's book.
+- Records a promise-to-pay (if UI
+  shipped).
+- Marks a broken promise (if UI
+  shipped).
+- Initiates repossession on a
+  broken promise (if UI shipped).
+- Business-outcome assertions
+  target the M12 BHPH admin API
+  surface.
+
+Scope any step down or defer per
+§0.a if the UI isn't shipped.
 
 ### 6. Extend personas + auth setup
 
-Two new personas:
-- `recon_manager` —
-  `acceptance-recon-manager` user
-  with `recon_manager` role at
-  the default dealership. Post-
-  login lands at whichever recon
-  page is the entry point.
-- `office_manager` —
-  `acceptance-office-manager`
-  user with `office_manager` (or
-  the closest available) role.
-  Post-login lands at the
-  accounting entry point.
-
-Extend `personas.ts`,
-`login.setup.ts` (add two setup
-steps + register seed commands
-in the SEED_COMMANDS list),
-`playwright.config.ts` (add two
-project entries).
+New persona: `bhph_collector` in
+`personas.ts`. Extend
+`login.setup.ts` with the setup
+step + register the new seed in
+`SEED_COMMANDS`. Add project entry
+in `playwright.config.ts`.
 
 ### 7. Extend assertion helpers
 
 Add
-`acceptance/support/assertions/recon.ts`
-and
-`acceptance/support/assertions/accounting.ts`
-as needed with business-outcome
-assertion helpers.
+`acceptance/support/assertions/bhph.ts`
+with business-outcome assertion
+helpers for promise-to-pay state +
+repossession initiation.
 
-### 8. Ship the M20.3 handoff
+### 8. Ship the M20.4 handoff
 
-- `docs/handoffs/SESSION_163_m20_inc3_backoffice_journeys.md`.
-- Coordinated commit per M19.1 /
-  M20.1 / M20.2 pattern.
+- `docs/handoffs/SESSION_164_m20_inc4_bhph_journey.md`.
+- Coordinated commit per the M20.1/
+  M20.2/M20.3 pattern.
 
-## Non-goals for SESSION_163
+## Non-goals for SESSION_164
 
 - ❌ Do NOT modify any existing
   backend service verb, endpoint,
@@ -223,14 +216,14 @@ assertion helpers.
 - ❌ Do NOT modify any existing
   frontend route or component
   (except selector-stability fixes
-  surfaced by the M20.2 or M20.3
+  surfaced by the M20.3 or M20.4
   dry-run, recorded as §0.a).
 - ❌ Do NOT add screenshot
   comparison or pixel-perfect
   visual regression.
 - ❌ Do NOT ship journeys beyond
-  the two M20.3 targets — BHPH
-  collections is M20.4.
+  the BHPH journey (M20.5 is
+  close-out).
 - ❌ Do NOT force-push, amend, or
   push to origin (M20.5 close is
   when the coordinated push
@@ -238,8 +231,8 @@ assertion helpers.
 
 ## Baseline expected at close
 
-- **Backend:** 4,721 → ~4,731-4,741
-  pass (M20.3 seed command tests).
+- **Backend:** 4,741 → ~4,750-4,760
+  pass (M20.4 seed command tests).
 - **Frontend Vitest:** 153
   (unchanged).
 - **Migrations:** unchanged
@@ -254,26 +247,28 @@ assertion helpers.
   at 113.
 - **Frontend operator routes:**
   unchanged at 20.
-- **Acceptance suite:** **5
+- **Acceptance suite:** **6
   journeys** (pilot onboarding +
   owner morning review + sales
   manager daily startup + recon
   workflow + office/accounting
-  workflow). Pilot-critical
-  subset unchanged at **2**.
+  workflow + BHPH collections
+  workflow). Pilot-critical subset
+  unchanged at **2**.
 
 ## NEXT TASK
 
-Start SESSION_163 with (a) starting-
+Start SESSION_164 with (a) starting-
 state verification, (b) confirm
 acceptance suite still green with
-7 passing journeys, (c) explore the
-recon + accounting shipped
-surfaces, (d) ship two seed delta
-commands + backend tests, (e) ship
-two journey specs + two new
-personas + assertion helpers, (f)
-ship the M20.3 handoff.
+10 passing journeys, (c) explore
+the BHPH collections shipped
+surface + narrow scope where UI
+missing, (d) ship the BHPH seed
+delta command + backend tests, (e)
+ship the BHPH journey spec + new
+persona + assertion helpers, (f)
+ship the M20.4 handoff.
 
 ---
 
@@ -290,11 +285,13 @@ ship the M20.3 handoff.
 7. `docs/CAPABILITY_MATRIX.md` §7t
    (M19 shipped surface — the
    substrate M20 validates)
-8. `docs/handoffs/SESSION_162_m20_inc2_dashboard_journeys.md`
+8. `docs/handoffs/SESSION_163_m20_inc3_backoffice_journeys.md`
+   (M20.3 shipped)
+9. `docs/handoffs/SESSION_162_m20_inc2_dashboard_journeys.md`
    (M20.2 shipped)
-9. `docs/handoffs/SESSION_161_m20_inc1_framework.md`
-   (M20.1 framework substrate)
-10. `docs/handoffs/SESSION_160_m20_inc0_planning.md`
+10. `docs/handoffs/SESSION_161_m20_inc1_framework.md`
+    (M20.1 framework substrate)
+11. `docs/handoffs/SESSION_160_m20_inc0_planning.md`
     (M20.0 planning close)
 
 Narrative docs are claims. Rules +
@@ -302,11 +299,11 @@ research + code are facts.
 
 ---
 
-## Operational state (post-SESSION_162 — M20.2 shipped)
+## Operational state (post-SESSION_163 — M20.3 shipped)
 
 - **Backend (local):** Django on
   `:8001`. Migrations `0001`–`0048`.
-  Test baseline: **4,721 pass**, 1
+  Test baseline: **4,741 pass**, 1
   skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on
@@ -316,12 +313,14 @@ research + code are facts.
 - **Frontend (prod):** NONE.
 - **Acceptance workspace (local):**
   Playwright 1.49 + TS 5.6
-  operational; three journeys
+  operational; **five journeys**
   green end-to-end (pilot
   onboarding + owner morning
   review + sales manager daily
-  startup). Full dry-run: **7
-  passed in 12.6s**.
+  startup + recon workflow +
+  office/accounting workflow).
+  Full dry-run: **10 passed in
+  16.4s**.
 - **Acceptance (CI):** wired via
   `.github/workflows/acceptance.yml`.
   First actual CI run pending the
@@ -333,8 +332,8 @@ research + code are facts.
   task families registered**.
 - **Milestones shipped:** M1 →
   **M19**. M20 in-progress (M20.0
-  + M20.1 + M20.2 shipped; M20.3–
-  M20.5 pending).
+  + M20.1 + M20.2 + M20.3 shipped;
+  M20.4–M20.5 pending).
 - **DRF admin surface:** **113**
   endpoints.
 - **Frontend operator routes:**
@@ -343,11 +342,13 @@ research + code are facts.
   showroom.
 - **Service surface:** all M1–M19
   packages unchanged. M20 adds no
-  service verbs. Three management
+  service verbs. Five management
   commands
   (`seed_journey_pilot_onboarding`
   + `seed_journey_owner_morning_review`
-  + `seed_journey_sales_manager_daily_startup`).
+  + `seed_journey_sales_manager_daily_startup`
+  + `seed_journey_recon_workflow`
+  + `seed_journey_office_accounting_workflow`).
 - **Frontend surfaces:** unchanged
   since M19.4.
 - **Tenancy carriers:** **52**.
@@ -366,19 +367,21 @@ research + code are facts.
 - **Milestone 20 status:** IN
   PROGRESS. M20.0 planning + M20.1
   framework + M20.2 dashboard
-  journeys shipped. Three
-  increments remaining (M20.3 back-
-  office + M20.4 BHPH + M20.5
+  journeys + M20.3 back-office
+  journeys shipped. Two increments
+  remaining (M20.4 BHPH + M20.5
   close-out) per §7 sequencing.
 - **Planning-time streak:** **86
   as-recommended M5.1 → M20.0**
   across eleven consecutive
   milestones.
-- **Acceptance-suite journeys:** 3
+- **Acceptance-suite journeys:** 5
   authored (pilot onboarding [
   `@pilot-critical`] + owner
   morning review [`@pilot-critical`]
-  + sales manager daily startup).
+  + sales manager daily startup +
+  recon workflow + office/
+  accounting workflow).
 - **Guiding principle for M20
   implementation:** business
   outcomes through real UI on

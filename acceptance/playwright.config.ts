@@ -48,6 +48,7 @@ export const AUTH_STORAGE = {
   platformOperator: path.join(HERE, ".auth/platform_operator.json"),
   owner: path.join(HERE, ".auth/owner.json"),
   salesManager: path.join(HERE, ".auth/sales_manager.json"),
+  reconManager: path.join(HERE, ".auth/recon_manager.json"),
 } as const;
 
 export default defineConfig({
@@ -108,6 +109,30 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         storageState: AUTH_STORAGE.salesManager,
+      },
+      dependencies: ["setup"],
+    },
+    {
+      // Recon-manager journeys (M20.3: recon workflow) run as the
+      // recon_manager persona.
+      name: "recon_manager",
+      testMatch: /journeys\/recon\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: AUTH_STORAGE.reconManager,
+      },
+      dependencies: ["setup"],
+    },
+    {
+      // Office / accounting journeys (M20.3: accounting workflow)
+      // reuse the owner persona — dealer_owner is a valid role for
+      // the M13/M14/M17 accounting endpoints per
+      // IsSalesManagerOrOwnerAtActiveDealership.
+      name: "office_accounting",
+      testMatch: /journeys\/office\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: AUTH_STORAGE.owner,
       },
       dependencies: ["setup"],
     },

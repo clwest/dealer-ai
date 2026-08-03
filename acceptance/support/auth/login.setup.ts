@@ -28,6 +28,8 @@ const SEED_COMMANDS = [
   "seed_journey_pilot_onboarding",
   "seed_journey_owner_morning_review",
   "seed_journey_sales_manager_daily_startup",
+  "seed_journey_recon_workflow",
+  "seed_journey_office_accounting_workflow",
 ] as const;
 
 function runManagementCommand(command: string): void {
@@ -94,4 +96,8 @@ setup("authenticate as owner", async ({ page }) => {
 
 setup("authenticate as sales_manager", async ({ page }) => {
   await loginPersona(page, PERSONAS.sales_manager, AUTH_STORAGE.salesManager);
+});
+
+setup("authenticate as recon_manager", async ({ page }) => {
+  await loginPersona(page, PERSONAS.recon_manager, AUTH_STORAGE.reconManager);
 });
