@@ -9,7 +9,7 @@ milestone_status: active
 milestone_name: "Audit-Script Parser Refinement (Planning-Substrate Integrity)"
 increment: 0
 increment_status: shipped
-commit: TBD-M26.0-planning-only
+commit: 8bb588f
 ---
 
 # SESSION_189 — Milestone 26 · Increment 0 (M26.0 — planning refinement + target selection)
