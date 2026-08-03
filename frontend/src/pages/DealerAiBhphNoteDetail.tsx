@@ -1,8 +1,20 @@
 // Milestone 12 · Increment 7 (SESSION_127) — BHPH per-note detail.
+// Milestone 21 · Increment 2 (SESSION_168) — write-side attachments.
 //
-// Composes M12.1–M12.6 read endpoints per §5.f Option C. Each
-// sub-list is fetched lazily via its own read endpoint (no bundle
-// endpoint at MVP per §0.a M12.7 decision 4).
+// Composes M12.1–M12.6 read endpoints per §5.f Option C. Each sub-list
+// is fetched lazily via its own read endpoint (no bundle endpoint at
+// MVP per §0.a M12.7 decision 4).
+//
+// M21.2 attaches the write-side surface via the components in
+// frontend/src/components/bhph/:
+//   - RecordPromiseToPayForm + MarkKeptPromiseButton + MarkBrokenPromiseButton
+//   - LogCollectionContactForm
+//   - InitiateRepossessionForm + MarkRecoveredButton + MarkReIntakedButton
+//
+// After each write, we optimistically merge the returned projection
+// into the corresponding sub-list. The backend is the source of truth
+// for aggregate state (e.g. days_past_due, current_bucket); a
+// subsequent read of the note detail refreshes those.
 
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -14,6 +26,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { InitiateRepossessionForm } from "@/components/bhph/InitiateRepossessionForm";
+import { LogCollectionContactForm } from "@/components/bhph/LogCollectionContactForm";
+import {
+  MarkBrokenPromiseButton,
+  MarkKeptPromiseButton,
+} from "@/components/bhph/PromiseRowActions";
+import { RecordPromiseToPayForm } from "@/components/bhph/RecordPromiseToPayForm";
+import {
+  MarkRecoveredButton,
+  MarkReIntakedButton,
+} from "@/components/bhph/RepossessionRowActions";
 import {
   getBhphNote,
   listBhphPayments,
@@ -37,6 +60,15 @@ function formatMoney(raw: string): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+
+function mergeById<T extends { id: number }>(prev: T[], next: T): T[] {
+  const idx = prev.findIndex((row) => row.id === next.id);
+  if (idx === -1) return [...prev, next];
+  const copy = prev.slice();
+  copy[idx] = next;
+  return copy;
 }
 
 
@@ -103,7 +135,7 @@ export default function DealerAiBhphNoteDetail() {
   const { bhph_note: note, payment_schedule: schedule } = detail;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6" data-testid="bhph-note-detail">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">
           BHPH Note #{note.id}
@@ -166,33 +198,63 @@ export default function DealerAiBhphNoteDetail() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-testid="promises-card">
         <CardHeader>
           <CardTitle>Promises ({promises.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
           {promises.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No promises on file.
             </p>
           ) : (
-            <ul className="text-sm">
+            <ul className="flex flex-col gap-2 text-sm">
               {promises.map((p) => (
-                <li key={p.id} className="py-1">
-                  {p.promised_at} · {formatMoney(p.promised_amount)} ·{" "}
-                  {p.promised_reason} · <strong>{p.state}</strong>
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border/60 px-3 py-2"
+                  data-testid={`promise-row-${p.id}`}
+                >
+                  <span>
+                    {p.promised_at} · {formatMoney(p.promised_amount)} ·{" "}
+                    {p.promised_reason} ·{" "}
+                    <strong data-testid={`promise-state-${p.id}`}>
+                      {p.state}
+                    </strong>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <MarkKeptPromiseButton
+                      notePk={notePk}
+                      promise={p}
+                      onMarked={(next) =>
+                        setPromises((prev) => mergeById(prev, next))
+                      }
+                    />
+                    <MarkBrokenPromiseButton
+                      promise={p}
+                      onMarked={(next) =>
+                        setPromises((prev) => mergeById(prev, next))
+                      }
+                    />
+                  </span>
                 </li>
               ))}
             </ul>
           )}
+          <RecordPromiseToPayForm
+            notePk={notePk}
+            onRecorded={(promise) =>
+              setPromises((prev) => mergeById(prev, promise))
+            }
+          />
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-testid="contacts-card">
         <CardHeader>
           <CardTitle>Contacts ({contacts.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
           {contacts.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No collection contacts logged.
@@ -200,34 +262,72 @@ export default function DealerAiBhphNoteDetail() {
           ) : (
             <ul className="text-sm">
               {contacts.map((c) => (
-                <li key={c.id} className="py-1">
+                <li
+                  key={c.id}
+                  className="py-1"
+                  data-testid={`contact-row-${c.id}`}
+                >
                   {c.contacted_at} · {c.channel} · {c.outcome}
                 </li>
               ))}
             </ul>
           )}
+          <LogCollectionContactForm
+            notePk={notePk}
+            onLogged={(contact) =>
+              setContacts((prev) => mergeById(prev, contact))
+            }
+          />
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-testid="repossessions-card">
         <CardHeader>
           <CardTitle>Repossessions ({repos.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
           {repos.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No repossessions on file.
             </p>
           ) : (
-            <ul className="text-sm">
+            <ul className="flex flex-col gap-2 text-sm">
               {repos.map((r) => (
-                <li key={r.id} className="py-1">
-                  {r.ordered_at} · {r.agent_name} ·{" "}
-                  <strong>{r.state}</strong>
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border/60 px-3 py-2"
+                  data-testid={`repo-row-${r.id}`}
+                >
+                  <span>
+                    {r.ordered_at} · {r.agent_name} ·{" "}
+                    <strong data-testid={`repo-state-${r.id}`}>
+                      {r.state}
+                    </strong>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <MarkRecoveredButton
+                      repossession={r}
+                      onMarked={(next) =>
+                        setRepos((prev) => mergeById(prev, next))
+                      }
+                    />
+                    <MarkReIntakedButton
+                      repossession={r}
+                      onMarked={(next) =>
+                        setRepos((prev) => mergeById(prev, next))
+                      }
+                    />
+                  </span>
                 </li>
               ))}
             </ul>
           )}
+          <InitiateRepossessionForm
+            notePk={notePk}
+            onInitiated={(repo) =>
+              setRepos((prev) => mergeById(prev, repo))
+            }
+          />
         </CardContent>
       </Card>
     </div>

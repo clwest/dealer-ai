@@ -122,6 +122,223 @@ async function fetchChildListCount(
   return 0;
 }
 
+// ---------------------------------------------------------------------
+// M21.2 write-side helpers. Locate specific rows by state so the
+// journey can interact with the correct fixture without leaning on
+// list ordering.
+// ---------------------------------------------------------------------
+
+interface PromiseRow {
+  id: number;
+  state: "promised" | "kept" | "broken";
+}
+
+interface RepossessionRow {
+  id: number;
+  state: "ordered" | "recovered" | "re_intaked";
+}
+
+interface ContactRow {
+  id: number;
+}
+
+async function fetchPromiseList(
+  request: APIRequestContext,
+  notePk: number,
+): Promise<PromiseRow[]> {
+  const url = `/api/dealer-ai/admin/bhph-notes/${notePk}/promises/list/`;
+  const response = await request.get(url);
+  expect(response.status(), `GET ${url} returned non-200`).toBe(200);
+  const body = (await response.json()) as {
+    results?: PromiseRow[];
+    bhph_promises?: { results?: PromiseRow[] };
+  };
+  return body.bhph_promises?.results ?? body.results ?? [];
+}
+
+async function fetchRepoList(
+  request: APIRequestContext,
+  notePk: number,
+): Promise<RepossessionRow[]> {
+  const url = `/api/dealer-ai/admin/bhph-notes/${notePk}/repossessions/list/`;
+  const response = await request.get(url);
+  expect(response.status(), `GET ${url} returned non-200`).toBe(200);
+  const body = (await response.json()) as {
+    results?: RepossessionRow[];
+    repossessions?: { results?: RepossessionRow[] };
+  };
+  return body.repossessions?.results ?? body.results ?? [];
+}
+
+async function fetchContactList(
+  request: APIRequestContext,
+  notePk: number,
+): Promise<ContactRow[]> {
+  const url = `/api/dealer-ai/admin/bhph-notes/${notePk}/contacts/list/`;
+  const response = await request.get(url);
+  expect(response.status(), `GET ${url} returned non-200`).toBe(200);
+  const body = (await response.json()) as {
+    results?: ContactRow[];
+    collection_contacts?: { results?: ContactRow[] };
+  };
+  return body.collection_contacts?.results ?? body.results ?? [];
+}
+
+/**
+ * Locate the M21.2 seeded promise in ``promised`` state. Asserts
+ * exactly one exists (the fixture guarantee); returns its id.
+ */
+export async function findPromisedStatePromiseId(
+  request: APIRequestContext,
+  notePk: number,
+): Promise<number> {
+  const promises = await fetchPromiseList(request, notePk);
+  const inState = promises.filter((p) => p.state === "promised");
+  expect(
+    inState.length,
+    `expected at least one promise in 'promised' state on note ${notePk}; ` +
+      `got ${inState.length} (states: ${promises.map((p) => p.state).join(", ")})`,
+  ).toBeGreaterThanOrEqual(1);
+  const first = inState[0];
+  if (first === undefined) throw new Error("unreachable — expect guard above");
+  return first.id;
+}
+
+/**
+ * Locate the seeded repossession in ``ordered`` state.
+ */
+export async function findOrderedRepossessionId(
+  request: APIRequestContext,
+  notePk: number,
+): Promise<number> {
+  const repos = await fetchRepoList(request, notePk);
+  const inState = repos.filter((r) => r.state === "ordered");
+  expect(
+    inState.length,
+    `expected at least one repossession in 'ordered' state on note ${notePk}; ` +
+      `got ${inState.length}`,
+  ).toBeGreaterThanOrEqual(1);
+  const first = inState[0];
+  if (first === undefined) throw new Error("unreachable — expect guard above");
+  return first.id;
+}
+
+/**
+ * Locate the M21.2 seeded repossession in ``recovered`` state.
+ */
+export async function findRecoveredRepossessionId(
+  request: APIRequestContext,
+  notePk: number,
+): Promise<number> {
+  const repos = await fetchRepoList(request, notePk);
+  const inState = repos.filter((r) => r.state === "recovered");
+  expect(
+    inState.length,
+    `expected at least one repossession in 'recovered' state on note ${notePk}; ` +
+      `got ${inState.length}`,
+  ).toBeGreaterThanOrEqual(1);
+  const first = inState[0];
+  if (first === undefined) throw new Error("unreachable — expect guard above");
+  return first.id;
+}
+
+interface ConditionReportRow {
+  id: number;
+  status: string;
+}
+
+/**
+ * Locate the M21.2 seeded complete ConditionReport for the fixture
+ * vehicle. The M12.6 mark-re-intaked endpoint requires the report ID;
+ * we surface it via a helper because there's no shipped operator UI
+ * for browsing intake reports.
+ */
+export async function findCompleteConditionReportId(
+  request: APIRequestContext,
+  stockNumber: string,
+): Promise<number> {
+  const url =
+    `/api/dealer-ai/admin/vehicles/${stockNumber}/condition-report/latest/`;
+  const response = await request.get(url);
+  expect(response.status(), `GET ${url} returned non-200`).toBe(200);
+  const body = (await response.json()) as {
+    report?: ConditionReportRow;
+    condition_report?: ConditionReportRow;
+  };
+  const report = body.report ?? body.condition_report;
+  expect(
+    report,
+    `no ConditionReport surfaced for vehicle ${stockNumber}`,
+  ).toBeDefined();
+  expect(
+    (report as ConditionReportRow).status,
+    `ConditionReport for vehicle ${stockNumber} should be 'complete'`,
+  ).toBe("complete");
+  return (report as ConditionReportRow).id;
+}
+
+/**
+ * Assert that a specific promise is in a given state.
+ */
+export async function expectPromiseState(
+  request: APIRequestContext,
+  notePk: number,
+  promiseId: number,
+  expected: "promised" | "kept" | "broken",
+): Promise<void> {
+  const promises = await fetchPromiseList(request, notePk);
+  const row = promises.find((p) => p.id === promiseId);
+  expect(row, `promise ${promiseId} missing from note ${notePk}`).toBeDefined();
+  expect(
+    (row as PromiseRow).state,
+    `promise ${promiseId} expected state ${expected}, got ${(row as PromiseRow).state}`,
+  ).toBe(expected);
+}
+
+/**
+ * Assert that a specific repossession is in a given state.
+ */
+export async function expectRepossessionState(
+  request: APIRequestContext,
+  notePk: number,
+  repoId: number,
+  expected: "ordered" | "recovered" | "re_intaked",
+): Promise<void> {
+  const repos = await fetchRepoList(request, notePk);
+  const row = repos.find((r) => r.id === repoId);
+  expect(row, `repo ${repoId} missing from note ${notePk}`).toBeDefined();
+  expect(
+    (row as RepossessionRow).state,
+    `repo ${repoId} expected state ${expected}, got ${(row as RepossessionRow).state}`,
+  ).toBe(expected);
+}
+
+/**
+ * Fetch current child counts — used by the journey to assert deltas
+ * after a successful write.
+ */
+export interface NoteChildCounts {
+  promises: number;
+  contacts: number;
+  repossessions: number;
+}
+
+export async function fetchChildCounts(
+  request: APIRequestContext,
+  notePk: number,
+): Promise<NoteChildCounts> {
+  const [promises, contacts, repos] = await Promise.all([
+    fetchPromiseList(request, notePk),
+    fetchContactList(request, notePk),
+    fetchRepoList(request, notePk),
+  ]);
+  return {
+    promises: promises.length,
+    contacts: contacts.length,
+    repossessions: repos.length,
+  };
+}
+
 /**
  * Verify the note detail's four child collections all have the
  * expected minimum count. The M20.4 seed plants exactly one of each,

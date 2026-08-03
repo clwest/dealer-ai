@@ -10,13 +10,23 @@
 //   GET  /admin/bhph-notes/<pk>/contacts/list/             (M12.5)
 //   GET  /admin/bhph-notes/<pk>/repossessions/list/        (M12.6)
 //
-// M12.7 §5.f Option C: portfolio dashboard + per-note detail ship;
-// collection-contact + repo-order UI defer.
+// Milestone 21 · Increment 2 (SESSION_168) — BHPH write-side wrappers:
+//
+//   POST /admin/bhph-notes/<pk>/promises/                  (M12.4)
+//   POST /admin/bhph-promises/<pk>/mark-kept/              (M12.4)
+//   POST /admin/bhph-promises/<pk>/mark-broken/            (M12.4)
+//   POST /admin/bhph-notes/<pk>/contacts/                  (M12.5)
+//   POST /admin/bhph-notes/<pk>/repossessions/             (M12.6)
+//   POST /admin/bhph-repossessions/<pk>/mark-recovered/    (M12.6)
+//   POST /admin/bhph-repossessions/<pk>/mark-re-intaked/   (M12.6)
+//
+// Every write wrapper attaches to the M12.7 collector dashboard
+// surface via a component in DealerAiBhphNoteDetail.tsx.
 //
 // Money on the wire is Decimal-as-string per the M9.5 + M10.1
 // convention.
 
-import { authGetJSON } from "@/lib/authFetch";
+import { authGetJSON, authPostJSON } from "@/lib/authFetch";
 
 // ---------------------------------------------------------------------------
 // Analytics summary
@@ -213,5 +223,174 @@ export function listRepossessions(
 ): Promise<RepossessionListResponse> {
   return authGetJSON<RepossessionListResponse>(
     `/admin/bhph-notes/${notePk}/repossessions/list/`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// M21.2 write-side wrappers — BHPH promise / contact / repossession.
+// ---------------------------------------------------------------------------
+
+// Promise CREATE — POST /admin/bhph-notes/<pk>/promises/
+// Payload matches PromiseCreateRequestSerializer in
+// backend/dealer_ai/views_bhph_promises.py.
+
+export type BhphPromiseReason =
+  | "paycheck"
+  | "tax_refund"
+  | "family_help"
+  | "other";
+
+export interface RecordPromiseToPayPayload {
+  promised_at: string; // ISO 8601 datetime
+  promised_amount: string; // Decimal-as-string
+  promised_reason: BhphPromiseReason;
+  notes?: string;
+}
+
+export interface BhphPromiseResponse {
+  bhph_promise: BhphPromiseProjection;
+}
+
+export function recordPromiseToPay(
+  notePk: number,
+  payload: RecordPromiseToPayPayload,
+): Promise<BhphPromiseResponse> {
+  return authPostJSON<BhphPromiseResponse>(
+    `/admin/bhph-notes/${notePk}/promises/`,
+    payload,
+  );
+}
+
+// Promise MARK-KEPT — POST /admin/bhph-promises/<pk>/mark-kept/
+// Requires a payment reference per M12.4 §5.d Option A operator-
+// triggered reconciliation.
+
+export interface MarkPromiseKeptPayload {
+  bhph_payment_id: number;
+  notes?: string;
+}
+
+export function markPromiseKept(
+  promisePk: number,
+  payload: MarkPromiseKeptPayload,
+): Promise<BhphPromiseResponse> {
+  return authPostJSON<BhphPromiseResponse>(
+    `/admin/bhph-promises/${promisePk}/mark-kept/`,
+    payload,
+  );
+}
+
+// Promise MARK-BROKEN — POST /admin/bhph-promises/<pk>/mark-broken/
+// The delinquency detector auto-fires; this endpoint is for manual
+// operator override with optional reason notes.
+
+export interface MarkPromiseBrokenPayload {
+  notes?: string;
+}
+
+export function markPromiseBroken(
+  promisePk: number,
+  payload: MarkPromiseBrokenPayload = {},
+): Promise<BhphPromiseResponse> {
+  return authPostJSON<BhphPromiseResponse>(
+    `/admin/bhph-promises/${promisePk}/mark-broken/`,
+    payload,
+  );
+}
+
+// Collection contact CREATE — POST /admin/bhph-notes/<pk>/contacts/
+// FDCPA-adjacent scrub layer applies at the backend.
+
+export type CollectionContactChannel =
+  | "phone"
+  | "letter"
+  | "sms"
+  | "email"
+  | "in_person";
+
+export type CollectionContactOutcome =
+  | "contact_made"
+  | "left_message"
+  | "no_answer"
+  | "refused_to_speak";
+
+export interface LogCollectionContactPayload {
+  contacted_at: string; // ISO 8601 datetime
+  channel: CollectionContactChannel;
+  outcome: CollectionContactOutcome;
+  notes?: string;
+}
+
+export interface CollectionContactResponse {
+  collection_contact: CollectionContactProjection;
+}
+
+export function logCollectionContact(
+  notePk: number,
+  payload: LogCollectionContactPayload,
+): Promise<CollectionContactResponse> {
+  return authPostJSON<CollectionContactResponse>(
+    `/admin/bhph-notes/${notePk}/contacts/`,
+    payload,
+  );
+}
+
+// Repossession CREATE — POST /admin/bhph-notes/<pk>/repossessions/
+
+export interface InitiateRepossessionPayload {
+  ordered_at: string; // ISO 8601 datetime
+  agent_name: string;
+  notes?: string;
+}
+
+export interface RepossessionResponse {
+  repossession: RepossessionProjection;
+}
+
+export function initiateRepossession(
+  notePk: number,
+  payload: InitiateRepossessionPayload,
+): Promise<RepossessionResponse> {
+  return authPostJSON<RepossessionResponse>(
+    `/admin/bhph-notes/${notePk}/repossessions/`,
+    payload,
+  );
+}
+
+// Repossession MARK-RECOVERED —
+// POST /admin/bhph-repossessions/<pk>/mark-recovered/
+
+export interface MarkRepossessionRecoveredPayload {
+  recovered_at?: string | null; // ISO 8601 datetime; defaults to now server-side
+  recovery_location?: string;
+  notes?: string;
+}
+
+export function markRepossessionRecovered(
+  repossessionPk: number,
+  payload: MarkRepossessionRecoveredPayload = {},
+): Promise<RepossessionResponse> {
+  return authPostJSON<RepossessionResponse>(
+    `/admin/bhph-repossessions/${repossessionPk}/mark-recovered/`,
+    payload,
+  );
+}
+
+// Repossession MARK-RE-INTAKED —
+// POST /admin/bhph-repossessions/<pk>/mark-re-intaked/
+// Requires a ConditionReport reference scoped to the recovered vehicle.
+
+export interface MarkRepossessionReIntakedPayload {
+  condition_report_id: number;
+  notes?: string;
+}
+
+export function markRepossessionReIntaked(
+  repossessionPk: number,
+  payload: MarkRepossessionReIntakedPayload,
+): Promise<RepossessionResponse> {
+  return authPostJSON<RepossessionResponse>(
+    `/admin/bhph-repossessions/${repossessionPk}/mark-re-intaked/`,
+    payload,
   );
 }

@@ -24,6 +24,22 @@ pilot base:
   Repossessions card has content and completes the "book review"
   narrative.
 
+Milestone 21 · Increment 2 additions — enable the M21.2 write-side
+journey extension to walk record-PtP → mark-broken → log-contact →
+initiate-repossession → mark-recovered → mark-re-intaked without
+needing to fabricate state mid-journey:
+
+- One **second BhphPromiseToPay** in the ``promised`` state — the
+  journey marks it broken (the seeded ``broken`` promise remains
+  as the historical showcase).
+- One **second Repossession** pre-transitioned to ``recovered`` —
+  the journey marks it re-intaked via the ConditionReport below
+  (the seeded ``ordered`` repossession remains for the mark-
+  recovered step).
+- One **ConditionReport** for the fixture vehicle in
+  ``complete`` state — referenced by ID during the mark-re-intaked
+  step.
+
 Per M20 planning §5.d Option B: composes M12 service verbs
 (``record_bhph_note`` cannot be used because it requires an
 existing Sale + also enforces a uniqueness guard that fights
@@ -57,6 +73,8 @@ from dealer_ai.models import (
     BHPH_PAYMENT_FREQUENCY_WEEKLY,
     BHPH_PAYMENT_METHOD_CASH,
     BHPH_PROMISE_REASON_PAYCHECK,
+    BHPH_PROMISE_REASON_TAX_REFUND,
+    CONDITION_REPORT_STATUS_COMPLETE,
     LEAD_CHANNEL_WALK_IN,
     ROLE_SALES_MANAGER,
     SALE_FINANCE_TYPE_BHPH,
@@ -64,6 +82,7 @@ from dealer_ai.models import (
     BhphPayment,
     BhphPromiseToPay,
     CollectionContact,
+    ConditionReport,
     CustomerLead,
     Dealership,
     Repossession,
@@ -84,6 +103,7 @@ from dealer_ai.services.collection_contacts.collection_contact import (
     record_contact,
 )
 from dealer_ai.services.repossessions.repossession import (
+    mark_recovered,
     record_repossession,
 )
 from dealer_ai.services.tenancy import get_default_dealership
@@ -155,7 +175,7 @@ class Command(BaseCommand):
         # buyer. Cascades cover most of it but explicit deletion
         # keeps counts observable.
         note = _existing_note(dealership)
-        n_repos = n_contacts = n_promises = n_payments = 0
+        n_repos = n_contacts = n_promises = n_payments = n_reports = 0
         if note is not None:
             n_repos, _ = Repossession.objects.filter(
                 note=note
@@ -169,9 +189,13 @@ class Command(BaseCommand):
             n_payments, _ = BhphPayment.objects.filter(note=note).delete()
             sale = note.sale
             note.delete()
-            # Sale + vehicle + buyer via the sale's FKs.
+            # Sale + vehicle + buyer via the sale's FKs. ConditionReport
+            # rows on the vehicle cascade with the vehicle delete.
             vehicle = sale.vehicle
             buyer = sale.buyer
+            n_reports = ConditionReport.objects.filter(
+                vehicle=vehicle
+            ).count()
             sale.delete()
             vehicle.delete()
             if buyer is not None:
@@ -181,7 +205,8 @@ class Command(BaseCommand):
         ).delete()
         self.stdout.write(
             f"reset: deleted repos={n_repos} contacts={n_contacts} "
-            f"promises={n_promises} payments={n_payments} + note chain + "
+            f"promises={n_promises} payments={n_payments} "
+            f"reports={n_reports} + note chain + "
             "cleared collector membership."
         )
 
@@ -313,9 +338,67 @@ class Command(BaseCommand):
             ordered_by_user=collector,
             notes="[M20.4-bhph] Fixture repo order.",
         )
+        # 9. [M21.2] A second promise in the ``promised`` state so the
+        #    M21.2 journey has a clean target for the mark-broken step
+        #    without depending on the seeded ``broken`` promise's state.
+        record_promise(
+            dealership=dealership,
+            note=note,
+            promised_at=now - dt.timedelta(hours=12),
+            promised_amount=FIXTURE_PROMISE_AMOUNT,
+            promised_reason=BHPH_PROMISE_REASON_TAX_REFUND,
+            notes=(
+                "[M21.2-bhph] Fixture promised-state PTP — journey marks broken."
+            ),
+        )
+        # 10. [M21.2] A second repossession pre-transitioned to
+        #     ``recovered`` so the journey can exercise mark-re-intaked
+        #     directly (mark-recovered runs against the seeded
+        #     ``ordered`` repossession created in step 8).
+        recovered_repo = record_repossession(
+            dealership=dealership,
+            note=note,
+            ordered_at=now - dt.timedelta(days=5),
+            agent_name="Acceptance Recovery Services",
+            ordered_by_user=collector,
+            notes=(
+                "[M21.2-bhph] Fixture recovered repossession — "
+                "journey marks re-intaked with ConditionReport."
+            ),
+        )
+        mark_recovered(
+            dealership=dealership,
+            repossession=recovered_repo,
+            recovered_at=now - dt.timedelta(days=2),
+            recovery_location="Acceptance recovery yard",
+            notes=(
+                "[M21.2-bhph] Fixture — marked recovered by seed so the "
+                "M21.2 journey can walk straight to re-intake."
+            ),
+        )
+        # 11. [M21.2] One complete ConditionReport for the fixture
+        #     vehicle so the mark-re-intaked step has a referenceable
+        #     intake report ID. In-tenant + status=complete satisfies
+        #     the M12.6 re-intake precondition.
+        report_time = now - dt.timedelta(days=1)
+        ConditionReport.objects.create(
+            dealership=dealership,
+            vehicle=vehicle,
+            inspector_name="Acceptance QC Inspector",
+            inspected_at=report_time,
+            mileage_at_inspection=98_500,
+            status=CONDITION_REPORT_STATUS_COMPLETE,
+            completed_at=report_time,
+            notes=(
+                "[M21.2-bhph] Fixture intake report for the recovered "
+                "repossession — referenced by mark-re-intaked step."
+            ),
+        )
 
         self.stdout.write(
             f"created BHPH note chain pk={note.pk} "
-            f"(vehicle={vehicle.stock_number}, sale={sale.pk})."
+            f"(vehicle={vehicle.stock_number}, sale={sale.pk}) "
+            "with M21.2 write-side fixtures (promised-state promise, "
+            "recovered-state repossession, condition report)."
         )
         return note
