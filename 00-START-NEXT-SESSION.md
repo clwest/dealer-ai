@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-03
-last_session_shipped: SESSION_179
+last_session_shipped: SESSION_180
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -25,98 +25,77 @@ milestone_20_status: shipped
 milestone_21_status: shipped
 milestone_22_status: shipped
 milestone_23_status: shipped
-next_session: SESSION_180
+milestone_24_status: in-progress
+next_session: SESSION_181
 next_milestone: 24
-next_milestone_name: "(target selection pending — locked at M24.0 open)"
-next_increment: 0
-next_increment_name: "M24.0 — Planning refinement + target selection"
+next_milestone_name: "Sales Operational Entry"
+next_increment: 1
+next_increment_name: "M24.1 — Shared intake substrate + walk-in UI + walk-in journey"
 ---
 
-# Next session — SESSION_180 · Milestone 24 · Increment 0 (M24.0 — planning refinement + target selection)
+# Next session — SESSION_181 · Milestone 24 · Increment 1 (M24.1 — shared intake substrate + walk-in UI + walk-in journey)
 
-> **Milestone 23 — BHPH Origination
-> + Payment Intake — SHIPPED at
-> SESSION_179.** Five-increment
-> milestone across SESSION_175 →
-> SESSION_179. Milestone shape
-> matched planned 5-increment
-> target exactly (no shape
-> shrinkage, unlike M21.4/M22.3).
-> **Backend baseline 4,766 →
-> 4,780** (+14). Frontend Vitest
-> **180 → 193** (+13). Acceptance
-> suite **7 → 9 journeys**. Full
-> clean-DB dry-run: **15 passed
-> (~20.5s)**.
+> **Milestone 24 — Sales
+> Operational Entry — PLANNING
+> LOCKED at SESSION_180.** Full
+> memo expansion + eight §5 load-
+> bearing decisions resolved.
+> §5.a + §5.c + §5.e + §5.f +
+> §5.g + §5.h confirmed as-
+> recommended; **§5.b + §5.d
+> redirected before lock** on
+> the webhook operator-UI
+> posture (webhook is a system-
+> to-system integration
+> mechanism, not an operator-
+> created lead source).
 >
-> **BHPH lifecycle now
-> operationally complete** —
-> every M12 verb reachable
-> through the product with
-> Playwright acceptance
-> coverage.
+> **Planning-time as-recommended
+> streak: RESET TO 0** at
+> SESSION_180. Historical run
+> preserved for the record: 89
+> across fourteen consecutive
+> milestones (M10 → M23).
+>
+> **M24 shape:** 5-to-6
+> evidence-sized increments.
+> M24.0 planning (shipped) →
+> M24.1 shared substrate + walk-
+> in (this session) → M24.2
+> phone → M24.3 referral →
+> M24.4 webhook integration
+> journey → M24.5 close-out
+> (with M24.4 collapse into
+> M24.5 possible).
+>
+> **M24.1 ships the shared
+> `<LeadIntakeForm>` component
+> that M24.2 + M24.3 inherit
+> via sibling-pattern
+> discipline.** First anchor UI
+> — get the shared substrate
+> right so subsequent increments
+> are small.
 >
 > **Zero-drift permission-class
-> streak extends 22 → 23**
-> consecutive milestones (M10
-> → M23). **Planning-time as-
-> recommended streak extends
-> 88 → 89** across fourteen
-> consecutive milestones.
->
-> **First M23 push executed at
-> M23.4** — all five M23
-> commits surface to
-> `origin/main` in one
-> coordinated push per M18/M19/M20/M21/M22
-> cadence. **First real M23 CI
-> run fires on that push —
-> verify status at M24.0 open.**
->
-> **NEW audit-verified genuine
-> gap surfaced at M23.1:** JE
-> creation UI
-> (`admin-journal-entry-create`)
-> reclassified from covered
-> (false-positive) to defer-
-> candidate-O2. Highest per-
-> item operational-coverage
-> delta at smallest scope
-> among M24 candidates.
->
-> **SESSION_180 opens M24.0 —
-> planning refinement + target
-> selection.** No target
-> locked yet — the candidate
-> list surfaces at open
-> (elevated: Candidate A2 JE
-> creation UI [NEW at M23.1],
-> Candidate H test-hygiene
-> [expanded at M23.2],
-> Candidate O2 next OSC
-> iteration; gated: T/U/L/M;
-> deferred pending evidence:
-> D/C; deferred but stable:
-> G). The assistant
-> recommends one option with
-> rationale grounded in the
-> primary operational-
-> coverage lens; the user
-> confirms or redirects.
-> Streak 89 → 90 expected on
-> confirm-as-recommended.
+> streak extends 22 → 23 at M23
+> close; M24 target extends to
+> 24** — all four intake
+> endpoints reuse
+> `IsSalesManagerOrOwnerAtActiveDealership`.
 
-## First thing SESSION_180 must do
+## First thing SESSION_181 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean.
 - `git log --oneline -6` — top
-  should be the M23.4 close-
-  out commit; `origin/main`
-  should now be at the same
-  head (push already executed
-  at M23.4).
+  should be the SESSION_180
+  M24.0 planning commit;
+  `origin/main` still at
+  `6dfdb5c` (M23 close-out,
+  no push at M24.0 per M24
+  non-goals).
 - `python3 manage.py test dealer_ai`
   → **4,780 pass, 1 skipped,
   0 fail**.
@@ -134,241 +113,219 @@ next_increment_name: "M24.0 — Planning refinement + target selection"
   --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. Monitor first M23 CI run
+### 2. Verify wrapper + endpoint shape one more time
 
-The M23.4 push at SESSION_179
-was the first push of the M23
-commits. The acceptance job
-fires on that `main` push —
-verify its status via:
+Before authoring UI, re-verify
+that `createWalkInLead` in
+`salesApi.ts` matches
+`admin-lead-walk-in-create`
+serializer exactly (should be
+unchanged since M11.6). Grep-
+verify no `<LeadIntakeForm>`
+component exists yet in
+`frontend/src/components/sales/`.
 
-```bash
-gh run list --workflow=acceptance --branch=main --limit 5
-gh run view <run-id> --log
-```
+### 3. Ship `<LeadIntakeForm>` shared component
 
-**If red:** address as §0.a
-M24.0 amendments before
-opening §5.a.
+Per MILESTONE_24_PLANNING.md
+§5.b + §7 M24.1:
 
-**If green:** M23 is CI-
-verified shipped; proceed
-to §3.
+- Create
+  `frontend/src/components/sales/LeadIntakeForm.tsx`.
+- Nine base fields per
+  `_BaseIntakeSerializer`
+  (`name`, `phone`, `email`,
+  `notes`, `target_monthly_payment`,
+  `down_payment`, `trade_in`,
+  `credit_range`, `urgency`).
+- Parameterized by `channel:
+  LeadChannel` prop; on
+  submit, dispatches to the
+  correct wrapper
+  (`createWalkInLead` /
+  `createPhoneLead` /
+  `createReferralLead`) based
+  on `channel`.
+- Submit + error handling +
+  loading state.
+- Uses shadcn primitives (Form,
+  Input, Button, Textarea,
+  Select) matching M23.2 /
+  M23.3 form patterns.
+- Vitest coverage: ~5–7 tests.
 
-### 3. Regenerate the audit artifact
+### 4. Attach `+ Walk-in` Dialog CTA to DealerAiSalesLeads
 
-Before candidate presentation,
-rerun the audit tooling:
+- Import `<LeadIntakeForm>` +
+  shadcn `Dialog`.
+- Add `+ Walk-in` button as
+  page-header CTA or table-
+  header action (attachment
+  point finalized during
+  authoring per M17 §6 lesson
+  6 in-place-page-extension
+  posture).
+- On submit success: close
+  Dialog + `navigate(\`/dealer-ai/sales/leads/${lead.id}\`)`.
 
-```bash
-cd backend
-python3 -m dealer_ai.scripts.audit_operational_surface
-```
+### 5. Ship the seed command
 
-Post-M23.1 fix the audit is
-trustworthy for BHPH +
-accounting. Other domains may
-still have latent false-
-positive/negative classes.
+Per §5.e Option A:
 
-### 4. Present the M24 candidate list
+- `backend/dealer_ai/management/commands/seed_journey_sales_operational_entry.py`.
+- Provisions salesperson user +
+  role + tenant + target
+  vehicle (for walk-in test
+  drive downstream handoff).
+- Session-safe pattern (guard
+  `set_password` call per
+  M23.2 durable memory).
+- Lead cleanup on re-
+  invocation per M22.2 /
+  M23.2 pattern.
+- Backend test: optional
+  seed-fixture correctness
+  test (~1 test).
 
-Per
-`docs/roadmap/MILESTONE_24_PLANNING.md`
-skeleton (§Candidate list):
+### 6. Ship the walk-in Playwright journey
 
-**Elevated (highest
-recommendation strength at
-M24.0):**
+Per §5.c + §5.d Option B
+walk-in row:
 
-- **Candidate A2 — JE creation
-  UI (NEW at M23.1).** Ships
-  new `createJournalEntry`
-  wrapper + form + Playwright
-  journey for
-  `admin-journal-entry-create`
-  (POST
-  `/admin/accounting/journal-
-  entries/`). Small bounded
-  scope; matches M23.2/M23.3
-  shipping shape. **Highest
-  per-item operational-
-  coverage delta at smallest
-  scope** — leads the
-  operational-coverage-lens
-  ranking.
-- **Candidate H — test-hygiene
-  remediation (expanded at
-  M23).** Extends three
-  affected seeds (freeze
-  snapshot, lead-assignment,
-  recon-decision) with cleanup
-  + sweeps session-
-  invalidation `set_password`
-  pattern across other seeds.
-  Small scope, high engineering-
-  velocity value.
-- **Candidate O2 — next OSC
-  iteration.** Selects from
-  remaining ~40
-  `defer-candidate-O2`
-  endpoints. Sub-scope options
-  unchanged from M22/M23:
-  F&I substrate (large — 16
-  endpoints — warrants
-  dedicated F&I milestone),
-  lead-source-specific intake
-  forms (4), deal-writeup
-  lifecycle (3), test-drive
-  creation (2).
+- `acceptance/journeys/sales_manager/walk_in_intake.spec.ts`:
+  1. Invoke seed via `invokeSeed('sales_operational_entry')`.
+  2. Login as salesperson via
+     `loginAs('salesperson')`.
+  3. Navigate to
+     `/dealer-ai/sales/leads`.
+  4. Click `+ Walk-in` CTA.
+  5. Fill form with test
+     customer details.
+  6. Submit.
+  7. Assert redirect to
+     `/dealer-ai/sales/leads/<id>`.
+  8. Assign salesperson via
+     existing UI.
+  9. Schedule test drive via
+     existing UI (walk-in
+     scenario — customer
+     physically present).
+  10. Assert test drive
+      appears on lead detail.
+- New assertion helper at
+  `acceptance/support/assertions/sales.ts`
+  IF patterns repeat (else
+  defer to M24.2).
 
-**Gated candidates:**
+### 7. Small operator-surface gap fixes (in-scope per §5.d)
 
-- **Candidate T** — process
-  real tester feedback.
-- **Candidate U** — hosted-
-  demo substrate.
-- **Candidate L** — first-
-  live-pilot staging.
-- **Candidate M** — multi-
-  operator support. **Breaks
-  zero-drift streak with
-  intent.**
+If authoring the journey
+surfaces small operator-
+surface gaps (missing testid,
+wrong redirect target, form
+validation friction): fix in-
+scope per M23 §5.d durable
+posture. Large gaps: document
+as retrospective §9 evidence
+for M25 planning.
 
-**Deferred pending
-evidence:**
+### 8. Ship the M24.1 handoff
 
-- **Candidate D** — LLM
-  router / cost caps.
-- **Candidate C** — F&I
-  chargeback substrate.
+- `docs/handoffs/SESSION_181_m24_inc1_walk_in.md`
+  following M23.2's SESSION_177
+  shape.
+- **Do NOT push** — coordinated
+  push at M24.5 per M24 non-
+  goals.
 
-**Deferred but stable:**
+### 9. Refresh 00-START-NEXT-SESSION.md for M24.2
 
-- **Candidate G** —
-  dashboard testid hardening.
+Point at SESSION_182 M24.2
+phone specialization + journey.
 
-Present each with two-
-sentence scope + operator
-pain resolved + dependency
-notes, then present the
-recommendation.
+## Non-goals for SESSION_181
 
-### 5. Recommend a target for §5.a
+- ❌ Do NOT ship a
+  `<WebhookIntakeForm>` or a
+  `+ Webhook` operator CTA
+  per §5.b + §5.d.
+- ❌ Do NOT create a test-only
+  backend endpoint or fake
+  operator workflow per §5.d.
+- ❌ Do NOT add new backend
+  service verbs, DRF
+  endpoints, tenancy
+  carriers, migrations,
+  permission classes, or
+  frontend routes.
+- ❌ Do NOT push individual
+  M24 commits — coordinated
+  close-out push at M24.5.
+- ❌ Do NOT force-scope
+  phone / referral / webhook
+  work into M24.1 — sibling-
+  pattern discipline; each
+  channel lands in its own
+  increment.
+- ❌ Do NOT skip the seed
+  session-invalidation
+  guarding — M23.2 durable
+  memory applies from the
+  start.
+- ❌ Do NOT ship
+  `<LeadIntakeForm>` without
+  Vitest coverage — component
+  binding contract per M11
+  practice.
 
-Ground the recommendation in
-the **primary operational-
-coverage lens** ("which
-candidate most increases
-operational coverage for a
-dealership employee?").
-Additional considerations:
+## Baseline expected at M24.1 close
 
-- Operator pain resolved.
-- Dependencies on shipped
-  substrate.
-- Whether the candidate
-  blocks future milestones
-  or is blocked by them.
-- Whether the M23 CI run
-  surfaced any operational
-  friction that reshuffles
-  priority.
-- Whether Candidate A2
-  (JE creation UI, small
-  scope, high per-item
-  delta) is the natural
-  extension of M22
-  Accounting Operational
-  Validation + M23 BHPH
-  bookend-completion
-  pattern.
-
-### 6. Draft §5.b–§5.h load-bearing decisions
-
-Once §5.a locks, draft the
-standard six-to-eight
-load-bearing decisions with
-confirm-as-recommended
-posture. Streak target: **89
-→ 90** planning-time as-
-recommended M5.1 → M24.0
-across fifteen consecutive
-milestones.
-
-### 7. DoD compliance check
-
-Per the M21.0 §5.f amendment:
-the M24 active memo §3 must
-either name a Playwright
-journey addition or extension
-OR explicitly document why
-no journey change is required
-(infrastructure-only
-milestones only).
-
-### 8. Expand M24 planning skeleton
-
-`MILESTONE_24_PLANNING.md`
-exists as a draft skeleton.
-SESSION_180 expands to full
-active memo per the standard
-shape.
-
-### 9. Ship the M24.0 handoff
-
-- `docs/handoffs/SESSION_180_m24_inc0_planning.md`.
-- **Do NOT push** — M24.0 is
-  planning only; coordinated
-  push at M24 close.
-
-## Non-goals for SESSION_180
-
-- ❌ Do NOT ship any backend
-  or frontend code — planning-
-  only session.
-- ❌ Do NOT open any M24
-  implementation increment.
-- ❌ Do NOT force-push or
-  amend earlier commits.
-- ❌ Do NOT modify M1-M23
-  shipped surface.
-- ❌ Do NOT modify the
-  acceptance suite unless CI
-  regression fixes land as
-  §0.a M24.0 amendments.
-- ❌ Do NOT skip the DoD
-  compliance check.
-
-## Baseline expected at close
-
-Backend + frontend unchanged
-from M23 close. Acceptance
-suite unchanged. Only
-planning docs change.
+- Backend: 4,780 → **~4,781**
+  (possibly one seed-fixture
+  test).
+- Frontend Vitest: 193 →
+  **~198–200**.
+- Acceptance suite: 9 →
+  **10**.
+- Migrations `0001`–`0048`
+  (unchanged).
+- Tenancy carriers 52
+  (unchanged).
+- DRF admin surface 113
+  (unchanged).
+- Frontend operator routes
+  20 (unchanged).
+- Permission classes 7
+  (unchanged).
+- Celery-beat task families
+  10 (unchanged).
 
 ## NEXT TASK
 
-Start SESSION_180 with (a)
+Start SESSION_181 with (a)
 starting-state verification,
-(b) monitor first real M23
-acceptance CI run + fix any
-regressions as §0.a M24.0
-amendments, (c) regenerate
-the audit artifact, (d)
-present the candidate list
-with recommendation +
-rationale under primary
-operational-coverage lens,
-(e) await user confirmation
-of §5.a, (f) draft §5.b–§5.h
-with confirm-as-recommended
-posture, (g) DoD compliance
-check on §3 draft, (h)
-expand the M24 planning
-skeleton into a full active
-memo, (i) ship the M24.0
-handoff.
+(b) wrapper + endpoint shape
+re-verification, (c)
+`<LeadIntakeForm>` shared
+component + Vitest coverage,
+(d) `+ Walk-in` Dialog CTA
+attachment on
+`DealerAiSalesLeads` with
+post-create redirect, (e)
+new
+`seed_journey_sales_operational_entry`
+seed command with session-
+safe + cleanup patterns, (f)
+new `walk_in_intake.spec.ts`
+Playwright journey exercising
+intake + assign + schedule
+test drive, (g) small in-
+scope §5.d fixes if
+surfaced, (h) ship
+`SESSION_181_m24_inc1_walk_in.md`
+handoff, (i) refresh
+`00-START-NEXT-SESSION.md`
+for M24.2.
 
 ---
 
@@ -377,27 +334,24 @@ handoff.
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-   (M23 shipped section landed
-   at M23.4)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_24_PLANNING.md`
-   (skeleton — expanded at
+   (planning locked at
    SESSION_180)
-6. `docs/roadmap/MILESTONE_23_RETROSPECTIVE.md`
-   §8 (M23 corrections) + §9
-   (standing M24 question)
-7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (audit-driven scope pool —
-   authoritative for BHPH +
-   accounting post-M23.1)
-8. `docs/roadmap/MILESTONE_23_PLANNING.md`
+6. `docs/roadmap/MILESTONE_23_PLANNING.md`
    (M23 governing contract
-   inherited by UI-creation-
-   shape M24 candidates)
+   inherited by M24)
+7. `docs/roadmap/MILESTONE_23_RETROSPECTIVE.md`
+   §8 + §9
+8. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+   (authoritative for sales
+   intake at M24.0)
 9. `docs/CAPABILITY_MATRIX.md`
    §7x (M23 shipped surface)
-10. `docs/handoffs/SESSION_179_m23_inc4_close.md`
-    (M23 shipped)
+10. `docs/handoffs/SESSION_180_m24_inc0_planning.md`
+    (M24 planning-open
+    findings + redirect
+    record)
 
 Narrative docs are claims.
 Rules + research + code are
@@ -405,7 +359,7 @@ facts.
 
 ---
 
-## Operational state (post-SESSION_179 — Milestone 23 SHIPPED)
+## Operational state (post-SESSION_180 — Milestone 24 planning LOCKED, implementation PENDING)
 
 - **Backend (local):** Django
   on `:8001`. Migrations
@@ -415,27 +369,25 @@ facts.
 - **Backend (prod):** NOT
   active.
 - **Frontend (local):** Vite
-  on `:5173`. `tsc --noEmit`
-  + `vite build` clean.
+  on `:5173`. `tsc --noEmit` +
+  `vite build` clean.
   **Vitest baseline: 193
   pass**.
 - **Frontend (prod):** NONE.
 - **Acceptance workspace
   (local):** Playwright 1.49
-  + TS 5.6 operational;
-  **nine journeys** passing
-  end-to-end on clean DB.
-  Full dry-run baseline:
-  **15 passed (~20.5s)** (6
-  setup + 9 journeys).
+  + TS 5.6 operational; **nine
+  journeys** passing end-to-
+  end on clean DB. Full dry-
+  run baseline: **15 passed
+  (~20.5s)** (6 setup + 9
+  journeys).
 - **Acceptance (CI):** live
   on
   `.github/workflows/acceptance.yml`.
-  First real M23 CI run
-  triggered by the M23.4
-  push at SESSION_179 —
-  status verified at
-  SESSION_180 open.
+  M23 close-out CI run
+  `30840071050` verified
+  **success** in 2m20s.
 - **Async runtime:** Celery
   5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1
@@ -443,94 +395,104 @@ facts.
   scheduled task families
   registered**.
 - **Milestones shipped:** M1
-  → **M23**. M24 target
-  selection pending
-  (SESSION_180).
+  → **M23**. **M24
+  planning locked**; M24
+  implementation begins at
+  M24.1 (SESSION_181).
 - **DRF admin surface:**
-  **113** endpoints.
+  **113** endpoints (M24 adds
+  zero).
 - **Frontend operator
-  routes:** **20**.
+  routes:** **20** (M24 adds
+  zero).
 - **Public endpoints:** +1
   M6.5 showroom.
 - **Service surface:** all
   M1–M23 packages unchanged.
-  M23 added zero service
+  M24 will add zero service
   verbs.
-- **Frontend surfaces:** M23
-  added two components
-  (`RecordBhphNoteForm` on
-  BHPH portfolio Notes card
-  as CTA + Dialog;
-  `RecordBhphPaymentForm`
-  inline in note detail
-  Payments card). No new
+- **Frontend surfaces (M24
+  target):** two new
+  components
+  (`<LeadIntakeForm>` +
+  `<ReferralLeadFormExtras>`)
+  in
+  `frontend/src/components/sales/`.
+  Three Dialog CTAs on
+  `DealerAiSalesLeads.tsx`
+  (`+ Walk-in`, `+ Phone`,
+  `+ Referral`). No new
   routes.
-- **Tenancy carriers:**
-  **52**.
-- **Permission classes:**
-  **7 actual** — zero-drift
+- **Tenancy carriers:** **52**
+  (M24 adds zero).
+- **Permission classes:** **7
+  actual** — zero-drift
   streak **twenty-three
   consecutive milestones**
-  (M10 → M23).
+  (M10 → M23). M24 target:
+  extend to twenty-four —
+  all four intake endpoints
+  reuse
+  `IsSalesManagerOrOwnerAtActiveDealership`.
 - **`Vehicle.is_available`:**
   unchanged.
 - **AI safety stack:** 17
   scrub stages (unchanged).
 - **Deterministic rules:**
   unchanged.
-- **Milestone 23 status:**
-  SHIPPED (SESSION_179 close-
-  out landed all documentation
-  + status flips + M24
-  skeleton + coordinated
-  close-out commit + first
-  M23 push).
-- **BHPH lifecycle
-  operationally complete:**
-  M12 backend + M12.7 read
-  UI + M20.4 Playwright +
-  M21.2 collections write-
-  side + M23.2 origination
-  + M23.3 payment intake.
+- **Milestone 24 status:**
+  planning LOCKED at
+  SESSION_180 M24.0;
+  implementation begins at
+  SESSION_181 M24.1.
+- **Sales intake gap
+  addressed at M24 target:**
+  Three operator-created
+  intake paths (walk-in,
+  phone, referral) get UI-
+  native intake via shared
+  `<LeadIntakeForm>` +
+  `<ReferralLeadFormExtras>`.
+  One externally-created
+  intake path (webhook)
+  gets an integration-to-
+  operator Playwright
+  journey via the shipped
+  `generic` adapter.
 - **Audit tooling:**
   authoritative for BHPH +
   accounting endpoints
-  post-M23.1 fix. Rerun at
-  M24.0 open to reflect any
-  drift.
-- **§9 evidence for M24:**
-  Candidate A2 JE creation
-  UI (NEW, highest per-item
-  operational-coverage delta
-  under primary lens),
-  Candidate H test-hygiene
-  (expanded with session-
-  invalidation seed pattern
-  sweep), Candidate O2 next
-  OSC iteration (remaining
-  sub-scopes: F&I 16, lead-
-  source intake 4, deal-
-  writeup 3, test-drive 2).
+  post-M23.1 fix.
+  Regenerated at M24.0 open
+  (153 endpoints, 110
+  covered, 43 backend-only).
+- **§9 evidence for M25:**
+  will emerge from M24
+  journey-authoring
+  evidence per §5.f
+  journey-as-verifier
+  posture.
 - **Planning-time streak:**
-  **89 as-recommended M5.1
-  → M23.0** across fourteen
-  consecutive milestones.
-  Target for M24.0: 89 →
-  90 across fifteen.
+  **RESET TO 0** at
+  SESSION_180 M24.0.
+  Historical run: 89 across
+  fourteen consecutive
+  milestones (M10 → M23).
+  Preserved for the record;
+  not extended. §5.b + §5.d
+  webhook redirect
+  recorded honestly.
 - **DoD amendment (M21.0
-  §5.f Option B):** every
-  future customer-facing
-  milestone must add or
-  update at least one
-  Playwright operational
-  journey, or explicitly
-  document in §3 why no
-  journey change is
-  required. Applies to
-  M24 forward.
-- **M23 audit coverage at
-  close:** 108 / 153
-  endpoints covered post-
-  M23.1 fix; 45 backend-
-  only remain for future
-  OSC scope selection.
+  §5.f Option B):** M24
+  ships four new Playwright
+  operational journeys —
+  intrinsically compliant.
+- **Governing contract:** M21
+  Candidate O UI-creation
+  shape (also used by M23)
+  inherited by M24 for
+  three operator channels;
+  webhook channel uses a
+  modified integration-to-
+  operator variant per
+  §5.d.

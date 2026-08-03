@@ -19,8 +19,8 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 153
-- **Consumed by frontend components (`covered`):** 108
-- **Backend-only (audit findings):** 45
+- **Consumed by frontend components (`covered`):** 110
+- **Backend-only (audit findings):** 43
   - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **7**
 - **Service verbs enumerated:** 312
 - **Distinct view modules importing service verbs:** 22
@@ -88,7 +88,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 38 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/` | `views.admin_condition_photo_attach` | `admin-condition-photo-attach` | api.ts:1302 `attachPhoto` | `covered` |
 | 39 | `admin/vehicles/<str:stock_number>/photos/<uuid:public_id>/` | `views.admin_condition_photo_delete` | `admin-condition-photo-delete` | api.ts:1309 `deletePhoto` | `covered` |
 | 40 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/local-upload/` | `views.admin_condition_photo_local_upload_receiver` | `admin-condition-photo-local-upload` | api.ts:1280 `uploadPhotoBytes` | `covered` |
-| 41 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1692 `fetchVendor` ⚠ wrapper-only, api.ts:1684 `fetchVendors`, api.ts:1688 `createVendor` ⚠ wrapper-only | `covered` |
+| 41 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1684 `fetchVendors`, api.ts:1688 `createVendor` ⚠ wrapper-only, api.ts:1692 `fetchVendor` ⚠ wrapper-only | `covered` |
 | 42 | `admin/vendors/<slug:slug>/` | `views_recon.admin_vendor_detail` | `admin-vendor-detail` | api.ts:1692 `fetchVendor` ⚠ wrapper-only, api.ts:1698 `updateVendor` ⚠ wrapper-only | `defer-candidate-O2` |
 | 43 | `admin/vehicles/<str:stock_number>/recon/` | `views_recon.admin_recon_dashboard` | `admin-recon-dashboard` | api.ts:1706 `fetchReconDashboard` | `covered` |
 | 44 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/recon-decision/` | `views_recon.admin_recon_decision_create` | `admin-recon-decision-create` | api.ts:1717 `recordReconDecision` | `covered` |
@@ -170,22 +170,22 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 120 | `admin/be-backs/list/` | `views_be_backs.admin_be_back_list` | `admin-be-back-list` | — | `defer-candidate-O2` |
 | 121 | `admin/be-backs/<int:pk>/mark-returned/` | `views_be_backs.admin_be_back_mark_returned` | `admin-be-back-mark-returned` | salesApi.ts:383 `markBeBackReturned` | `covered` |
 | 122 | `admin/be-backs/<int:pk>/mark-no-show/` | `views_be_backs.admin_be_back_mark_no_show` | `admin-be-back-mark-no-show` | salesApi.ts:394 `markBeBackNoShow` | `covered` |
-| 123 | `admin/bhph-notes/` | `views_bhph_notes.admin_bhph_note_create` | `admin-bhph-note-create` | — | `defer-candidate-O2` |
-| 124 | `admin/bhph-notes/list/` | `views_bhph_notes.admin_bhph_note_list` | `admin-bhph-note-list` | bhphApi.ts:95 `listBhphNotes` | `covered` |
-| 125 | `admin/bhph-notes/<int:pk>/` | `views_bhph_notes.admin_bhph_note_retrieve` | `admin-bhph-note-retrieve` | bhphApi.ts:109 `getBhphNote` | `covered` |
-| 126 | `admin/bhph-notes/<int:pk>/payments/` | `views_bhph_payments.admin_bhph_payment_create` | `admin-bhph-payment-create` | — | `defer-candidate-O2` |
-| 127 | `admin/bhph-notes/<int:pk>/payments/list/` | `views_bhph_payments.admin_bhph_payment_list` | `admin-bhph-payment-list` | bhphApi.ts:138 `listBhphPayments` | `covered` |
-| 128 | `admin/bhph-notes/<int:pk>/promises/` | `views_bhph_promises.admin_bhph_promise_create` | `admin-bhph-promise-create` | bhphApi.ts:258 `recordPromiseToPay` | `covered` |
-| 129 | `admin/bhph-notes/<int:pk>/promises/list/` | `views_bhph_promises.admin_bhph_promise_list` | `admin-bhph-promise-list` | bhphApi.ts:165 `listBhphPromises` | `covered` |
-| 130 | `admin/bhph-promises/<int:pk>/mark-kept/` | `views_bhph_promises.admin_bhph_promise_mark_kept` | `admin-bhph-promise-mark-kept` | bhphApi.ts:277 `markPromiseKept` | `covered` |
-| 131 | `admin/bhph-promises/<int:pk>/mark-broken/` | `views_bhph_promises.admin_bhph_promise_mark_broken` | `admin-bhph-promise-mark-broken` | bhphApi.ts:295 `markPromiseBroken` | `covered` |
-| 132 | `admin/bhph-notes/<int:pk>/contacts/` | `views_collection_contacts.admin_collection_contact_create` | `admin-collection-contact-create` | bhphApi.ts:332 `logCollectionContact` | `covered` |
-| 133 | `admin/bhph-notes/<int:pk>/contacts/list/` | `views_collection_contacts.admin_collection_contact_list` | `admin-collection-contact-list` | bhphApi.ts:195 `listCollectionContacts` | `covered` |
-| 134 | `admin/bhph-notes/<int:pk>/repossessions/` | `views_repossessions.admin_repossession_create` | `admin-repossession-create` | bhphApi.ts:354 `initiateRepossession` | `covered` |
-| 135 | `admin/bhph-notes/<int:pk>/repossessions/list/` | `views_repossessions.admin_repossession_list` | `admin-repossession-list` | bhphApi.ts:224 `listRepossessions` | `covered` |
-| 136 | `admin/bhph-repossessions/<int:pk>/mark-recovered/` | `views_repossessions.admin_repossession_mark_recovered` | `admin-repossession-mark-recovered` | bhphApi.ts:373 `markRepossessionRecovered` | `covered` |
-| 137 | `admin/bhph-repossessions/<int:pk>/mark-re-intaked/` | `views_repossessions.admin_repossession_mark_re_intaked` | `admin-repossession-mark-re-intaked` | bhphApi.ts:392 `markRepossessionReIntaked` | `covered` |
-| 138 | `admin/bhph/analytics/summary/` | `views_bhph_analytics.admin_bhph_analytics_summary` | `admin-bhph-analytics-summary` | bhphApi.ts:61 `fetchBhphAnalyticsSummary` | `covered` |
+| 123 | `admin/bhph-notes/` | `views_bhph_notes.admin_bhph_note_create` | `admin-bhph-note-create` | bhphApi.ts:165 `createBhphNote` | `covered` |
+| 124 | `admin/bhph-notes/list/` | `views_bhph_notes.admin_bhph_note_list` | `admin-bhph-note-list` | bhphApi.ts:117 `listBhphNotes` | `covered` |
+| 125 | `admin/bhph-notes/<int:pk>/` | `views_bhph_notes.admin_bhph_note_retrieve` | `admin-bhph-note-retrieve` | bhphApi.ts:131 `getBhphNote` | `covered` |
+| 126 | `admin/bhph-notes/<int:pk>/payments/` | `views_bhph_payments.admin_bhph_payment_create` | `admin-bhph-payment-create` | bhphApi.ts:220 `createBhphPayment` | `covered` |
+| 127 | `admin/bhph-notes/<int:pk>/payments/list/` | `views_bhph_payments.admin_bhph_payment_list` | `admin-bhph-payment-list` | bhphApi.ts:197 `listBhphPayments` | `covered` |
+| 128 | `admin/bhph-notes/<int:pk>/promises/` | `views_bhph_promises.admin_bhph_promise_create` | `admin-bhph-promise-create` | bhphApi.ts:341 `recordPromiseToPay` | `covered` |
+| 129 | `admin/bhph-notes/<int:pk>/promises/list/` | `views_bhph_promises.admin_bhph_promise_list` | `admin-bhph-promise-list` | bhphApi.ts:248 `listBhphPromises` | `covered` |
+| 130 | `admin/bhph-promises/<int:pk>/mark-kept/` | `views_bhph_promises.admin_bhph_promise_mark_kept` | `admin-bhph-promise-mark-kept` | bhphApi.ts:360 `markPromiseKept` | `covered` |
+| 131 | `admin/bhph-promises/<int:pk>/mark-broken/` | `views_bhph_promises.admin_bhph_promise_mark_broken` | `admin-bhph-promise-mark-broken` | bhphApi.ts:378 `markPromiseBroken` | `covered` |
+| 132 | `admin/bhph-notes/<int:pk>/contacts/` | `views_collection_contacts.admin_collection_contact_create` | `admin-collection-contact-create` | bhphApi.ts:415 `logCollectionContact` | `covered` |
+| 133 | `admin/bhph-notes/<int:pk>/contacts/list/` | `views_collection_contacts.admin_collection_contact_list` | `admin-collection-contact-list` | bhphApi.ts:278 `listCollectionContacts` | `covered` |
+| 134 | `admin/bhph-notes/<int:pk>/repossessions/` | `views_repossessions.admin_repossession_create` | `admin-repossession-create` | bhphApi.ts:437 `initiateRepossession` | `covered` |
+| 135 | `admin/bhph-notes/<int:pk>/repossessions/list/` | `views_repossessions.admin_repossession_list` | `admin-repossession-list` | bhphApi.ts:307 `listRepossessions` | `covered` |
+| 136 | `admin/bhph-repossessions/<int:pk>/mark-recovered/` | `views_repossessions.admin_repossession_mark_recovered` | `admin-repossession-mark-recovered` | bhphApi.ts:456 `markRepossessionRecovered` | `covered` |
+| 137 | `admin/bhph-repossessions/<int:pk>/mark-re-intaked/` | `views_repossessions.admin_repossession_mark_re_intaked` | `admin-repossession-mark-re-intaked` | bhphApi.ts:475 `markRepossessionReIntaked` | `covered` |
+| 138 | `admin/bhph/analytics/summary/` | `views_bhph_analytics.admin_bhph_analytics_summary` | `admin-bhph-analytics-summary` | bhphApi.ts:83 `fetchBhphAnalyticsSummary` | `covered` |
 | 139 | `admin/accounting/journal-entries/` | `views_accounting.admin_journal_entry_create` | `admin-journal-entry-create` | — | `defer-candidate-O2` |
 | 140 | `admin/accounting/journal-entries/<int:pk>/reverse/` | `views_accounting.admin_journal_entry_reverse` | `admin-journal-entry-reverse` | accountingApi.ts:260 `reverseJournalEntry` | `covered` |
 | 141 | `admin/accounting/journal-entries/<int:pk>/` | `views_accounting.admin_journal_entry_retrieve` | `admin-journal-entry-retrieve` | accountingApi.ts:236 `fetchJournalEntry` | `covered` |
@@ -204,7 +204,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**45 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**43 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -214,7 +214,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (40)
+### defer-candidate-O2 (38)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -252,8 +252,6 @@ _None._
 - `admin/deal-writeups/<int:pk>/approve/` → `views_deal_writeups.admin_deal_writeup_approve` (`admin-deal-writeup-approve`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/hand-off/` → `views_deal_writeups.admin_deal_writeup_hand_off` (`admin-deal-writeup-hand-off`). Imported service verbs: `get_current_dealership`
 - `admin/be-backs/list/` → `views_be_backs.admin_be_back_list` (`admin-be-back-list`). Imported service verbs: `get_current_dealership`
-- `admin/bhph-notes/` → `views_bhph_notes.admin_bhph_note_create` (`admin-bhph-note-create`). Imported service verbs: `UnknownBhphFrequencyError`, `get_current_dealership`
-- `admin/bhph-notes/<int:pk>/payments/` → `views_bhph_payments.admin_bhph_payment_create` (`admin-bhph-payment-create`). Imported service verbs: `UnknownPaymentMethodError`, `get_current_dealership`
 - `admin/accounting/journal-entries/` → `views_accounting.admin_journal_entry_create` (`admin-journal-entry-create`). Imported service verbs: `get_current_dealership`
 - `admin/demo-store/feedback/` → `views_demo_store.admin_demo_store_feedback_create` (`admin-demo-store-feedback-create`). Imported service verbs: `get_current_dealership`
 
@@ -302,14 +300,12 @@ _None._
 ### views_bhph_notes
 
 - **Endpoints:** 3
-- **Backend-only:** 1
-- **Backend-only dispositions in this module:** `defer-candidate-O2`
+- **Backend-only:** 0
 
 ### views_bhph_payments
 
 - **Endpoints:** 2
-- **Backend-only:** 1
-- **Backend-only dispositions in this module:** `defer-candidate-O2`
+- **Backend-only:** 0
 
 ### views_bhph_promises
 
