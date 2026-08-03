@@ -266,18 +266,44 @@ recommendation.
 
 ### 5. Recommend a target for §5.a
 
-Ground the recommendation in:
+**Primary evaluation lens** (durable
+guidance carried forward from M22
+close):
 
+> **Which candidate most increases
+> operational coverage for a
+> dealership employee?**
+
+Evaluate every candidate through
+this lens first. Endpoint count,
+implementation effort, and roadmap
+momentum are secondary signals for
+tie-breaking within candidates that
+score comparably on operational
+coverage. Bounded infrastructure-
+adjacent candidates (Candidate H is
+the current example) can win via
+"increases coverage RELIABILITY
+across all existing journeys"
+framing — reliability is a form of
+coverage.
+
+Then ground the recommendation in:
+
+- **PRIMARY:** operational coverage
+  delta for a dealership employee.
+  Which employee-persona workflow
+  does this candidate enable, make
+  more reliable, or bring under
+  Playwright end-to-end validation?
 - Operator pain resolved.
-- Dependencies on shipped
-  substrate.
+- Dependencies on shipped substrate.
 - Whether the candidate blocks
-  future milestones or is
-  blocked by them.
-- Whether the M22 CI run
-  surfaced any operational
-  friction that reshuffles
-  priority.
+  future milestones or is blocked
+  by them.
+- Whether the M22 CI run surfaced
+  any operational friction that
+  reshuffles priority.
 - Whether the M22 §9 evidence
   points more strongly at one
   candidate than others.
@@ -287,6 +313,11 @@ Ground the recommendation in:
   win" milestone before
   returning to larger scope
   work.
+
+Explicitly note candidates with
+LOW operational-coverage delta —
+they need a strong case on other
+dimensions to win.
 
 ### 6. Draft §5.b–§5.h load-bearing decisions
 
@@ -311,6 +342,43 @@ journey change is required
 milestones only). Non-
 adherence is a planning-memo
 review finding.
+
+**Also verify §3 addresses the
+compound operational contract**
+carried forward from M20-M22:
+(a) verify through the real
+application before locking
+scope; (b) let evidence drive
+roadmap decisions; (c) keep
+milestones tightly bounded;
+(d) extend Playwright journeys
+whenever customer-facing
+operational behavior changes;
+(e) allow completed operational
+journeys to reveal the next
+highest-value work rather than
+planning from assumptions. Any
+§5 decision that violates one
+of these should be flagged
+before locking.
+
+### 7a. Planning artifact generation discussion (standing topic)
+
+Not necessarily M23 scope, but
+include as a standing
+discussion topic at planning
+time. Which planning artifacts
+are mature enough for
+generation from the codebase?
+Current examples of the
+maturity threshold catalogued in
+`MILESTONE_23_PLANNING.md`
+§"Planning artifact generation
+discussion" — flag candidates
+in retrospective §9 or elevate
+to scope when hand-maintenance
+cost exceeds generation tooling
+cost.
 
 ### 8. Expand M23 planning skeleton
 

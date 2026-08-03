@@ -407,6 +407,126 @@ with the full brief in hand.**
 - **Candidate G** — dashboard
   testid hardening. Not urgent.
 
+## Guiding question for M23.0 candidate evaluation
+
+**Which candidate most increases
+operational coverage for a
+dealership employee?**
+
+This lens is primary at §5.a
+target selection. Evaluate every
+candidate through it FIRST.
+Endpoint count, implementation
+effort, roadmap momentum, and
+continuity with prior scope are
+secondary signals used to break
+ties within candidates that
+score comparably on operational
+coverage. Established durable
+guidance at M22 close per the
+M20-M22 operational-contract
+demonstration: shipped
+Playwright coverage produces
+better planning decisions than
+speculation, and the same lens
+should govern scope selection.
+
+Bounded infrastructure-adjacent
+candidates (Candidate H test-
+hygiene remediation is the
+current example) can win via
+"increases coverage
+RELIABILITY across all
+existing journeys" framing —
+reliability is a form of
+coverage.
+
+## Planning artifact generation discussion
+
+**Not necessarily M23 scope**,
+but every future planning
+session should include a
+standing discussion topic:
+which planning artifacts are
+mature enough to become
+generated or partially-
+generated from the codebase
+rather than hand-maintained?
+
+Current examples of the
+maturity threshold:
+
+- **Already auto-generated:**
+  `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
+  is emitted by
+  `backend/dealer_ai/scripts/audit_operational_surface.py`.
+  Works well — hand-authored
+  narrative + auto-generated
+  tables.
+- **Candidates for
+  generation:** portions of
+  CAPABILITY_MATRIX (per-
+  domain endpoint tables,
+  journey coverage tables);
+  standalone endpoint
+  coverage summaries;
+  component-to-wrapper
+  mappings.
+- **Should stay hand-
+  authored:** narrative
+  planning memos,
+  retrospectives, business
+  problem framings, §5
+  load-bearing decisions —
+  these encode judgment
+  that scripts cannot
+  reproduce.
+
+When authoring or updating a
+planning artifact by hand,
+ask: "Could a script maintain
+this from the codebase?" If
+yes, flag it in retrospective
+§9 as a future-work candidate.
+When the hand-maintenance cost
+of a specific artifact exceeds
+the cost of generation tooling,
+generation graduates to
+shipped scope. Not urgent for
+M23; standing conversation
+topic as the platform matures.
+
+## Preserve the M20–M22 operational contract
+
+Compound guidance to carry
+forward through every future
+milestone:
+
+- Verify through the real
+  application before locking
+  scope.
+- Let evidence drive roadmap
+  decisions — retrospective
+  §9 recommendations decay
+  when the codebase changes.
+- Keep milestones tightly
+  bounded — evidence-sized
+  §5.h Option B posture
+  allows shape to shrink as
+  well as grow (M21.4 +
+  M22.3 collapses are the
+  reference cases).
+- Extend Playwright journeys
+  whenever customer-facing
+  operational behavior
+  changes (M21.0 §5.f Option
+  B DoD amendment).
+- Allow completed operational
+  journeys to reveal the
+  next highest-value work
+  rather than planning from
+  assumptions.
+
 ## What M23.0 must do
 
 At SESSION_175 (or whenever M23.0
@@ -444,6 +564,14 @@ opens):
 4. **Recommend a target** for §5.a
    selection. Ground the
    recommendation in:
+   - **PRIMARY:** operational
+     coverage delta for a
+     dealership employee (per
+     guiding question above).
+     Which employee-persona
+     workflow does this
+     candidate enable or make
+     more reliable?
    - Operator pain resolved.
    - Dependencies on already-
      shipped substrate.
@@ -453,6 +581,11 @@ opens):
      future milestones or is
      blocked by them.
    - Evidence from Inputs 1–6.
+   - Explicitly note candidates
+     with LOW operational-
+     coverage delta — they need
+     a strong case on other
+     dimensions to win.
 5. **Await user confirmation** or
    redirection to a different
    candidate.
