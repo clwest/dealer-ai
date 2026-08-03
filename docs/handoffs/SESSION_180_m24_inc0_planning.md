@@ -870,3 +870,245 @@ Per MILESTONE_24_PLANNING.md
 10. `docs/CAPABILITY_MATRIX.md`
     §7x (M23 shipped
     surface)
+
+---
+
+## Correction at SESSION_181 open (M24.1)
+
+Appended per DOC_GOVERNANCE.md
+rule 5 (historical handoffs
+preserved unless factual
+correction required). This
+section documents an
+implementation-time planning
+correction discovered at
+SESSION_181 M24.1 open. The
+correction updates the
+authoritative planning memo
+(`MILESTONE_24_PLANNING.md`)
+in place per rule 2; this
+handoff records what was
+decided at M24.0 based on the
+information I had then, plus
+what changed when subsequent
+evidence surfaced.
+
+### What was corrected
+
+**Two evidence-based
+discoveries** surfaced during
+M24.1-open UI substrate
+verification (before any
+implementation code was
+authored):
+
+1. **Route path mismatch.**
+   This handoff and the M24.0
+   planning memo referenced
+   `/dealer-ai/sales/leads/<id>`
+   as the post-create
+   redirect target. The real
+   sales-leads route is
+   `/dealer-ai-sales/leads`
+   (hyphen; no `:id` sub-
+   route); there is no
+   dedicated sales-side
+   lead detail page. This
+   was a documentation
+   error introduced at
+   M24.0 by unverified
+   route assumption.
+
+2. **Downstream-verb UI
+   substrate gap.** M24.0
+   §5.b + §5.d promised
+   per-channel handoffs
+   assuming shipped
+   downstream operator UI
+   existed:
+   - Walk-in → assign +
+     schedule test drive.
+     Assign IS reachable
+     via `LeadDetailModal`
+     + `AssignmentDropdown`
+     (but the modal is not
+     currently wired into
+     `DealerAiSalesLeads` —
+     small in-scope wire-up
+     needed). **Test-drive
+     creation UI does NOT
+     ship.**
+     `DealerAiSalesTestDrives.tsx:4-5`
+     explicitly notes:
+     "Read-only view at
+     M11.6 — creation
+     happens via the
+     dedicated form on the
+     M11.2 backend surface
+     (deferred to a follow-
+     on UX pass)."
+   - Phone → assign +
+     start 24hr cadence.
+     Both reachable via
+     modal wire-up +
+     existing
+     `CadenceConfigPanel`
+     on
+     `DealerAiSalesFollowUps`.
+   - Referral → attribution
+     link visible on lead
+     detail. **`LeadDetailModal`
+     does NOT display
+     `referrer_id`** or
+     referrer information.
+     Attribution is
+     observable only in
+     the raw API projection
+     and via
+     `channel="referral"`
+     in the leads-list
+     table column.
+   - Webhook → correct
+     platform attribution
+     visible in UI.
+     `channel="listing_form"`
+     IS visible in the
+     leads-list table
+     column; `platform`
+     value is NOT surfaced
+     anywhere.
+
+### Revised decisions locked at SESSION_181 open
+
+Per user direction to "reopen
+and correct the M24 planning
+contract before continuing
+implementation." Under the
+M23 §5.d durable "small in-
+scope fix vs. large deferred"
+posture:
+
+- **§5.b revised.** Post-
+  create opens
+  `LeadDetailModal` on the
+  same page for the newly
+  created lead (no
+  redirect; no new route).
+  `LeadDetailModal` +
+  `AssignmentDropdown`
+  wired into
+  `DealerAiSalesLeads` as
+  an M24.1 in-scope
+  extension (~30-line
+  addition). All route
+  references corrected
+  from
+  `/dealer-ai/sales/leads/<id>`
+  to
+  `/dealer-ai-sales/leads`.
+- **§5.d revised.** Common
+  core across all four
+  channels: intake → list
+  visibility with correct
+  `channel` attribution →
+  open `LeadDetailModal` →
+  assign via
+  `AssignmentDropdown`.
+  Phone additionally
+  navigates to
+  `/dealer-ai-sales/follow-ups`
+  and creates a 24hr
+  cadence via the existing
+  `CadenceConfigPanel`.
+  Walk-in / referral /
+  webhook stop at assign
+  (test-drive UI absent
+  per M11.6; referrer
+  display absent in
+  modal; platform display
+  absent). Attribution
+  assertions retained only
+  where the UI truthfully
+  displays the field
+  (`channel` column) and
+  dropped where it does
+  not (`referrer_id`,
+  `platform`).
+- **§5.h revised.** M24.1
+  completion contract
+  expanded to include
+  `LeadDetailModal` +
+  `AssignmentDropdown`
+  wire-in on
+  `DealerAiSalesLeads`.
+  Per-increment scopes
+  adjusted. Increment
+  count unchanged (5-6
+  evidence-sized).
+- **§3 deferrals added:**
+  - #12
+    `<RecordTestDriveForm>`
+    + attachment (M25
+    Candidate O2 sub-
+    scope).
+  - #13 `referrer_id` /
+    "Referred by" display
+    in `LeadDetailModal`
+    (M25 candidate).
+  - #14 `platform`
+    display in
+    `LeadDetailModal` for
+    webhook-origin leads
+    (M25 candidate).
+
+### Streak accounting update
+
+Planning-time as-recommended
+streak was already reset to
+0 at SESSION_180 M24.0 for
+the webhook operator-UI
+posture redirect. The
+SESSION_181 M24.1-open
+correction is a second
+planning revision on the
+same milestone; streak
+remains at 0 (not further
+reset; not extended). The
+M24 retrospective §5 will
+record both corrections
+truthfully.
+
+### Durable lesson strengthened
+
+The M22 durable lesson
+`feedback_verify_prior_recommendations_at_planning_open.md`
+covered intake-side
+verification at planning
+open. The M24.1-open
+discovery strengthens the
+lesson to include
+**downstream-verb UI
+substrate verification** as
+a mandatory M25+ planning-
+open check before locking
+§5.b + §5.d for any UI-
+creation milestone.
+
+### Where the corrected contract lives
+
+- `docs/roadmap/MILESTONE_24_PLANNING.md`
+  is updated in place with
+  the corrected §5.b + §5.d
+  + §5.h + §7 M24.1-M24.5
+  + §3 deferrals + preamble
+  correction note.
+- `00-START-NEXT-SESSION.md`
+  is refreshed with the
+  corrected M24.1 scope
+  and route references.
+- This handoff is the
+  historical record of the
+  M24.0 planning session
+  as it was decided; the
+  correction section above
+  is the delta.
