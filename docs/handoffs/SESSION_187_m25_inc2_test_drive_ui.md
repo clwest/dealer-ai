@@ -9,7 +9,7 @@ milestone_status: in-progress
 milestone_name: "Lead-to-Test-Drive Operational Completion"
 increment: 2
 increment_status: shipped
-commit: TBD
+commit: 27cbe87
 ---
 
 # SESSION_187 — Milestone 25 · Increment 2 (M25.2 — test-drive UI + admin vehicle list endpoint)
