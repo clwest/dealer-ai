@@ -84,7 +84,12 @@ jobs:
           # The tag filter is the M20 sequencing seam — as journeys
           # land in M20.2–M20.4, they inherit @pilot-critical only
           # when explicitly tagged (owner morning review in M20.2).
-          PLAYWRIGHT_GREP: ${{ github.event_name == 'push' && '' || '@pilot-critical' }}
+          # NB: GHA expression `x && '' || y` always resolves to y
+          # because the empty string is falsy. Invert the ternary so
+          # the PR case is the truthy branch:
+          #   pull_request → '@pilot-critical'
+          #   push (main)  → '' (empty ⇒ full suite)
+          PLAYWRIGHT_GREP: ${{ github.event_name == 'pull_request' && '@pilot-critical' || '' }}
         run: |
           if [ -n "$PLAYWRIGHT_GREP" ]; then
             npx playwright test --grep "$PLAYWRIGHT_GREP"
