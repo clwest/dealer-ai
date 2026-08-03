@@ -3120,6 +3120,103 @@ Verification at open worked as intended.
 
 ---
 
+## 7α. Audit-Script Parser Refinement — Planning-Substrate Integrity (Milestone 26, shipped)
+
+Milestone 26 (SESSION_189 planning + SESSION_190 implementation
++ close-out folded per §5.h Option B) delivered **planning-
+substrate integrity**: a bounded refinement to the operational-
+surface audit script's frontend-consumer tokenizer so that
+wrappers using nested template literals inside `${...}`
+interpolation are correctly recognized. Zero operator-facing
+change; zero endpoint additions; zero permission-class change;
+zero backend runtime behavior touched.
+
+The M25.3 close-out handoff had scoped a 2-endpoint false-
+positive gap in the trailing-optional-querystring template
+pattern. SESSION_189 §3 tracing revealed the true blast radius
+was 6 endpoints; SESSION_190 §2 pre-implementation refinement
+narrowed the nested-template-literal-attributable subset to 5
+endpoints (row 5 `vehicles/<int:vehicle_id>/` reclassified as
+a separate `getJSON` public-helper defect, deferred to M27+
+per M26 planning §3). Every M27+ target selection under the
+durable operational-coverage guiding question now inherits an
+accurate 119/154 coverage baseline instead of the pre-fix
+114/154 report.
+
+Milestone shape inherits the M23.1 §5.d precedent — small
+bounded parser fix inside the same audit script — with the
+symmetric orientation (M23.1 removed false positives on GET
+wrappers prefix-matching POST endpoints; M26 removes false
+negatives on `authGetJSON` wrappers using nested template
+literals). **Zero-drift permission-class posture extends to
+twenty-six consecutive milestones** (M10 → M26). Row 5
+public-fetch-helper refinement and Candidate H test-hygiene
+remediation surfaced as separate M27+ candidates per user
+constraint at M26.0 open.
+
+Three durable design refinements surfaced at M26 and are
+carried forward: (a) *empirical-discovery refinements are
+counted as as-recommended when the target itself does not
+shift* (planning-time streak logic — M26.0 target locked
+under a re-framing of the durable guiding question; M26.1-
+open row-5 reclassification narrowed scope from 6 to 5 without
+changing §5.a); (b) *the two-source agreement discipline
+(§5.d Phase 1 diff + §5.d Phase 2 per-row manual verification)
+catches the exact under-scoping failure mode that produced the
+M25.3 → SESSION_189 § → SESSION_190 § chain of estimate
+corrections* — regeneration alone is insufficient; (c) *audit-
+correctness milestones are welcome standalone scope when the
+blast radius exceeds sub-scope size and the fix is naturally
+self-contained; the parallel to M23.1 §5.d confirms the shape*.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M26.0 planning refinement + target selection | Full active memo at `MILESTONE_26_PLANNING.md` — all eight §5 locks resolved at SESSION_189 open under the planning-substrate integrity re-framing. §5.a locked as audit-script parser refinement (AI's independent recommendation confirmed after A2 / H / audit alternatives presented under the three-tier operator-coverage / test-hygiene-and-audit-tooling / gated / deferred framing). §5.b locked as narrow parser fix inside `extract_frontend_consumers` (script line 607); preferred approach was post-match refinement via balanced-brace-aware companion, keeping the fast-path regex intact. §5.c locked as dedicated `test_audit_operational_surface.py` with 6 positive + 6 negative test methods (refined to 5+7 at SESSION_190 §2 after row-5 reclassification). §5.d locked as two-phase protocol (regenerate + per-row manual verification of wrapper existence, verb match, component import). §5.e locked as two-source agreement requirement for baseline recording. §5.f locked as 1 implementation increment + close-out fold. §5.g locked with M21.0 §5.f exception path explicitly invoked (no Playwright journey; audit-tooling is not operator-facing). §5.h locked as evidence-sized Option B fold. Handoff at `docs/handoffs/SESSION_189_m26_inc0_planning.md`. Session-numbering correction at open: M25.3 folded-close-out handoff occupies the 188 slot; this session is SESSION_189 (not SESSION_188 as the prior start-here doc named it). | Planning-time as-recommended streak → 4. No code, no push. |
+| M26.1 parser fix + regression suite + audit regeneration + doc updates | **Empirical refinement at M26.1 open:** pre-implementation verification of the six SESSION_189-listed false positives revealed row 5 `vehicles/<int:vehicle_id>/` uses public `getJSON` (not `authGetJSON`) — its coverage gap is a separate `_HELPER_CALL_RE` regex-omission defect, not the nested-template-literal one. M26.1 scope narrowed to 5 endpoints (rows 7, 16, 29, 111, 121); row 5 deferred to M27+ per user scope constraint. Planning memo + start-here doc refined additively. Backend: `_extract_balanced_template_literal(source, start_pos)` extracted as shared substrate from the existing `_extract_url_literals` walking logic (lines 462-484). Post-match refinement added to `extract_frontend_consumers` — when the fast-path regex captures a template literal with mismatched `${` vs `}` count (indicating truncation at an inner backtick), re-tokenize from `m.start(2)` using the balanced parser. `_extract_url_literals` refactored to delegate to the shared substrate. `normalize_frontend()`, `_HELPER_TO_VERB`, `cross_reference()`, `recommend_disposition()` all untouched per §5.b out-of-scope discipline. Tests: 12 methods across 2 classes in new `dealer_ai/tests/test_audit_operational_surface.py` — 5 positive cases mirror the 5 confirmed false positives (each asserts full-backtick capture + correct normalized pattern + `authGetJSON` verb + wrapper name); 7 negative cases guard against over-classification (fixed query string, nonexistent endpoint, fast-path unchanged, identifier-lookback preserved M22.1 §5.e, verb-filter substrate preserved M23.1 §5.d, malformed-template no-hang, public `getJSON` still invisible documenting M27+ deferral). Audit regeneration: `python3 -m dealer_ai.scripts.audit_operational_surface` produces exactly the expected diff — coverage summary 114 → 119, five rows (7, 16, 29, 111, 121) flip `defer-candidate-O2` → `covered` with wrapper columns populated, defer-candidate-O2 bulleted-group size drops 35 → 30, per-module backend-only counts update accordingly, cosmetic row-42 `admin/vendors/` wrapper-reorder (deterministic script output). Row 5 correctly remains `defer-candidate-O2` per §3 deferral. §5.d Phase 2 manual verification: all 5 flipped wrappers are `authGetJSON` matching GET endpoints; all 5 wrappers imported by ≥1 non-test `.tsx` / `.ts` component (68 total imports across 17 files). Two-source agreement per §5.e: artifact 119 / 154 + repository inspection all-clean. Corrected baseline recorded. | Backend **4,793 → 4,805 pass** (+12 across 5 positive + 7 negative regression test methods). Frontend Vitest **226 unchanged** (M26 does not touch frontend). Acceptance **14 journeys unchanged** (§5.g exception path invoked). Audit: **114 / 154 → 119 / 154 covered** (+5, real repository state). Planning-time as-recommended streak → 5 (M26.0 + M26.1). Zero-drift permission-class streak → 26. M26.2 close-out folded into M26.1 session per §5.h Option B — no code discrepancies surfaced at any §5.d checkpoint. |
+| Test baseline | Backend **4,793 → 4,805 pass** (+12 across M26.1 regression suite: 5 positive + 7 negative test methods in `test_audit_operational_surface.py`, all pure `SimpleTestCase` — no Django test-DB usage). Frontend Vitest **226 unchanged**. Acceptance **14 journeys unchanged**. `manage.py check` + `makemigrations --check` clean. Per-increment delta: M26.0 = 0 (planning); M26.1 = +12 backend + 0 frontend + 0 new journeys. | Zero-drift permission-class streak **twenty-five → twenty-six** consecutive milestones (M10 → M26). Planning-time as-recommended streak **3 → 4 → 5** across M26.0 → M26.1 close. Historical run of 89 across M10 → M23 preserved for the record. |
+
+**What is NOT shipped in Milestone 26** (deferred per
+`MILESTONE_26_PLANNING.md` §3):
+
+- **Row 5 `vehicles/<int:vehicle_id>/` public-fetch-helper
+  regex refinement (NEW deferral at M26.1 open).** Wrapper
+  `fetchVehicleDetail` at api.ts:611 uses public `getJSON`,
+  not `authGetJSON`; `_HELPER_CALL_RE` (script line 390)
+  enumerates only the auth-helper family. `_PUBLIC_FETCH_RE`
+  matches only literal `fetch(...)` calls with
+  `/api/dealer-ai/` or `${API_BASE}` in the URL. Separate
+  defect from the nested-template-literal one M26 addresses;
+  explicitly deferred from M26 per user scope constraint.
+  M27+ candidate: extend `_HELPER_CALL_RE` to include public
+  helpers, or broaden `_PUBLIC_FETCH_RE` filters. Blast
+  radius unknown pre-tracing; standard SESSION-189-§3-style
+  verification required before scope commit.
+- **Plain-string-literal false-positive investigation
+  (rows 1–4 `chat/start/`, `chat/message/`,
+  `chat/session/<uuid:session_id>/`, `leads/`).** Root cause
+  is not the M26 defect; surfaced at SESSION_189 §3 but
+  requires separate tracing before scope commit. M27+
+  candidate.
+- **Test-hygiene remediation (Candidate H).** Kept separate
+  from M26 per user constraint. Live M27+ candidate.
+- **A2 (JE creation UI).** Kept elevated as leading M27
+  §5.a candidate per user constraint at M26.0 open.
+- **Endpoint disposition changes unrelated to the five
+  known false positives.** `recommend_disposition()`
+  heuristic out of scope per §3.
+- **Audit script rewrite / restructure.** M26 fixes the
+  narrow parser defect; broader refactor (dedicated
+  tokenizer class, TS AST parser integration) deferred
+  pending evidence.
+- **Audit output format changes.** Row shape, disposition
+  legend, coverage summary format all unchanged.
+- **No visible new functionality on any operator surface.**
+  M26 is audit-script-only per the planning-substrate
+  integrity framing. All BHPH / accounting / recon / F&I /
+  sales / pilot surfaces continue unchanged.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

@@ -447,12 +447,55 @@ def _resolve_variable_url(
     return matches[-1].group(1).strip()
 
 
+def _extract_balanced_template_literal(source: str, start: int) -> tuple[str, int]:
+    """Walk a template literal starting at ``source[start]`` (which must
+    point at the opening backtick), honoring ``${...}`` interpolation
+    depth so that inner backticks inside interpolations are not treated
+    as terminators. Returns ``(full_literal, end_exclusive)`` where
+    ``end_exclusive`` points just past the closing backtick. If the
+    literal is unterminated before EOF, returns the partial capture and
+    ``len(source)``.
+
+    M26.1 §5.b — shared substrate between ``_extract_url_literals``
+    (which uses the same algorithm inline) and the fast-path refinement
+    in ``extract_frontend_consumers`` for the nested-template-literal
+    defect (SESSION_189 §3 discovery, refined at SESSION_190 §2).
+    """
+    if start >= len(source) or source[start] != "`":
+        return "", start
+    j = start + 1
+    n = len(source)
+    depth = 0
+    while j < n:
+        cj = source[j]
+        if cj == "\\":
+            j += 2
+            continue
+        if cj == "$" and j + 1 < n and source[j + 1] == "{":
+            depth += 1
+            j += 2
+            continue
+        if depth > 0 and cj == "}":
+            depth -= 1
+            j += 1
+            continue
+        if depth == 0 and cj == "`":
+            return source[start : j + 1], j + 1
+        j += 1
+    # Unterminated
+    return source[start:], n
+
+
 def _extract_url_literals(expr: str) -> list[str]:
     """Return every top-level string / template literal in an expression.
     Handles ternaries (``asOf ? \\`...\\` : "..."``) by returning both
     branches. Nested template literals inside ``${...}`` substitutions
     are NOT double-counted — the balanced-brace collapse in
     normalize_frontend handles them at normalization time.
+
+    Template-literal walking delegates to
+    ``_extract_balanced_template_literal`` (M26.1 §5.b shared
+    substrate).
     """
     literals: list[str] = []
     i = 0
@@ -460,31 +503,10 @@ def _extract_url_literals(expr: str) -> list[str]:
     while i < n:
         ch = expr[i]
         if ch == "`":
-            # Walk to matching backtick, honoring nested ${...} which
-            # may themselves contain backticked templates.
-            j = i + 1
-            depth = 0
-            while j < n:
-                cj = expr[j]
-                if cj == "\\":
-                    j += 2
-                    continue
-                if cj == "$" and j + 1 < n and expr[j + 1] == "{":
-                    depth += 1
-                    j += 2
-                    continue
-                if depth > 0 and cj == "}":
-                    depth -= 1
-                    j += 1
-                    continue
-                if depth == 0 and cj == "`":
-                    literals.append(expr[i : j + 1])
-                    i = j + 1
-                    break
-                j += 1
-            else:
-                # Unterminated — bail on this literal
-                i = n
+            lit, end = _extract_balanced_template_literal(expr, i)
+            if lit and lit.endswith("`"):
+                literals.append(lit)
+            i = end
         elif ch in "\"'":
             j = expr.find(ch, i + 1)
             if j == -1:
@@ -612,6 +634,27 @@ def extract_frontend_consumers(api_source: str) -> list[FrontendConsumer]:
         raw_url_expr = m.group(2)
         source_line = api_source[: m.start()].count("\n") + 1
         wrapper = _wrapper_owning_line(api_source, source_line)
+
+        # M26.1 §5.b — post-match refinement for nested-template-literal
+        # tokenization. The fast-path _HELPER_CALL_RE template branch
+        # ``\`[^`]*(?:`|$)`` terminates the outer template literal at
+        # the first inner backtick, mis-tokenizing wrappers whose URL
+        # includes a nested template inside a ``${...}`` interpolation
+        # (e.g. ``\`/admin/vehicles/${qs ? \`?${qs}\` : ""}\``). Detect
+        # truncation by comparing ``${`` count vs ``}`` count in the raw
+        # capture — a mismatch means the tokenizer stopped inside an
+        # interpolation. Re-tokenize with the balanced-brace parser.
+        # Preserves the fast-path regex for the majority of wrappers.
+        if raw_url_expr and raw_url_expr[0] == "`":
+            dollar_opens = raw_url_expr.count("${")
+            close_braces = raw_url_expr.count("}")
+            if dollar_opens > close_braces:
+                bt_start = m.start(2)
+                full_literal, _ = _extract_balanced_template_literal(
+                    api_source, bt_start,
+                )
+                if full_literal and full_literal.endswith("`"):
+                    raw_url_expr = full_literal
 
         # If the captured first-arg is an identifier (not a string
         # literal), look backward within the wrapper for the assignment

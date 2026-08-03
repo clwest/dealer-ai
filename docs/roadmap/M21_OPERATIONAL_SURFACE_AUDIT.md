@@ -19,8 +19,8 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 154
-- **Consumed by frontend components (`covered`):** 114
-- **Backend-only (audit findings):** 40
+- **Consumed by frontend components (`covered`):** 119
+- **Backend-only (audit findings):** 35
   - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **3**
 - **Service verbs enumerated:** 312
 - **Distinct view modules importing service verbs:** 22
@@ -54,7 +54,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 4 | `leads/` | `views.create_lead` | `leads-create` | — | `defer-candidate-O2` |
 | 5 | `vehicles/<int:vehicle_id>/` | `views.vehicle_detail` | `vehicle-detail` | — | `defer-candidate-O2` |
 | 6 | `vehicles/<int:vehicle_id>/ask/` | `views.vehicle_ask` | `vehicle-ask` | — | `defer-candidate-O2` |
-| 7 | `admin/leads/` | `views.admin_lead_list` | `admin-lead-list` | — | `defer-candidate-O2` |
+| 7 | `admin/leads/` | `views.admin_lead_list` | `admin-lead-list` | api.ts:283 `fetchAdminLeads` | `covered` |
 | 8 | `admin/lead/<int:lead_id>/` | `views.admin_lead_detail` | `admin-lead-detail` | api.ts:709 `fetchLeadDetail` | `covered` |
 | 9 | `admin/lead/<int:lead_id>/handoff/` | `views.admin_lead_handoff` | `admin-lead-handoff` | api.ts:716 `buildLeadHandoff` | `covered` |
 | 10 | `admin/chat-sessions/` | `views.admin_chat_session_list` | `admin-chat-session-list` | api.ts:346 `fetchAdminChatSessions` | `covered` |
@@ -63,7 +63,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 13 | `admin/ad-copy/` | `views.admin_ad_copy` | `admin-ad-copy` | api.ts:476 `generateAdCopy` | `covered` |
 | 14 | `admin/salespeople/` | `views.admin_salespeople` | `admin-salespeople` | api.ts:541 `fetchAdminSalespeople` | `covered` |
 | 15 | `admin/lead/<int:lead_id>/assign/` | `views.admin_lead_assign` | `admin-lead-assign` | api.ts:560 `assignLead` | `covered` |
-| 16 | `admin/audit-events/` | `views.admin_audit_events` | `admin-audit-events` | — | `defer-candidate-O2` |
+| 16 | `admin/audit-events/` | `views.admin_audit_events` | `admin-audit-events` | api.ts:340 `fetchAuditEvents` | `covered` |
 | 17 | `salespeople/` | `views.public_salespeople` | `salespeople-list` | — | `defer-candidate-O2` |
 | 18 | `salespeople/<slug:slug>/` | `views.public_salesperson_detail` | `salespeople-detail` | — | `defer-candidate-O2` |
 | 19 | `advisor/<slug:slug>/` | `views.advisor_workspace` | `advisor-workspace` | api.ts:566 `fetchAdvisorWorkspace` | `covered` |
@@ -76,7 +76,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 26 | `auth/login/` | `views.auth_login` | `auth-login` | — | `intentional-omission` |
 | 27 | `auth/logout/` | `views.auth_logout` | `auth-logout` | — | `intentional-omission` |
 | 28 | `auth/me/` | `views.auth_me` | `auth-me` | — | `intentional-omission` |
-| 29 | `admin/vehicles/` | `views.admin_vehicle_list` | `admin-vehicle-list` | — | `defer-candidate-O2` |
+| 29 | `admin/vehicles/` | `views.admin_vehicle_list` | `admin-vehicle-list` | salesApi.ts:256 `listAdminVehicles` | `covered` |
 | 30 | `admin/vehicles/<str:stock_number>/ledger/` | `views.admin_vehicle_ledger` | `admin-vehicle-ledger` | api.ts:1008 `fetchVehicleLedger` | `covered` |
 | 31 | `admin/vehicles/<str:stock_number>/acquisition/` | `views.admin_vehicle_acquisition_upsert` | `admin-vehicle-acquisition` | api.ts:1015 `upsertVehicleAcquisition` | `covered` |
 | 32 | `admin/vehicles/<str:stock_number>/costs/` | `views.admin_vehicle_cost_create` | `admin-vehicle-cost-create` | api.ts:1025 `createVehicleCost` | `covered` |
@@ -89,7 +89,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 39 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/` | `views.admin_condition_photo_attach` | `admin-condition-photo-attach` | api.ts:1313 `attachPhoto` | `covered` |
 | 40 | `admin/vehicles/<str:stock_number>/photos/<uuid:public_id>/` | `views.admin_condition_photo_delete` | `admin-condition-photo-delete` | api.ts:1320 `deletePhoto` | `covered` |
 | 41 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/local-upload/` | `views.admin_condition_photo_local_upload_receiver` | `admin-condition-photo-local-upload` | api.ts:1291 `uploadPhotoBytes` | `covered` |
-| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only, api.ts:1703 `fetchVendor` ⚠ wrapper-only | `covered` |
+| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only | `covered` |
 | 43 | `admin/vendors/<slug:slug>/` | `views_recon.admin_vendor_detail` | `admin-vendor-detail` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1709 `updateVendor` ⚠ wrapper-only | `defer-candidate-O2` |
 | 44 | `admin/vehicles/<str:stock_number>/recon/` | `views_recon.admin_recon_dashboard` | `admin-recon-dashboard` | api.ts:1717 `fetchReconDashboard` | `covered` |
 | 45 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/recon-decision/` | `views_recon.admin_recon_decision_create` | `admin-recon-decision-create` | api.ts:1728 `recordReconDecision` | `covered` |
@@ -158,7 +158,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 108 | `admin/leads/referral/` | `views_leads.admin_lead_referral_create` | `admin-lead-referral-create` | salesApi.ts:122 `createReferralLead` | `covered` |
 | 109 | `admin/leads/webhook/` | `views_leads.admin_lead_webhook_create` | `admin-lead-webhook-create` | salesApi.ts:132 `createWebhookLead` ⚠ wrapper-only | `defer-candidate-O2` |
 | 110 | `admin/test-drives/` | `views_test_drives.admin_test_drive_create` | `admin-test-drive-create` | salesApi.ts:177 `createTestDrive` | `covered` |
-| 111 | `admin/test-drives/list/` | `views_test_drives.admin_test_drive_list` | `admin-test-drive-list` | — | `defer-candidate-O2` |
+| 111 | `admin/test-drives/list/` | `views_test_drives.admin_test_drive_list` | `admin-test-drive-list` | salesApi.ts:203 `listTestDrives` | `covered` |
 | 112 | `admin/deal-writeups/` | `views_deal_writeups.admin_deal_writeup_create` | `admin-deal-writeup-create` | — | `defer-candidate-O2` |
 | 113 | `admin/deal-writeups/<int:pk>/approve/` | `views_deal_writeups.admin_deal_writeup_approve` | `admin-deal-writeup-approve` | — | `defer-candidate-O2` |
 | 114 | `admin/deal-writeups/<int:pk>/hand-off/` | `views_deal_writeups.admin_deal_writeup_hand_off` | `admin-deal-writeup-hand-off` | — | `defer-candidate-O2` |
@@ -168,7 +168,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 118 | `admin/follow-up-tasks/<int:pk>/complete/` | `views_follow_ups.admin_follow_up_task_complete` | `admin-follow-up-task-complete` | salesApi.ts:353 `completeTask` | `covered` |
 | 119 | `admin/follow-up-tasks/<int:pk>/skip/` | `views_follow_ups.admin_follow_up_task_skip` | `admin-follow-up-task-skip` | salesApi.ts:364 `skipTask` | `covered` |
 | 120 | `admin/be-backs/` | `views_be_backs.admin_be_back_create` | `admin-be-back-create` | salesApi.ts:402 `createBeBack` | `covered` |
-| 121 | `admin/be-backs/list/` | `views_be_backs.admin_be_back_list` | `admin-be-back-list` | — | `defer-candidate-O2` |
+| 121 | `admin/be-backs/list/` | `views_be_backs.admin_be_back_list` | `admin-be-back-list` | salesApi.ts:424 `listBeBacks` | `covered` |
 | 122 | `admin/be-backs/<int:pk>/mark-returned/` | `views_be_backs.admin_be_back_mark_returned` | `admin-be-back-mark-returned` | salesApi.ts:436 `markBeBackReturned` | `covered` |
 | 123 | `admin/be-backs/<int:pk>/mark-no-show/` | `views_be_backs.admin_be_back_mark_no_show` | `admin-be-back-mark-no-show` | salesApi.ts:447 `markBeBackNoShow` | `covered` |
 | 124 | `admin/bhph-notes/` | `views_bhph_notes.admin_bhph_note_create` | `admin-bhph-note-create` | bhphApi.ts:165 `createBhphNote` | `covered` |
@@ -205,7 +205,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**40 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**35 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -215,7 +215,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (35)
+### defer-candidate-O2 (30)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -223,11 +223,8 @@ _None._
 - `leads/` → `views.create_lead` (`leads-create`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `vehicles/<int:vehicle_id>/` → `views.vehicle_detail` (`vehicle-detail`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `vehicles/<int:vehicle_id>/ask/` → `views.vehicle_ask` (`vehicle-ask`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
-- `admin/leads/` → `views.admin_lead_list` (`admin-lead-list`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
-- `admin/audit-events/` → `views.admin_audit_events` (`admin-audit-events`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `salespeople/` → `views.public_salespeople` (`salespeople-list`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `salespeople/<slug:slug>/` → `views.public_salesperson_detail` (`salespeople-detail`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
-- `admin/vehicles/` → `views.admin_vehicle_list` (`admin-vehicle-list`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `admin/vendors/<slug:slug>/` → `views_recon.admin_vendor_detail` (`admin-vendor-detail`). Imported service verbs: `get_current_dealership`, `recon`, `vendor_comm`
 - `admin/vehicles/<str:stock_number>/photos/reorder/` → `views_photos.admin_photo_reorder` (`admin-photo-reorder`). Imported service verbs: `get_current_dealership`, `photo_gallery`, `photo_storage`
 - `showroom/vehicles/<str:stock_number>/` → `views_showroom.showroom_vehicle_detail` (`showroom-vehicle-detail`). Imported service verbs: —
@@ -245,11 +242,9 @@ _None._
 - `admin/funding/<int:pk>/` → `views_f_and_i.admin_funding_update` (`admin-funding-update`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/chargebacks/` → `views_f_and_i.admin_chargeback_create` (`admin-chargeback-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/leads/webhook/` → `views_leads.admin_lead_webhook_create` (`admin-lead-webhook-create`). Imported service verbs: `get_current_dealership`, `registered_platforms`
-- `admin/test-drives/list/` → `views_test_drives.admin_test_drive_list` (`admin-test-drive-list`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/` → `views_deal_writeups.admin_deal_writeup_create` (`admin-deal-writeup-create`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/approve/` → `views_deal_writeups.admin_deal_writeup_approve` (`admin-deal-writeup-approve`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/hand-off/` → `views_deal_writeups.admin_deal_writeup_hand_off` (`admin-deal-writeup-hand-off`). Imported service verbs: `get_current_dealership`
-- `admin/be-backs/list/` → `views_be_backs.admin_be_back_list` (`admin-be-back-list`). Imported service verbs: `get_current_dealership`
 - `admin/accounting/journal-entries/` → `views_accounting.admin_journal_entry_create` (`admin-journal-entry-create`). Imported service verbs: `get_current_dealership`
 - `admin/demo-store/feedback/` → `views_demo_store.admin_demo_store_feedback_create` (`admin-demo-store-feedback-create`). Imported service verbs: `get_current_dealership`
 
@@ -270,7 +265,7 @@ _None._
 ### views
 
 - **Endpoints:** 41
-- **Backend-only:** 16
+- **Backend-only:** 13
 - **Backend-only dispositions in this module:** `defer-candidate-O2`, `intentional-omission`
 
 ### views_accounting
@@ -287,8 +282,7 @@ _None._
 ### views_be_backs
 
 - **Endpoints:** 4
-- **Backend-only:** 1
-- **Backend-only dispositions in this module:** `defer-candidate-O2`
+- **Backend-only:** 0
 
 ### views_bhph_analytics
 
@@ -395,8 +389,7 @@ _None._
 ### views_test_drives
 
 - **Endpoints:** 2
-- **Backend-only:** 1
-- **Backend-only dispositions in this module:** `defer-candidate-O2`
+- **Backend-only:** 0
 
 ---
 

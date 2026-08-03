@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-03
-last_session_shipped: SESSION_189
+last_session_shipped: SESSION_190
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -27,100 +27,103 @@ milestone_22_status: shipped
 milestone_23_status: shipped
 milestone_24_status: shipped
 milestone_25_status: shipped
-milestone_26_status: active
-next_session: SESSION_190
-next_milestone: 26
-next_milestone_name: "Audit-Script Parser Refinement (Planning-Substrate Integrity)"
-next_increment: 1
-next_increment_name: "M26.1 — Parser fix + regression suite + audit regeneration + doc updates"
+milestone_26_status: shipped
+next_session: SESSION_191
+next_milestone: 27
+next_milestone_name: "(target selection pending — locked at M27.0 open)"
+next_increment: 0
+next_increment_name: "M27.0 — Planning refinement + target selection"
 ---
 
-# Next session — SESSION_190 · Milestone 26 · Increment 1 (M26.1 — parser fix + regression suite + audit regeneration + doc updates)
+# Next session — SESSION_191 · Milestone 27 · Increment 0 (M27.0 — planning refinement + target selection)
 
-> **Milestone 26 opened at SESSION_189 (M26.0) as a
-> planning-substrate integrity milestone** — a reframe of the
-> durable operational-coverage guiding question rather than a
-> departure from it. All §5 locks captured in
-> `docs/roadmap/MILESTONE_26_PLANNING.md`.
+> **Milestone 26 — Audit-Script Parser Refinement
+> (Planning-Substrate Integrity) — SHIPPED at SESSION_190.**
+> Two-session milestone (SESSION_189 → SESSION_190). M26.2
+> close-out folded into M26.1 per §5.h Option B — no code
+> discrepancies at any §5.d checkpoint. **Backend baseline
+> 4,793 → 4,805 (+12 regression tests). Audit coverage
+> 114 / 154 → 119 / 154** (five nested-template-literal false
+> positives correctly recognized post-fix; row 5 remains
+> `defer-candidate-O2` per M26.1-open empirical refinement —
+> separate `getJSON` public-helper defect deferred to M27+).
 >
-> **§3 empirical discovery at SESSION_189 §3:** the M25.3
-> close-out handoff scoped the trailing-optional-querystring
-> parser gap at 2 false-positive endpoints. Direct extractor
-> tracing revealed the true blast radius is **6 endpoints** —
-> a 3× understatement. Every M27+ target selection made from
-> the current audit inherits that drift; M26 corrects it
-> before the next major candidate ranking.
+> **§5.d two-source agreement confirmed** at 119 / 154 across
+> all four recording sites: `CAPABILITY_MATRIX.md` §7α,
+> `IMPLEMENTATION_ROADMAP.md` §Milestone 26,
+> `MILESTONE_26_RETROSPECTIVE.md` §2 + §7, this doc's
+> operational-state block.
 >
-> **The six confirmed false positives (all shipped
-> wrappers, all consumed by shipped UI, all currently
-> `defer-candidate-O2` in the audit):**
+> **Zero-drift permission-class streak extends 25 → 26**
+> consecutive milestones (M10 → M26). Zero endpoints added.
 >
-> - Row 5 `vehicles/<int:vehicle_id>/` — `getVehicleDetail`
->   (api.ts:626).
-> - Row 7 `admin/leads/` — `fetchAdminLeads` (api.ts:284).
-> - Row 16 `admin/audit-events/` — `fetchAuditEvents`
->   (api.ts:341).
-> - Row 29 `admin/vehicles/` — `listAdminVehicles`
->   (salesApi.ts:257).
-> - Row 111 `admin/test-drives/list/` — `listTestDrives`
->   (salesApi.ts:204).
-> - Row 121 `admin/be-backs/list/` — `listBeBacks`
->   (salesApi.ts:425).
+> **Planning-time as-recommended streak reached 5** (was 3 at
+> M25 close; +1 at M26.0 with target locked as recommended
+> after 3-tier framing + 5 scope-discipline constraints; +1
+> at M26.1 with M26.1-open row-5 empirical refinement counted
+> as as-recommended because it narrowed evidence without
+> shifting target). Historical run of 89 across M10 → M23
+> preserved for the record.
 >
-> **True post-fix coverage baseline:** 120 / 154. Recorded
-> only after §5.e two-source agreement (regenerated artifact
-> + direct repository inspection).
+> **Coordinated push at M26 close pending.** M26.1 shipped
+> the parser fix, regression suite, audit regeneration, all
+> §5.e doc updates, retrospective, this start-here overwrite,
+> and the M26.1-close handoff. Awaits explicit user
+> confirmation before push. Expected M26 commits at push:
+> 4 (M26.0 planning + hash backfill + M26.1 close + hash
+> backfill).
 >
-> **Root cause identified at SESSION_189 §3:** the regex
-> tokenizer at `audit_operational_surface.py:390`
-> (`_HELPER_CALL_RE` template-literal branch
-> `` `[^`]*(?:`|$) ``) terminates the outer template string
-> at the first inner backtick — mis-tokenizing every wrapper
-> that uses a nested template literal inside a `${...}`
-> interpolation.
+> **Three durable design principles surfaced or reinforced
+> at M26** (see `MILESTONE_26_RETROSPECTIVE.md` §5):
+> (a) *empirical-discovery refinements preserve streak
+> integrity when the target does not shift* — reinforced
+> for the fourth time in the M24–M26 arc;
+> (b) *two-source agreement (§5.d Phase 1 diff + Phase 2
+> per-row verification) is the mechanical guard against
+> baseline drift* — reinforced by catching the row-5
+> misclassification before it hit the record;
+> (c) *DoD exception path (M21.0 §5.f Option B) applies
+> cleanly to infrastructure-focused milestones* — new at
+> M26; audit-tooling / test-hygiene / CI-infrastructure
+> milestones can cite this precedent.
 >
-> **Session numbering fix:** the previous start-here doc
-> named "SESSION_188" as this current session, but the M25.3
-> folded-close-out handoff already occupies the 188 slot per
-> DOC_GOVERNANCE.md incrementing convention. Corrected at
-> M26.0 open — the SESSION_189 handoff shipped at
-> `docs/handoffs/SESSION_189_m26_inc0_planning.md`. This
-> doc's `next_session: SESSION_190` reflects the corrected
-> numbering.
+> **Three NEW M27+ candidates surfaced during M26** (all
+> deferred per user constraints or empirical discovery):
+> (a) **Row 5 public-fetch-helper regex refinement** —
+> extend `_HELPER_CALL_RE` to include public helpers
+> (`getJSON` / `postJSON` / etc.), OR broaden
+> `_PUBLIC_FETCH_RE` filters; blast radius unknown
+> pre-tracing;
+> (b) **Plain-string-literal false-positive investigation
+> (rows 1–4)** — surfaced at SESSION_189 §3, likely
+> `component_consumed` word-boundary check;
+> (c) **A2 (JE creation UI)** — kept elevated per user
+> constraint as leading M27 §5.a direct operator-coverage
+> candidate. Row 140 `admin/accounting/journal-entries/`
+> create endpoint remains genuinely uncovered post-M26.
 >
-> **Zero-drift permission-class streak** stands at 25 (M10 →
-> M25). M26 adds zero endpoints; intended posture at M26
-> close extends to 26.
->
-> **Planning-time as-recommended streak** stands at 4 after
-> M26.0 (was 3 at M25 close; increments to 4 at M26.0 with
-> AI recommendation confirmed after alternatives presented
-> and five scope-discipline constraints added additively to
-> §5 sections without shifting the target).
->
-> **M26 is deliberately small.** 1 implementation increment
-> (this session) + close-out fold per §5.h Option B unless
-> §5.d verification surfaces discrepancies. Expected commit
-> count: **2** if folded, 3–4 if split. Half the M25
-> velocity envelope by design.
->
-> **A2 (JE creation UI)** remains elevated as the leading
-> direct operator-coverage candidate for M27 §5.a per user
-> constraint. **H (test-hygiene remediation)** kept
-> separate. **Rows 1–4 plain-string-literal audit
-> investigation** (surfaced at SESSION_189 §3 but out of
-> M26 scope) available as a separate M27+ candidate.
+> **SESSION_191 opens M27.0 — planning refinement + target
+> selection.** No target locked yet — the candidate list
+> surfaces at open (elevated: A2, NEW row-5 public-helper
+> refinement, NEW rows-1–4 plain-string investigation, H
+> test-hygiene; gated: T / U / L / M; deferred pending
+> evidence: D / C; deferred stable: G; plus all M25 §4
+> deferrals still valid). The assistant recommends one
+> option with rationale grounded in the durable primary
+> operational-coverage lens (or a reframe if evidence
+> supports it); the user confirms or redirects.
 
-## First thing SESSION_190 must do
+## First thing SESSION_191 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean; local `HEAD` matches
-  `origin/main` post-SESSION_189 push (planning-only
-  session; if not pushed, `HEAD` remains at `6a3efbb`).
-- `git log --oneline -10` — top should be the M25.3
-  close-out hash-backfill commit at `6a3efbb`.
-- `python3 manage.py test dealer_ai` → **4,793 pass, 1
+- `git status` — clean; local `HEAD` matches `origin/main`
+  post-M26 push (if pushed) OR local `HEAD` ahead by 4
+  commits (M26.0 planning + hash backfill + M26.1 close +
+  hash backfill) if push not yet executed.
+- `git log --oneline -10` — top should be the M26.1
+  hash-backfill commit; four M26 commits total.
+- `python3 manage.py test dealer_ai` → **4,805 pass, 1
   skipped, 0 fail**.
 - `cd frontend && npm test` → **226 pass**.
 - `python3 manage.py check` clean.
@@ -130,210 +133,181 @@ next_increment_name: "M26.1 — Parser fix + regression suite + audit regenerati
 - `cd acceptance && npx tsc --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-If the M21 audit artifact shows a working-tree
-modification (SESSION_189 §3 regen cosmetic
-wrapper-ordering diff on row 42 `admin/vendors/`),
-either revert before opening M26.1 OR leave it and
-absorb into the M26.1 regen diff — the recommended
-posture is revert-before, since M26.1 will produce the
-same cosmetic diff alongside the six coverage flips.
+### 2. If M26 pushed — monitor first M26 CI run
 
-### 2. Re-verify the six false positives before implementing
-
-Before touching the parser, re-run the SESSION_189 §3
-verification to confirm the six false positives are
-still present in the audit and still have shipped
-wrappers. This guards against a scenario where an
-intervening change (unlikely but possible) shifted the
-audit output.
+If M26 has been pushed, verify the CI acceptance workflow
+status via:
 
 ```bash
-cd backend
-python3 -c "
-import sys
-sys.path.insert(0, '.')
-from dealer_ai.scripts.audit_operational_surface import extract_frontend_consumers
-for f in ['api.ts', 'salesApi.ts']:
-    source = open(f'../frontend/src/lib/{f}').read()
-    for c in extract_frontend_consumers(source):
-        if 'qs ?' in c.url_expr:
-            print(f'{f}:{c.source_line} helper={c.helper} url={c.url_expr!r} normalized={c.normalized_pattern!r}')
-"
+gh run list --workflow=acceptance --branch=main --limit 5
+gh run view <run-id> --log
 ```
 
-Expected: five entries showing bogus `normalized_pattern`
-values like `/admin/vehicles/${qs /` — confirming the
-tokenizer defect. (The sixth false positive, row 5
-`vehicles/<int:vehicle_id>/`, uses a slightly different
-pattern and may not appear in this quick check — verify
-separately.)
+**If red:** address as §0.a M27.0 amendments before opening
+§5.a.
 
-### 3. Implement §5.b parser fix
+**If green:** M26 is CI-verified shipped; proceed to §3.
 
-Per `MILESTONE_26_PLANNING.md` §5.b:
+### 3. Regenerate the audit artifact
 
-- **Preferred approach:** keep the fast-path
-  `_HELPER_CALL_RE` regex, add a post-match refinement
-  via a balanced-brace-aware companion function
-  `_extract_balanced_template_literal(source, start_pos)
-  -> tuple[str, int]`. When the fast-path regex captures
-  a template-literal expression that contains an
-  unterminated `${` (detected by the companion function),
-  re-tokenize from `m.start()` and replace the captured
-  expression.
-- **Do NOT** change `normalize_frontend()` (already
-  correct once tokenizer captures full expression).
-- **Do NOT** change `_HELPER_TO_VERB` (M23.1 §5.d
-  substrate).
-- **Do NOT** change `recommend_disposition()` heuristic
-  (out of scope per §3).
-- **Do NOT** change `cross_reference()` candidate-
-  pattern generation.
-
-### 4. Add §5.c 12-test regression suite
-
-Create `backend/dealer_ai/tests/test_audit_operational_
-surface.py` with **6 positive** + **6 negative** test
-methods per §5.c. Positive cases mirror the six
-confirmed false positives; negative cases guard against
-over-classification and preserve M22.1 §5.e + M23.1 §5.d
-substrate. Expected new tests: 12; backend baseline
-target 4,793 → ~4,805.
-
-### 5. Regenerate the audit + §5.d Phase 1 verification
+Before candidate presentation, rerun the audit tooling to
+confirm the M26.1 baseline holds:
 
 ```bash
 cd backend
 python3 -m dealer_ai.scripts.audit_operational_surface
 ```
 
-Diff the regenerated artifact against pre-fix. Assert
-exactly the following changes appear:
+Expected: **154 total / 119 covered / 35 backend-only /
+312 service verbs**. If the artifact drifts from this,
+investigate before scope-locking.
 
-- Coverage summary numerator: **114 → 120**.
-- Six rows flip `defer-candidate-O2` → `covered` with
-  wrapper columns populated (rows 5, 7, 16, 29, 111,
-  121 per SESSION_189 §3 evidence table).
-- Cosmetic wrapper-ordering shifts (like the
-  SESSION_189 §3 regen's row 42 re-order) are
-  acceptable script-deterministic output.
-- **No other row semantically changes.**
+### 4. Present the M27 candidate list
 
-If any expectation fails, halt — treat as a §5.b
-implementation gap, not a §5.d verification failure.
+Per the M26 retrospective §9 evidence:
 
-### 6. §5.d Phase 2 per-row manual verification
+**Elevated (highest recommendation strength at M27.0):**
 
-For each of the six reclassified rows, open the wrapper
-source file at the reported `{filename}:{line}` and
-verify:
+- **A2 — Journal-Entry creation UI.** Direct operator-
+  coverage gain. Row 140 `admin/accounting/journal-entries/`
+  create endpoint uncovered; reverse / retrieve / list
+  wrappers all ship. Small population × moderate frequency;
+  small scope; single-increment-shaped.
+- **NEW Row 5 public-fetch-helper regex refinement.** Extend
+  `_HELPER_CALL_RE` to include public helpers, OR broaden
+  `_PUBLIC_FETCH_RE` filters. Blast radius unknown; requires
+  SESSION-189-§3-style tracing at M27.0 open.
+- **NEW Rows 1–4 plain-string-literal investigation.**
+  Requires tracing at M27.0 open to determine root cause
+  (likely `component_consumed` word-boundary check).
+- **H — test-hygiene remediation.** 3 shared-DB
+  non-idempotent journeys. High compound value as suite
+  grows. Not operator-facing directly.
 
-1. Wrapper exists at the reported line.
-2. Wrapper's HTTP helper matches the endpoint's
-   declared methods per `extract_view_methods()`.
-3. Wrapper is imported and called by at least one
-   non-test `.tsx` or `.ts` component under
-   `frontend/src/`.
+**Gated (unchanged from M25 close):**
 
-If any row fails any check: halt, document, treat as
-§5.b implementation gap.
+- **T** — process real tester feedback.
+- **U** — hosted-demo substrate.
+- **L** — first-live-pilot staging.
+- **M** — multi-operator support (breaks zero-drift
+  streak with intent).
 
-### 7. Update docs (§5.e — corrected baseline recording)
+**Deferred pending evidence (unchanged):**
 
-Record 120 / 154 baseline **only after both** §5.d
-Phase 1 and Phase 2 pass. Recording sites in order:
+- **D** — LLM router / cost caps.
+- **C** — F&I chargeback substrate.
 
-- `docs/CAPABILITY_MATRIX.md` — add §7α block.
-- `docs/roadmap/IMPLEMENTATION_ROADMAP.md` — M26 entry.
-- `docs/roadmap/MILESTONE_26_RETROSPECTIVE.md` — NEW at
-  M26 close (draft during this session per fold
-  posture).
-- `docs/handoffs/SESSION_190_m26_inc1_parser_fix.md` (or
-  `SESSION_190_m26_close.md` if folded).
-- `00-START-NEXT-SESSION.md` — overwrite with
-  SESSION_191 priorities (A2 elevated as leading M27
-  §5.a candidate; H remains separate; corrected 120 /
-  154 baseline reflected in operational-state block).
+**Deferred but stable:**
 
-### 8. DoD compliance check (§5.g exception path)
+- **G** — dashboard testid hardening.
 
-Per the M21.0 §5.f Option B DoD amendment: M26.1 does
-not add or extend any Playwright journey. The
-retrospective §journey-plan section must explicitly
-document the exception path: "no journey change;
-audit-tooling refinement; §5.g exception path invoked
-per M21.0 §5.f." Acceptance baseline **14 journeys
-unchanged**.
+**Deferred at M25 §4 (all valid for later re-entry):**
 
-### 9. Close-out posture (§5.h Option B fold)
+Secondary "+ Record test drive" launch point on
+`DealerAiSalesTestDrives`; clickable "Referred by"
+attribution navigation; named-platform webhook adapters
+(Autotrader / Cars.com / etc.) — JSONField substrate
+ready; attribution analytics / rollups; vehicle picker
+advanced filters.
 
-If steps 3–7 all pass cleanly, fold M26.2 close-out
-into this session — retrospective drafted + all docs
-updated + coordinated push in one session.
+Present each with two-sentence scope + operator pain
+resolved + dependency notes, then present the
+recommendation.
 
-If steps 5 (Phase 1) or 6 (Phase 2) surface any
-mismatch, promote close-out to a separate M26.2
-session (SESSION_191).
+### 5. Recommend a target for §5.a
 
-### 10. Ship the M26.1 handoff + coordinated push
+Ground the recommendation in the **primary operational-
+coverage lens** ("which candidate most increases
+operational coverage for a dealership employee?") OR its
+reframe (planning-substrate integrity, per M26 precedent)
+if evidence supports it.
 
-- Handoff: `docs/handoffs/SESSION_190_m26_inc1_parser_
-  fix.md` (or `_m26_close.md` if folded).
-- Coordinated push (M26.1 commit + hash backfill).
-  Expected commit count 2 if folded, 3–4 if split.
-- Push per M18 → M25 cadence — one coordinated push
-  per milestone close.
+Elevated candidates evaluated under the primary lens:
 
-## Non-goals for SESSION_190
+- **A2 (JE creation UI)** — direct operator-facing; small
+  population × moderate frequency; small scope. Wins on
+  strict operator-coverage grounds.
+- **NEW row-5 audit refinement** — indirect (accuracy of
+  roadmap-planning substrate). Very small scope. Wins on
+  compound-infrastructure grounds ONLY if M26 didn't
+  fully correct the audit drift.
+- **NEW rows-1–4 investigation** — indirect; scope
+  unknown pre-tracing.
+- **H (test-hygiene)** — indirect (CI stability); high
+  compound value as suite grows.
 
-- ❌ Do NOT touch any `frontend/src/` file. M26 is
-  audit-script-only.
-- ❌ Do NOT touch any backend view, model, migration,
-  serializer, permission class, or `urls.py`. M26 is
-  audit-script-only.
-- ❌ Do NOT add, remove, or extend any Playwright
-  journey (§5.g exception path).
-- ❌ Do NOT change any endpoint disposition beyond the
-  six mechanical reclassifications the parser fix
-  produces.
-- ❌ Do NOT investigate the plain-string-literal
-  false-positive suspicion on rows 1–4 within M26.
-- ❌ Do NOT combine test-hygiene (Candidate H) into
-  M26.
-- ❌ Do NOT hand-edit `M21_OPERATIONAL_SURFACE_AUDIT.md`.
-  Regenerate only.
-- ❌ Do NOT record the corrected 120 / 154 baseline
-  without both §5.e sources agreeing.
-- ❌ Do NOT push per-increment. Coordinated push at
-  M26 close per §5.h.
-- ❌ Do NOT let M26 broaden into a general "audit
-  quality" milestone.
-- ❌ Do NOT skip §5.d Phase 2 per-row manual
-  verification.
+**Judgment call for M27:** M26 already spent a bounded
+audit-tooling milestone; whether M27 should spend another
+depends on whether the row-5 or rows-1–4 defects would
+compound before A2's operator gain lands. Present both
+framings and let the user pick.
+
+**Alternatively:** if the M26 CI run surfaces regression
+work at M27.0, address as §0.a amendments first.
+
+### 6. Draft §5.b–§5.h load-bearing decisions
+
+Once §5.a locks, draft the standard six-to-eight
+load-bearing decisions.
+
+### 7. Verify BOTH intake AND downstream UI surfaces before locking §5.b + §5.d
+
+**M24.1-open + M25.0 + M25.2-open + SESSION_189 §3 +
+SESSION_190 §2 durable lesson reinforced across M24
+through M26.** Every planning-open surface verification
+must cover both intake AND downstream paths, including
+audit-substrate accuracy checks when audit is
+load-bearing on the selection.
+
+### 8. DoD compliance check
+
+Per the M21.0 §5.f amendment: the M27 active memo §3
+must either name a Playwright journey addition or
+extension OR explicitly document why no journey change
+is required (M26 precedent for the exception path).
+
+### 9. Expand M27 planning skeleton
+
+Draft fresh per the standard active-memo shape (no
+existing skeleton at close of M26).
+
+### 10. Ship the M27.0 handoff
+
+- `docs/handoffs/SESSION_191_m27_inc0_planning.md`.
+- **Do NOT push** — M27.0 is planning only; coordinated
+  push at M27 close.
+
+## Non-goals for SESSION_191
+
+- ❌ Do NOT ship any backend or frontend code — planning-
+  only session.
+- ❌ Do NOT open any M27 implementation increment.
+- ❌ Do NOT force-push or amend earlier commits.
+- ❌ Do NOT modify M1–M26 shipped surface.
+- ❌ Do NOT modify the acceptance suite unless CI
+  regression fixes land as §0.a M27.0 amendments.
+- ❌ Do NOT skip the DoD compliance check.
+- ❌ Do NOT skip the downstream / substrate verification
+  (M24–M26 durable lesson).
 
 ## Baseline expected at close
 
-- Backend: **≥4,805 pass** (4,793 + ~12 new parser
-  regression tests), 1 skipped, 0 fail.
-- Frontend Vitest: **226 pass** unchanged.
-- Acceptance: **14 journeys** unchanged.
-- Audit: **120 / 154 covered** (was 114 / 154).
-- `manage.py check` clean.
-- Migrations: no changes detected.
-- `tsc --noEmit` clean (frontend + acceptance).
+Backend + frontend unchanged from M26 close. Acceptance
+suite unchanged. Only planning docs change.
 
 ## NEXT TASK
 
-Start SESSION_190 with (a) starting-state verification,
-(b) re-verify the six false positives are still
-present pre-fix, (c) implement §5.b parser fix
-(post-match refinement approach), (d) add §5.c 12-test
-regression suite, (e) regenerate audit + §5.d Phase 1
-diff verification, (f) §5.d Phase 2 per-row manual
-verification, (g) update docs per §5.e (only after
-two-source agreement), (h) DoD §5.g exception-path
-documentation, (i) fold close-out per §5.h if all
-steps clean, (j) M26.1 handoff + coordinated push.
+Start SESSION_191 with (a) starting-state verification,
+(b) if M26 pushed, monitor first M26 CI run + fix any
+regressions as §0.a M27.0 amendments, (c) regenerate the
+audit artifact and confirm 119/154 holds, (d) present
+the candidate list with recommendation + rationale
+under the primary operational-coverage lens (or
+substrate-integrity reframe if evidence supports it),
+(e) await user confirmation of §5.a, (f) draft
+§5.b–§5.h, (g) DoD compliance check on §3 draft,
+(h) expand the M27 planning memo, (i) ship the M27.0
+handoff.
 
 ---
 
@@ -342,121 +316,133 @@ steps clean, (j) M26.1 handoff + coordinated push.
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-   (M26 entry added at close)
+   (M26 shipped section landed at M26.1)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_25_RETROSPECTIVE.md`
-   §8 + §9
+5. `docs/roadmap/MILESTONE_26_RETROSPECTIVE.md`
+   §3 (deviations) + §5 (durable lessons) + §9
+   (standing M27 question)
 6. `docs/roadmap/MILESTONE_26_PLANNING.md`
    (M26 governing contract + all §5 locks +
-   SESSION_189 §3 empirical discovery record)
+   SESSION_189 §3 + SESSION_190 §2 empirical
+   discovery record)
 7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (pre-fix 114 / 154 baseline; source of truth
-   until M26.1 regenerates it)
+   (post-M26 baseline — 154 endpoints /
+   **119 covered** / 35 backend-only)
 8. `docs/CAPABILITY_MATRIX.md` §7z (M25 shipped
-   surface) + §7α (M26 audit-tooling refinement,
-   added at close)
-9. `backend/dealer_ai/scripts/audit_operational_
-   surface.py` (implementation source of truth
-   for the parser defect)
-10. `docs/handoffs/SESSION_189_m26_inc0_planning.md`
-    (M26.0 planning + §5 locks + SESSION_189 §3
-    empirical discovery)
-11. `docs/handoffs/SESSION_188_m25_inc3_close.md`
-    (M25.3 close; records the under-scoped
-    2-endpoint estimate SESSION_189 §3 corrected
-    to 6)
-12. Memory record
-    `feedback_audit_correctness_as_supporting_
-    infra.md` (durable principle governing M26
-    framing)
+   surface) + §7α (M26 audit-tooling refinement)
+9. `docs/handoffs/SESSION_190_m26_close.md`
+   (M26.1 shipped + M26.2 close-out fold)
 
 Narrative docs are claims. Rules + research + code +
 regenerated artifact are facts.
 
 ---
 
-## Operational state (post-SESSION_189 — Milestone 26 · Increment 0 shipped)
+## Operational state (post-SESSION_190 — Milestone 26 SHIPPED)
 
 - **Backend (local):** Django on `:8001`.
-  Migrations `0001`–`0049`. Test baseline: **4,793
-  pass**, 1 skipped, 0 fail (unchanged from M25
-  close).
+  Migrations `0001`–`0049`. Test baseline: **4,805
+  pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`.
   `tsc --noEmit` + `vite build` clean.
   **Vitest baseline: 226 pass** across 32 test
-  files (unchanged).
+  files.
 - **Frontend (prod):** NONE.
 - **Acceptance workspace (local):** Playwright 1.49
   + TS 5.6 operational; **14 journeys** passing
   end-to-end on clean DB. Full dry-run baseline:
-  **20 passed (~30s)** (6 setup + 14 journeys)
-  (unchanged).
+  **20 passed (~30s)** (6 setup + 14 journeys).
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`. First real
-  M25 CI run green (2m21s, verified at SESSION_189
-  §2). Five most recent `main` runs all green.
+  M26 CI run pending on the M26 push (executes at
+  M26 close after explicit user confirmation).
 - **Async runtime:** Celery 5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1 DatabaseScheduler.
   10 scheduled task families registered.
-- **Milestones shipped:** M1 → **M25**. M26 opened
-  (M26.0 planning shipped SESSION_189).
+- **Milestones shipped:** M1 → **M26**. M27
+  target selection pending (SESSION_191).
 - **DRF admin surface:** **114** endpoints
-  (unchanged post-M25.2 `admin/vehicles/`).
+  (unchanged — M26 added zero endpoints).
 - **Frontend operator routes:** 20 (unchanged).
 - **Public endpoints:** +1 M6.5 showroom
   (unchanged).
-- **Service surface:** all M1–M25 packages
-  unchanged. Zero M26 service verbs.
-- **Frontend surfaces:** unchanged. M26 does not
-  touch `frontend/src/`.
+- **Service surface:** all M1–M26 packages
+  unchanged. Zero M26 service verbs (M26 is
+  audit-script-only).
+- **Frontend surfaces:** unchanged (M26 does not
+  touch `frontend/src/`).
 - **Tenancy carriers:** 52 (unchanged).
-- **Permission classes:** **7 actual** — zero-drift
-  streak **twenty-five consecutive milestones**
-  (M10 → M25). M26 posture at close extends to 26.
+- **Permission classes:** **7 actual** —
+  zero-drift streak **twenty-six consecutive
+  milestones** (M10 → M26).
 - **`Vehicle.is_available`:** unchanged.
-- **AI safety stack:** 17 scrub stages (unchanged).
+- **AI safety stack:** 17 scrub stages
+  (unchanged).
 - **Deterministic rules:** unchanged.
-- **Milestone 26 status:** ACTIVE. M26.0 shipped
-  (planning only, no code). M26.1 opens
-  SESSION_190.
-- **Audit tooling status:** current 114 / 154
-  baseline under-reports true coverage by 6
-  endpoints (SESSION_189 §3 empirical discovery).
-  Corrected 120 / 154 baseline recorded at M26.1
-  close only after §5.e two-source agreement.
+- **Milestone 26 status:** SHIPPED (SESSION_190
+  close-out landed all documentation + status
+  flips + M27 handoff + coordinated close-out
+  session-local commits, awaits explicit user
+  push confirmation).
+- **Audit tooling status:** M26.1 corrected the
+  nested-template-literal defect via post-match
+  refinement of `extract_frontend_consumers` +
+  extracted shared substrate
+  `_extract_balanced_template_literal`. Coverage
+  114 / 154 → **119 / 154** (real). 12 regression
+  tests in `test_audit_operational_surface.py`
+  guard the fix. §5.d Phase 2 per-row manual
+  verification passed for all 5 flipped rows
+  (7, 16, 29, 111, 121). Row 5 remains
+  `defer-candidate-O2` per M26.1-open empirical
+  refinement (separate `getJSON` public-helper
+  defect deferred to M27+). Row 42
+  `admin/vendors/` cosmetic wrapper-reorder in
+  M26.1 audit regen (deterministic script
+  output).
 - **§9 evidence for M27:** A2 elevated (leading
-  candidate per user constraint at M26.0);
-  H (test-hygiene, unchanged from M25);
-  plain-string-literal audit investigation (NEW
-  candidate surfaced at SESSION_189 §3, deferred
-  from M26 scope); plus gated T/U/L/M, deferred
-  pending evidence D/C, deferred stable G.
-- **Planning-time streak:** **4** (at M26.0
-  open; increments only if M26.1 lock matches
-  M26.0 recommendation).
-- **DoD amendment (M21.0 §5.f Option B):** M26.1
-  invokes exception path — planning infrastructure,
-  not customer-facing behavior. Acceptance 14
-  journeys unchanged.
-- **M25 audit coverage at close:** 114 / 154
-  endpoints covered per script (**120 / 154 in
-  reality** per SESSION_189 §3 empirical
-  discovery; corrected artifact ships at M26.1
-  close).
-- **Durable lessons carried into M26:** (a) one
-  operational workflow beats two partially
-  overlapping ones (M25.0 §5.d origin); (b)
-  planning-open verification must cover the
-  persistence path, not just the UI path (M25.0
+  direct operator-coverage candidate); NEW row-5
+  public-fetch-helper regex refinement (surfaced
+  M26.1 open); NEW rows-1–4 plain-string
+  investigation (surfaced SESSION_189 §3); H
+  test-hygiene (unchanged from M25); plus gated
+  T/U/L/M, deferred pending evidence D/C,
+  deferred stable G, plus all M25 §4 deferrals.
+- **Planning-time streak: 5** (at M26.1 close;
+  extends M25 close of 3 through M26.0 + M26.1
+  as-recommended increments; historical run of
+  89 across M10 → M23 preserved for the record).
+- **DoD amendment (M21.0 §5.f Option B):** every
+  future customer-facing milestone must add or
+  update at least one Playwright operational
+  journey, or explicitly document in §3 why no
+  journey change is required. M26 invoked the
+  exception path (audit-tooling / infrastructure
+  focus); future infrastructure milestones can
+  cite the M26 precedent.
+- **M26 audit coverage at close:** 154 endpoints,
+  **119 covered / 35 backend-only** (was 114 / 40
+  pre-fix; §5.e two-source agreement confirms
+  these are the true coverage numbers).
+- **Durable lessons carried into M27:** (a) one
+  operational workflow beats two overlapping
+  (M25.0 §5.d origin); (b) planning-open
+  verification must cover persistence path (M25.0
   §5.b + M25.2 §5.e origin); (c) additive-forever
   JSONField beats CharField (M25.0 §5.b origin);
   (d) record empirical-discovery refinements
-  honestly (M25.0 + M25.2 origin); (e) modal-
-  attached collapsible + success badge > toast
-  (M25.2 origin); (f) dependency-injectable
-  helpers over network mocks in unit tests (M25.2
-  origin); (g) audit correctness is supporting
-  infrastructure — every accuracy gain compounds
-  across future scope decisions (M25.3 →
-  SESSION_189 §3 origin; primary M26 framing).
+  honestly (M25.0 + M25.2 + SESSION_189 §3 +
+  SESSION_190 §2 origin; four reinforcements
+  across M24–M26); (e) modal-attached collapsible
+  + success badge > toast (M25.2 origin); (f)
+  dependency-injectable helpers over network
+  mocks in unit tests (M25.2 origin); (g) audit
+  correctness is supporting infrastructure — every
+  accuracy gain compounds (M25.3 → M26 origin);
+  (h) two-source agreement (§5.d Phase 1 diff +
+  §5.d Phase 2 per-row verification) is the
+  mechanical guard against baseline drift (M26.1
+  origin); (i) DoD exception path applies cleanly
+  to infrastructure-focused milestones (M26
+  origin — first post-M21.0 exception invocation).

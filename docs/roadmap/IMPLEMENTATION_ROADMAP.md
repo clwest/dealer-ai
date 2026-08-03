@@ -3631,6 +3631,100 @@ workflow?*
 
 ---
 
+### Milestone 26 — Audit-Script Parser Refinement (Planning-Substrate Integrity) — SHIPPED at SESSION_190
+
+**Sessions:** SESSION_189 → SESSION_190 (M26.2 close-out folded
+into M26.1 per §5.h evidence-sized Option B — no code
+discrepancies at any §5.d checkpoint).
+**Anchor business question:** *Can future milestone selection
+rely on the operational-surface audit as trustworthy coverage
+evidence?* (A prerequisite to the durable operational-coverage
+guiding question, not a departure from it.)
+
+**Increments:**
+
+- **M26.0 (SESSION_189)** — planning refinement + target
+  selection + all eight §5 locks under the planning-substrate
+  integrity re-framing. Full active memo at
+  `MILESTONE_26_PLANNING.md`. Commit `8bb588f`.
+- **M26.1 (SESSION_190)** — parser fix + regression suite +
+  audit regeneration + doc updates + M26.2 close-out fold.
+  `_extract_balanced_template_literal` extracted as shared
+  substrate; `extract_frontend_consumers` post-match
+  refinement added for nested-template-literal tokenization.
+  12 regression tests (5 positive + 7 negative) in new
+  `test_audit_operational_surface.py`. Audit regenerated:
+  114 / 154 → 119 / 154 covered. §5.d Phase 2 per-row
+  verification pass. §5.e two-source agreement confirmed.
+  M26.1-open empirical refinement: row 5
+  `vehicles/<int:vehicle_id>/` reclassified as separate
+  `getJSON` public-helper defect and deferred to M27+.
+
+**Ships:**
+
+- One narrow audit-script parser fix
+  (`backend/dealer_ai/scripts/audit_operational_surface.py`):
+  new `_extract_balanced_template_literal` companion; existing
+  `_extract_url_literals` refactored to delegate to it;
+  `extract_frontend_consumers` post-match refinement branch.
+- One new regression test file
+  (`backend/dealer_ai/tests/test_audit_operational_surface.py`)
+  with 5 positive + 7 negative test methods.
+- One regenerated audit artifact
+  (`docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`): 5 rows
+  flip `defer-candidate-O2` → `covered` (rows 7, 16, 29, 111,
+  121); coverage summary 114 → 119; per-module backend-only
+  counts update; row 42 cosmetic wrapper-order.
+- Zero backend views / models / migrations / serializers /
+  permission classes / urls.py touched.
+- Zero frontend components / API wrappers / types touched.
+- Zero acceptance journeys added or extended (§5.g exception
+  path invoked: audit-tooling is not operator-facing).
+
+**Baselines at close:**
+
+- Backend: **4,805 pass** (+12 across M26.1 regression suite).
+- Frontend: **226 pass** unchanged.
+- Acceptance: **14 journeys** unchanged.
+- Migrations: **0049** (unchanged).
+- Zero-drift permission-class streak: **26** (M10 → M26).
+- Planning-time as-recommended streak: **5** at M26.1 close
+  (extends M25 close streak of 3 through M26.0 + M26.1;
+  historical run of 89 across M10 → M23 preserved).
+- Audit artifact: **154 endpoints, 119 covered / 35
+  backend-only** (was 114 / 40 pre-fix; the 5-endpoint
+  reclassification is the mechanical result of the parser
+  fix; §5.d two-source agreement confirms these are the true
+  coverage numbers, not audit-tooling artifacts).
+
+**Non-goals for M26 (all held):**
+
+- Row 5 `vehicles/<int:vehicle_id>/` public-fetch-helper
+  regex refinement — separate defect (public `getJSON` not
+  enumerated in `_HELPER_CALL_RE`); NEW M27+ candidate.
+- Plain-string-literal false-positive investigation on
+  rows 1–4 (`chat/start/`, `chat/message/`,
+  `chat/session/<uuid:session_id>/`, `leads/`) — surfaced
+  at SESSION_189 §3 but out of M26 scope per user
+  constraint; M27+ candidate.
+- Test-hygiene remediation (Candidate H) — kept separate
+  from M26 per user constraint; live M27+ candidate.
+- A2 (JE creation UI) — kept elevated as leading M27
+  §5.a direct operator-coverage candidate per user
+  constraint at M26.0 open.
+- Endpoint disposition changes unrelated to the five
+  mechanical reclassifications — `recommend_disposition()`
+  heuristic out of scope per §3.
+- Audit script rewrite / restructure — narrow parser fix
+  only; broader refactor deferred pending evidence.
+- Audit output format changes — row shape, disposition
+  legend, coverage summary format all unchanged.
+- No operator-facing surface change — M26 is
+  audit-script-only per the planning-substrate integrity
+  framing.
+
+---
+
 ## 5. Explicit non-goals and deferrals
 
 The following are documented in research but explicitly out of
