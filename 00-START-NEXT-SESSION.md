@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-04
-last_session_shipped: SESSION_202
+last_session_shipped: SESSION_203
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -32,296 +32,237 @@ milestone_27_status: shipped
 milestone_28_status: shipped
 milestone_29_status: shipped
 milestone_30_status: shipped
-next_session: SESSION_203
+milestone_31_status: active
+next_session: SESSION_204
 next_milestone: 31
-next_milestone_name: "(target selection pending — locked at M31.0 open)"
-next_increment: 0
-next_increment_name: "M31.0 — Planning refinement + target selection"
+next_milestone_name: "Journal-Entry Template Restore / \"Show inactive\" UI (lifecycle-completion on M28.1 substrate + M30.1 include_inactive kwarg)"
+next_increment: 1
+next_increment_name: "M31.1 — Backend substrate (Restore verb + endpoint + list ?include_inactive exposure)"
 ---
 
-# Next session — SESSION_203 · Milestone 31 · Increment 0 (M31.0 — planning refinement + target selection)
+# Next session — SESSION_204 · Milestone 31 · Increment 1 (M31.1 — backend substrate)
 
-> **Milestone 30 — Template Edit / Delete UI — SHIPPED at
-> SESSION_202.** M30.0 planning + §0.a M29 CI hotfix +
-> M30.1 backend substrate + M30.2 frontend + Playwright +
-> close-out all landed. Backend baseline 4,871 → 4,904 (+33
-> at M30.1). Frontend Vitest 282 → 300 (+18 at M30.2).
-> Acceptance 20 → 21 journeys (+1 M30.2 edit-delete
-> describe block). Audit **157 / 123 covered / 34 backend-
-> only / 317 service verbs**.
+> **Milestone 31 opened at SESSION_203 M31.0 planning.**
+> Target locked as **NEW Restore / "Show inactive"
+> templates UI (lifecycle-completion)** under the primary
+> operational-coverage lens, evaluated as lifecycle-
+> completion per explicit user direction. All §5.b–§5.h
+> locks landed (D1–D10, 10-item risk register, 8
+> verifications including L1 lifecycle-integrity
+> precheck, two-increment split, DoD compliance,
+> rollback, non-goals).
 >
-> **Zero-drift permission-class streak advanced 29 → 31
-> consecutive milestones** (M10 → M30). Planning-time as-
-> recommended streak reached **9** at M30.0 close, unchanged
-> at M30.1 + M30.2 (both pure implementation).
+> **Planning-time as-recommended streak advanced 9 →
+> 10** at M31.0 close (target selected as recommended
+> after five-alternative comparison + user-directed
+> lifecycle-integrity precheck; historical run of 89
+> across M10 → M23 preserved).
 >
-> **Substrate-compound-value continuation reached 4 links
-> realized** (M27.1 gl-accounts → M28.1 templates → M29
-> variable-amount → M30 template CRUD closure). M30 spent
+> **Substrate-compound-value continuation to fifth link
+> projected at M31 close** (M27.1 → M28.1 → M29 → M30 →
+> **M31 template lifecycle closure**). M31 will spend
 > zero new migrations by composing on M28.1's `is_active`
-> field + model shape.
+> field + M30.1's `include_inactive` service kwarg.
 >
-> **Additive-prop pattern (durable lesson (t)) re-applied
-> successfully at M30.2** — first re-application of the
-> M29.2-surfaced lesson. Elevates from "surfaced" to
-> "load-bearing across two milestones."
+> **First M30 CI run verified green** at SESSION_203
+> open (workflow `30930670900` on `f658c06` — 26 passed /
+> 0 failed / 2m50s). No §0.a M31.0 amendments landed.
 >
-> **§0.a durable lesson (v) preserved through M30.2** —
-> M30.2's new test-id conventions mirror the existing
-> `template-instantiate-<pk>` pattern; the amount-cell UI
-> shape on `NewJournalEntryDialog` was left unchanged.
->
-> **Coordinated M30 close push pending.** All M30 non-
-> §0.a work is local-only; awaits explicit user
-> confirmation. Expected M30 commits at push: **6** (§0.a
-> `43b715b` already pushed at SESSION_200 under exception;
-> SESSION_200 planning `1956ed7` local; SESSION_201 M30.1
-> `6bb5b0f` local; this session's M30.2 + close-out
-> commits, plus hash-backfill follow-up per convention).
->
-> **Two durable design principles NEW at M30.2**
-> (see `MILESTONE_30_RETROSPECTIVE.md` §5):
-> (w) *`is_active` mutation surface asymmetry is a load-
->     bearing design constraint* — PATCH must silently drop
->     `is_active` from body; activation is DELETE-only
->     (soft) or a future Restore verb; enforced at
->     serializer + service + endpoint-test layers;
-> (x) *Delete UI copy must reframe row-action vocabulary
->     into truth vocabulary* — row button says "Delete"
->     (operator convention); confirmation dialog reframes to
->     "Deactivate" (truth — soft-hide, historically
->     preserved, restorable) + explicit reassurance about
->     historical entries.
->
-> **Five NEW M31+ candidates surfaced or elevated during
-> M30** (per `MILESTONE_30_RETROSPECTIVE.md` §9):
-> (a) **NEW — Restore / "Show inactive" UI toggle on
->     templates** — freshly unblocked at M30 close by
->     M30.1's `include_inactive` service kwarg; endpoint
->     exposure is a one-line view-layer change; toggle on
->     M30.2 templates section is small-to-moderate scope;
->     completes operator-facing soft-delete lifecycle;
-> (b) **NEW C — F&I chargeback substrate** — would extend
->     substrate-compound-value lineage to a fifth link on
->     M27.1; gated on pilot evidence today (unchanged from
->     M29 §9);
-> (c) NEW O2 — Row 5 public-fetch-helper regex refinement
->     (M26/M27/M28/M29/M30 deferral, unchanged);
-> (d) NEW O3 — Rows-1–4 plain-string-literal investigation
->     (M26/M27/M28/M29/M30 deferral, unchanged);
-> (e) H — Test-hygiene remediation — same 3 shared-DB non-
->     idempotent journeys unchanged from M27.2 → M28.2 →
->     M29.2 → M30.2 close.
->
-> **SESSION_203 opens M31.0 — planning refinement + target
-> selection.** No target locked yet — the candidate list
-> surfaces at open (elevated: NEW Restore UI, NEW C F&I,
-> O2, O3, H; gated: T/U/L/M; deferred pending evidence: D;
-> deferred stable: G; plus all M30 §3 + M29 §3 + M28 §3 +
-> M27 §3 + M25 §4 deferrals still valid). The assistant
-> recommends one option with rationale grounded in the
-> durable primary operational-coverage lens (or a
-> substrate-compound-value continuation / substrate-
-> integrity reframe if evidence supports it); the user
-> confirms or redirects.
+> **SESSION_204 opens M31.1 — backend substrate
+> implementation** per `MILESTONE_31_PLANNING.md` §5.b
+> D1–D3 + §5.e M31.1 spec. Pure backend increment; no
+> frontend changes. DoD exception path invocation #6
+> (M26 + M27.1 + M28.1 + M29.1 + M30.1 + M31.1).
+> Coordinated M31 close push deferred to explicit user
+> confirmation after M31.2 close.
 
-## First thing SESSION_203 must do
+## First thing SESSION_204 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean; local `HEAD` matches `origin/main`
-  post-M30 push (if pushed) OR local `HEAD` ahead by 4–6
-  commits (SESSION_200 handoff + M30.1 + M30.2 impl +
-  M30.2 close-out + potential hash-backfill) if push not
-  yet executed.
-- `git log --oneline -10` — top should be the M30.2 close-
-  out or hash-backfill commit; check for expected M30
-  commit sequence.
+- `git status` — clean; local `HEAD` matches
+  `origin/main` post-M30 push (`f658c06`); planning-only
+  M31.0 commit from SESSION_203 present locally, unpushed.
+- `git log --oneline -10` — top should be the SESSION_203
+  M31.0 planning commit (+ optional hash-backfill
+  follow-up).
 - `python3 manage.py test dealer_ai` → **4,904 pass, 1
   skipped, 0 fail**.
-- `cd frontend && npm test` → **300 pass** across 36 files.
+- `cd frontend && npm test` → **300 pass** across 36
+  files.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations --check --dry-run` →
   "No changes detected."
 - `cd frontend && npx tsc --noEmit` clean.
 - `cd acceptance && npx tsc --noEmit` clean.
 - `redis-cli ping` → `PONG`.
-- `rm -f backend/db.acceptance.sqlite3` — proactive reset
-  per SESSION_200 §0.a durable lesson (v).
+- `rm -f backend/db.acceptance.sqlite3` — proactive
+  reset per SESSION_200 §0.a durable lesson (v).
 
-### 2. If M30 pushed — monitor first M30 CI run
+### 2. Read the M31 governing contract before writing code
 
-If M30 has been pushed, verify the CI acceptance workflow
-status via:
+Load-bearing docs to read before M31.1 implementation:
 
-```bash
-gh run list --workflow=acceptance --branch=main --limit 5
-gh run view <run-id> --log
-```
+- `docs/roadmap/MILESTONE_31_PLANNING.md` §5.b D1
+  (Restore is a dedicated verb, not a PATCH side-
+  effect), D2 (idempotent, tenant-scoped, preservation
+  contract), D3 (fail-closed `?include_inactive`
+  parsing).
+- `docs/roadmap/MILESTONE_31_PLANNING.md` §5.e M31.1
+  spec (service verb, endpoint, URL, tests).
+- `docs/handoffs/SESSION_203_m31_inc0_planning.md` §5
+  + §7 for the confirmed §5.b review points.
 
-**If red:** address as §0.a M31.0 amendments before opening
-§5.a.
+Do **not** re-open scope. §5.a target and all §5.b
+decisions are locked; any narrow amendment goes through
+the §0.a change-log path in the planning memo.
 
-**If green:** M30 is CI-verified shipped; proceed to §3.
+### 3. Ship M31.1 backend substrate
 
-### 3. Regenerate the audit artifact
+Per `MILESTONE_31_PLANNING.md` §5.e M31.1:
 
-Before candidate presentation, rerun the audit tooling to
-confirm the M30.2 baseline holds:
+- **Service layer** (`services/accounting/template.py`):
+  - New `restore_journal_entry_template(*, pk,
+    dealership) -> Optional[JournalEntryTemplate]` verb
+    per D2 contract. Atomic; idempotent on already-
+    active input; `update_fields=["is_active",
+    "updated_at"]` on state-change branch.
+  - Module docstring updated to list the new verb
+    alongside `update_` and `delete_`.
+- **Endpoint layer** (`views_accounting.py`):
+  - New `admin_journal_entry_template_restore(request,
+    pk)` view (POST). Reuses `_M131_PERMS`. Error
+    mapping: 404 missing/cross-tenant, 200 restored,
+    200 idempotent already-active.
+  - Extend `admin_journal_entry_template_list` to
+    parse `?include_inactive=true` per D3 fail-closed
+    parsing. Only literal `"true"` (case-insensitive)
+    enables inactive rows; every other value resolves
+    to active-only default.
+- **URL** (`urls.py`): new pattern
+  `admin/accounting/journal-entry-templates/<int:pk>/restore/`
+  → `admin-journal-entry-template-restore`.
+- **Zero migration.** Reuses `is_active` field.
 
-```bash
-cd backend
-python3 -m dealer_ai.scripts.audit_operational_surface
-```
+### 4. Ship tests per D2 + D3 coverage
 
-Expected: **157 total / 123 covered / 34 backend-only / 317
-service verbs**. If the artifact drifts from this,
-investigate before scope-locking.
+Planned ~24–26 tests:
 
-### 4. Present the M31 candidate list
+- **NEW `test_m31_journal_entry_template_restore_service.py`** (~12):
+  happy-path Restore; idempotent repeat-Restore returns
+  row without state change AND `updated_at` unchanged;
+  returns None on missing pk; returns None on cross-
+  tenant; preserves `name`; preserves `description`;
+  preserves lines including amounts and ordering;
+  preserves `created_at`; advances `updated_at` only on
+  state-change branch; accepts already-active pk
+  without error; returns projected row shape.
+- **EXTEND `test_m28_journal_entry_template_endpoint.py`**
+  with `TemplateRestoreEndpointTests` (~10): POST 200
+  restore; POST 200 idempotent already-active; POST 404
+  missing; POST 404 cross-tenant; admin allowed;
+  advisor allowed; unauth denied; **PATCH cannot
+  mutate `is_active`** — regression re-assertion from
+  M30.2; list default returns active-only; list with
+  `?include_inactive=true` returns both.
+- **EXTEND `test_m28_journal_entry_template_endpoint.py`**
+  list tests with `?include_inactive` fail-closed
+  parsing (~4): `true`, `TRUE`, `True` all enable
+  inactive rows; `1`, `yes`, empty string, malformed
+  value, missing param all resolve to active-only.
 
-Per the M30 retrospective §9 evidence:
+### 5. Verify M31.1 close baselines
 
-**Elevated (highest recommendation strength at M31.0):**
+- Backend suite: **4,904 → ~4,930 pass**, 1 skipped, 0
+  fail.
+- `python3 manage.py check` clean.
+- `python3 manage.py makemigrations --check --dry-run` →
+  "No changes detected."
+- Frontend Vitest unchanged (300 pass) — M31.1 makes
+  no frontend changes.
+- `cd frontend && npx tsc --noEmit` unchanged (clean).
+- `cd acceptance && npx tsc --noEmit` unchanged (clean).
 
-- **NEW — Restore / "Show inactive" UI toggle on templates.**
-  M28 §3 deferral, freshly unblocked at M30 close by
-  M30.1's `include_inactive` service kwarg. Endpoint
-  exposure is a one-line view-layer change; a "Show
-  inactive" toggle on the M30.2 templates section is small-
-  to-moderate scope. Direct sequential complement to M30 —
-  completes the operator-facing soft-delete lifecycle.
-- **NEW C — F&I chargeback substrate.** Would reuse M27.1
-  gl-accounts substrate + M28.1 template substrate.
-  Continues the substrate-compound-value lineage into a
-  **fifth link** if operator evidence surfaces during a
-  pilot (gated).
-- **NEW O2 — Row 5 public-fetch-helper regex refinement**
-  (M26/M27/M28/M29/M30 deferral, unchanged). Requires
-  SESSION-189-§3-style tracing at M31.0 open. Blast radius
-  unknown.
-- **NEW O3 — Rows-1–4 plain-string-literal investigation**
-  (M26/M27/M28/M29/M30 deferral). Requires tracing.
-- **H — Test-hygiene remediation.** Three shared-DB non-
-  idempotent journeys unchanged from M27.2 → M30.2 close.
+Optional at close: regenerate audit artifact and
+confirm expected transitional state (157 → 158
+endpoints; 122 covered / 35 backend-only during M31.1
+transitional state before M31.2 re-covers the new
+endpoint). Two-source agreement gate at M31.2 close per
+convention.
 
-**Gated (unchanged from M30 close):**
+### 6. Document DoD exception path invocation #6
 
-- T (real tester feedback); U (hosted-demo substrate); L
-  (first-live-pilot staging); M (multi-operator support —
-  breaks the zero-drift streak with intent).
+M31.1 invokes the DoD exception path per M21.0 §5.f
+Option B (M26 lineage) — backend substrate with no
+operator-facing behavior change on its own. Document
+in §3 of the M31.1 handoff:
 
-**Deferred pending evidence (unchanged):**
+- M31.1 is infrastructure-only; M31.2 satisfies DoD
+  directly via new `restore-inactive` describe block.
+- Sixth invocation of the exception path (M26 + M27.1
+  + M28.1 + M29.1 + M30.1 + M31.1). Pattern firmly
+  established.
 
-- D (LLM router / cost caps).
+### 7. Ship the M31.1 handoff
 
-**Deferred but stable:**
+- `docs/handoffs/SESSION_204_m31_inc1_backend.md`.
+- **Do NOT push** — coordinated push at M31 close.
 
-- G (dashboard testid hardening).
+## Non-goals for SESSION_204
 
-**Deferred at M30 §3 (all valid for later re-entry):**
-
-Hard-delete escape hatch on templates; template mutation
-audit trail; optimistic concurrency control on template
-edit; bulk delete/edit.
-
-**Deferred at M29 §3, M28 §3, M27 §3, M25 §4 (unchanged):**
-
-All prior deferrals carried forward.
-
-Present each with two-sentence scope + operator pain
-resolved + dependency notes, then present the recommendation.
-
-### 5. Recommend a target for §5.a
-
-Ground the recommendation in the **primary operational-
-coverage lens** ("which candidate most increases operational
-coverage for a dealership employee?") OR its reframes
-(substrate-compound-value continuation per M27.1 → M28.1 →
-M29 → M30 precedent; substrate-integrity per M26 precedent)
-if evidence supports it.
-
-**Standing question from M30 retrospective §9:** with the
-substrate-compound-value framing now proven across FOUR
-consecutive links, the fifth link is the natural next move
-under the compound-value lens. Two candidates continue this
-lineage: (a) F&I chargeback on M27.1 (gated on pilot
-evidence today); (b) Restore / Show-inactive on M28.1 +
-M30.1 (available today; primary operational-coverage lens).
-Evidence at M30 close does not force either path — both are
-compelling; both are additive to the lineage.
-
-**Alternatively:** if the M30 CI run surfaces regression
-work at M31.0, address as §0.a amendments first.
-
-### 6. Draft §5.b–§5.h load-bearing decisions
-
-Once §5.a locks, draft the standard six-to-eight load-bearing
-decisions.
-
-### 7. Verify BOTH intake AND downstream UI surfaces + FK discoverability before locking §5.b + §5.d
-
-**M24.1-open + M25.0 + M25.2-open + SESSION_189 §3 +
-SESSION_190 §2 + M27.0 §7 + M28.0 §7 + M29.0 §7 + M30.0 §7
-durable lesson.** Every planning-open surface verification
-must cover both intake AND downstream paths, including
-audit-substrate accuracy checks when audit is load-bearing
-on the selection, and **verify FK / identifier discoverability
-for any create/edit workflow candidate**.
-
-### 8. DoD compliance check
-
-Per the M21.0 §5.f amendment: the M31 active memo §3 must
-either name a Playwright journey addition or extension OR
-explicitly document why no journey change is required
-(M26 + M27.1 + M28.1 + M29.1 + M30.1 precedents for the
-exception path — pattern firmly established at five
-invocations).
-
-### 9. Expand M31 planning skeleton
-
-Draft fresh per the standard active-memo shape (no existing
-skeleton at close of M30).
-
-### 10. Ship the M31.0 handoff
-
-- `docs/handoffs/SESSION_203_m31_inc0_planning.md`.
-- **Do NOT push** — M31.0 is planning only; coordinated push
-  at M31 close.
-
-## Non-goals for SESSION_203
-
-- ❌ Do NOT ship any backend or frontend code — planning-
-  only session.
-- ❌ Do NOT open any M31 implementation increment.
+- ❌ Do NOT ship any frontend or Playwright code — pure
+  backend substrate increment.
+- ❌ Do NOT touch `AccountingJournalEntriesPage.tsx`,
+  `JournalEntryTemplateDialog.tsx`, or
+  `accountingApi.ts`.
+- ❌ Do NOT ship the D10 M30.2 copy update — bundled
+  with M31.2 UI increment.
+- ❌ Do NOT re-open §5.a or §5.b decisions; narrow
+  amendments go through §0.a change-log path.
+- ❌ Do NOT push. Coordinated push at M31 close after
+  explicit user confirmation.
 - ❌ Do NOT force-push or amend earlier commits.
 - ❌ Do NOT modify M1–M30 shipped surface.
-- ❌ Do NOT modify the acceptance suite unless CI regression
-  fixes land as §0.a M31.0 amendments.
-- ❌ Do NOT skip the DoD compliance check.
-- ❌ Do NOT skip the downstream / substrate / FK-
-  discoverability verification (M24–M30 durable lessons).
-- ❌ Do NOT re-litigate M30.0 architectural verifications
-  (dialog consolidation + soft-delete integrity — both
-  locked at M30.0 and validated through M30.2 shipping).
+- ❌ Do NOT introduce any new permission class —
+  Restore endpoint reuses `_M131_PERMS` verbatim.
+- ❌ Do NOT add server-side coupling between
+  JournalEntry and JournalEntryTemplate — the
+  decoupling is load-bearing on Restore/Deactivate
+  safety per M28.0 §5.b + M30.0 §4.7 + M31.0 §4.1
+  L1 finding. Stale-tab JE creation from previously-
+  hydrated template values is an accepted race
+  outcome per user direction.
+- ❌ Do NOT add a migration. Zero-migration property
+  is load-bearing on rollback cheapness per §5.g.
+- ❌ Do NOT allow PATCH to mutate `is_active`.
+  Activation stays behind dedicated Deactivate /
+  Restore verbs per M30.2 lesson (w).
 
 ## Baseline expected at close
 
-Backend + frontend + acceptance unchanged from M30 close.
-Only planning docs change.
+- Backend: 4,904 → ~4,930 pass, 1 skipped, 0 fail.
+- Frontend: unchanged (300 pass across 36 files).
+- Acceptance: unchanged (21 journeys).
+- Migrations: `0001`–`0050` unchanged (zero migration).
+- DRF admin surface: 117 → 118 (+1 for Restore).
+- Service verbs: 317 → 318 (+1 for
+  `restore_journal_entry_template`).
+- Permission classes: 7 unchanged (Restore reuses
+  `_M131_PERMS`; zero-drift streak advances 31 → 32).
 
 ## NEXT TASK
 
-Start SESSION_203 with (a) starting-state verification;
-(b) if M30 pushed, monitor first M30 CI run + fix any
-regressions as §0.a M31.0 amendments; (c) regenerate the
-audit artifact and confirm 123 / 157 holds; (d) present the
-candidate list with recommendation + rationale under the
-primary operational-coverage lens (or substrate-compound-
-value continuation reframe if evidence supports it);
-(e) await user confirmation of §5.a; (f) draft §5.b–§5.h;
-(g) DoD compliance check on §3 draft; (h) expand the M31
-planning memo; (i) ship the M31.0 handoff.
+Start SESSION_204 with (a) starting-state verification;
+(b) read the M31 governing contract; (c) implement
+Restore service verb + endpoint + list
+`?include_inactive` exposure per §5.b D1–D3 and §5.e
+M31.1 spec; (d) ship ~24–26 tests per D2 + D3
+coverage; (e) verify close baselines (backend ~4,930
+pass; check + makemigrations clean; frontend/acceptance
+unchanged); (f) document DoD exception path invocation
+#6 in the M31.1 handoff §3; (g) ship the M31.1 handoff
+at `docs/handoffs/SESSION_204_m31_inc1_backend.md`; (h)
+DO NOT push.
 
 ---
 
@@ -330,127 +271,150 @@ planning memo; (i) ship the M31.0 handoff.
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-   (M1–M28 shipped in-tree; M29–M30 shipped surface in
-   CAPABILITY_MATRIX §7δ + §7ε per convention adopted at
-   M27+)
+   (M1–M28 shipped in-tree; M29–M30 shipped surface
+   in CAPABILITY_MATRIX §7δ + §7ε per convention
+   adopted at M27+; M31 §7ζ added at M31 close)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_30_RETROSPECTIVE.md`
-   §3 (deviations) + §5 (durable lessons — especially
-   (t) additive-prop pattern now load-bearing, (v)
-   acceptance-selector-sweep, (w) is_active mutation
-   asymmetry, (x) delete-UI copy vocabulary asymmetry)
-   + §9 (standing M31 question)
-6. `docs/roadmap/MILESTONE_30_PLANNING.md`
-   (M30 governing contract + §0.a + all §5 locks + two
-   architectural verifications at §4.6 and §4.7)
+5. **`docs/roadmap/MILESTONE_31_PLANNING.md`** —
+   M31 governing contract; §5.b D1–D3 + §5.e M31.1
+   spec govern SESSION_204 implementation
+6. `docs/roadmap/MILESTONE_30_RETROSPECTIVE.md` §9
+   (M31 candidate list origin; standing question
+   on substrate-compound-value fifth link resolved
+   in favor of Restore under primary operational-
+   coverage lens)
 7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (post-M30 baseline — 157 endpoints / **123 covered** /
-   34 backend-only / 317 service verbs)
-8. `docs/CAPABILITY_MATRIX.md` §7z (M25) + §7α (M26) +
-   §7β (M27) + §7γ (M28) + §7δ (M29) + §7ε (M30 shipped
-   surface)
-9. `docs/handoffs/SESSION_202_m30_inc2_frontend.md`
-   (M30.2 shipped + M30 close-out fold)
-10. Memory record `feedback_duplicate_small_stable_logic.md`
-    (M28.0 origin — governs future refactor scoping)
-11. Memory record `feedback_verify_fk_discoverability_before_lock.md`
-    (M27.0 origin — verified through M30.0)
+   (post-M30 baseline — 157 endpoints / **123
+   covered** / 34 backend-only / 317 service verbs;
+   M31 projected delta +1 endpoint / +1 covered /
+   +1 verb at M31.2 close)
+8. `docs/CAPABILITY_MATRIX.md` §7z (M25) + §7α
+   (M26) + §7β (M27) + §7γ (M28) + §7δ (M29) +
+   §7ε (M30 shipped surface); §7ζ added at M31
+   close
+9. **`docs/handoffs/SESSION_203_m31_inc0_planning.md`**
+   (M31.0 planning shipped — §5 locks summary + L1
+   lifecycle-integrity precheck + confirmed §5.b
+   review points)
+10. `docs/handoffs/SESSION_202_m30_inc2_frontend.md`
+    (M30.2 shipped + M30 close-out; source of
+    shipped Restore-promise copy that D10 fulfills)
+11. Memory record `feedback_duplicate_small_stable_logic.md`
+    (M28.0 origin — governs D8 co-located inline-
+    dialog choice at M31.2)
+12. Memory record
+    `feedback_verify_fk_discoverability_before_lock.md`
+    (M27.0 origin — verified through M31.0 §6.6)
 
 Narrative docs are claims. Rules + research + code +
 regenerated artifact are facts.
 
 ---
 
-## Operational state (post-SESSION_202 — Milestone 30 SHIPPED)
+## Operational state (post-SESSION_203 — Milestone 31 ACTIVE at M31.0)
 
 - **Backend (local):** Django on `:8001`. Migrations
   `0001`–`0050` (unchanged since M28.1). Test baseline:
-  **4,904 pass**, 1 skipped, 0 fail.
+  **4,904 pass**, 1 skipped, 0 fail. **Projected at
+  M31.1 close: ~4,930 pass.**
 - **Backend (prod):** NOT active.
-- **Frontend (local):** Vite on `:5173`. `tsc --noEmit` +
-  `vite build` clean. **Vitest baseline: 300 pass** across
-  36 test files.
+- **Frontend (local):** Vite on `:5173`. `tsc --noEmit`
+  + `vite build` clean. Vitest baseline: **300 pass**
+  across 36 test files. **Unchanged at M31.1 close;
+  projected ~322 at M31.2 close.**
 - **Frontend (prod):** NONE.
-- **Acceptance workspace (local):** Playwright 1.49 + TS
-  5.6 operational; **21 journeys** total. Full-suite fresh-
-  DB run at M30.2 close: **27 passed / 0 failed / 36.5s**.
+- **Acceptance workspace (local):** Playwright 1.49 +
+  TS 5.6 operational; **21 journeys** total.
+  **Unchanged at M31.1 close; projected 22 at M31.2
+  close.**
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`. Latest run on
-  `origin/main` at `43b715b` (SESSION_200 §0.a hotfix
-  push): 26 passed / 0 failed / 2m43s. First real M30 CI
-  run pending on the M30 push (executes at M30 close after
-  explicit user confirmation).
+  `origin/main` at `f658c06` (M30.2 hash-backfill
+  commit): **26 passed / 0 failed / 2m50s** (workflow
+  `30930670900`, verified green at SESSION_203 open).
 - **Async runtime:** Celery 5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1 DatabaseScheduler. 10
   scheduled task families registered.
-- **Milestones shipped:** M1 → **M30**. M31 target
-  selection pending (SESSION_203).
-- **DRF admin surface:** **117** endpoints (M28.1 116 → +1
-  at M30.1).
-- **Frontend operator routes:** 20 (unchanged; M30.2
-  attached Edit + Delete buttons to existing rows on the
-  JE list page, no new route).
+- **Milestones shipped:** M1 → **M30**. **M31 active
+  at M31.0 planning** (SESSION_203); M31.1 target
+  SESSION_204; M31.2 target SESSION_205.
+- **DRF admin surface:** **117** endpoints (M28.1 116
+  → +1 at M30.1). Projected at M31.1 close: **118**
+  (+1 for Restore endpoint).
+- **Frontend operator routes:** 20 (unchanged;
+  Show-inactive toggle + row-state rendering attach
+  to the existing JE list page).
 - **Public endpoints:** +1 M6.5 showroom (unchanged).
-- **Service surface:** M30.1 added `update_journal_entry
-  _template` + `delete_journal_entry_template` verbs +
-  `include_inactive` kwarg on `get_journal_entry_template`.
-  M30.2 added no service verbs.
-- **Frontend surfaces:** M30.2 renamed
-  `NewJournalEntryTemplateDialog.tsx` →
-  `JournalEntryTemplateDialog.tsx` (via `git mv` + import
-  sweep in same commit); added additive `mode` /
-  `initialTemplate` / `onEdited` / `open` / `onOpenChange`
-  props; attached Edit + Delete row buttons to templates
-  section; added inline `TemplateDeleteConfirmDialog` with
-  mandated D3 copy.
+- **Service surface:** 317 verbs at M30 close. Projected
+  at M31.1 close: **318** (+1 for
+  `restore_journal_entry_template`).
+- **Frontend surfaces:** unchanged at M31.1;
+  M31.2 will add Show-inactive toggle,
+  `TemplateRestoreConfirmDialog`, inactive-row
+  rendering, disabled Edit/Instantiate guards, D10
+  copy update on `TemplateDeleteConfirmDialog`.
 - **Tenancy carriers:** 52 (unchanged).
-- **Permission classes:** **7 actual** — zero-drift streak
-  **thirty-one consecutive milestones** (M10 → M30).
+- **Permission classes:** **7 actual** — zero-drift
+  streak **thirty-one consecutive milestones** (M10 →
+  M30). **Projected 32 at M31 close** (M31.1 Restore
+  endpoint reuses `_M131_PERMS`).
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages (unchanged).
 - **Deterministic rules:** unchanged.
-- **Milestone 30 status:** SHIPPED (SESSION_202 close-out
-  landed all documentation + status flips + M31 handoff +
-  coordinated close-out session-local commits, awaits
-  explicit user push confirmation).
-- **Audit tooling status:** unchanged from M26.1. Coverage
-  **123 / 157** (M29.2 close 122 / 156 → M30.1 122 / 157
-  → M30.2 123 / 157 with M30.1 endpoint re-classified to
-  covered by M30.2's wrappers).
-- **§9 evidence for M31:** NEW Restore / "Show inactive"
-  UI toggle (elevated — freshly unblocked by M30.1
-  `include_inactive` kwarg); NEW C F&I chargeback
-  substrate (elevated pending pilot — would be fifth
-  substrate-compound-value link on M27.1); NEW O2 + NEW O3
-  (unchanged from M26+M27+M28+M29+M30); H (test-hygiene —
-  same 3 failing journeys unchanged from M27.2+M28.2+M29.2
-  +M30.2); plus gated T/U/L/M, deferred D, deferred stable
-  G, plus M30 §3 + M29 §3 + M28 §3 + M27 §3 + M25 §4
-  deferrals.
-- **Planning-time streak: 9** (at M30.2 close; unchanged
-  from M30.0 as-recommended; M30.1 + M30.2 both pure
-  implementation; historical run of 89 across M10 → M23
-  preserved).
-- **DoD amendment (M21.0 §5.f Option B):** every future
-  customer-facing milestone must add or update at least
-  one Playwright operational journey, or explicitly
-  document in §3 why no journey change is required. M26
-  invoked the exception path (audit-tooling
-  infrastructure); M27.1 was the second invocation; M28.1
-  was the third; M29.1 was the fourth; **M30.1 was the
-  fifth invocation** (backend-only detail endpoint with
-  no operator-facing behavior change); M30.2 satisfied DoD
-  directly via new `edit-delete` describe block.
-- **M30 audit coverage at close:** 157 endpoints, **123
-  covered / 34 backend-only** (delta from M29.2: +1
-  endpoint, +1 covered, unchanged backend-only). Two-
-  source agreement confirmed both M30.1 and M30.2 coverage
-  numbers.
-- **Durable lessons carried into M31+:** all (a)–(x) from
-  the SESSION_202 close-state list continue to apply. M30
-  added two new: (w) **NEW at M30.2** — `is_active`
-  mutation surface asymmetry (PATCH silently drops it;
-  activation is DELETE/Restore only); (x) **NEW at M30.2**
-  — Delete UI copy must reframe row-action vocabulary
-  ("Delete" button, "Deactivate" confirmation) into truth
-  vocabulary + include historical-entries reassurance.
+- **Milestone 31 status:** ACTIVE at M31.0 (planning
+  landed; two implementation increments pending —
+  M31.1 backend + M31.2 frontend + Playwright).
+- **Audit tooling status:** unchanged from M26.1.
+  Coverage **123 / 157** at M30 close. Projected at
+  M31.2 close: **124 / 158** (+1 endpoint, +1
+  covered; backend-only unchanged after M31.2
+  re-covers the M31.1 endpoint via the frontend
+  wrapper).
+- **§9 evidence carried into M31:** NEW Restore /
+  "Show inactive" UI toggle **selected as M31 target
+  under primary operational-coverage lens** (M28 §3
+  deferral resolved at M31); NEW C F&I chargeback
+  substrate (unchanged — gated pending pilot
+  evidence); NEW O2 + NEW O3 (unchanged); H test-
+  hygiene (unchanged); gated T/U/L/M unchanged;
+  deferred D + deferred-stable G unchanged; M30 §3 +
+  M29 §3 + M28 §3 + M27 §3 + M25 §4 deferrals
+  unchanged. New at M31 §3 (see planning memo):
+  template mutation history / diff viewer; auto-
+  refresh of stale-tab template list (accepted per
+  R1); persistent Show-inactive toggle state; bulk
+  lifecycle actions.
+- **Planning-time streak: 10** (at M31.0 close;
+  advanced from 9 at M30.2 close per §5.a
+  as-recommended lock; historical run of 89 across
+  M10 → M23 preserved).
+- **DoD amendment (M21.0 §5.f Option B):** every
+  future customer-facing milestone must add or update
+  at least one Playwright operational journey, or
+  explicitly document in §3 why no journey change is
+  required. M26 was first invocation; M27.1 second;
+  M28.1 third; M29.1 fourth; M30.1 fifth. **M31.1
+  will be sixth** (backend substrate). M31.2 will
+  satisfy DoD directly via new `restore-inactive`
+  describe block.
+- **M30 audit coverage at close:** 157 endpoints,
+  **123 covered / 34 backend-only** (baseline
+  unchanged at SESSION_203; carries forward to
+  SESSION_204). Two-source agreement confirmed at
+  M30 close.
+- **Durable lessons carried into M31+:** all (a)–(x)
+  from the M30 close-state list continue to apply.
+  M31 exercises (t) additive-prop pattern in a
+  reinforcement posture (no new mode branches on the
+  renamed dialog; co-located inline dialog for
+  Restore confirmation per (M28.0)
+  `feedback_duplicate_small_stable_logic.md`); (v)
+  acceptance-selector-sweep (row testid mirrors the
+  M30.2 `tmpl-*-trigger-<pk>` pattern for
+  consistency); (w) `is_active` mutation surface
+  asymmetry is **hardened** at M31 (adds Restore as
+  the second dedicated verb alongside Delete/
+  Deactivate; PATCH cannot mutate is_active — locked
+  again at endpoint test layer); (x) delete-UI copy
+  vocabulary asymmetry **re-applied** at M31.2
+  (row "Restore" → confirmation "Reactivate template?").
