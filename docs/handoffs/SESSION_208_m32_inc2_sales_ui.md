@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Deal Writeups: Sales-Manager-to-F&I Handoff (writeup CRUD substrate + sales-manager UI + F&I intake queue + provenance-FK migration)"
 increment: 2
 increment_status: shipped
-commit: null
-commit_notes: "M32.2 sales-manager UI + sales-side Playwright — local commit expected at close per M28.2 / M29.2 / M30.2 / M31.2 cadence; hash backfill via a subsequent commit; NOT pushed. Coordinated push at M32 close after explicit user confirmation."
+commit: 2ef039d
+commit_notes: "M32.2 sales-manager UI + sales-side Playwright — local commit landed as 2ef039d at close per M28.2 / M29.2 / M30.2 / M31.2 cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated push at M32 close after explicit user confirmation."
 ---
 
 # SESSION_208 — Milestone 32 · Increment 2 (M32.2 — sales-manager UI + sales-side Playwright)
