@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Journal-Entry Template Restore / \"Show inactive\" UI (lifecycle-completion on M28.1 substrate + M30.1 include_inactive kwarg)"
 increment: 0
 increment_status: shipped
-commit: pending
-commit_notes: "M31.0 planning session — local commit at close per M28.0 / M29.0 / M30.0 planning-only cadence; hash backfill via a subsequent commit; NOT pushed. Coordinated push at M31 close after explicit user confirmation."
+commit: f45a630
+commit_notes: "M31.0 planning session — local commit landed as f45a630 at close per M28.0 / M29.0 / M30.0 planning-only cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated push at M31 close after explicit user confirmation."
 ---
 
 # SESSION_203 — Milestone 31 · Increment 0 (M31.0 — planning refinement + target selection)
