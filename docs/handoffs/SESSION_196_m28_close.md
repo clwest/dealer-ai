@@ -9,7 +9,7 @@ milestone_status: shipped
 milestone_name: "Recurring Journal Templates (on M27.1 shared GLAccount substrate)"
 increment: 2
 increment_status: shipped
-commit: TBD
+commit: 5a7f978
 ---
 
 # SESSION_196 — Milestone 28 · Increment 2 (M28.2 — UI + Playwright) + close-out fold
