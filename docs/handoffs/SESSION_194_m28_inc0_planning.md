@@ -9,7 +9,7 @@ milestone_status: active
 milestone_name: "Recurring Journal Templates (on M27.1 shared GLAccount substrate)"
 increment: 0
 increment_status: shipped
-commit: TBD
+commit: 5f9f7c4
 ---
 
 # SESSION_194 — Milestone 28 · Increment 0 (M28.0 — planning refinement + target selection)
