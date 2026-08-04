@@ -9,7 +9,7 @@ milestone_status: active
 milestone_name: "Journal-Entry Creation UI (via shared GLAccount substrate)"
 increment: 1
 increment_status: shipped
-commit: pending-post-push
+commit: f9256c2
 ---
 
 # SESSION_192 — Milestone 27 · Increment 1 (M27.1 — backend substrate + frontend wrapper)
