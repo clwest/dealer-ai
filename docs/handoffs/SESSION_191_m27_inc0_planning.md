@@ -9,7 +9,7 @@ milestone_status: active
 milestone_name: "Journal-Entry Creation UI (via shared GLAccount substrate)"
 increment: 0
 increment_status: shipped
-commit: pending-post-push
+commit: 4641eaa
 ---
 
 # SESSION_191 — Milestone 27 · Increment 0 (M27.0 — planning refinement + target selection)
