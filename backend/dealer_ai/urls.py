@@ -1025,6 +1025,19 @@ urlpatterns = [
         views_accounting.admin_trial_balance_snapshot_retrieve,
         name="admin-trial-balance-snapshot-retrieve",
     ),
+    # Milestone 27 · Increment 1 (SESSION_192) — GLAccount list substrate.
+    # Per MILESTONE_27_PLANNING.md §5.b M27.1. Reuses
+    # ``IsSalesManagerOrOwnerAtActiveDealership`` (zero-drift
+    # permission-class streak preserved). Shared accounting
+    # infrastructure — the M27.2 JE-create dialog is the immediate
+    # consumer; future accounting workflows (recurring journals,
+    # adjustments, budgets, statement recon, F&I chargebacks,
+    # period-open) reuse the same substrate.
+    path(
+        "admin/accounting/gl-accounts/",
+        views_accounting.admin_gl_account_list,
+        name="admin-gl-account-list",
+    ),
     # Milestone 18 · Increment 5 (SESSION_151) — TesterFeedback POST.
     # Per MILESTONE_18_PLANNING.md §7 M18.5 + §5.e Option A. Reuses
     # ``IsSalesManagerOrOwnerAtActiveDealership`` (zero-drift streak

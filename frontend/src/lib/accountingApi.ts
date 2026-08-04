@@ -311,3 +311,36 @@ export function fetchCostPostingFailures(
     (body) => body.cost_posting_failures,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Chart-of-accounts list (M27.1 endpoint — shared accounting substrate)
+// ---------------------------------------------------------------------------
+//
+// Milestone 27 · Increment 1 (SESSION_192). Consumes GET
+// /admin/accounting/gl-accounts/ — returns the tenant's active
+// chart of accounts sorted by ``code`` ASC. Immediate consumer is
+// the M27.2 JE-create dialog account picker; future consumers
+// include recurring journals, adjustments, budget uploads,
+// statement reconciliation, F&I chargebacks, and period-open
+// workflows.
+//
+// Reuses the existing ``GLAccountType`` alias exported above from
+// the M14 trial-balance types — no duplicate declaration.
+
+/** One row on the M27.1 chart-of-accounts projection. */
+export interface GLAccount {
+  id: number;
+  code: string;
+  name: string;
+  type: GLAccountType;
+}
+
+interface GLAccountListResponse {
+  gl_accounts: { accounts: GLAccount[] };
+}
+
+export function fetchGLAccounts(): Promise<GLAccount[]> {
+  return authGetJSON<GLAccountListResponse>(
+    "/admin/accounting/gl-accounts/",
+  ).then((body) => body.gl_accounts.accounts);
+}

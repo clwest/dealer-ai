@@ -18,10 +18,10 @@ sources:
 
 ## Coverage summary
 
-- **Backend endpoints enumerated:** 154
+- **Backend endpoints enumerated:** 155
 - **Consumed by frontend components (`covered`):** 119
-- **Backend-only (audit findings):** 35
-  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **3**
+- **Backend-only (audit findings):** 36
+  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **4**
 - **Service verbs enumerated:** 312
 - **Distinct view modules importing service verbs:** 22
 
@@ -196,16 +196,17 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 146 | `admin/accounting/trial-balance/snapshots/` | `views_accounting.admin_trial_balance_snapshot_create` | `admin-trial-balance-snapshot-create` | accountingApi.ts:124 `freezeTrialBalance` | `covered` |
 | 147 | `admin/accounting/trial-balance/snapshots/list/` | `views_accounting.admin_trial_balance_snapshot_list` | `admin-trial-balance-snapshot-list` | accountingApi.ts:142 `listTrialBalanceSnapshots` | `covered` |
 | 148 | `admin/accounting/trial-balance/snapshots/<int:pk>/` | `views_accounting.admin_trial_balance_snapshot_retrieve` | `admin-trial-balance-snapshot-retrieve` | accountingApi.ts:150 `fetchTrialBalanceSnapshot` | `covered` |
-| 149 | `admin/demo-store/feedback/` | `views_demo_store.admin_demo_store_feedback_create` | `admin-demo-store-feedback-create` | — | `defer-candidate-O2` |
-| 150 | `admin/pilots/create/` | `views_pilot_onboarding.admin_pilot_create` | `admin-pilot-create` | api.ts:2254 `createPilotDealership` | `covered` |
-| 151 | `admin/pilots/` | `views_pilot_onboarding.admin_pilot_list` | `admin-pilot-list` | api.ts:2248 `fetchPilotDealerships` | `covered` |
-| 152 | `admin/pilots/<slug:slug>/checklist/advance/` | `views_pilot_onboarding.admin_pilot_checklist_advance` | `admin-pilot-checklist-advance` | api.ts:2264 `advancePilotChecklistStep` | `covered` |
-| 153 | `admin/pilots/<slug:slug>/inventory/import/` | `views_pilot_onboarding.admin_pilot_inventory_import` | `admin-pilot-inventory-import` | api.ts:2273 `importPilotInventory` | `covered` |
-| 154 | `admin/pilots/<slug:slug>/terminate/` | `views_pilot_onboarding.admin_pilot_terminate` | `admin-pilot-terminate` | api.ts:2283 `terminatePilotDealership` | `covered` |
+| 149 | `admin/accounting/gl-accounts/` | `views_accounting.admin_gl_account_list` | `admin-gl-account-list` | accountingApi.ts:343 `fetchGLAccounts` ⚠ wrapper-only | `defer-candidate-O2` |
+| 150 | `admin/demo-store/feedback/` | `views_demo_store.admin_demo_store_feedback_create` | `admin-demo-store-feedback-create` | — | `defer-candidate-O2` |
+| 151 | `admin/pilots/create/` | `views_pilot_onboarding.admin_pilot_create` | `admin-pilot-create` | api.ts:2254 `createPilotDealership` | `covered` |
+| 152 | `admin/pilots/` | `views_pilot_onboarding.admin_pilot_list` | `admin-pilot-list` | api.ts:2248 `fetchPilotDealerships` | `covered` |
+| 153 | `admin/pilots/<slug:slug>/checklist/advance/` | `views_pilot_onboarding.admin_pilot_checklist_advance` | `admin-pilot-checklist-advance` | api.ts:2264 `advancePilotChecklistStep` | `covered` |
+| 154 | `admin/pilots/<slug:slug>/inventory/import/` | `views_pilot_onboarding.admin_pilot_inventory_import` | `admin-pilot-inventory-import` | api.ts:2273 `importPilotInventory` | `covered` |
+| 155 | `admin/pilots/<slug:slug>/terminate/` | `views_pilot_onboarding.admin_pilot_terminate` | `admin-pilot-terminate` | api.ts:2283 `terminatePilotDealership` | `covered` |
 
 ## Backend-only findings
 
-**35 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**36 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -215,7 +216,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (30)
+### defer-candidate-O2 (31)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -246,6 +247,7 @@ _None._
 - `admin/deal-writeups/<int:pk>/approve/` → `views_deal_writeups.admin_deal_writeup_approve` (`admin-deal-writeup-approve`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/hand-off/` → `views_deal_writeups.admin_deal_writeup_hand_off` (`admin-deal-writeup-hand-off`). Imported service verbs: `get_current_dealership`
 - `admin/accounting/journal-entries/` → `views_accounting.admin_journal_entry_create` (`admin-journal-entry-create`). Imported service verbs: `get_current_dealership`
+- `admin/accounting/gl-accounts/` → `views_accounting.admin_gl_account_list` (`admin-gl-account-list`). Imported service verbs: `get_current_dealership`
 - `admin/demo-store/feedback/` → `views_demo_store.admin_demo_store_feedback_create` (`admin-demo-store-feedback-create`). Imported service verbs: `get_current_dealership`
 
 ### defer-domain-milestone (0)
@@ -270,8 +272,8 @@ _None._
 
 ### views_accounting
 
-- **Endpoints:** 9
-- **Backend-only:** 1
+- **Endpoints:** 10
+- **Backend-only:** 2
 - **Backend-only dispositions in this module:** `defer-candidate-O2`
 
 ### views_analytics

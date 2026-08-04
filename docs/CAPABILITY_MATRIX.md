@@ -3217,6 +3217,89 @@ self-contained; the parallel to M23.1 §5.d confirms the shape*.
 
 ---
 
+## 7β. Journal-Entry Creation UI — via shared GLAccount substrate (Milestone 27, in progress)
+
+Milestone 27 (opened SESSION_191 M27.0 planning; M27.1 shipped
+SESSION_192; M27.2 pending) delivers **direct operator coverage
+for accounting staff originating a journal entry** through the
+shipped application. §7 verification at M27.0 surfaced that the
+existing `admin/accounting/journal-entries/` create endpoint (row
+140, `defer-candidate-O2` at M26 close) requires numeric
+`account_id` values, while the frontend had no GLAccount list
+endpoint, no wrapper, and no picker component anywhere. Per user
+direction, M27 split into two increments and attaches the JE-
+create dialog to the existing `AccountingJournalEntriesPage`
+rather than shipping a standalone Chart of Accounts route.
+
+**`admin/accounting/gl-accounts/` is deliberately shared
+accounting infrastructure**, not JE-specific. Immediate consumer
+is the M27.2 JE-create dialog picker; future consumers include
+recurring journals, adjustments, budget uploads, statement
+reconciliation, F&I chargeback flows, and period-open workflows.
+Every future accounting workflow needing account selection
+reuses the same endpoint + wrapper.
+
+M27.1 is an infrastructure-only increment invoking the M21.0
+§5.f Option B DoD exception path per M26 precedent — the new
+endpoint's operational journey coverage arrives at M27.2 via
+the JE-create Playwright journey extension. Zero-drift
+permission-class posture preserved: `_M131_PERMS` reused for
+the new endpoint; no permission classes evolve.
+
+Durable planning lesson surfaced at M27.0 §7 and saved to
+memory as
+`feedback_verify_fk_discoverability_before_lock.md`: **before
+locking any create/edit workflow, verify every required
+foreign key or identifier is discoverable and selectable by
+the operator through a truthful product surface.** Trial
+Balance had been examined as a potential CoA discovery
+surface but was rejected — it is activity-filtered (zero-
+balance accounts never render) and its response lacks `id`
+(returns only `account_code`, `account_name`, `account_type`,
+balances).
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M27.0 planning refinement + target selection | Full active memo at `MILESTONE_27_PLANNING.md` — all eight §5 locks resolved at SESSION_191 open under the primary operational-coverage lens (durable per M22 close). §5.a locked as A2 (JE creation UI); §5.b locked as two-increment split (M27.1 backend substrate + wrapper, M27.2 create dialog on existing JE list page — no standalone CoA route); §5.c locked to match existing accounting response envelope convention (`cost_posting_failures` precedent — unpaginated-collection wrapper `{<resource>: {<items>: [...]}}`); §5.d locked as two Playwright test cases (successful create exercising both code+name picker search + cancel-without-persistence with API assertion); §5.e locked as two-source agreement discipline inherited from M26; §5.f locked as 2 implementation increments + close-out fold; §5.g locked with M21.0 §5.f exception path invoked for M27.1 (infrastructure-only) and satisfied directly at M27.2; §5.h locked as evidence-sized Option B fold. Handoff at `docs/handoffs/SESSION_191_m27_inc0_planning.md`. | Planning-time as-recommended streak → 6. No code, no push. |
+| M27.1 backend substrate + frontend wrapper | Backend: new `admin_gl_account_list` view at `views_accounting.py:651` — DRF `@api_view(["GET"])`, `permission_classes(_M131_PERMS)`, tenant-scoped via `get_current_dealership(request)`, returns the active CoA (`is_active=True`) sorted by `code` ASC. Response envelope `{"gl_accounts": {"accounts": [{id, code, name, type}, ...]}}` per the `cost_posting_failures` precedent. `is_active=False` accounts filtered by design — inactive accounts must never surface in a create-workflow picker (M13.1 GLAccount model contract). Route wired at `urls.py:1029` (`admin-gl-account-list`). Frontend: `fetchGLAccounts` wrapper + `GLAccount` type + `GLAccountListResponse` interface added to `accountingApi.ts:334` — reuses the existing `GLAccountType` alias (no duplicate declaration). No UI change at M27.1; consumer arrives at M27.2. | Backend baseline **4,805 → 4,813 pass** (+8 across `test_m27_gl_account_list.py`: 8 methods covering envelope shape, sort order, projection fields, zero-balance inclusion, soft-hidden exclusion, cross-tenant isolation, advisor 403, unauthenticated rejection). Frontend Vitest **226 unchanged** (wrapper tested via consumer at M27.2 per `analyticsApi.test.ts` convention — pure formatter helpers unit-tested; fetch wrappers exercised via component tests). Audit **154 → 155 endpoints / 119 covered / 35 → 36 backend-only** — new row 149 `admin/accounting/gl-accounts/` disposition `defer-candidate-O2` with wrapper detected as `accountingApi.ts:343 fetchGLAccounts ⚠ wrapper-only` (M27.1 predicted state — flips to `covered` at M27.2 when the dialog consumes the wrapper). §5.e Phase 2 verification: endpoint view symbol matches, permissions match `_M131_PERMS`, HTTP method matches GET. |
+| M27.2 JE-create dialog + Playwright journey (pending SESSION_193) | Planned surface: "+ New journal entry" button in the header of `AccountingJournalEntriesPage` (no new frontend route). Modal `<Dialog>` reusing M14.4 reversal-dialog pattern from `AccountingJournalEntryDetailPage`. `NewJournalEntryDialog` + `GLAccountPicker` (searchable by both `code` and `name`) + `createJournalEntry` wrapper. `posted_at` field defaults to today (editable). Client-side validation: balanced (Σ debits = Σ credits) + non-empty + one-side-non-zero. Success closes dialog, refetches list, inline success badge per M25.2 pattern. Playwright: two test cases in one spec (successful create exercising code+name search; cancel-without-persistence with API assertion that no entry with the cancel-test prefix persists). Expected audit at M27.2 close: row 140 flips → `covered`; new gl-accounts row flips → `covered`; coverage **119 → 121 / 155 total / 34 backend-only**. | Baseline projection pending SESSION_193 execution. |
+| Test baseline | Backend **4,805 → 4,813 pass** at M27.1 (+8 across `test_m27_gl_account_list.py`). Frontend Vitest **226 unchanged** at M27.1. Acceptance **14 journeys unchanged** at M27.1 (§5.g exception path invoked). Per-increment delta: M27.0 = 0 (planning); M27.1 = +8 backend + 0 frontend + 0 new journeys; M27.2 = 0 backend + ~10–15 frontend + 1 journey (2 test cases) pending. | Zero-drift permission-class streak **twenty-six → twenty-seven intended** at M27 close (both new surfaces reuse `_M131_PERMS`; no permission classes evolve). Planning-time as-recommended streak **5 → 6** at M27.0 close. |
+
+**What is NOT shipped in Milestone 27** (deferred per
+`MILESTONE_27_PLANNING.md` §3):
+
+- **Standalone Chart of Accounts page / route / navigation
+  entry.** Per user substrate-attachment direction at M27.0.
+  The M27.2 dialog picker IS the browsable CoA surface.
+  Trial Balance remains the activity-oriented view.
+- **Trial Balance changes.** No modification to the TB page,
+  endpoint, or response shape. No scope creep on a report page.
+- **JE edit / update endpoints.** Journal entries remain an
+  append-only ledger; corrections continue via reverse-and-
+  repost (M14.4).
+- **JE templates / recurring journals.** Distinct workflow;
+  separate M28+ candidate.
+- **`posted_by_user` override in the dialog.** Authenticated
+  operator IS the posting user.
+- **Advanced account-picker filtering (filter-by-type
+  dropdown, etc.).** Text search over `code` + `name` is
+  sufficient at M27.2; advanced controls re-enter on operator
+  evidence.
+- **Server-side search or pagination on `gl-accounts`.** Full
+  CoA is small (typically 20–100 accounts); client-side filter
+  is sufficient. `?include_inactive=true` query param deferred
+  until a consumer needs inactive accounts.
+- **Row 5 public-fetch-helper regex refinement (M26 O2
+  deferral).** Still deferred at M27; M28+ candidate.
+- **Rows-1–4 plain-string-literal investigation (M26 O3
+  deferral).** Still deferred at M27; M28+ candidate.
+- **Test-hygiene remediation (Candidate H).** Kept separate;
+  M27 is customer-facing operator coverage; H is CI stability.
+  Live M28+ candidate.
+- **All M25 §4 deferrals** — remain valid for later re-entry.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

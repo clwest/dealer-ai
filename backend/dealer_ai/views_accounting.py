@@ -646,3 +646,60 @@ def admin_trial_balance_snapshot_retrieve(request, pk: int):
         {"trial_balance_snapshot": _project_snapshot_detail(snapshot)},
         status=status.HTTP_200_OK,
     )
+
+
+# --- Milestone 27 · Increment 1 (SESSION_192) — GLAccount list substrate ------
+#
+# Per MILESTONE_27_PLANNING.md §5.b M27.1. Reuses
+# ``IsSalesManagerOrOwnerAtActiveDealership`` — zero-drift
+# permission-class streak extends across a further increment.
+#
+# Shared accounting infrastructure. Immediate consumer is the M27.2
+# JE-create dialog picker; future consumers include recurring
+# journals, adjustments, budget uploads, statement reconciliation,
+# F&I chargebacks, and period-open workflows. Every future accounting
+# workflow that needs GLAccount selection reuses this substrate.
+
+
+@api_view(["GET"])
+@permission_classes(_M131_PERMS)
+def admin_gl_account_list(request):
+    """GET /admin/accounting/gl-accounts/
+
+    Returns the active chart of accounts for the current tenant,
+    sorted by ``code`` ascending. Includes zero-balance accounts
+    (unlike the trial balance, which activity-filters via aggregation
+    over posted JournalEntryLines).
+
+    Filters ``is_active=True`` by default — the ``is_active`` flag is
+    the operator-facing soft-hide mechanism per the M13.1 GLAccount
+    model contract, so inactive accounts must never surface in a
+    create-workflow picker. If a future consumer needs to expose
+    inactive accounts (e.g., historical-review UI), extend with a
+    ``?include_inactive=true`` query parameter at that time rather
+    than changing the default posture.
+
+    Response envelope follows the M14.1 ``cost_posting_failures``
+    precedent (unpaginated-collection wrapper
+    ``{<resource_plural>: {<items_key>: [...]}}``).
+    """
+    dealership = get_current_dealership(request)
+    accounts = GLAccount.objects.filter(
+        dealership=dealership, is_active=True
+    ).order_by("code")
+    return Response(
+        {
+            "gl_accounts": {
+                "accounts": [
+                    {
+                        "id": acct.pk,
+                        "code": acct.code,
+                        "name": acct.name,
+                        "type": acct.account_type,
+                    }
+                    for acct in accounts
+                ],
+            }
+        },
+        status=status.HTTP_200_OK,
+    )
