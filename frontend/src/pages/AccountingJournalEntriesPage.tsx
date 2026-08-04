@@ -1,17 +1,21 @@
 // Milestone 14 · Increment 3 (SESSION_136) — journal-entry browser page.
+// Milestone 27 · Increment 2 (SESSION_193) — extended in place with
+// the "+ New journal entry" dialog trigger + success indicator per
+// M27.0 §5.b substrate-attachment rule (no new frontend route).
 //
 // Consumes GET /admin/accounting/journal-entries/list/ (M14.1). Read-
-// only. Recent-first pagination (-posted_at, -id) matches the backend
-// ordering. Reversal entries appear as ordinary list rows with a
-// reversal-linkage indicator column.
+// only browsing surface; JE origination happens through the M27.2
+// dialog attached to the header. Reversal entries appear as ordinary
+// list rows with a reversal-linkage indicator column.
 //
 // No filter surface at M14.3 — §5.b Option B locks filter-less MVP at
 // both backend (M14.1) and frontend (M14.3). Filters land at M15+ per
 // operator evidence.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { NewJournalEntryDialog } from "@/components/accounting/NewJournalEntryDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +27,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  fetchGLAccounts,
   fetchJournalEntries,
+  type GLAccount,
+  type JournalEntry,
   type JournalEntryListEntry,
   type JournalEntryListPage,
 } from "@/lib/accountingApi";
@@ -65,6 +72,14 @@ export default function AccountingJournalEntriesPage() {
     "loading",
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [accounts, setAccounts] = useState<GLAccount[]>([]);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [lastCreated, setLastCreated] = useState<JournalEntry | null>(null);
+
+  const refetchList = useCallback(() => {
+    setReloadTick((tick) => tick + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +105,34 @@ export default function AccountingJournalEntriesPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize]);
+  }, [page, pageSize, reloadTick]);
+
+  useEffect(() => {
+    // Fetch the chart of accounts once on mount — the M27.1 substrate
+    // returns the full active tenant CoA (typically 20–100 accounts)
+    // in a single response, sufficient for the M27.2 picker's
+    // client-side filter without re-fetching per open.
+    let cancelled = false;
+    async function loadAccounts() {
+      try {
+        const response = await fetchGLAccounts();
+        if (cancelled) return;
+        setAccounts(response);
+        setAccountsError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setAccountsError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load chart of accounts.",
+        );
+      }
+    }
+    void loadAccounts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const totalPages = result
     ? Math.max(1, Math.ceil(result.total_count / result.page_size))
@@ -98,18 +140,57 @@ export default function AccountingJournalEntriesPage() {
   const canPrev = page > 1;
   const canNext = result ? page < totalPages : false;
 
+  const handleCreated = useCallback(
+    (entry: JournalEntry) => {
+      setLastCreated(entry);
+      // If not on page 1 the new entry (recent-first ordering) won't
+      // appear where the operator is looking — jump to page 1 in that
+      // case so the success badge sits above the freshly-posted row.
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        refetchList();
+      }
+    },
+    [page, refetchList],
+  );
+
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Journal Entries
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Every double-entry posting to the general ledger, recent
-          first. Reversal entries appear inline with a linkage to the
-          original.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Journal Entries
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Every double-entry posting to the general ledger, recent
+            first. Reversal entries appear inline with a linkage to the
+            original.
+          </p>
+        </div>
+        <NewJournalEntryDialog
+          accounts={accounts}
+          onCreated={handleCreated}
+          disabled={accounts.length < 2}
+        />
       </header>
+
+      {accountsError && (
+        <p className="text-sm text-destructive" role="alert">
+          Could not load the chart of accounts — {accountsError}. New
+          journal entry creation is unavailable until this loads.
+        </p>
+      )}
+
+      {lastCreated && (
+        <div
+          role="status"
+          className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+          data-testid="je-create-success-badge"
+        >
+          Journal Entry #{lastCreated.id} posted — {lastCreated.description}
+        </div>
+      )}
 
       {loadState === "loading" && (
         <p className="text-sm text-muted-foreground">

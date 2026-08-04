@@ -3725,6 +3725,92 @@ guiding question, not a departure from it.)
 
 ---
 
+### Milestone 27 — Journal-Entry Creation UI (via shared GLAccount substrate) — SHIPPED at SESSION_193
+
+**Sessions:** SESSION_191 → SESSION_192 → SESSION_193 (M27.3
+close-out folded into M27.2 per §5.h evidence-sized Option B —
+both increments' §5.e Phase 1 + Phase 2 checks agreed cleanly).
+
+**Increment shape (per `MILESTONE_27_PLANNING.md` §5.f):**
+
+- **M27.0 (SESSION_191)** — planning refinement + target
+  selection + all §5 locks. §7 verification surfaced the
+  GLAccount FK intake gap and drove the substrate-attachment
+  scope adjustment (split into M27.1 / M27.2, no standalone
+  Chart of Accounts route).
+- **M27.1 (SESSION_192)** — backend substrate + frontend
+  wrapper. New `GET admin/accounting/gl-accounts/` endpoint
+  (tenant-scoped, `_M131_PERMS`, returns active CoA sorted by
+  code ASC, `is_active=False` filtered per M13.1 GLAccount
+  contract). New `fetchGLAccounts` wrapper in
+  `accountingApi.ts`. No UI change; DoD exception path per
+  M21.0 §5.f Option B invoked (M26 precedent).
+- **M27.2 (SESSION_193)** — JE-create dialog + Playwright
+  journey. New "+ New journal entry" button on existing
+  `AccountingJournalEntriesPage` (no new route). New
+  `NewJournalEntryDialog` + `GLAccountPicker` (searchable by
+  both `code` and `name`; built on shipped `Input` primitive
+  since installed shadcn subset lacks `Command`/`Popover`) +
+  `createJournalEntry` wrapper. Playwright peer spec
+  `accounting_je_create.spec.ts` with two test cases:
+  successful create exercising both picker search modes +
+  cancel-without-persistence with pre/post admin-API count
+  assertion.
+
+**Baselines at M27 close:**
+
+- Backend: **4,813 pass**, 1 skipped, 0 fail (+8 across
+  `test_m27_gl_account_list.py`).
+- Frontend Vitest: **246 pass** across 34 files (+20 across
+  `GLAccountPicker.test.tsx`, `NewJournalEntryDialog.test.tsx`,
+  `AccountingJournalEntriesPage.test.tsx` extensions).
+- Acceptance: **16 journeys** (+2 in `accounting_je_create.spec.ts`).
+- Audit: **155 total / 121 covered / 34 backend-only / 312
+  service verbs**. Row 140
+  `admin/accounting/journal-entries/` flipped → `covered`
+  (wrapper `accountingApi.ts:377 createJournalEntry`). Row 149
+  `admin/accounting/gl-accounts/` flipped → `covered` (wrapper
+  `accountingApi.ts:343 fetchGLAccounts` now has a non-test
+  consumer via the dialog).
+- Zero-drift permission-class streak: **27** (M10 → M27).
+- Planning-time as-recommended streak: **6** at M27.0 close
+  (extends M26 close of 5); unchanged through M27.1 + M27.2
+  (both pure implementation increments).
+
+**Durable planning lesson from M27.0** (saved to memory as
+`feedback_verify_fk_discoverability_before_lock.md`): *before
+locking any create/edit workflow, verify every required
+foreign key or identifier is discoverable and selectable by
+the operator through a truthful product surface*. Extends the
+§7 verification lineage (M24.1 + M25.0 + M25.2 + SESSION_189
++ SESSION_190) to a specific class of intake gap. Governs all
+future create/edit workflow scoping.
+
+**Non-goals for M27 (all held):**
+
+- Standalone Chart of Accounts page / route / navigation entry
+  — per user substrate-attachment direction; picker inside the
+  M27.2 dialog IS the browsable CoA surface.
+- Trial Balance changes — no scope creep on a report page.
+- JE edit / update — append-only ledger; corrections via
+  reverse-and-repost (M14.4).
+- JE templates / recurring journals — M28+ candidate; will
+  reuse the M27.1 gl-accounts substrate.
+- `posted_by_user` override — authenticated operator IS the
+  posting user.
+- Advanced picker filtering / server-side search / pagination
+  on `gl-accounts` — client-side filter over the small CoA is
+  sufficient at M27.2.
+- Row 5 (O2) / rows-1–4 (O3) audit-parser refinements —
+  remain M28+ candidates.
+- Test-hygiene remediation (H) — 3 shared-DB non-idempotent
+  journeys confirmed at M27.2 full-suite run
+  (`sales_manager/daily_startup`, `recon/workflow`,
+  `office/accounting_workflow`); pass on clean DB, fail on
+  polluted DB. Live M28+ candidate.
+
+---
+
 ## 5. Explicit non-goals and deferrals
 
 The following are documented in research but explicitly out of

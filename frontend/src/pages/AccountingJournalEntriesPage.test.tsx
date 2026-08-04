@@ -1,4 +1,6 @@
 // Milestone 14 · Increment 3 (SESSION_136) — journal-entry list page tests.
+// Milestone 27 · Increment 2 (SESSION_193) — extended with M27.2
+// GLAccount fetch mock + "+ New journal entry" button assertions.
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,15 +14,26 @@ vi.mock("@/lib/accountingApi", async () => {
   return {
     ...actual,
     fetchJournalEntries: vi.fn(),
+    fetchGLAccounts: vi.fn(),
   };
 });
 
 import {
+  fetchGLAccounts,
   fetchJournalEntries,
+  type GLAccount,
   type JournalEntryListEntry,
   type JournalEntryListPage,
 } from "@/lib/accountingApi";
 import AccountingJournalEntriesPage from "@/pages/AccountingJournalEntriesPage";
+
+
+function makeAccounts(): GLAccount[] {
+  return [
+    { id: 1, code: "110000", name: "Bank — Operating", type: "asset" },
+    { id: 2, code: "400000", name: "Vehicle Sales — Retail", type: "revenue" },
+  ];
+}
 
 
 function makeEntry(
@@ -86,6 +99,8 @@ describe("AccountingJournalEntriesPage", () => {
   beforeEach(() => {
     vi.mocked(fetchJournalEntries).mockReset();
     vi.mocked(fetchJournalEntries).mockResolvedValue(makePage());
+    vi.mocked(fetchGLAccounts).mockReset();
+    vi.mocked(fetchGLAccounts).mockResolvedValue(makeAccounts());
   });
 
   it("renders the h1 header", async () => {
@@ -202,5 +217,43 @@ describe("AccountingJournalEntriesPage", () => {
     await waitFor(() => {
       expect(screen.getByText("nope")).toBeInTheDocument();
     });
+  });
+
+  // ---- Milestone 27 · Increment 2 additions -----------------------
+
+  it("renders the '+ New journal entry' trigger button", async () => {
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchGLAccounts).toHaveBeenCalled();
+    });
+    expect(
+      screen.getByRole("button", { name: /\+ New journal entry/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables the create trigger when the CoA has fewer than 2 accounts", async () => {
+    vi.mocked(fetchGLAccounts).mockResolvedValue([
+      { id: 1, code: "110000", name: "Bank", type: "asset" },
+    ]);
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchGLAccounts).toHaveBeenCalled();
+    });
+    expect(
+      screen.getByRole("button", { name: /\+ New journal entry/i }),
+    ).toBeDisabled();
+  });
+
+  it("surfaces a chart-of-accounts fetch error message", async () => {
+    vi.mocked(fetchGLAccounts).mockRejectedValue(
+      new Error("coa unavailable"),
+    );
+    await renderPage();
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Could not load the chart of accounts/i),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText(/coa unavailable/)).toBeInTheDocument();
   });
 });

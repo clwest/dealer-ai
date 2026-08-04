@@ -344,3 +344,38 @@ export function fetchGLAccounts(): Promise<GLAccount[]> {
     "/admin/accounting/gl-accounts/",
   ).then((body) => body.gl_accounts.accounts);
 }
+
+// ---------------------------------------------------------------------------
+// Journal-entry creation (M13.1 endpoint, wired at M27.2)
+// ---------------------------------------------------------------------------
+//
+// Milestone 27 · Increment 2 (SESSION_193). Consumes the pre-existing
+// POST /admin/accounting/journal-entries/ endpoint (row 140 in the
+// M21 audit — endpoint has shipped since M13.1 without a frontend
+// consumer). Envelope + Decimal-as-string conventions match the
+// existing ``reverseJournalEntry`` wrapper.
+
+export interface CreateJournalEntryLine {
+  account_id: number;
+  /** Decimal-as-string per §5.c Option A. Zero on the credit side of
+   * a debit-line and vice versa. */
+  debit: string;
+  credit: string;
+  memo?: string;
+}
+
+export interface CreateJournalEntryPayload {
+  description: string;
+  /** Optional ISO 8601 timestamp. Server defaults to now when omitted. */
+  posted_at?: string;
+  lines: CreateJournalEntryLine[];
+}
+
+export function createJournalEntry(
+  payload: CreateJournalEntryPayload,
+): Promise<JournalEntry> {
+  return authPostJSON<JournalEntryDetailResponse>(
+    "/admin/accounting/journal-entries/",
+    payload,
+  ).then((body) => body.journal_entry);
+}
