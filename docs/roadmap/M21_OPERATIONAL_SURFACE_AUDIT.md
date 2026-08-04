@@ -19,8 +19,8 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 161
-- **Consumed by frontend components (`covered`):** 128
-- **Backend-only (audit findings):** 33
+- **Consumed by frontend components (`covered`):** 129
+- **Backend-only (audit findings):** 32
   - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **4**
 - **Service verbs enumerated:** 321
 - **Distinct view modules importing service verbs:** 22
@@ -89,7 +89,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 39 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/` | `views.admin_condition_photo_attach` | `admin-condition-photo-attach` | api.ts:1313 `attachPhoto` | `covered` |
 | 40 | `admin/vehicles/<str:stock_number>/photos/<uuid:public_id>/` | `views.admin_condition_photo_delete` | `admin-condition-photo-delete` | api.ts:1320 `deletePhoto` | `covered` |
 | 41 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/local-upload/` | `views.admin_condition_photo_local_upload_receiver` | `admin-condition-photo-local-upload` | api.ts:1291 `uploadPhotoBytes` | `covered` |
-| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only | `covered` |
+| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only, api.ts:1703 `fetchVendor` ⚠ wrapper-only | `covered` |
 | 43 | `admin/vendors/<slug:slug>/` | `views_recon.admin_vendor_detail` | `admin-vendor-detail` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1709 `updateVendor` ⚠ wrapper-only | `defer-candidate-O2` |
 | 44 | `admin/vehicles/<str:stock_number>/recon/` | `views_recon.admin_recon_dashboard` | `admin-recon-dashboard` | api.ts:1717 `fetchReconDashboard` | `covered` |
 | 45 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/recon-decision/` | `views_recon.admin_recon_decision_create` | `admin-recon-decision-create` | api.ts:1728 `recordReconDecision` | `covered` |
@@ -137,7 +137,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 87 | `admin/vehicles/<str:stock_number>/delivery/` | `views_delivery.admin_delivery_create` | `admin-delivery-create` | saleApi.ts:138 `createDelivery`, saleApi.ts:152 `readDelivery` | `covered` |
 | 88 | `admin/deliveries/<int:delivery_id>/` | `views_delivery.admin_delivery_update` | `admin-delivery-update` | saleApi.ts:175 `updateDelivery` | `covered` |
 | 89 | `admin/credit-applications/` | `views_f_and_i.admin_credit_application_create` | `admin-credit-application-create` | — | `defer-candidate-O2` |
-| 90 | `admin/credit-applications/list/` | `views_f_and_i.admin_credit_application_list` | `admin-credit-application-list` | — | `defer-candidate-O2` |
+| 90 | `admin/credit-applications/list/` | `views_f_and_i.admin_credit_application_list` | `admin-credit-application-list` | fAndIApi.ts:308 `fetchCreditApplications` | `covered` |
 | 91 | `admin/deal-structures/` | `views_f_and_i.admin_deal_structure_create` | `admin-deal-structure-create` | — | `defer-candidate-O2` |
 | 92 | `admin/lender-programs/` | `views_f_and_i.admin_lender_program_create` | `admin-lender-program-create` | — | `defer-candidate-O2` |
 | 93 | `admin/lender-submissions/` | `views_f_and_i.admin_lender_submission_create` | `admin-lender-submission-create` | — | `defer-candidate-O2` |
@@ -150,10 +150,10 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 100 | `admin/funding/` | `views_f_and_i.admin_funding_create` | `admin-funding-create` | — | `defer-candidate-O2` |
 | 101 | `admin/funding/<int:pk>/` | `views_f_and_i.admin_funding_update` | `admin-funding-update` | — | `defer-candidate-O2` |
 | 102 | `admin/chargebacks/` | `views_f_and_i.admin_chargeback_create` | `admin-chargeback-create` | — | `defer-candidate-O2` |
-| 103 | `admin/compliance-records/` | `views_f_and_i.admin_compliance_create` | `admin-compliance-create` | fAndIApi.ts:173 `createCompliance` | `covered` |
-| 104 | `admin/compliance-records/<int:pk>/` | `views_f_and_i.admin_compliance_update` | `admin-compliance-update` | fAndIApi.ts:201 `updateCompliance` | `covered` |
-| 105 | `admin/deal-jackets/<int:contract_pk>/` | `views_f_and_i.admin_deal_jacket_read` | `admin-deal-jacket-read` | fAndIApi.ts:150 `fetchDealJacket` | `covered` |
-| 106 | `admin/f-and-i/deals/` | `views_f_and_i.admin_f_and_i_deals_list` | `admin-f-and-i-deals-list` | fAndIApi.ts:61 `fetchDeals` | `covered` |
+| 103 | `admin/compliance-records/` | `views_f_and_i.admin_compliance_create` | `admin-compliance-create` | fAndIApi.ts:177 `createCompliance` | `covered` |
+| 104 | `admin/compliance-records/<int:pk>/` | `views_f_and_i.admin_compliance_update` | `admin-compliance-update` | fAndIApi.ts:205 `updateCompliance` | `covered` |
+| 105 | `admin/deal-jackets/<int:contract_pk>/` | `views_f_and_i.admin_deal_jacket_read` | `admin-deal-jacket-read` | fAndIApi.ts:154 `fetchDealJacket` | `covered` |
+| 106 | `admin/f-and-i/deals/` | `views_f_and_i.admin_f_and_i_deals_list` | `admin-f-and-i-deals-list` | fAndIApi.ts:65 `fetchDeals` | `covered` |
 | 107 | `admin/leads/walk-in/` | `views_leads.admin_lead_walk_in_create` | `admin-lead-walk-in-create` | salesApi.ts:109 `createWalkInLead` | `covered` |
 | 108 | `admin/leads/phone/` | `views_leads.admin_lead_phone_create` | `admin-lead-phone-create` | salesApi.ts:119 `createPhoneLead` | `covered` |
 | 109 | `admin/leads/referral/` | `views_leads.admin_lead_referral_create` | `admin-lead-referral-create` | salesApi.ts:126 `createReferralLead` | `covered` |
@@ -212,7 +212,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**33 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**32 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -222,7 +222,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (28)
+### defer-candidate-O2 (27)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -236,7 +236,6 @@ _None._
 - `admin/vehicles/<str:stock_number>/photos/reorder/` → `views_photos.admin_photo_reorder` (`admin-photo-reorder`). Imported service verbs: `get_current_dealership`, `photo_gallery`, `photo_storage`
 - `showroom/vehicles/<str:stock_number>/` → `views_showroom.showroom_vehicle_detail` (`showroom-vehicle-detail`). Imported service verbs: —
 - `admin/credit-applications/` → `views_f_and_i.admin_credit_application_create` (`admin-credit-application-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
-- `admin/credit-applications/list/` → `views_f_and_i.admin_credit_application_list` (`admin-credit-application-list`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/deal-structures/` → `views_f_and_i.admin_deal_structure_create` (`admin-deal-structure-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/lender-programs/` → `views_f_and_i.admin_lender_program_create` (`admin-lender-program-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/lender-submissions/` → `views_f_and_i.admin_lender_submission_create` (`admin-lender-submission-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
@@ -333,7 +332,7 @@ _None._
 ### views_f_and_i
 
 - **Endpoints:** 18
-- **Backend-only:** 14
+- **Backend-only:** 13
 - **Backend-only dispositions in this module:** `defer-candidate-O2`
 
 ### views_follow_ups

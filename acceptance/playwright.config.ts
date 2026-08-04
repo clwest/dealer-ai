@@ -52,6 +52,7 @@ export const AUTH_STORAGE = {
   salesManager: path.join(HERE, ".auth/sales_manager.json"),
   reconManager: path.join(HERE, ".auth/recon_manager.json"),
   bhphCollector: path.join(HERE, ".auth/bhph_collector.json"),
+  fAndIManager: path.join(HERE, ".auth/f_and_i_manager.json"),
 } as const;
 
 export default defineConfig({
@@ -150,6 +151,27 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         storageState: AUTH_STORAGE.bhphCollector,
+      },
+      dependencies: ["setup"],
+    },
+    {
+      // F&I intake journeys (M32.3) run as the f_and_i_manager
+      // persona. First F&I-role-gated journey — consumes the M32.1
+      // `admin/credit-applications/list/` endpoint (gated on
+      // IsFinanceManagerOrOwnerAtActiveDealership per M32.0 §5.b D3
+      // + D10) via the M32.3 `/dealer-ai-f-and-i/incoming` intake
+      // page.
+      //
+      // Fixture independence guarantee per M32 §5.c R11: the
+      // `seed_journey_fandi_intake_receipt` command provisions its
+      // own dedicated lead + vehicle + approved+handed-off writeup +
+      // paired CA — distinct from any M32.2 sales-side fixture. Test
+      // order irrelevant; parallelism-safe.
+      name: "f_and_i_manager",
+      testMatch: /journeys\/f_and_i_manager\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: AUTH_STORAGE.fAndIManager,
       },
       dependencies: ["setup"],
     },

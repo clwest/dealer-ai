@@ -54,6 +54,18 @@ const NAV_ITEMS: NavItem[] = [
     to: "/dealer-ai-f-and-i",
     label: "F&I",
     icon: ClipboardCheck,
+    end: true,
+  },
+  {
+    // Milestone 32 · Increment 3 — F&I intake queue (sibling to the
+    // existing F&I Deals page). Non-navigational rows per §5.b
+    // D8-revised; backend-gated on
+    // IsFinanceManagerOrOwnerAtActiveDealership (other roles see
+    // the "forbidden" branch, matching the M10.7 F&I Deals page
+    // gating shape).
+    to: "/dealer-ai-f-and-i/incoming",
+    label: "Incoming",
+    icon: ClipboardCheck,
     end: false,
   },
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },

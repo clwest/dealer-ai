@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-04
-last_session_shipped: SESSION_208
+last_session_shipped: SESSION_209
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -33,77 +33,125 @@ milestone_28_status: shipped
 milestone_29_status: shipped
 milestone_30_status: shipped
 milestone_31_status: shipped
-milestone_32_status: active
-next_session: SESSION_209
-next_milestone: 32
-next_milestone_name: "Deal Writeups: Sales-Manager-to-F&I Handoff (writeup CRUD substrate + sales-manager UI + F&I intake queue + provenance-FK migration)"
-next_increment: 3
-next_increment_name: "M32.3 — F&I intake UI + F&I-side Playwright + new f_and_i_manager persona"
+milestone_32_status: shipped
+next_session: SESSION_210
+next_milestone: 33
+next_milestone_name: "(target selection pending — locked at M33.0 open)"
+next_increment: 0
+next_increment_name: "M33.0 — Planning refinement + target selection"
 ---
 
-# Next session — SESSION_209 · Milestone 32 · Increment 3 (M32.3 — F&I intake UI + F&I-side Playwright + new f_and_i_manager persona)
+# Next session — SESSION_210 · Milestone 33 · Increment 0 (M33.0 — planning refinement + target selection)
 
-> **M32.2 sales-manager UI shipped at SESSION_208.** Five new
-> `salesApi.ts` wrappers (removes shipped-source "UI deferred"
-> promise); three new co-located components
-> (`DealWriteupForm`, `WriteupConfirmDialogs`,
-> `LeadWriteupsPanel`); LeadDetailModal wiring; 35 new Vitest
-> tests (+4 test files); new Playwright describe block
-> `sales-manager-writeup-handoff` proving the full sales-side
-> workflow through the real UI with D5-revised + D6
-> irreversibility copy asserted verbatim. **DoD satisfied
-> directly** — no exception. **Two §0.a M32.2 amendments** vs
-> the M32.0 memo (see `docs/handoffs/SESSION_208_m32_inc2_sales_ui.md`
-> §7): (1) technical assertion switched from F&I-gated CA list
-> to sales-role-accessible writeup detail endpoint (F&I role
-> not available in M32.2); (2) M32.3 spec will live at a
-> distinct file under a new `f_and_i_manager` project entry in
-> playwright.config.ts (file-per-persona strengthens the
-> independence guarantee).
+> **Milestone 32 — Deal Writeups: Sales-Manager-to-F&I Handoff
+> — SHIPPED at SESSION_209.** M32.0 planning + M32.1 backend
+> substrate + provenance-FK migration + M32.2 sales-manager UI +
+> sales-side Playwright + M32.3 F&I intake UI + F&I-side
+> Playwright + new f_and_i_manager persona + close-out fold all
+> landed. Backend baseline 4,933 → 4,995 (+62 at M32.1).
+> Frontend Vitest 319 → 354 → 377 (+35 M32.2 + +23 M32.3).
+> Acceptance 22 → 23 → 24 spec files / 29 → 31 tests / 32.5s.
+> Audit 158/124/34/318 → **161 / 129 / 32 / 321**.
 >
-> **Baselines at M32.2 close:** backend **4,995 pass**
-> (unchanged); frontend **319 → 354 pass** (+35 tests / +4
-> files); acceptance **22 → 23 spec files / 29 tests / 30.5s**;
-> audit **161 / 128 / 33 / 321** (+4 covered for writeup
-> create/approve/hand-off/list; -4 backend-only). Zero-drift
-> permission-class streak 34 → 35.
+> **Zero-drift permission-class streak advanced 33 → 36
+> consecutive milestones** (M10 → M32). Planning-time
+> as-recommended streak reached **11** at M32.0 close, unchanged
+> at M32.1 + M32.2 + M32.3 (all pure implementation).
 >
-> **SESSION_209 opens M32.3 F&I intake UI + F&I-side Playwright
-> + new f_and_i_manager persona.** New persona addition per D11
-> (personas.ts + login.setup.ts + AUTH_STORAGE.fAndIManager +
-> new project entry in playwright.config.ts + idempotent
-> `seed_journey_fandi_intake_receipt` seed command provisioning
-> both persona and independent `Intake Iris` fixture). New
-> `fetchCreditApplications` wrapper in `fAndIApi.ts`. New
-> `DealerFandIIncoming.tsx` page at `/dealer-ai-f-and-i/incoming`
-> per D8-revised (non-navigational rows; all triage info
-> rendered inline — F&I role cannot access `admin_lead_detail`).
-> "Incoming" nav link in F&I side nav. ~20 Vitest tests. New
-> Playwright describe block `fandi-intake-receipt` at
-> `journeys/f_and_i_manager/fandi_intake_receipt.spec.ts` using
-> new persona + pre-seeded independent fixture (deterministic
-> under any test order or parallelism).
+> **Substrate-compound-value continuation unchanged at 5 links.**
+> M32 chose breadth (fresh direct-operator gap in sales-to-F&I
+> workflow) over depth (NEW C F&I chargeback remained pilot-
+> evidence-gated). Six-milestone accounting/templates lineage
+> (M27.1 → M31) broken at M32.
 >
-> **After M32.3 ships:** M32 close-out fold per M31 precedent
-> — `CAPABILITY_MATRIX.md` §7η, audit re-baseline,
-> `IMPLEMENTATION_ROADMAP.md` milestone_32_status flip,
-> retrospective at `docs/roadmap/MILESTONE_32_RETROSPECTIVE.md`.
+> **Three firsts shipped in M32:** first F&I-role-gated list
+> endpoint (M32.1 `admin_credit_application_list`); first
+> schema-level pairing constraint at the DealWriteup ↔
+> CreditApplication seam (M32.1 nullable OneToOneField with
+> three-layer defense); first customer-facing milestone since
+> M11 to ship across three increments (scope-driven per
+> verification findings). Also first milestone since M20 to
+> add a new Playwright persona (`f_and_i_manager`).
 >
-> **DoD satisfied directly** — no exception.
+> **Shipped-source deferral fully closed:** `salesApi.ts:10-25`
+> "M11.3 UI deferred" comment removed at M32.2 — 9 sessions
+> after M11.3 shipped at SESSION_119. `git grep "UI deferred"
+> frontend/` returns only the removal-verification test.
+>
+> **Four NEW durable-lesson candidates surfaced in M32** (see
+> `MILESTONE_32_RETROSPECTIVE.md` §5): (y) Playwright-
+> independent-fixture pattern (M32.3 origin); (z) verification-
+> driven revision cycles at planning-open (M32.0 origin); (aa)
+> historical-migration-immutability discipline (M32.1 origin);
+> (bb) non-navigational cross-role UI when role-gating conflicts
+> (M32.3 origin). Each awaits first re-application to elevate
+> to "load-bearing across two milestones".
+>
+> **(w) activation-surface asymmetry elevated** to "load-bearing
+> across three milestones" (M30 + M31 + M32) via M32.1 re-
+> application (unknown state values reject at service layer).
+>
+> **§9 seven NEW/carried M33+ candidates surfaced or elevated
+> during M32** (per `MILESTONE_32_RETROSPECTIVE.md` §9):
+> (a) **NEW C — F&I chargeback substrate** — sixth substrate-
+>     compound-value link if pilot evidence surfaces; now with
+>     stronger operator context post-M32 (F&I team can see
+>     incoming CAs and would benefit from tracking post-funding
+>     chargeback exposure);
+> (b) **NEW F&I workflow state extensions on intake rows** —
+>     take M32.3 intake page from single-state "Incoming" to
+>     proper F&I workflow tracker using M10.2–M10.6 backend
+>     entities that ship without incoming-queue progression UI
+>     today;
+> (c) **NEW F&I-scoped lead-context view** — non-navigational
+>     M32.3 rows carry inline triage today; if evidence surfaces
+>     need for richer context, either narrower F&I-scoped
+>     endpoint or selective role-gating expansion on
+>     `admin_lead_detail` (with what-leaks review);
+> (d) **NEW cross-lead sales-manager pending-approval queue
+>     page** — assumption at M32 was same-day approval via
+>     LeadDetailModal; elevate if operator evidence surfaces;
+> (e) NEW O2 — Row 5 public-fetch-helper regex refinement
+>     (M26/M27/M28/M29/M30/M31/M32 deferral, unchanged);
+> (f) NEW O3 — Rows 1–4 plain-string-literal investigation
+>     (M26/M27/M28/M29/M30/M31/M32 deferral);
+> (g) H — Test-hygiene remediation (same 3 shared-DB non-
+>     idempotent journeys unchanged from M27.2 → M32.3 close).
+>
+> **Coordinated M32 close push pending.** All M32 work is
+> local-only; awaits explicit user confirmation. Expected M32
+> commits at push: **8** — M32.0 planning `c3d46fd`; M32.0
+> hash-backfill `4e2afc9`; M32.1 substrate `16c54e9`; M32.1
+> hash-backfill `6f2b64d`; M32.2 sales UI `2ef039d`; M32.2
+> hash-backfill `2d9bb30`; M32.3 close-out fold (this session);
+> M32.3 hash-backfill (follow-up).
+>
+> **SESSION_210 opens M33.0 — planning refinement + target
+> selection.** No target locked yet — the candidate list
+> surfaces at open (elevated: NEW C F&I chargeback [now with
+> stronger post-M32 context], NEW F&I workflow state
+> extensions, NEW F&I-scoped lead-context view, NEW cross-lead
+> pending-approval queue, NEW O2, NEW O3, H; plus fresh direct-
+> operator gaps surveyed under the depth-vs-breadth lens; gated
+> T/U/L/M; deferred D; deferred stable G; plus all M32 §3 +
+> prior deferrals still valid). The assistant recommends one
+> option with rationale grounded in the durable primary
+> operational-coverage lens; the user confirms or redirects.
 
-## First thing SESSION_209 must do
+## First thing SESSION_210 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean; local `HEAD` ahead of `origin/main` by
-  6 commits (SESSION_206 planning + hash-backfill;
-  SESSION_207 substrate + hash-backfill; SESSION_208 UI +
-  hash-backfill).
-- `git log --oneline -8` — top should be SESSION_208 M32.2
-  hash-backfill; check for expected M32 commit sequence.
-- `python3 manage.py test dealer_ai` → **4,995 pass, 1 skipped,
-  0 fail**.
-- `cd frontend && npm test` → **354 pass** across 40 files.
+- `git status` — clean; local `HEAD` matches `origin/main`
+  post-M32 push (if pushed) OR local `HEAD` ahead by 8 commits
+  (SESSION_206–209 planning + impls + hash-backfills) if push
+  not yet executed.
+- `git log --oneline -10` — top should be the M32.3
+  hash-backfill commit; check for expected M32 commit
+  sequence.
+- `python3 manage.py test dealer_ai` → **4,995 pass, 1
+  skipped, 0 fail**.
+- `cd frontend && npm test` → **377 pass** across 42 files.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations --check --dry-run` → "No
   changes detected."
@@ -113,190 +161,210 @@ next_increment_name: "M32.3 — F&I intake UI + F&I-side Playwright + new f_and_
 - `rm -f backend/db.acceptance.sqlite3` — proactive reset per
   SESSION_200 §0.a durable lesson (v).
 
-### 2. Confirm working from M32.0 planning memo + M32.2 amendments
+### 2. If M32 pushed — monitor first M32 CI run
 
-Read `docs/roadmap/MILESTONE_32_PLANNING.md` §5.b D3 + D8-revised
-+ D11 + §5.e M32.3 before touching code. **Consult the
-SESSION_208 handoff §7 amendments** — Amendment 2 changes M32.3
-to a separate spec file under a new `f_and_i_manager` project
-entry in playwright.config.ts.
+If M32 has been pushed, verify the CI acceptance workflow
+status via:
 
-Key pre-reads:
+```bash
+gh run list --workflow=acceptance --branch=main --limit 5
+gh run view <run-id> --log
+```
 
-- **D3** — CA list endpoint already shipped at M32.1 with fail-
-  explicit validation (`intake=true` only accepted; `intake=false`
-  → 400; projection includes writeup context via D9-revised²
-  FK). M32.3 wires the wrapper + page.
-- **D8-revised** — F&I intake rows are **non-navigational** —
-  no lead-detail link (would 403 for F&I). All triage fields
-  rendered inline: lead name/phone/email; vehicle
-  stock/description; four-square terms; CA notes verbatim;
-  written-up-by; approved-by; hand-off timestamp.
-- **D11** — new `f_and_i_manager` persona requires four files
-  updated: `personas.ts`, `login.setup.ts`, `playwright.config.ts`,
-  and a new seed command registered in `SEED_COMMANDS`.
-- **SESSION_208 handoff §7 Amendment 2** — spec lives at
-  `journeys/f_and_i_manager/fandi_intake_receipt.spec.ts`;
-  needs new project entry with
-  `testMatch: /journeys\/f_and_i_manager\/.*\.spec\.ts/` and
-  `storageState: AUTH_STORAGE.fAndIManager`.
+**If red:** address as §0.a M33.0 amendments before opening
+§5.a.
 
-### 3. Ship the new f_and_i_manager persona
+**If green:** M32 is CI-verified shipped; proceed to §3.
 
-Per D11 + M32.2 §7 Amendment 2:
+### 3. Regenerate the audit artifact
 
-- **`acceptance/support/auth/personas.ts`** — add entry with
-  `username: "acceptance-f-and-i-manager"`, `password`, and
-  role hint.
-- **`acceptance/playwright.config.ts`** —
-  - Add `fAndIManager: path.join(HERE, ".auth/f_and_i_manager.json")`
-    to `AUTH_STORAGE`.
-  - Add new project entry with
-    `testMatch: /journeys\/f_and_i_manager\/.*\.spec\.ts/` and
-    `storageState: AUTH_STORAGE.fAndIManager`.
-- **`acceptance/support/auth/login.setup.ts`** —
-  - Add `setup("authenticate as f_and_i_manager", ...)` task.
-  - Register new seed command in `SEED_COMMANDS`.
-- **New management command
-  `backend/dealer_ai/management/commands/seed_journey_fandi_intake_receipt.py`**
-  — idempotent per M20 lesson; provisions:
-  - `acceptance-f-and-i-manager` user with
-    `f_and_i_manager` role at default dealership.
-  - `Intake Iris` lead.
-  - `FANDI-INTAKE-1` vehicle.
-  - Approved deal writeup on that lead+vehicle with realistic
-    four-square terms.
-  - Handed-off CA via real `hand_off_to_fandi` code path (uses
-    the M32.1 provenance FK).
+Before candidate presentation, rerun the audit tooling to
+confirm the M32.3 baseline holds:
 
-### 4. Ship M32.3 F&I intake UI
+```bash
+cd backend
+python3 -m dealer_ai.scripts.audit_operational_surface
+```
 
-Per §5.e M32.3:
+Expected: **161 total / 129 covered / 32 backend-only / 321
+service verbs**. If the artifact drifts from this, investigate
+before scope-locking.
 
-- **Frontend wrapper `fetchCreditApplications`** in
-  `fAndIApi.ts` — consumes GET
-  `/admin/credit-applications/list/` with optional `intake`,
-  `leadId`, `since` filters + typed projection matching the
-  M32.1 D3 endpoint shape (including `writeup_context`).
-- **New page `DealerFandIIncoming.tsx`** at
-  `/dealer-ai-f-and-i/incoming`:
-  - Backend-gated on
-    `IsFinanceManagerOrOwnerAtActiveDealership` via the D3
-    endpoint. UI shows access-denied branch on 403.
-  - Non-navigational rows per D8-revised. Every triage field
-    rendered inline (no `<a>` wrapping; no click handlers).
-  - Filter controls (intake / lead search / since).
-  - Empty state: *"No incoming applications. Credit
-    applications from sales-manager hand-offs appear here."*
-- **F&I nav "Incoming" link** — extend existing F&I nav
-  component; adjacent to "Deals".
-- **~20 Vitest tests** — page rendering, filter passthrough,
-  empty state, inline field rendering (lead + vehicle + terms
-  + notes + attribution + hand-off timestamp), non-
-  navigational-row assertions (no `<a>` wrapping / no click
-  handler / no cursor-pointer), advisor 403 branch, nav link
-  visibility per role.
+### 4. Present the M33 candidate list
 
-### 5. Playwright — new F&I-side describe block
+Per the M32 retrospective §9 evidence:
 
-Per §5.e M32.3 + M32.2 §7 Amendment 2:
+**Elevated (highest recommendation strength at M33.0):**
 
-- **New spec** at
-  `acceptance/journeys/f_and_i_manager/fandi_intake_receipt.spec.ts`
-  with `test.describe("fandi-intake-receipt", …)`.
-- Uses new `f_and_i_manager` persona (via project storageState).
-- Reads pre-seeded `Intake Iris` fixture deterministically
-  by lead name / writeup pk from seed output.
-- **Fully independent of M32.2 fixture** — distinct rows; no
-  shared state; test order irrelevant; parallelism-safe.
-- Steps:
-  1. Navigate to `/dealer-ai-f-and-i/incoming`.
-  2. Assert row for `Intake Iris` fixture appears with full
-     inline data: lead name/phone/email; vehicle stock; four-
-     square terms verbatim; written-up-by; approved-by;
-     hand-off timestamp.
-  3. Assert row is non-navigational (no `<a>` wrapping / no
-     click handler / no cursor-pointer).
-  4. Assert notes carries the M11.3 `Deal write-up #<pk>
-     handoff:` prefix + four-square summary.
+- **NEW C — F&I chargeback substrate.** Sixth substrate-
+  compound-value link candidate. Now with stronger post-M32
+  context: F&I team can see incoming CAs (M32.3 intake page)
+  and would benefit from tracking their post-funding
+  chargeback exposure. Still requires pilot evidence per
+  M30/M31/M32 §9 gating pattern — but the operator surface
+  it would extend now exists.
+- **NEW F&I workflow state extensions on intake rows.**
+  Take M32.3 intake page from single-state "Incoming" to
+  proper F&I workflow tracker (In progress / Structuring /
+  Submitted to lender / Approved / Funded / etc.). Adjacent
+  to M10.2–M10.6 F&I entities (deal_structure,
+  lender_submission, stipulation, contract, funding,
+  chargeback) that ship as backend-only today.
+- **NEW F&I-scoped lead-context view.** Currently F&I sees
+  inline triage data per M32.3 D8; if operator evidence
+  surfaces need for richer lead context, elevate as either
+  (a) new endpoint with narrower projection or (b) selective
+  role-gating expansion on `admin_lead_detail` with what-
+  leaks review.
+- **NEW cross-lead sales-manager pending-approval queue
+  page.** M32 assumption was same-day approval via
+  LeadDetailModal; elevate if operator evidence surfaces
+  that per-lead is insufficient.
+- **NEW O2 — Row 5 public-fetch-helper regex refinement**
+  (M26/M27/M28/M29/M30/M31/M32 deferral, unchanged). Requires
+  SESSION-189-§3-style tracing at M33.0 open. Blast radius
+  unknown.
+- **NEW O3 — Rows 1–4 plain-string-literal investigation**
+  (M26/M27/M28/M29/M30/M31/M32 deferral). Requires tracing.
+- **H — Test-hygiene remediation.** Three shared-DB non-
+  idempotent journeys unchanged from M27.2 → M32.3 close.
 
-### 6. Verify M32.3 close baselines
+**Fresh direct-operator gaps to survey (breadth candidates):**
+vendor detail (#43); photo reorder (#65); broader F&I domain
+surface (#89–101 excluding chargeback which is NEW C).
 
-- Backend suite: **4,995 pass** (unchanged — no backend
-  changes in M32.3 aside from seed command).
-- Frontend Vitest: **354 → ~374 pass** (+~20 M32.3 tests).
-- Acceptance journeys (spec files): 23 → **24**.
-- Acceptance suite tests: 29 → **~31+ tests** (accounting for
-  new persona setup + new journey).
-- `tsc --noEmit` clean across frontend + acceptance.
-- Audit: 161 endpoints; 128 → **129** covered (CA list #90
-  becomes covered via `fetchCreditApplications` wrapper); 33
-  → **32** backend-only.
+**Gated (unchanged from M29+M30+M31+M32 close):**
 
-### 7. DoD satisfied directly
+- T (real tester feedback); U (hosted-demo substrate); L
+  (first-live-pilot staging); M (multi-operator support —
+  breaks the M10 → M32 zero-drift streak with intent).
 
-No exception. F&I intake UI ships operator surface; new
-`fandi-intake-receipt` describe block satisfies DoD directly.
-Documented in §3 of the M32.3 handoff.
+**Deferred pending evidence (unchanged):**
 
-### 8. Ship the M32.3 handoff + M32 close-out fold
+- D (LLM router / cost caps).
 
-- `docs/handoffs/SESSION_209_m32_inc3_fandi_ui.md`.
-- **M32 close-out fold per M31 precedent:**
-  - `docs/CAPABILITY_MATRIX.md` §7η — add M32 shipped surface.
-  - `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` — final
-    baseline.
-  - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` —
-    milestone_32_status: shipped.
-  - `docs/roadmap/MILESTONE_32_RETROSPECTIVE.md` — new file;
-    §5 durable-lesson candidates (Playwright-independent-
-    fixture; verification-driven revision cycles; historical-
-    migration-immutability); §9 M33+ candidates.
-- **Coordinated push at M32 close** — after explicit user
-  confirmation. Expected 6–8 commits per §9 of M32.2
-  handoff.
+**Deferred but stable:**
 
-## Non-goals for SESSION_209
+- G (dashboard testid hardening).
 
-- ❌ Do NOT modify M32.1 backend code or M32.2 frontend code
-  (except if regressions surface as §0.a M32.3 amendments).
-- ❌ Do NOT modify M11.3 shipped endpoint functions or URLs.
-- ❌ Do NOT modify historical migrations.
-- ❌ Do NOT modify `admin_lead_detail` role gating — F&I-scoped
-  lead-context view is a M33+ evidence-gated deferral per
-  §5.h.
-- ❌ Do NOT add F&I-workflow state extensions to intake rows
-  (In progress / Structuring / etc.) — M32 intake rows carry
-  only "Incoming" state.
-- ❌ Do NOT push until explicit user confirmation post-M32
-  close-out fold.
+**Deferred at M32 §3 (all valid for later re-entry):**
+
+Salesperson-authored writeups; writeup edit (PATCH); F&I
+workflow state extensions (as separate from NEW above, if
+scoped narrower); F&I-scoped lead-context view; per-CA detail
+page; separation-of-duties enforcement; pagination on 3 M32
+list endpoints; websocket / auto-refresh; F&I state extensions
+on intake rows; `intake=false` filter; backfill of
+`credit_application.deal_writeup`; F&I-scoped post-intake
+acceptance journey; retroactive historical-migration
+modification.
+
+**Deferred at M31 §3 / M30 §3 / M29 §3 / M28 §3 / M27 §3 /
+M25 §4 (unchanged):** all prior deferrals carried forward.
+
+Present each with two-sentence scope + operator pain resolved
++ dependency notes, then present the recommendation.
+
+### 5. Recommend a target for §5.a
+
+Ground the recommendation in the **primary operational-
+coverage lens** OR its reframes (substrate-compound-value
+continuation per M27.1 → M28.1 → M29 → M30 → M31 precedent;
+sales-to-F&I depth-arc continuation per M32 precedent;
+substrate-integrity per M26 precedent) if evidence supports.
+
+**Standing question from M32 retrospective §9:** the sales-to-
+F&I workflow is now bridged. Two natural next moves: (a)
+**Continue the F&I depth arc** via NEW C chargeback substrate
+(sixth substrate-compound-value link if pilot evidence
+surfaces) OR NEW F&I workflow state extensions (multi-state
+intake row tracker on M10.2–M10.6 entities); (b) **Reset to
+breadth** via a fresh direct-operator gap surveyed from the
+32 backend-only audit endpoints; (c) **Close a M32 §3
+deferral** like NEW F&I-scoped lead-context view or cross-
+lead pending-approval queue. Evaluate through the primary
+operational-coverage lens first; secondary reframes only if
+evidence surfaces.
+
+**Alternatively:** if the M32 CI run surfaces regression work
+at M33.0, address as §0.a amendments first.
+
+### 6. Draft §5.b–§5.h load-bearing decisions
+
+Once §5.a locks, draft the standard load-bearing decisions
+per M28/M29/M30/M31/M32 shape.
+
+### 7. Verify BOTH intake AND downstream UI surfaces + FK discoverability before locking §5.b + §5.d
+
+**M24.1-open + M25.0 + M25.2-open + SESSION_189 §3 +
+SESSION_190 §2 + M27.0 §7 + M28.0 §7 + M29.0 §7 + M30.0 §7 +
+M31.0 §7 + M32.0 §4 durable lesson.** Every planning-open
+surface verification must cover both intake AND downstream
+paths, including audit-substrate accuracy checks + FK /
+identifier discoverability for any create/edit workflow
+candidate + role-access verification for any cross-role UI.
+
+**M32 added a new verification-driven revision cycle
+discipline (candidate lesson z)** — multiple user-directed
+revision rounds at §5.b–§5.h before scope-lock are acceptable
+and often strengthen the milestone; do not batch objections
+into one revision round.
+
+### 8. DoD compliance check
+
+Per the M21.0 §5.f amendment: the M33 active memo §3 must
+either name a Playwright journey addition or extension OR
+explicitly document why no journey change is required (M26 +
+M27.1 + M28.1 + M29.1 + M30.1 + M31.1 + M32.1 precedents for
+the exception path — pattern firmly established at seven
+invocations).
+
+### 9. Expand M33 planning skeleton
+
+Draft fresh per the standard active-memo shape (no existing
+skeleton at close of M32).
+
+### 10. Ship the M33.0 handoff
+
+- `docs/handoffs/SESSION_210_m33_inc0_planning.md`.
+- **Do NOT push** — M33.0 is planning only; coordinated push
+  at M33 close.
+
+## Non-goals for SESSION_210
+
+- ❌ Do NOT ship any backend or frontend code — planning-only
+  session.
+- ❌ Do NOT open any M33 implementation increment.
+- ❌ Do NOT force-push or amend earlier commits.
+- ❌ Do NOT modify M1–M32 shipped surface.
+- ❌ Do NOT modify the acceptance suite unless CI regression
+  fixes land as §0.a M33.0 amendments.
+- ❌ Do NOT skip the DoD compliance check.
+- ❌ Do NOT skip the downstream / substrate / FK-
+  discoverability / role-access verification.
+- ❌ Do NOT re-litigate M32 architectural verifications
+  (three-layer defense on OneToOneField; non-navigational F&I
+  rows; manager-only Writeups tab; historical migration 0034
+  immutability — all locked at M32.0 and validated through
+  M32.3 shipping).
 
 ## Baseline expected at close
 
-- Backend: 4,995 pass (unchanged).
-- Frontend: 354 → ~374 pass.
-- Acceptance: 23 → 24 spec files / 29 → ~31 tests.
-- Audit: 161 endpoints / 128 → 129 covered / 33 → 32 backend-
-  only / 321 service verbs.
+Backend + frontend + acceptance unchanged from M32.3 close.
+Only planning docs change.
 
 ## NEXT TASK
 
-Start SESSION_209 with (a) starting-state verification;
-(b) confirm working from M32.0 planning memo + M32.2 handoff §7
-amendments (D3 + D8-revised + D11 + §5.e M32.3 + Amendments 1+2);
-(c) ship new `f_and_i_manager` persona (personas.ts +
-login.setup.ts + playwright.config.ts + seed command
-provisioning `Intake Iris` fixture); (d) ship M32.3 F&I intake
-UI (`fetchCreditApplications` wrapper + `DealerFandIIncoming.tsx`
-page + F&I nav link + ~20 Vitest tests); (e) new Playwright
-spec `journeys/f_and_i_manager/fandi_intake_receipt.spec.ts`
-using pre-seeded `Intake Iris` fixture; (f) verify M32.3 close
-baselines (frontend ~374 pass; acceptance 24 journeys / ~31
-tests; audit 128 → 129 covered); (g) DoD satisfied directly
-(no exception); (h) ship the M32.3 handoff + M32 close-out
-fold (CAPABILITY_MATRIX §7η, roadmap flip, retrospective);
-(i) **coordinated M32 close push after explicit user
-confirmation**.
+Start SESSION_210 with (a) starting-state verification;
+(b) if M32 pushed, monitor first M32 CI run + fix any
+regressions as §0.a M33.0 amendments; (c) regenerate the
+audit artifact and confirm 161/129/32/321 holds;
+(d) present the candidate list with recommendation +
+rationale under the primary operational-coverage lens (with
+depth-vs-breadth framing per M32 §9 standing question);
+(e) await user confirmation of §5.a; (f) draft §5.b–§5.h;
+(g) DoD compliance check on §3 draft; (h) expand the M33
+planning memo; (i) ship the M33.0 handoff.
 
 ---
 
@@ -305,86 +373,126 @@ confirmation**.
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+   (M1–M28 shipped in-tree; M29–M32 shipped surface in
+   CAPABILITY_MATRIX §7δ + §7ε + §7ζ + §7η per convention
+   adopted at M27+)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. **`docs/roadmap/MILESTONE_32_PLANNING.md`** §5.b D3 +
-   D8-revised + D11 + §5.e M32.3 (governing contract for M32.3)
-6. `docs/handoffs/SESSION_206_m32_inc0_planning.md` (M32.0)
-7. `docs/handoffs/SESSION_207_m32_inc1_backend.md` (M32.1)
-8. **`docs/handoffs/SESSION_208_m32_inc2_sales_ui.md`** §7
-   Amendment 2 (spec file placement for M32.3)
-9. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` (post-M32.2
-   baseline — 161 / 128 / 33 / 321)
-10. `docs/roadmap/MILESTONE_11_PLANNING.md` §7 M11.3
-11. Memory record `feedback_duplicate_small_stable_logic.md`
+5. **`docs/roadmap/MILESTONE_32_RETROSPECTIVE.md`** §5 (four
+   NEW durable-lesson candidates + one lesson elevation) +
+   §9 (M33 candidate list origin + depth-vs-breadth standing
+   question)
+6. `docs/roadmap/MILESTONE_32_PLANNING.md` (shipped; governing
+   contract for M32)
+7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` (post-M32
+   baseline — **161 endpoints / 129 covered / 32 backend-
+   only / 321 service verbs**)
+8. `docs/CAPABILITY_MATRIX.md` §7z (M25) + §7α (M26) + §7β
+   (M27) + §7γ (M28) + §7δ (M29) + §7ε (M30) + §7ζ (M31) +
+   **§7η (M32 shipped surface)**
+9. `docs/handoffs/SESSION_209_m32_inc3_fandi_ui.md` (M32.3
+   shipped + M32 close-out fold)
+10. Memory record `feedback_duplicate_small_stable_logic.md`
+    (M28.0 origin — exercised at M32.2 for
+    `WriteupConfirmDialogs.tsx` co-location)
+11. Memory record
+    `feedback_verify_fk_discoverability_before_lock.md` (M27.0
+    origin — verified through M32.0 for APPROVE / HAND-OFF
+    discoverability)
 12. Memory record
-    `feedback_playwright_as_operational_contract.md`
+    `feedback_playwright_as_operational_contract.md` (M32.2 +
+    M32.3 dual-persona journeys strengthen the operational
+    contract)
 
 Narrative docs are claims. Rules + research + code +
 regenerated artifact are facts.
 
 ---
 
-## Operational state (post-SESSION_208 — Milestone 32.2 SHIPPED)
+## Operational state (post-SESSION_209 — Milestone 32 SHIPPED)
 
 - **Backend (local):** Django on `:8001`. Migrations
-  `0001`–`0051`. Test baseline: **4,995 pass**, 1 skipped, 0
-  fail.
+  `0001`–`0051` (unchanged since M32.1). Test baseline:
+  **4,995 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
-- **Frontend (local):** Vite on `:5173`. **Vitest baseline:
-  354 pass** across 40 test files (was 319/36 at M32.1 close;
-  +35 tests / +4 files at M32.2).
+- **Frontend (local):** Vite on `:5173`. `tsc --noEmit` +
+  `vite build` clean. **Vitest baseline: 377 pass** across 42
+  test files.
 - **Frontend (prod):** NONE.
 - **Acceptance workspace (local):** Playwright 1.49 + TS 5.6
-  operational; **23 journeys** total (was 22 at M32.1 close;
-  +1 for M32.2 `sales_to_fandi_handoff.spec.ts`). Full-suite
-  run: 29 passed / 30.5s.
+  operational; **24 journeys** total. Full-suite fresh-DB run
+  at M32.3 close: **31 passed / 0 failed / 32.5s**.
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`. Latest run on
-  `origin/main` at `08fef5f` (M31.2 hash-backfill): 28 passed
-  / 0 failed / 2m57s.
+  `origin/main` at `08fef5f` (M31.2 hash-backfill commit):
+  28 passed / 0 failed / 2m57s. First real M32 CI run pending
+  on the M32 push.
 - **Async runtime:** Celery 5.5.3 + Redis 6.4.0 +
-  `django-celery-beat` 2.8.1 DatabaseScheduler.
-- **Milestones shipped:** M1 → M31. **M32 in progress —
-  M32.0 + M32.1 + M32.2 shipped;** M32.3 next.
-- **DRF admin surface:** 121 endpoints (unchanged from M32.1;
-  M32.3 ships no new backend endpoints).
-- **Frontend operator routes:** 20 (unchanged; M32.3 will add
+  `django-celery-beat` 2.8.1 DatabaseScheduler. 10 scheduled
+  task families registered.
+- **Milestones shipped:** M1 → **M32**. M33 target selection
+  pending (SESSION_210).
+- **DRF admin surface:** **121** endpoints (M31.1 118 → +3
+  at M32.1).
+- **Frontend operator routes:** **21** (M32.3 added
   `/dealer-ai-f-and-i/incoming`).
-- **Service surface:** 321 verbs (unchanged).
+- **Public endpoints:** +1 M6.5 showroom (unchanged).
+- **Service surface:** **321** verbs (M31.1 318 → +3 at M32.1).
 - **Frontend surfaces:** M32.2 added sales-manager Writeups
-  tab on `LeadDetailModal` via `LeadWriteupsPanel` +
-  `DealWriteupForm` + `WriteupConfirmDialogs`; M32.3 will add
-  new `DealerFandIIncoming.tsx` page.
+  tab on `LeadDetailModal` (via `LeadWriteupsPanel` +
+  `DealWriteupForm` + `WriteupConfirmDialogs`); M32.3 added
+  new `DealerFandIIncoming.tsx` page + F&I "Incoming" nav
+  entry.
 - **Tenancy carriers:** 52 (unchanged).
 - **Permission classes:** **7 actual** — zero-drift streak
-  **thirty-five consecutive milestones** (M10 → M32.2).
-  Projected 36 at M32.3 close.
+  **thirty-six consecutive milestones** (M10 → M32). All M32
+  endpoints reused existing classes verbatim.
+- **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages (unchanged).
-- **Milestone 32 status:** ACTIVE (M32.0 + M32.1 + M32.2
-  shipped; M32.3 next).
+- **Deterministic rules:** unchanged.
+- **Milestone 32 status:** SHIPPED (SESSION_209 close-out
+  landed all documentation + status flips + close-out
+  session-local commits, awaits explicit user push
+  confirmation for coordinated M32 push).
 - **Audit tooling status:** unchanged from M26.1. Coverage
-  **128 / 161** (M32.2 close; +4 vs M32.1 for writeup
-  create/approve/hand-off/list; +1 more expected at M32.3 for
-  CA list once F&I UI wrapper lands).
-- **§9 evidence for M33+:** unchanged from M32.0 + M32.1.
-- **Planning-time streak: 11** (unchanged; M32.2 is pure
-  implementation per plan with one §0.a amendment on
-  Playwright technical assertion).
-- **DoD amendment (M21.0 §5.f Option B):** M32.1 = seventh
-  invocation of exception path (M26 + M27.1 + M28.1 + M29.1 +
-  M30.1 + M31.1 + M32.1); M32.2 satisfies directly; M32.3
-  satisfies directly (pending).
-- **Two §0.a M32.2 amendments** (SESSION_208 handoff §7):
-  Amendment 1 — technical assertion switched to sales-role-
-  accessible writeup detail endpoint; Amendment 2 — M32.3
-  spec at a distinct file under new `f_and_i_manager`
-  project (file-per-persona; strengthens R11 independence
-  guarantee).
-- **First operator UI to reach M11.3 DealWriteup surface** —
-  9 sessions after M11.3 shipped; closes shipped-source
-  deferral promise called out in M32.0 §5.a Evidence #1.
-- **Durable lessons carried into M32.3+:** all (a)–(x) plus
-  M31-elevated (w) + (x). Candidate lessons at M32
-  retrospective: (y) Playwright-independent-fixture pattern
-  (M32.3); (z) verification-driven revision cycles (M32.0);
-  (aa) historical-migration-immutability discipline (M32.1).
+  **129 / 161** (M32.3 close; +5 vs M31.2 for writeup
+  create/approve/hand-off/list at M32.2 + CA list at M32.3).
+- **Playwright personas:** **6 actual** — platform_operator,
+  owner, sales_manager, recon_manager, bhph_collector,
+  **f_and_i_manager** (M32.3 addition — first since M20.4).
+- **§9 evidence for M33:** NEW C F&I chargeback substrate
+  (unchanged pilot-evidence gating but stronger post-M32
+  operator context); NEW F&I workflow state extensions;
+  NEW F&I-scoped lead-context view; NEW cross-lead pending-
+  approval queue; NEW O2 + NEW O3 (unchanged from M26+M27+
+  M28+M29+M30+M31+M32); H (test-hygiene — same 3 failing
+  journeys unchanged); plus gated T/U/L/M, deferred D,
+  deferred stable G, plus M32 §3 + M31 §3 + M30 §3 + M29 §3
+  + M28 §3 + M27 §3 + M25 §4 deferrals. **Standing question
+  at M33.0:** F&I depth-arc continuation (chargeback or
+  workflow states) vs breadth reset vs M32 §3 deferral
+  closure.
+- **Planning-time streak: 11** (at M32.3 close; unchanged
+  from M32.0 as-recommended; M32.1 + M32.2 + M32.3 all pure
+  implementation; historical run of 89 across M10 → M23
+  preserved).
+- **DoD amendment (M21.0 §5.f Option B):** every future
+  customer-facing milestone must add or update at least one
+  Playwright operational journey, or explicitly document in
+  §3 why no journey change is required. M26 first invocation;
+  M27.1 second; M28.1 third; M29.1 fourth; M30.1 fifth; M31.1
+  sixth; **M32.1 seventh** (backend-only substrate with no
+  operator-facing behavior change); M32.2 + M32.3 satisfied
+  DoD directly.
+- **M32 audit coverage at close:** 161 endpoints, **129
+  covered / 32 backend-only** (delta from M31.2: +3
+  endpoints, +5 covered, -2 backend-only). Two-source
+  agreement confirmed at M32.3 close.
+- **Durable lessons carried into M33+:** all (a)–(x) plus
+  M31-elevated (w) + (x). M32 **elevated (w) to load-bearing-
+  across-three-milestones** via M32.1 unknown-state rejection;
+  **surfaced four NEW candidate lessons**: (y) Playwright-
+  independent-fixture pattern (M32.3); (z) verification-driven
+  revision cycles (M32.0); (aa) historical-migration-
+  immutability discipline (M32.1); (bb) non-navigational
+  cross-role UI when role-gating conflicts (M32.3). Each
+  awaits first re-application to elevate.

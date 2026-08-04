@@ -19,6 +19,7 @@ import DealerAiSalesLeads from "@/pages/DealerAiSalesLeads";
 import DealerAiSalesTestDrives from "@/pages/DealerAiSalesTestDrives";
 import DealerFandICompliance from "@/pages/DealerFandICompliance";
 import DealerFandIDeals from "@/pages/DealerFandIDeals";
+import DealerFandIIncoming from "@/pages/DealerFandIIncoming";
 import DealershipHomePage from "@/pages/DealershipHomePage";
 import DealerOnboardingPage from "@/pages/DealerOnboardingPage";
 import DealerOverviewPage from "@/pages/DealerOverviewPage";
@@ -131,10 +132,19 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 element={<AdvisorWorkspacePage />}
               />
               {/* Milestone 10 · Increment 7 — F&I operator UI (two-
-                  tab MVP per §1.8.d Option A). */}
+                  tab MVP per §1.8.d Option A). Extended at Milestone
+                  32 · Increment 3 (SESSION_209) with the Incoming
+                  Applications intake queue per §5.b D8-revised —
+                  non-navigational rows with all triage info inline
+                  because admin_lead_detail is sales-role-gated
+                  (F&I would 403 on any row-link). */}
               <Route
                 path="dealer-ai-f-and-i"
                 element={<DealerFandIDeals />}
+              />
+              <Route
+                path="dealer-ai-f-and-i/incoming"
+                element={<DealerFandIIncoming />}
               />
               <Route
                 path="dealer-ai-f-and-i/:contract_id/compliance"

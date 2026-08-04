@@ -1,18 +1,22 @@
 // Milestone 10 · Increment 7 (SESSION_112) — F&I operator UI API client.
+// Extended at Milestone 32 · Increment 3 (SESSION_209) with the
+// M32.1 credit-application list wrapper for the F&I intake queue.
 //
-// Consumes the four M10.7 admin endpoints:
+// Consumes the M10.7 + M32.1 admin endpoints:
 //
-//   GET   /admin/f-and-i/deals/                     (deals-in-progress list)
-//   GET   /admin/deal-jackets/<contract_pk>/        (per-deal compliance audit)
-//   POST  /admin/compliance-records/                (create for contract)
-//   PATCH /admin/compliance-records/<pk>/           (partial-update columns)
+//   GET   /admin/f-and-i/deals/                     (M10.7 deals-in-progress list)
+//   GET   /admin/deal-jackets/<contract_pk>/        (M10.7 per-deal compliance audit)
+//   POST  /admin/compliance-records/                (M10.7 create for contract)
+//   PATCH /admin/compliance-records/<pk>/           (M10.7 partial-update columns)
+//   GET   /admin/credit-applications/list/          (M32.1 F&I intake queue)
 //
 // All money on the wire is a Decimal-as-string per the M9.5 + M10.1
 // convention; timestamps are ISO-8601 strings.
 //
 // Kept as its own module because it consumes the M10 F&I admin
 // surface and the F&I operator UI (DealerFandIDeals /
-// DealerFandICompliance) is a discrete substrate.
+// DealerFandICompliance / DealerFandIIncoming) is a discrete
+// substrate.
 
 import { authGetJSON, authPatchJSON, authPostJSON } from "@/lib/authFetch";
 
@@ -203,4 +207,106 @@ export async function updateCompliance(
     payload,
   );
   return response.compliance;
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 32 · Increment 3 — F&I intake queue
+// ---------------------------------------------------------------------------
+//
+// Consumes GET /admin/credit-applications/list/ per M32.0 §5.b D3.
+// Gated on IsFinanceManagerOrOwnerAtActiveDealership (first F&I-role-
+// gated list endpoint per M32.0 §5.b D10). Fail-explicit filter
+// validation on the backend — invalid `intake`, `lead_id`, or
+// `since` values return 400 with a clear message. `intake=false` is
+// reserved-and-rejected per §5.h.
+//
+// Projection includes writeup context via the M32.1 D9-revised²
+// nullable OneToOneField backpointer (`deal_writeup`). When the CA
+// was created via `hand_off_to_fandi`, writeup_context is populated
+// deterministically (no text-parsing of `notes`). When the CA was
+// created directly via M10.1, writeup_context is `null`.
+
+export interface CreditApplicationLead {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+}
+
+export interface CreditApplicationVehicle {
+  id: number;
+  stock_number: string;
+  year: number;
+  make: string;
+  model: string;
+}
+
+export interface CreditApplicationTerms {
+  vehicle_price: string | null;
+  trade_allowance: string | null;
+  down_payment: string | null;
+  monthly_payment_target: string | null;
+  term_months_target: number | null;
+  apr_target: string | null;
+}
+
+export interface CreditApplicationWriteupContext {
+  deal_writeup_id: number;
+  written_up_by_user_id: number | null;
+  sales_manager_approved_by_user_id: number | null;
+  handed_off_to_fandi_at: string | null;
+  lead: CreditApplicationLead;
+  vehicle: CreditApplicationVehicle;
+  terms: CreditApplicationTerms;
+}
+
+export interface CreditApplicationProjection {
+  id: number;
+  lead_id: number | null;
+  sale_id: number | null;
+  applicant_full_name: string;
+  applicant_ssn_last4: string;
+  source_format: string;
+  status: string;
+  captured_at: string;
+  retention_expires_at: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  writeup_context: CreditApplicationWriteupContext | null;
+}
+
+interface CreditApplicationListEnvelope {
+  credit_applications: CreditApplicationProjection[];
+}
+
+export interface CreditApplicationListFilters {
+  /**
+   * When true, filters to CAs where no downstream Contract exists
+   * (pre-contract F&I intake queue). Sent as `?intake=true`.
+   *
+   * The backend fails explicitly on any other value (`false`, `1`,
+   * `TRUE`, empty, etc. → 400). This wrapper only sends `true`
+   * when the caller passes `true`; anything else is omitted, which
+   * the backend treats as unfiltered.
+   */
+  intake?: boolean;
+  leadId?: number;
+  since?: string;
+}
+
+export async function fetchCreditApplications(
+  filters: CreditApplicationListFilters = {},
+): Promise<CreditApplicationProjection[]> {
+  const params = new URLSearchParams();
+  if (filters.intake === true) params.set("intake", "true");
+  if (filters.leadId !== undefined) {
+    params.set("lead_id", String(filters.leadId));
+  }
+  if (filters.since !== undefined) params.set("since", filters.since);
+  const qs = params.toString();
+  const response = await authGetJSON<CreditApplicationListEnvelope>(
+    `/admin/credit-applications/list/${qs ? `?${qs}` : ""}`,
+  );
+  return response.credit_applications;
 }

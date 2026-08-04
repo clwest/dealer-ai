@@ -1,8 +1,8 @@
-// Milestone 20 · Increment 1 (extended at M20.2) — persona registry
-// for the acceptance suite. Each persona corresponds to a role or set
-// of roles that a journey exercises. The `setup` project logs each
-// persona in via the real UI and saves storage state; journey
-// projects reuse it.
+// Milestone 20 · Increment 1 (extended at M20.2 / M20.3 / M20.4 /
+// M32.3) — persona registry for the acceptance suite. Each persona
+// corresponds to a role or set of roles that a journey exercises.
+// The `setup` project logs each persona in via the real UI and saves
+// storage state; journey projects reuse it.
 //
 // M20.1 shipped: platform_operator.
 // M20.2 adds:   owner, sales_manager.
@@ -16,13 +16,21 @@
 //               model-level ROLE_COLLECTIONS constant is defined
 //               but not wired to any endpoint. Persona name still
 //               reflects the operational role.
+// M32.3 adds:   f_and_i_manager — first F&I-role-gated journey
+//               persona. Consumes the M32.1 CA-list endpoint
+//               (F&I-role-gated per M32.0 §5.b D3) and the M32.3
+//               `/dealer-ai-f-and-i/incoming` intake page. Uses the
+//               real `f_and_i_manager` role at the migration-seeded
+//               default dealership; provisioned by
+//               `seed_journey_fandi_intake_receipt`.
 
 export type PersonaName =
   | "platform_operator"
   | "owner"
   | "sales_manager"
   | "recon_manager"
-  | "bhph_collector";
+  | "bhph_collector"
+  | "f_and_i_manager";
 
 export interface Persona {
   name: PersonaName;
@@ -63,6 +71,12 @@ export const PERSONAS: Record<PersonaName, Persona> = {
     name: "bhph_collector",
     username: "acceptance-bhph-collector",
     password: "acceptance-bhph-password",
+    postLoginPath: "/dealer-ai-overview",
+  },
+  f_and_i_manager: {
+    name: "f_and_i_manager",
+    username: "acceptance-f-and-i-manager",
+    password: "acceptance-fandi-password",
     postLoginPath: "/dealer-ai-overview",
   },
 };

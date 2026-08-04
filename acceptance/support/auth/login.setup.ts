@@ -39,6 +39,12 @@ const SEED_COMMANDS = [
   // manager) for auth; the M20 seed provisions Acceptance Advisor,
   // which the M24 journeys use as the assignment target.
   "seed_journey_sales_operational_entry",
+  // Milestone 32 · Increment 3 (SESSION_209) — F&I intake receipt
+  // journey. Provisions the f_and_i_manager persona + Intake Iris
+  // fixture (lead + vehicle + approved+handed-off writeup + paired
+  // CA) fully independent of any M32.2 sales-side fixture per M32
+  // §5.c R11 independence guarantee.
+  "seed_journey_fandi_intake_receipt",
 ] as const;
 
 function runManagementCommand(command: string): void {
@@ -113,4 +119,12 @@ setup("authenticate as recon_manager", async ({ page }) => {
 
 setup("authenticate as bhph_collector", async ({ page }) => {
   await loginPersona(page, PERSONAS.bhph_collector, AUTH_STORAGE.bhphCollector);
+});
+
+setup("authenticate as f_and_i_manager", async ({ page }) => {
+  await loginPersona(
+    page,
+    PERSONAS.f_and_i_manager,
+    AUTH_STORAGE.fAndIManager,
+  );
 });
