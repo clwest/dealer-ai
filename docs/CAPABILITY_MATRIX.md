@@ -3300,6 +3300,77 @@ balances).
 
 ---
 
+## 7γ. Recurring Journal Templates — via M27.1 shared GLAccount substrate (Milestone 28, in progress)
+
+Milestone 28 (opened SESSION_194 M28.0 planning; M28.1 substrate
+SESSION_195) delivers **direct operator coverage for accounting
+staff persisting a recurring journal-entry recipe once and
+instantiating it monthly** through the shipped application.
+M28 is the first M28+ consumer of the M27.1 shared `gl-accounts`
+infrastructure beyond the M27.2 JE-create dialog — validating
+the "compound value" framing recorded at M27.1 close.
+
+**Two architectural verifications performed at M28.0 open** (per
+user direction, before locking any §5 decisions):
+
+1. **Variable-amount forward-compat.** `JournalEntryTemplateLine`
+   uses `side` (CharField choices) + nullable `amount` — *deliberately
+   diverging* from `JournalEntryLine`'s dual `debit`/`credit` columns.
+   Verified against four future workflows (monthly rent fixed;
+   depreciation, utilities, payroll accruals variable). All four
+   accommodate with zero DB migration; M28 serializer requires
+   non-null, future variable-amount work relaxes serializer + adds
+   instantiation-prompt UI. Dual-column mirroring rejected because
+   it cannot express "side known, amount deferred" without adding a
+   side column — so `side` is added now, once, at template creation
+   time, avoiding a later migration. `amount IS NULL` posture is
+   intentional forward-compat, documented in the model docstring.
+
+2. **Model duplication analysis.** Four sharing options considered
+   (abstract base class; `is_template` flag fusing into `JournalEntry`;
+   small shared cross-tenant helper; dual-column amount mirroring).
+   Fusion rejected — templates are *recipes* (editable, amount
+   optionally deferred, no `posted_at`, no reversal semantics); JEs
+   are *postings* (immutable per M13.1, `posted_at` required,
+   reversal chain via `reverses` FK). Fusion destroys separation of
+   concerns and forces `WHERE is_template = FALSE` filters on every
+   trial-balance / JE-list / audit query. Normalization is correct;
+   sharing would be premature coupling.
+
+**Durable engineering-practices refinement adopted at M28.0** (from
+user pushback on initial helper-extraction proposal): *duplicate
+small stable domain logic; extract only on evidence*. The initial
+§5.b draft proposed extracting the cross-tenant guard as a shared
+helper `_validate_line_cross_tenant()`. User applied the
+evidence-first standard: two ~5-line `clean()` methods enforcing
+the same invariant against different parents, unlikely to diverge,
+each better owned locally. Duplication preserves local clarity;
+extraction is evidence-gated (divergence has happened; copies grew
+non-trivially; a third similarly-shaped consumer landed). Saved to
+memory as `feedback_duplicate_small_stable_logic.md`; documented
+in `MILESTONE_28_PLANNING.md` §0 engineering-practices and §5.b
+commentary.
+
+M28.1 is an infrastructure-only increment invoking the M21.0 §5.f
+Option B DoD exception path per M26 + M27.1 precedent (third
+invocation — pattern now established for infrastructure-only
+sub-increments) — the new endpoints' operational journey coverage
+arrives at M28.2 via the new `accounting_je_template.spec.ts`
+Playwright peer spec. Zero-drift permission-class posture
+preserved: `_M131_PERMS` reused for the new endpoint; no
+permission classes evolve.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M28.0 planning refinement + target selection | Full active memo at `MILESTONE_28_PLANNING.md` — all eight §5 locks resolved at SESSION_194 open under the primary operational-coverage lens (durable per M22 close). §5.a locked as A (recurring templates); §5.b locked as two-increment split (M28.1 backend substrate + wrappers, M28.2 templates section on existing JE list page + template dialog + Instantiate wiring — no standalone template route); §5.c locked to match existing accounting envelope; §5.d locked as new `accounting_je_template.spec.ts` (2 cases: create-template + instantiate-template) + 1-case extension to `accounting_je_create.spec.ts` (blank-path regression); §5.e locked as two-source agreement inherited from M26+M27; §5.f locked as 2 implementation increments + close-out fold; §5.g locked with M21.0 §5.f exception path invoked for M28.1 (third invocation) and satisfied directly at M28.2; §5.h locked as evidence-sized Option B fold. Two architectural verifications performed at open (variable-amount forward-compat + model duplication analysis) — both confirmed current design; small durable refinement adopted (evidence-first duplication over DRY-for-its-own-sake). Handoff at `docs/handoffs/SESSION_194_m28_inc0_planning.md`. | Planning-time as-recommended streak → 7. No code, no push. |
+| M28.1 backend substrate + frontend wrappers | Backend: two new models — `JournalEntryTemplate` (`dealership` FK CASCADE + `name` + `description` + `is_active` soft-hide reservation + `(dealership, name)` unique constraint) and `JournalEntryTemplateLine` (`template` FK CASCADE + `dealership` FK + `account` FK PROTECT + `side` CharField(choices=debit/credit) + **nullable `amount`** DecimalField reserved for future variable-amount templates + `memo` + `ordering`). `JournalEntryTemplateLine.clean` implements its own cross-tenant guard inline (~10 lines) — deliberately duplicated from `JournalEntryLine.clean` per M28.0 evidence-first standard. Shipped `JournalEntryLine` is NOT modified. New service module `services/accounting/template.py` — three verbs (`create_journal_entry_template` atomic + validating; `list_journal_entry_templates` active-only ordered-by-name; `get_journal_entry_template` fail-closed) + `TemplateLineInput` dataclass + four new domain errors (`EmptyJournalEntryTemplateError`, `InvalidJournalEntryTemplateLineError`, `UnbalancedJournalEntryTemplateError`, `DuplicateJournalEntryTemplateNameError`). Endpoint: new `admin_journal_entry_template_list_or_create` view at `views_accounting.py` using `@api_view(["GET", "POST"])` — reuses `_M131_PERMS` (zero-drift streak preserved 27 → 28 intended). Envelope: `{"journal_entry_templates": {"templates": [...]}}` for list, `{"journal_entry_template": {...}}` for create; both mirror the `gl_accounts` / `journal_entry` precedent. Route wired at `urls.py:1041` (`admin-journal-entry-template-list-or-create`). Migration `0050_m281_je_template.py` (auto-detected). Frontend: `fetchJournalEntryTemplates` + `createJournalEntryTemplate` wrappers + `JournalEntryTemplate` + `JournalEntryTemplateLine` + `JournalEntryTemplateLineSide` + `CreateJournalEntryTemplate*` types added to `accountingApi.ts:446+`. No UI change at M28.1; consumers arrive at M28.2. | Backend baseline **4,813 → 4,855 pass, 1 skipped, 0 fail** (+42 across three new test files: `test_m28_journal_entry_template_model.py` (10) + `_service.py` (17) + `_endpoint.py` (15)). Frontend Vitest **246 → 251 pass** across 34 → 35 files (+5 wrapper tests in `accountingApi.templates.test.ts` covering fetch envelope, create posts to correct URL, error propagation, and nullable-amount forward-compat guard). Acceptance **16 journeys unchanged** at M28.1 (DoD exception path per §5.g). Audit **155 → 156 endpoints / 121 covered / 34 → 35 backend-only / 312 → 315 service verbs** — new row 150 `admin/accounting/journal-entry-templates/` disposition `defer-candidate-O2` with both wrappers detected as `accountingApi.ts:447 fetchJournalEntryTemplates ⚠ wrapper-only, accountingApi.ts:455 createJournalEntryTemplate ⚠ wrapper-only` (M28.1 predicted state — flips to `covered` at M28.2 when the templates section + template dialog consume both wrappers). §5.e Phase 2 verification: endpoint view symbol matches, permissions match `_M131_PERMS`, HTTP methods match GET+POST; wrappers exist at reported lines; correct envelope shape. **§5.e discovery refinement:** memo predicted +2 rows for GET+POST on the same URL, but the audit tool treats a single URL as one row regardless of HTTP verb dispatch — actual delta is +1 row, not +2. Empirical-discovery-refinement recorded (no scope shift; correct behavior). |
+
+**M28 status:** M28.1 shipped local at SESSION_195; M28.2
+(UI + Playwright + close-out fold) opens next session.
+Coordinated push at M28 close per §5.h Option B.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

@@ -379,3 +379,81 @@ export function createJournalEntry(
     payload,
   ).then((body) => body.journal_entry);
 }
+
+// ---------------------------------------------------------------------------
+// Journal-entry templates (Milestone 28 · Increment 1, SESSION_195)
+// ---------------------------------------------------------------------------
+//
+// Consumes the new POST + GET /admin/accounting/journal-entry-templates/
+// endpoint. Templates are recipes for recurring postings — the M28.2
+// UI opens the existing NewJournalEntryDialog pre-populated when the
+// operator clicks Instantiate on a template row, then the actual JE
+// posts through the M13.1 create endpoint via ``createJournalEntry``.
+//
+// The nullable ``amount`` field on a template line is *intentional
+// forward-compat* for variable-amount templates (depreciation,
+// utilities, payroll accruals). At M28 the create serializer requires
+// non-null, so shipped payloads always populate amount; a future
+// variable-amount milestone relaxes that requirement + adds an
+// instantiation-prompt UI. See MILESTONE_28_PLANNING.md §5.b
+// commentary.
+
+export type JournalEntryTemplateLineSide = "debit" | "credit";
+
+export interface JournalEntryTemplateLine {
+  id: number;
+  account_id: number;
+  account_code: string;
+  side: JournalEntryTemplateLineSide;
+  /** null reserved for future variable-amount templates; M28 always
+   * returns a Decimal-as-string. */
+  amount: string | null;
+  memo: string;
+  ordering: number;
+}
+
+export interface JournalEntryTemplate {
+  id: number;
+  name: string;
+  description: string;
+  is_active: boolean;
+  line_count: number;
+  lines: JournalEntryTemplateLine[];
+}
+
+interface JournalEntryTemplateListResponse {
+  journal_entry_templates: { templates: JournalEntryTemplate[] };
+}
+
+interface JournalEntryTemplateResponse {
+  journal_entry_template: JournalEntryTemplate;
+}
+
+export interface CreateJournalEntryTemplateLine {
+  account_id: number;
+  side: JournalEntryTemplateLineSide;
+  /** M28 serializer requires non-null. */
+  amount: string;
+  memo?: string;
+}
+
+export interface CreateJournalEntryTemplatePayload {
+  name: string;
+  description: string;
+  lines: CreateJournalEntryTemplateLine[];
+}
+
+export function fetchJournalEntryTemplates(): Promise<JournalEntryTemplate[]> {
+  return authGetJSON<JournalEntryTemplateListResponse>(
+    "/admin/accounting/journal-entry-templates/",
+  ).then((body) => body.journal_entry_templates.templates);
+}
+
+export function createJournalEntryTemplate(
+  payload: CreateJournalEntryTemplatePayload,
+): Promise<JournalEntryTemplate> {
+  return authPostJSON<JournalEntryTemplateResponse>(
+    "/admin/accounting/journal-entry-templates/",
+    payload,
+  ).then((body) => body.journal_entry_template);
+}

@@ -38,6 +38,7 @@ from rest_framework.response import Response
 from .models import (
     GLAccount,
     JournalEntry,
+    JournalEntryTemplate,
     TrialBalanceSnapshot,
     TrialBalanceSnapshotRow,
 )
@@ -45,19 +46,27 @@ from .permissions import IsSalesManagerOrOwnerAtActiveDealership
 from .services.accounting import (
     CrossTenantGLAccountError,
     CrossTenantJournalEntryError,
+    DuplicateJournalEntryTemplateNameError,
     DuplicateTrialBalanceSnapshotError,
     EmptyJournalEntryError,
+    EmptyJournalEntryTemplateError,
     ImmutableJournalEntryError,
     InvalidJournalLineError,
+    InvalidJournalEntryTemplateLineError,
     JournalLineInput,
+    TemplateLineInput,
     TrialBalanceComputation,
     UnbalancedJournalEntryError,
+    UnbalancedJournalEntryTemplateError,
     compute_trial_balance,
+    create_journal_entry_template,
     detect_cost_posting_failures,
     freeze_trial_balance,
     get_journal_entry,
+    get_journal_entry_template,
     get_trial_balance_snapshot,
     list_journal_entries,
+    list_journal_entry_templates,
     list_trial_balance_snapshots,
     post_journal_entry,
     reverse_journal_entry,
@@ -702,4 +711,171 @@ def admin_gl_account_list(request):
             }
         },
         status=status.HTTP_200_OK,
+    )
+
+
+# --- Milestone 28 · Increment 1 (SESSION_195) — journal-entry templates ------
+#
+# Two verbs under one URL per MILESTONE_28_PLANNING.md §5.b M28.1:
+#
+# - POST /admin/accounting/journal-entry-templates/  — create a template.
+# - GET  /admin/accounting/journal-entry-templates/  — list active templates.
+#
+# Both reuse _M131_PERMS — zero-drift permission-class streak preserved
+# at 27 → 28 intended. Endpoint envelope follows the gl-accounts /
+# journal-entry precedents.
+#
+# Domain-error → HTTP mapping (asserted in
+# test_m28_journal_entry_template_endpoint.py):
+#
+# - EmptyJournalEntryTemplateError            → 400
+# - InvalidJournalEntryTemplateLineError      → 400
+# - UnbalancedJournalEntryTemplateError       → 400
+# - DuplicateJournalEntryTemplateNameError    → 409
+# - CrossTenantGLAccountError                 → 404 (fail-closed)
+
+
+class JournalEntryTemplateLineSerializer(serializers.Serializer):
+    account_id = serializers.IntegerField()
+    side = serializers.ChoiceField(choices=[("debit", "debit"), ("credit", "credit")])
+    # At M28 amount is required non-null; future variable-amount work
+    # will allow null. Kept as a DecimalField for consistent parsing +
+    # Decimal-as-string wire posture (matches JournalEntryLine).
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    memo = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class JournalEntryTemplateCreateRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=200)
+    description = serializers.CharField(max_length=500)
+    lines = JournalEntryTemplateLineSerializer(many=True)
+
+
+def _project_template_line(line) -> dict:
+    return {
+        "id": line.pk,
+        "account_id": line.account_id,
+        "account_code": line.account.code,
+        "side": line.side,
+        "amount": str(line.amount) if line.amount is not None else None,
+        "memo": line.memo,
+        "ordering": line.ordering,
+    }
+
+
+def _project_template(template: JournalEntryTemplate) -> dict:
+    lines = list(template.lines.select_related("account").all())
+    return {
+        "id": template.pk,
+        "dealership_id": template.dealership_id,
+        "name": template.name,
+        "description": template.description,
+        "is_active": template.is_active,
+        "line_count": len(lines),
+        "lines": [_project_template_line(line) for line in lines],
+        "created_at": template.created_at.isoformat(),
+        "updated_at": template.updated_at.isoformat(),
+    }
+
+
+def _resolve_template_lines(dealership, raw_lines):
+    """Map serialized template-line dicts → :class:`TemplateLineInput`.
+
+    Fails-closed on any missing / cross-tenant account by raising
+    :class:`CrossTenantGLAccountError` (endpoint maps to 404).
+    """
+    account_ids = [raw["account_id"] for raw in raw_lines]
+    accounts_by_id = {
+        acct.pk: acct
+        for acct in GLAccount.objects.filter(
+            dealership=dealership, pk__in=account_ids
+        )
+    }
+    resolved: list[TemplateLineInput] = []
+    for idx, raw in enumerate(raw_lines):
+        account = accounts_by_id.get(raw["account_id"])
+        if account is None:
+            raise CrossTenantGLAccountError(
+                f"GLAccount {raw['account_id']} not found in tenant."
+            )
+        resolved.append(
+            TemplateLineInput(
+                account=account,
+                side=raw["side"],
+                amount=raw["amount"],
+                memo=raw.get("memo", ""),
+                ordering=idx,
+            )
+        )
+    return resolved
+
+
+@api_view(["GET", "POST"])
+@permission_classes(_M131_PERMS)
+def admin_journal_entry_template_list_or_create(request):
+    """GET / POST /admin/accounting/journal-entry-templates/
+
+    GET returns the active templates for the current tenant, ordered
+    by name, with full line breakdown per response envelope. POST
+    creates a template + its lines atomically.
+    """
+    dealership = get_current_dealership(request)
+
+    if request.method == "GET":
+        templates = list_journal_entry_templates(dealership=dealership)
+        return Response(
+            {
+                "journal_entry_templates": {
+                    "templates": [
+                        _project_template(tmpl) for tmpl in templates
+                    ],
+                }
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    serializer = JournalEntryTemplateCreateRequestSerializer(
+        data=request.data
+    )
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    try:
+        lines = _resolve_template_lines(dealership, data["lines"])
+    except CrossTenantGLAccountError:
+        return Response(
+            {"detail": "GLAccount not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        template = create_journal_entry_template(
+            dealership=dealership,
+            name=data["name"],
+            description=data["description"],
+            lines=lines,
+        )
+    except (
+        EmptyJournalEntryTemplateError,
+        InvalidJournalEntryTemplateLineError,
+        UnbalancedJournalEntryTemplateError,
+    ) as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    except CrossTenantGLAccountError:
+        return Response(
+            {"detail": "GLAccount not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except DuplicateJournalEntryTemplateNameError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+
+    return Response(
+        {"journal_entry_template": _project_template(template)},
+        status=status.HTTP_201_CREATED,
     )

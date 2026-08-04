@@ -1038,6 +1038,19 @@ urlpatterns = [
         views_accounting.admin_gl_account_list,
         name="admin-gl-account-list",
     ),
+    # Milestone 28 · Increment 1 (SESSION_195) — journal-entry templates.
+    # Per MILESTONE_28_PLANNING.md §5.b M28.1. Two verbs (GET list +
+    # POST create) under one URL via @api_view(["GET", "POST"]).
+    # Reuses ``IsSalesManagerOrOwnerAtActiveDealership`` (zero-drift
+    # permission-class streak preserved at 27 → 28 intended). Templates
+    # are recipes for recurring journal entries — instantiation flows
+    # through the existing M13.1 POST admin/accounting/journal-entries/
+    # endpoint pre-populated by the M28.2 dialog.
+    path(
+        "admin/accounting/journal-entry-templates/",
+        views_accounting.admin_journal_entry_template_list_or_create,
+        name="admin-journal-entry-template-list-or-create",
+    ),
     # Milestone 18 · Increment 5 (SESSION_151) — TesterFeedback POST.
     # Per MILESTONE_18_PLANNING.md §7 M18.5 + §5.e Option A. Reuses
     # ``IsSalesManagerOrOwnerAtActiveDealership`` (zero-drift streak

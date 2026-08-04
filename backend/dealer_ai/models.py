@@ -7489,6 +7489,170 @@ class JournalEntryLine(models.Model):
             raise ValidationError(errors)
 
 
+class JournalEntryTemplate(models.Model):
+    """Milestone 28 · Increment 1 — a named recurring journal-entry recipe.
+
+    Per MILESTONE_28_PLANNING.md §5.b M28.1. A *recipe*, not a *posting*:
+    an operator persists a template once (e.g., "Monthly rent") and
+    instantiates it repeatedly. Instantiation opens the existing M27.2
+    ``NewJournalEntryDialog`` pre-populated with the template's
+    description and lines; posting still flows through the shipped
+    :func:`services.accounting.post_journal_entry` path (M13.1). No
+    posting semantics live on this model — no ``posted_at``, no
+    reversal chain, no immutability contract.
+
+    **Domain framing** (M28.0 §5.b architectural verification). Recipes
+    and postings are different domain concepts. Fusing this into
+    :class:`JournalEntry` via an ``is_template`` flag was rejected —
+    it would force ``WHERE is_template = FALSE`` filters on every
+    trial-balance / JE-list / audit query, and it would violate the
+    M13.1 immutability contract (templates need to be editable in
+    principle). Normalization is the correct choice; sharing would be
+    premature coupling.
+
+    **Cross-tenant guard.** Each Dealership owns its own templates;
+    the ``(dealership, name)`` unique constraint namespaces names
+    within a tenant. :class:`JournalEntryTemplateLine.clean` enforces
+    that any line's ``account`` belongs to the same tenant as the
+    parent template.
+
+    **Soft-hide reservation.** ``is_active`` exists at the DB layer
+    for future use (M28+ operator-facing deactivate UI is a §3
+    deferral). At M28 the ``list_journal_entry_templates`` service
+    filters ``is_active=True`` by default.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="journal_entry_templates",
+    )
+    name = models.CharField(max_length=200)
+    description = models.CharField(max_length=500)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["dealership", "name"],
+                name="uniq_je_template_name_per_dealership",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"JournalEntryTemplate #{self.pk} — {self.name}"
+
+
+class JournalEntryTemplateLine(models.Model):
+    """Milestone 28 · Increment 1 — one line on a JournalEntryTemplate.
+
+    Per MILESTONE_28_PLANNING.md §5.b M28.1. A recipe line: names one
+    :class:`GLAccount`, declares which ``side`` (debit or credit) the
+    posted amount lands on, and optionally carries a fixed ``amount``.
+
+    **Amount storage divergence from JournalEntryLine** (M28.0 §5.b
+    architectural verification). Where :class:`JournalEntryLine` uses
+    dual ``debit`` / ``credit`` columns (each non-negative, default 0
+    — one populated per line), this model uses ``side`` (CharField
+    choices) plus a *nullable* ``amount``. This divergence is
+    intentional and forward-compatible with variable-amount templates
+    (depreciation, utilities, payroll accruals, etc., whose amounts
+    change month to month). Dual-column encoding cannot express "side
+    known, amount deferred to instantiation" without adding a side
+    column — so adding ``side`` now, once, at template creation time,
+    avoids a future migration + backfill.
+
+    **``amount IS NULL`` posture is intentional forward-compat**, not
+    accidental permissiveness. At M28 the create serializer requires
+    ``amount`` to be non-null; a future variable-amount milestone
+    relaxes that constraint and adds an instantiation-prompt UI. No
+    schema migration required.
+
+    **Cross-tenant guard.** ``clean()`` implements its own cross-
+    tenant validator inline (~5 lines) — mirrors, but does not share,
+    the pattern from :class:`JournalEntryLine.clean`. Per M28.0 §5.b
+    evidence-first duplication decision: small, stable, domain-local
+    logic stays local to its owning model until evidence of
+    divergence or maintenance burden supports extraction.
+
+    **Deletion posture.** ``account`` uses ``PROTECT`` so a GLAccount
+    with attached template line history can't be deleted;
+    ``template`` uses ``CASCADE`` because deleting a template
+    naturally removes its lines.
+    """
+
+    template = models.ForeignKey(
+        "JournalEntryTemplate",
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="journal_entry_template_lines",
+    )
+    account = models.ForeignKey(
+        "GLAccount",
+        on_delete=models.PROTECT,
+        related_name="journal_entry_template_lines",
+    )
+    side = models.CharField(
+        max_length=6,
+        choices=[("debit", "debit"), ("credit", "credit")],
+    )
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    memo = models.CharField(max_length=255, blank=True, default="")
+    ordering = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["ordering", "id"]
+
+    def __str__(self) -> str:
+        amount_repr = str(self.amount) if self.amount is not None else "—"
+        return (
+            f"JournalEntryTemplateLine #{self.pk} — "
+            f"template #{self.template_id} "
+            f"{self.account.code if self.account_id else '?'} "
+            f"{self.side} {amount_repr}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.dealership_id is None:
+            return
+        errors: dict[str, str] = {}
+        if (
+            self.template_id is not None
+            and self.template.dealership_id != self.dealership_id
+        ):
+            errors["template"] = (
+                "JournalEntryTemplateLine.template must belong to the "
+                "same dealership as the JournalEntryTemplateLine."
+            )
+        if (
+            self.account_id is not None
+            and self.account.dealership_id != self.dealership_id
+        ):
+            errors["account"] = (
+                "JournalEntryTemplateLine.account must belong to the "
+                "same dealership as the JournalEntryTemplateLine. "
+                "Cross-tenant GLAccount reference (see "
+                "AUTHENTICATION_MODEL.md §1 layer 4)."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+
 class TrialBalanceSnapshot(models.Model):
     """Milestone 17 · Increment 1 — a durable, materialized trial-balance close.
 
