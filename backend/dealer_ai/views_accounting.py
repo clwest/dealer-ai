@@ -70,6 +70,7 @@ from .services.accounting import (
     list_journal_entry_templates,
     list_trial_balance_snapshots,
     post_journal_entry,
+    restore_journal_entry_template,
     reverse_journal_entry,
     update_journal_entry_template,
 )
@@ -824,14 +825,30 @@ def _resolve_template_lines(dealership, raw_lines):
 def admin_journal_entry_template_list_or_create(request):
     """GET / POST /admin/accounting/journal-entry-templates/
 
-    GET returns the active templates for the current tenant, ordered
-    by name, with full line breakdown per response envelope. POST
-    creates a template + its lines atomically.
+    GET returns the templates for the current tenant, ordered by name,
+    with full line breakdown per response envelope. Default posture is
+    active-only; ``?include_inactive=true`` (fail-closed — only the
+    literal string ``true``, case-insensitive, enables inactive rows)
+    additionally includes soft-hidden rows for the Restore /
+    "Show inactive" UI per MILESTONE_31_PLANNING.md §5.b D3. Any
+    other query value (``1``, ``yes``, empty, malformed, missing) is
+    treated as False so inactive templates never mix into the default
+    active list.
+
+    POST creates a template + its lines atomically.
     """
     dealership = get_current_dealership(request)
 
     if request.method == "GET":
-        templates = list_journal_entry_templates(dealership=dealership)
+        # Fail-closed parse: only literal ``true`` (case-insensitive)
+        # opts in per §5.b D3. Every other value resolves to False so
+        # a malformed or missing query never surfaces inactive rows.
+        include_inactive = (
+            request.GET.get("include_inactive", "").lower() == "true"
+        )
+        templates = list_journal_entry_templates(
+            dealership=dealership, include_inactive=include_inactive
+        )
         return Response(
             {
                 "journal_entry_templates": {
@@ -1009,6 +1026,65 @@ def admin_journal_entry_template_detail(request, pk: int):
             status=status.HTTP_404_NOT_FOUND,
         )
 
+    return Response(
+        {"journal_entry_template": _project_template(template)},
+        status=status.HTTP_200_OK,
+    )
+
+
+# Milestone 31 · Increment 1 (SESSION_204) — template restore endpoint.
+#
+# Per MILESTONE_31_PLANNING.md §5.b D1–D2. One new URL pattern at
+# ``admin/accounting/journal-entry-templates/<int:pk>/restore/``
+# supporting POST. Reactivates a soft-hidden template by setting
+# ``is_active = True``; idempotent (POST on already-active row
+# returns 200 without state change and without advancing
+# ``updated_at``).
+#
+# Reuses ``_M131_PERMS`` (zero-drift permission-class streak preserved
+# at 31 → 32 intended at M31.1). Restore is a *dedicated verb* per
+# M30.2 durable lesson (w) — activation lifecycle stays behind
+# Delete (Deactivate) and Restore (Reactivate); general PATCH cannot
+# mutate ``is_active`` (still asserted by
+# ``test_patch_silently_ignores_is_active_in_body``, re-asserted at
+# M31.1 in the new RestoreEndpointTests).
+#
+# Endpoint precedent: ``admin/vehicle-photos/<uuid:public_id>/restore/``
+# (M21 audit endpoint #68, covered). Same URL shape and HTTP verb.
+#
+# Domain-error → HTTP mapping (asserted in
+# test_m28_journal_entry_template_endpoint.py extensions at M31.1):
+#
+# - Template not found or cross-tenant → 404.
+# - Successful restore → 200 with the standard
+#   ``{"journal_entry_template": {...}}`` envelope.
+# - Idempotent already-active → 200 without state change.
+
+
+@api_view(["POST"])
+@permission_classes(_M131_PERMS)
+def admin_journal_entry_template_restore(request, pk: int):
+    """POST /admin/accounting/journal-entry-templates/<pk>/restore/
+
+    Reactivates a soft-hidden template by setting ``is_active =
+    True``. Idempotent — a POST on an already-active row returns
+    200 with the current row projection and does NOT advance
+    ``updated_at``. Cross-tenant or missing pk returns 404.
+
+    Preserves every non-lifecycle field verbatim (``name``,
+    ``description``, all lines including amounts and ordering,
+    ``created_at``). Advances ``updated_at`` only on the
+    state-change branch (per D2 preservation contract).
+    """
+    dealership = get_current_dealership(request)
+    template = restore_journal_entry_template(
+        pk=pk, dealership=dealership
+    )
+    if template is None:
+        return Response(
+            {"detail": "JournalEntryTemplate not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
     return Response(
         {"journal_entry_template": _project_template(template)},
         status=status.HTTP_200_OK,

@@ -72,6 +72,7 @@ from .template import (
     delete_journal_entry_template,
     get_journal_entry_template,
     list_journal_entry_templates,
+    restore_journal_entry_template,
     update_journal_entry_template,
 )
 from .trial_balance_close import (
@@ -149,6 +150,7 @@ __all__ = [
     "post_journal_entry",
     "post_sale_booking_journal",
     "post_vehicle_cost_journal",
+    "restore_journal_entry_template",
     "reverse_journal_entry",
     "seed_default_coa",
     "update_journal_entry_template",

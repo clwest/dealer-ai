@@ -1063,6 +1063,19 @@ urlpatterns = [
         views_accounting.admin_journal_entry_template_detail,
         name="admin-journal-entry-template-detail",
     ),
+    # Milestone 31 · Increment 1 (SESSION_204) — template restore
+    # endpoint. POST reactivates a soft-hidden template by setting
+    # is_active = True; idempotent on already-active rows. Per
+    # MILESTONE_31_PLANNING.md §5.b D1–D2. Reuses _M131_PERMS
+    # (zero-drift permission-class streak preserved at 31 → 32
+    # intended at M31.1). Endpoint-shape precedent:
+    # admin/vehicle-photos/<uuid:public_id>/restore/ (M21 audit
+    # endpoint #68).
+    path(
+        "admin/accounting/journal-entry-templates/<int:pk>/restore/",
+        views_accounting.admin_journal_entry_template_restore,
+        name="admin-journal-entry-template-restore",
+    ),
     # Milestone 18 · Increment 5 (SESSION_151) — TesterFeedback POST.
     # Per MILESTONE_18_PLANNING.md §7 M18.5 + §5.e Option A. Reuses
     # ``IsSalesManagerOrOwnerAtActiveDealership`` (zero-drift streak

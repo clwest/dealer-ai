@@ -1,10 +1,13 @@
 """Milestone 28 · Increment 1 (SESSION_195) — journal-entry template verbs.
 Milestone 29 · Increment 1 (SESSION_198) — variable-amount relaxation.
 Milestone 30 · Increment 1 (SESSION_201) — edit + soft-delete verbs.
+Milestone 31 · Increment 1 (SESSION_204) — restore verb (lifecycle
+closure).
 
-Five verbs per MILESTONE_28_PLANNING.md §5.b M28.1 +
-MILESTONE_30_PLANNING.md §5.b D1. Templates are *recipes*, not
-*postings* — the actual posting still flows through
+Six verbs per MILESTONE_28_PLANNING.md §5.b M28.1 +
+MILESTONE_30_PLANNING.md §5.b D1 + MILESTONE_31_PLANNING.md §5.b
+D1–D2. Templates are *recipes*, not *postings* — the actual
+posting still flows through
 :func:`services.accounting.post_journal_entry` (M13.1) when an operator
 instantiates a template. This module handles template CRUD.
 
@@ -12,17 +15,20 @@ instantiates a template. This module handles template CRUD.
   JournalEntryTemplate + its lines. Refuses duplicate names within
   a tenant, unbalanced populated-line sets, cross-tenant account
   references, and empty / malformed lines.
-- :func:`list_journal_entry_templates` — tenant-scoped active-only list.
+- :func:`list_journal_entry_templates` — tenant-scoped list. Accepts
+  ``include_inactive: bool = False`` (M30.1); the M31.1 list
+  endpoint parses ``?include_inactive=true`` (fail-closed) and
+  passes through.
 - :func:`get_journal_entry_template` — tenant-scoped read; accepts
   ``include_inactive: bool = False`` (M30.1 symmetry with the list
-  verb) so the future Restore-inactive path and internal
-  edit / delete callers can opt into fetching soft-hidden rows.
+  verb) so the Restore path and internal edit / delete callers
+  can opt into fetching soft-hidden rows.
 - :func:`update_journal_entry_template` — M30.1. Atomic edit of a
   template's name / description / lines. Full-replace of lines
   (small ordered set, typically 2–5; partial patch adds serializer
   surface without operator value per M30.0 §5.b D1). Preserves
-  ``is_active`` (activation is DELETE-only per D5). Same error
-  surface as create.
+  ``is_active`` (activation is DELETE / Restore-only per M30.2
+  durable lesson (w)). Same error surface as create.
 - :func:`delete_journal_entry_template` — M30.1. Soft-delete —
   sets ``is_active = False`` and returns the updated row.
   Idempotent (DELETE of an already-inactive template returns the
@@ -30,13 +36,25 @@ instantiates a template. This module handles template CRUD.
   Historical JournalEntry rows instantiated from this template
   are untouched by construction — no FK exists (M28.0 §5.b domain
   separation).
+- :func:`restore_journal_entry_template` — M31.1. Reactivate a
+  soft-hidden template by setting ``is_active = True``. Idempotent
+  (Restore of an already-active template returns the same row
+  without state change; ``updated_at`` does NOT advance). Returns
+  ``None`` for cross-tenant or missing pk (endpoint layer maps to
+  404). Preserves ``name``, ``description``, lines (fields +
+  amounts + ordering), and ``created_at`` verbatim; ``updated_at``
+  advances only on the state-change branch. Restore is a
+  *dedicated verb* — never a PATCH side-effect — per M30.2 durable
+  lesson (w) mutation-surface asymmetry. Layered enforcement: the
+  update serializer omits ``is_active``; the update service passes
+  explicit ``update_fields`` on save; endpoint tests re-assert both.
 
 Immutability posture (per M28.0 §5.b architectural verification): a
 JournalEntryTemplate is editable in principle — templates are recipes,
-not the ledger. M30.1 spends the reservation: edit + soft-delete
-operator surfaces land at the endpoint layer; the ``is_active`` flag
-is now backed by a DELETE verb (no ``is_active`` mutation via edit —
-that's a D5 design constraint).
+not the ledger. M30.1 spent the reservation on edit + soft-delete;
+M31.1 completes the reversible lifecycle by adding Restore. The
+``is_active`` flag is now backed by two dedicated verbs (Delete /
+Deactivate and Restore / Reactivate); PATCH cannot mutate it.
 
 **M29 variable-amount posture** (per MILESTONE_29_PLANNING.md §5.b D1).
 A template line's ``amount`` may be ``None`` — the side + GL account
@@ -429,5 +447,59 @@ def delete_journal_entry_template(
         return None
     if template.is_active:
         template.is_active = False
+        template.save(update_fields=["is_active", "updated_at"])
+    return template
+
+
+def restore_journal_entry_template(
+    *, pk: int, dealership: Dealership
+) -> Optional[JournalEntryTemplate]:
+    """Reactivate a soft-hidden JournalEntryTemplate by setting
+    ``is_active = True``.
+
+    Fetches with ``include_inactive=True`` so a soft-hidden row is
+    reachable. Returns ``None`` when the pk doesn't exist or
+    belongs to another tenant (endpoint layer maps to 404);
+    otherwise returns the (now-active) row (endpoint layer maps to
+    200).
+
+    **Idempotent.** Restore of an already-active row returns the
+    same row without a save — ``updated_at`` does NOT advance
+    (contract asserted by
+    :class:`RestoreJournalEntryTemplateTests.test_repeat_restore_does_not_advance_updated_at`).
+
+    **Preservation contract** (per MILESTONE_31_PLANNING.md §5.b
+    D2). Restore preserves everything except the lifecycle
+    timestamp:
+
+    - ``name`` — untouched.
+    - ``description`` — untouched.
+    - ``lines`` (all fields: account, side, amount, memo,
+      ordering) — untouched. Restore does not re-read or re-write
+      lines.
+    - ``created_at`` — untouched (Django auto-add-only field).
+    - ``updated_at`` — advances *only* on the state-change branch
+      (via ``update_fields=["is_active", "updated_at"]`` which
+      re-triggers the auto-now behavior). Unchanged on idempotent
+      repeat-Restore.
+    - Historical ``JournalEntry`` rows — untouched by
+      construction. No FK exists from :class:`JournalEntry` to
+      :class:`JournalEntryTemplate` (M28.0 §5.b domain separation;
+      verified again at M30.0 §4.7 and M31.0 §4.3). Restore has
+      zero effect on any historical JE, snapshot, trial-balance
+      report, or JE list / detail surface.
+
+    Restore is a *dedicated verb* — activation lifecycle stays
+    behind Delete (Deactivate) and Restore (Reactivate) verbs;
+    general PATCH cannot mutate ``is_active`` (M30.2 durable
+    lesson (w)).
+    """
+    template = get_journal_entry_template(
+        pk=pk, dealership=dealership, include_inactive=True
+    )
+    if template is None:
+        return None
+    if not template.is_active:
+        template.is_active = True
         template.save(update_fields=["is_active", "updated_at"])
     return template
