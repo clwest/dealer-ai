@@ -9,7 +9,7 @@ milestone_status: shipped
 milestone_name: "Variable-Amount Journal Templates (on M28.1 template substrate + M27.1 gl-accounts substrate)"
 increment: 2
 increment_status: shipped
-commit: TBD
+commit: c79ff85
 ---
 
 # SESSION_199 — Milestone 29 · Increment 2 (M29.2 — frontend + Playwright) + close-out fold
