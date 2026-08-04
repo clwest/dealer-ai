@@ -9,8 +9,8 @@ milestone_status: shipped
 milestone_name: "Journal-Entry Template Edit / Delete UI (on M28.1 template substrate + M29.2 additive-prop pattern)"
 increment: 2
 increment_status: shipped
-commit: TBD
-commit_notes: "M30.2 implementation + close-out commits stay local per M30 coordinated-push cadence; coordinated M30 push awaits explicit user confirmation."
+commit: f1c26df
+commit_notes: "M30 coordinated-push completed at SESSION_202 close (user authorized). Push range: 43b715b..f1c26df — 3 commits (SESSION_200 planning handoff 1956ed7, SESSION_201 M30.1 backend 6bb5b0f, SESSION_202 M30.2 + close-out f1c26df)."
 ---
 
 # SESSION_202 — Milestone 30 · Increment 2 (M30.2 — frontend + Playwright) + close-out fold
