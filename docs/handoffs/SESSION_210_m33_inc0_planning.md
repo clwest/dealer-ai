@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "F&I Intake Activation: Incoming Application to Active Deal Structure (derived DealStructure status + DealStructure read endpoint + F&I structuring UI + Playwright loop)"
 increment: 0
 increment_status: shipped
-commit: pending
-commit_notes: "M33.0 planning session — local commit at close per M28.0 / M29.0 / M30.0 / M31.0 / M32.0 planning-only cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated M33 close push deferred to explicit user confirmation after M33.2 close."
+commit: 7b8f6b6
+commit_notes: "M33.0 planning session — local commit landed as 7b8f6b6 at close per M28.0 / M29.0 / M30.0 / M31.0 / M32.0 planning-only cadence; hash backfilled via this subsequent commit; NOT pushed. Coordinated M33 close push deferred to explicit user confirmation after M33.2 close."
 ---
 
 # SESSION_210 — Milestone 33 · Increment 0 (M33.0 — planning refinement + target selection)
