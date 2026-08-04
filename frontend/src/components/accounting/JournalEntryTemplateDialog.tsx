@@ -1,15 +1,28 @@
 // Milestone 28 · Increment 2 (SESSION_196) — journal-entry template create dialog.
 // Milestone 29 · Increment 2 (SESSION_199) — "Variable amount" checkbox.
+// Milestone 30 · Increment 2 (SESSION_202) — additive-mode consolidation.
 //
 // Peer of the M27.2 NewJournalEntryDialog. Persists a *recipe* (name +
 // description + lines with side + amount or variable-marker) via the
-// M28.1 createJournalEntryTemplate wrapper. Templates are recipes, not
-// postings — no posted_at field, no reversal semantics.
+// M28.1 createJournalEntryTemplate wrapper OR the M30.1
+// updateJournalEntryTemplate wrapper (mode-dependent). Templates are
+// recipes, not postings — no posted_at field, no reversal semantics.
 //
 // Reuses the M27.2 GLAccountPicker verbatim + the same viewport-
 // constraint dialog pattern (max-h-[90vh] flex-col + scrollable inner
 // body + fixed footer) so a template with many lines stays operable
 // on 1280×720 screens.
+//
+// M30.2 — additive-mode pattern re-application of M29.2 durable lesson
+// (t). Optional ``mode?: "create" | "edit"`` (default ``"create"``)
+// with safe defaults preserves the M29.2 create-mode behavior byte-
+// identical. When ``mode === "edit"`` the caller supplies
+// ``initialTemplate`` + ``onEdited`` and uses the controlled-open
+// pair (``open`` + ``onOpenChange``) so a row-level trigger can
+// programmatically open the dialog. Blank-baseline callers pass none
+// of the M30.2 props and continue to see the baked-in
+// ``+ New template`` trigger. See MILESTONE_30_PLANNING.md §5.b D2 +
+// D4.
 //
 // Client-side validation blocks submit unless:
 //   1. Name is non-empty (trimmed).
@@ -26,7 +39,7 @@
 //      the M13.1 posting service will enforce full balance at
 //      instantiate time).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +54,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createJournalEntryTemplate,
+  updateJournalEntryTemplate,
   type CreateJournalEntryTemplatePayload,
   type GLAccount,
   type JournalEntryTemplate,
@@ -83,19 +97,84 @@ function parseMoney(raw: string): number {
 }
 
 
-export interface NewJournalEntryTemplateDialogProps {
-  accounts: GLAccount[];
-  onCreated: (template: JournalEntryTemplate) => void;
-  disabled?: boolean;
+/**
+ * M30.2 — convert a saved template's line projection back into the
+ * editable draft shape for edit-mode population. Mirrors the shape
+ * ``newTemplateLineDraft`` returns; the ``key`` gets a fresh UUID
+ * per line so React reconciles cleanly.
+ */
+function templateToDraftLines(
+  template: JournalEntryTemplate,
+): TemplateLineDraft[] {
+  return template.lines.map((line) => ({
+    key: crypto.randomUUID(),
+    account_id: line.account_id,
+    side: line.side,
+    amount: line.amount ?? "",
+    memo: line.memo,
+    is_variable: line.amount === null,
+  }));
 }
 
 
-export function NewJournalEntryTemplateDialog({
+export interface JournalEntryTemplateDialogProps {
+  accounts: GLAccount[];
+  disabled?: boolean;
+
+  /** M30.2 — mode selector. Default ``"create"`` preserves M29.2
+   *  behavior byte-identical (baked-in trigger + createJournalEntry
+   *  Template on submit). ``"edit"`` requires ``initialTemplate`` +
+   *  ``onEdited`` + controlled-open props. */
+  mode?: "create" | "edit";
+
+  /** M30.2 — populated on ``mode === "edit"``. Ignored in create
+   *  mode. */
+  initialTemplate?: JournalEntryTemplate;
+
+  /** Fired after a successful create. Existing M28.2 prop. */
+  onCreated?: (template: JournalEntryTemplate) => void;
+
+  /** M30.2 — fired after a successful edit. Required when
+   *  ``mode === "edit"``. */
+  onEdited?: (template: JournalEntryTemplate) => void;
+
+  /** M30.2 controlled-open pair. When both are supplied the baked-in
+   *  trigger button is NOT rendered and the parent controls the open
+   *  state (row-level trigger elsewhere). When absent (M29.2
+   *  default), the baked-in ``+ New template`` button renders and
+   *  controls its own open state. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+
+export function JournalEntryTemplateDialog({
   accounts,
-  onCreated,
   disabled = false,
-}: NewJournalEntryTemplateDialogProps) {
-  const [open, setOpen] = useState(false);
+  mode = "create",
+  initialTemplate,
+  onCreated,
+  onEdited,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: JournalEntryTemplateDialogProps) {
+  // Controlled-open pattern: when both open + onOpenChange props are
+  // supplied, parent controls state (baked-in trigger not rendered).
+  // Otherwise the dialog manages its own open state (M29.2 default).
+  const isControlled =
+    openProp !== undefined && onOpenChangeProp !== undefined;
+  const [openUncontrolled, setOpenUncontrolled] = useState(false);
+  const open = isControlled ? openProp : openUncontrolled;
+  const setOpen = (next: boolean) => {
+    if (isControlled) {
+      onOpenChangeProp?.(next);
+    } else {
+      setOpenUncontrolled(next);
+    }
+  };
+
+  const isEditMode = mode === "edit";
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [lines, setLines] = useState<TemplateLineDraft[]>(() => [
@@ -104,6 +183,18 @@ export function NewJournalEntryTemplateDialog({
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // M30.2 edit-mode population — on open transition or initialTemplate
+  // reference change, hydrate the form fields from the template. In
+  // create-mode this effect is a no-op (initialTemplate is undefined).
+  useEffect(() => {
+    if (!open || !isEditMode || !initialTemplate) return;
+    setName(initialTemplate.name);
+    setDescription(initialTemplate.description);
+    setLines(templateToDraftLines(initialTemplate));
+    setError(null);
+    setSubmitting(false);
+  }, [open, isEditMode, initialTemplate]);
 
   const trimmedName = name.trim();
   const trimmedDescription = description.trim();
@@ -203,15 +294,43 @@ export function NewJournalEntryTemplateDialog({
       })),
     };
     try {
-      const template = await createJournalEntryTemplate(payload);
-      setOpen(false);
-      reset();
-      onCreated(template);
+      if (isEditMode) {
+        if (!initialTemplate) {
+          throw new Error(
+            "JournalEntryTemplateDialog: edit mode requires initialTemplate.",
+          );
+        }
+        const template = await updateJournalEntryTemplate(
+          initialTemplate.id,
+          payload,
+        );
+        setOpen(false);
+        reset();
+        onEdited?.(template);
+      } else {
+        const template = await createJournalEntryTemplate(payload);
+        setOpen(false);
+        reset();
+        onCreated?.(template);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setSubmitting(false);
     }
   }
+
+  const dialogTitle = isEditMode ? "Edit template" : "New recurring template";
+  const dialogDescription = isEditMode
+    ? "Update the recipe. Debit-side and credit-side amounts must balance. Historical journal entries created from this template are not affected by edits."
+    : "Save a reusable journal-entry recipe. Debit-side and credit-side amounts must balance. You can instantiate this template into a new journal entry later.";
+  const submitLabel = submitting
+    ? isEditMode
+      ? "Saving…"
+      : "Saving…"
+    : isEditMode
+      ? "Save changes"
+      : "Save template";
+  const submitTestId = isEditMode ? "tmpl-edit-submit" : "tmpl-create-submit";
 
   return (
     <Dialog
@@ -221,23 +340,23 @@ export function NewJournalEntryTemplateDialog({
         if (!next) reset();
       }}
     >
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={disabled || accounts.length < 2}
-        onClick={() => setOpen(true)}
-        data-testid="tmpl-create-trigger"
-      >
-        + New template
-      </Button>
+      {!isControlled && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled || accounts.length < 2}
+          onClick={() => setOpen(true)}
+          data-testid="tmpl-create-trigger"
+        >
+          + New template
+        </Button>
+      )}
       <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col">
         <DialogHeader>
-          <DialogTitle>New recurring template</DialogTitle>
-          <DialogDescription>
-            Save a reusable journal-entry recipe. Debit-side and
-            credit-side amounts must balance. You can instantiate this
-            template into a new journal entry later.
-          </DialogDescription>
+          <DialogTitle data-testid="tmpl-dialog-title">
+            {dialogTitle}
+          </DialogTitle>
+          <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
@@ -330,9 +449,9 @@ export function NewJournalEntryTemplateDialog({
           <Button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            data-testid="tmpl-create-submit"
+            data-testid={submitTestId}
           >
-            {submitting ? "Saving…" : "Save template"}
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

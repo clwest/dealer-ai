@@ -1,9 +1,10 @@
 ---
 title: "Milestone 30 — Journal-Entry Template Edit / Delete UI (on M28.1 template substrate + M29.2 additive-prop pattern)"
-status: active
+status: shipped
 type: planning-memo
 generated: 2026-08-04
 generated_at_session: SESSION_200 (skeleton + expansion + all §5 locks)
+shipped_at_session: SESSION_202 (M30.2 frontend + Playwright + close-out)
 milestone: 30
 milestone_name: "Journal-Entry Template Edit / Delete UI (on M28.1 template substrate + M29.2 additive-prop pattern)"
 sources:

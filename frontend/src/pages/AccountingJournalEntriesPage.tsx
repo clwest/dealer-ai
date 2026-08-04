@@ -19,7 +19,7 @@ import {
   NewJournalEntryDialog,
   type NewJournalEntryInitialValues,
 } from "@/components/accounting/NewJournalEntryDialog";
-import { NewJournalEntryTemplateDialog } from "@/components/accounting/NewJournalEntryTemplateDialog";
+import { JournalEntryTemplateDialog } from "@/components/accounting/JournalEntryTemplateDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  deleteJournalEntryTemplate,
   fetchGLAccounts,
   fetchJournalEntries,
   fetchJournalEntryTemplates,
@@ -136,6 +145,16 @@ export default function AccountingJournalEntriesPage() {
   const [instantiateLocks, setInstantiateLocks] = useState<
     readonly boolean[] | undefined
   >(undefined);
+
+  // Milestone 30 · Increment 2 — edit + delete UI state.
+  const [editingTemplate, setEditingTemplate] =
+    useState<JournalEntryTemplate | null>(null);
+  const [lastEditedTemplate, setLastEditedTemplate] =
+    useState<JournalEntryTemplate | null>(null);
+  const [deletingTemplate, setDeletingTemplate] =
+    useState<JournalEntryTemplate | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const refetchList = useCallback(() => {
     setReloadTick((tick) => tick + 1);
@@ -254,6 +273,50 @@ export default function AccountingJournalEntriesPage() {
     setInstantiateLocks(templateToLockedLines(template));
     setInstantiateOpen(true);
   }, []);
+
+  const handleEditClick = useCallback((template: JournalEntryTemplate) => {
+    setEditingTemplate(template);
+    setLastEditedTemplate(null);
+  }, []);
+
+  const handleEditDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) setEditingTemplate(null);
+  }, []);
+
+  const handleEdited = useCallback((template: JournalEntryTemplate) => {
+    setLastEditedTemplate(template);
+    setEditingTemplate(null);
+    setTemplatesReloadTick((tick) => tick + 1);
+  }, []);
+
+  const handleDeleteClick = useCallback((template: JournalEntryTemplate) => {
+    setDeletingTemplate(template);
+    setDeleteError(null);
+    setDeleteSubmitting(false);
+  }, []);
+
+  const handleDeleteCancel = useCallback(() => {
+    if (deleteSubmitting) return;
+    setDeletingTemplate(null);
+    setDeleteError(null);
+  }, [deleteSubmitting]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deletingTemplate) return;
+    setDeleteSubmitting(true);
+    setDeleteError(null);
+    try {
+      await deleteJournalEntryTemplate(deletingTemplate.id);
+      setDeletingTemplate(null);
+      setTemplatesReloadTick((tick) => tick + 1);
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to deactivate template.",
+      );
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  }, [deletingTemplate]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -404,7 +467,7 @@ export default function AccountingJournalEntriesPage() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <NewJournalEntryTemplateDialog
+            <JournalEntryTemplateDialog
               accounts={accounts}
               onCreated={handleTemplateCreated}
               disabled={accounts.length < 2}
@@ -436,6 +499,15 @@ export default function AccountingJournalEntriesPage() {
                 Template &ldquo;{lastCreatedTemplate.name}&rdquo; saved
               </div>
             )}
+            {lastEditedTemplate && (
+              <div
+                role="status"
+                className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+                data-testid="tmpl-edit-success-badge"
+              >
+                Template &ldquo;{lastEditedTemplate.name}&rdquo; updated
+              </div>
+            )}
             {templates.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No templates yet. Save your first template using the
@@ -458,6 +530,8 @@ export default function AccountingJournalEntriesPage() {
                       template={template}
                       disabled={accounts.length < 2}
                       onInstantiate={() => handleInstantiate(template)}
+                      onEdit={() => handleEditClick(template)}
+                      onDelete={() => handleDeleteClick(template)}
                     />
                   ))}
                 </tbody>
@@ -466,6 +540,27 @@ export default function AccountingJournalEntriesPage() {
           </CardContent>
         )}
       </Card>
+
+      {editingTemplate && (
+        <JournalEntryTemplateDialog
+          accounts={accounts}
+          mode="edit"
+          initialTemplate={editingTemplate}
+          open={editingTemplate !== null}
+          onOpenChange={handleEditDialogOpenChange}
+          onEdited={handleEdited}
+        />
+      )}
+
+      {deletingTemplate && (
+        <TemplateDeleteConfirmDialog
+          templateName={deletingTemplate.name}
+          submitting={deleteSubmitting}
+          error={deleteError}
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
+        />
+      )}
     </div>
   );
 }
@@ -475,10 +570,14 @@ function TemplateRow({
   template,
   disabled,
   onInstantiate,
+  onEdit,
+  onDelete,
 }: {
   template: JournalEntryTemplate;
   disabled: boolean;
   onInstantiate: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <tr
@@ -493,17 +592,115 @@ function TemplateRow({
         {template.line_count}
       </td>
       <td className="py-2 text-right">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={onInstantiate}
-          data-testid={`template-instantiate-${template.id}`}
-        >
-          Instantiate
-        </Button>
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={onInstantiate}
+            data-testid={`template-instantiate-${template.id}`}
+          >
+            Instantiate
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={onEdit}
+            data-testid={`tmpl-edit-trigger-${template.id}`}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDelete}
+            data-testid={`tmpl-delete-trigger-${template.id}`}
+          >
+            Delete
+          </Button>
+        </div>
       </td>
     </tr>
+  );
+}
+
+
+// Milestone 30 · Increment 2 — inline delete confirmation dialog.
+//
+// Per MILESTONE_30_PLANNING.md §5.b D3. Mandated copy: "Deactivate"
+// (not "Delete forever") + "Historical journal entries created from
+// this template are not affected" reassurance + "You can restore
+// this template later" (Restore UX ships in a future milestone).
+// The row-level trigger uses "Delete" for operator vocabulary
+// convention; the confirmation reframes to "Deactivate" for truth.
+
+function TemplateDeleteConfirmDialog({
+  templateName,
+  submitting,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  templateName: string;
+  submitting: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
+    >
+      <DialogContent className="max-w-md" data-testid="tmpl-delete-confirm-dialog">
+        <DialogHeader>
+          <DialogTitle data-testid="tmpl-delete-confirm-title">
+            Deactivate template?
+          </DialogTitle>
+          <DialogDescription
+            className="pt-2 leading-relaxed"
+            data-testid="tmpl-delete-confirm-body"
+          >
+            Are you sure you want to deactivate &ldquo;{templateName}
+            &rdquo;? Historical journal entries created from this
+            template are not affected — they remain unchanged in the
+            Journal Entries list and in trial balance reports. You can
+            restore this template later. (Restore UX ships in a future
+            milestone.)
+          </DialogDescription>
+        </DialogHeader>
+        {error && (
+          <p
+            className="text-sm text-destructive"
+            role="alert"
+            data-testid="tmpl-delete-error"
+          >
+            {error}
+          </p>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            disabled={submitting}
+            data-testid="tmpl-delete-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={submitting}
+            data-testid="tmpl-delete-confirm"
+          >
+            {submitting ? "Deactivating…" : "Deactivate"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -1,26 +1,47 @@
 // Milestone 28 · Increment 1 (SESSION_195) — templates wrapper tests.
+// Milestone 30 · Increment 2 (SESSION_202) — extended for update +
+// delete wrappers on top of the M30.1 detail endpoint.
 //
-// Guards fetchJournalEntryTemplates + createJournalEntryTemplate:
-// envelope projection, URL, HTTP verb, and payload shape. Mocks
-// authFetch so no real network is touched.
+// Guards fetchJournalEntryTemplates + createJournalEntryTemplate +
+// updateJournalEntryTemplate + deleteJournalEntryTemplate: envelope
+// projection, URL, HTTP verb, payload shape, and DELETE 404-as-
+// success semantics. Mocks authFetch so no real network is touched.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/authFetch", () => ({
-  authGetJSON: vi.fn(),
-  authPostJSON: vi.fn(),
-}));
+vi.mock("@/lib/authFetch", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/authFetch")>(
+    "@/lib/authFetch",
+  );
+  return {
+    ...actual,
+    authGetJSON: vi.fn(),
+    authPostJSON: vi.fn(),
+    authPatchJSON: vi.fn(),
+    authDelete: vi.fn(),
+  };
+});
 
-import { authGetJSON, authPostJSON } from "@/lib/authFetch";
+import {
+  ApiError,
+  authDelete,
+  authGetJSON,
+  authPatchJSON,
+  authPostJSON,
+} from "@/lib/authFetch";
 import {
   createJournalEntryTemplate,
+  deleteJournalEntryTemplate,
   fetchJournalEntryTemplates,
+  updateJournalEntryTemplate,
   type CreateJournalEntryTemplatePayload,
   type JournalEntryTemplate,
 } from "@/lib/accountingApi";
 
 const authGetJSONMock = vi.mocked(authGetJSON);
 const authPostJSONMock = vi.mocked(authPostJSON);
+const authPatchJSONMock = vi.mocked(authPatchJSON);
+const authDeleteMock = vi.mocked(authDelete);
 
 function fixtureTemplate(overrides: Partial<JournalEntryTemplate> = {}): JournalEntryTemplate {
   return {
@@ -247,5 +268,82 @@ describe("createJournalEntryTemplate", () => {
     const result = await fetchJournalEntryTemplates();
     expect(result[0]!.lines[0]!.amount).toBe("25.00");
     expect(result[0]!.lines[1]!.amount).toBeNull();
+  });
+});
+
+
+// ======================================================================
+// Milestone 30 · Increment 2 (SESSION_202) — update + delete wrappers
+// ======================================================================
+
+describe("updateJournalEntryTemplate", () => {
+  beforeEach(() => {
+    authPatchJSONMock.mockReset();
+  });
+
+  it("PATCHes the detail endpoint with the payload and projects the response", async () => {
+    const template = fixtureTemplate({ id: 42, name: "Monthly rent (edited)" });
+    authPatchJSONMock.mockResolvedValue({
+      journal_entry_template: template,
+    });
+    const payload: CreateJournalEntryTemplatePayload = {
+      name: "Monthly rent (edited)",
+      description: "Edited",
+      lines: [
+        { account_id: 42, side: "debit", amount: "4000.00" },
+        { account_id: 17, side: "credit", amount: "4000.00" },
+      ],
+    };
+    const result = await updateJournalEntryTemplate(42, payload);
+    expect(authPatchJSONMock).toHaveBeenCalledTimes(1);
+    expect(authPatchJSONMock).toHaveBeenCalledWith(
+      "/admin/accounting/journal-entry-templates/42/",
+      payload,
+    );
+    expect(result).toEqual(template);
+  });
+
+  it("propagates rejections (409 duplicate name) to the caller", async () => {
+    authPatchJSONMock.mockRejectedValue(
+      new ApiError(409, "Duplicate name"),
+    );
+    await expect(
+      updateJournalEntryTemplate(42, {
+        name: "Collides",
+        description: "—",
+        lines: [
+          { account_id: 1, side: "debit", amount: "1.00" },
+          { account_id: 2, side: "credit", amount: "1.00" },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+
+describe("deleteJournalEntryTemplate", () => {
+  beforeEach(() => {
+    authDeleteMock.mockReset();
+  });
+
+  it("DELETEs the correct detail URL", async () => {
+    authDeleteMock.mockResolvedValue(undefined);
+    await deleteJournalEntryTemplate(42);
+    expect(authDeleteMock).toHaveBeenCalledTimes(1);
+    expect(authDeleteMock).toHaveBeenCalledWith(
+      "/admin/accounting/journal-entry-templates/42/",
+    );
+  });
+
+  it("treats 404 as success (race-safe — template already gone)", async () => {
+    authDeleteMock.mockRejectedValue(new ApiError(404, "Not found"));
+    await expect(deleteJournalEntryTemplate(42)).resolves.toBeUndefined();
+  });
+
+  it("propagates non-404 errors (e.g., 500) to the caller", async () => {
+    authDeleteMock.mockRejectedValue(new ApiError(500, "Server error"));
+    await expect(deleteJournalEntryTemplate(42)).rejects.toBeInstanceOf(
+      ApiError,
+    );
   });
 });

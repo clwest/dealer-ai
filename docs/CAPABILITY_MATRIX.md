@@ -3433,7 +3433,7 @@ API surface change).
 
 **M29 status:** M29 SHIPPED at SESSION_199 (M29.2 close +
 close-out fold — no separate M29.3). Coordinated M29 push
-awaits explicit user confirmation.
+completed at SESSION_200 (§0.a hotfix included).
 
 **What is NOT shipped in Milestone 29** (deferred per
 `MILESTONE_29_PLANNING.md` §3):
@@ -3456,6 +3456,89 @@ awaits explicit user confirmation.
 - **`?include_inactive=true`** endpoint exposure (unchanged).
 - **Standalone template detail page** (unchanged).
 - All prior M28 §3 + M27 §3 + M25 §4 deferrals — unchanged.
+
+---
+
+## 7ε. Journal-Entry Template Edit / Delete UI — closing the CRUD surface on the M28+M29 template lineage (Milestone 30, shipped)
+
+Milestone 30 (opened SESSION_200 M30.0 planning + §0.a M29 CI
+regression correction; M30.1 backend substrate SESSION_201;
+M30.2 UI + Playwright + close-out SESSION_202) delivers
+**template edit + soft-delete UI** — the fourth link in the
+substrate-compound-value lineage (M27.1 gl-accounts → M28.1
+template substrate → M29 variable-amount extension → M30 CRUD
+closure). Accounting staff can now correct a stale template
+(rename, fix a wrong GL account or amount, add/remove lines)
+or deactivate one that no longer belongs, all through the
+shipped application — without the Django-shell access that
+was required through M29. **Zero DB migration** — soft-delete
+uses M28.1's `is_active` field; edit uses M28.1's model shape
+verbatim.
+
+**Two architectural verifications performed at M30.0 open**
+(per user direction, before locking §5.b): (1) **Dialog
+consolidation → additive-mode pattern** chosen over parallel
+`EditJournalEntryTemplateDialog` (direct re-application of
+M29.2 durable lesson (t); the 200+ lines of shared validation
++ `TemplateLineRow` + `TemplateBalanceIndicator` in
+`NewJournalEntryTemplateDialog` would be pure duplication if
+forked). (2) **Soft-delete integrity → clean by construction**
+— grep across `backend/dealer_ai/**/*.py` confirmed no FK from
+`JournalEntry` to `JournalEntryTemplate` (M28.0 §5.b domain
+separation), so template edits + deletes cannot cascade to any
+historical journal entry. Delete UI copy mandated to say
+"Deactivate" (not "Delete forever") + "Historical journal
+entries created from this template are not affected" +
+"You can restore this template later" per §5.b D3.
+
+**§0.a M30.0 amendment shipped mid-planning:** first M29 CI
+acceptance run (workflow 30919344101 on `e01cfde`) turned red
+because M29.2's `LockedAmountChip` UI change broke a pre-
+existing M28.2 `getByLabel("Line 1 debit")` assertion in
+`accounting_je_template.spec.ts:295`. Fix committed + pushed
+as `43b715b` under "restore red main" push-cadence exception.
+Second CI run: 26 passed / 0 failed / 2m43s. New durable
+lesson (v) recorded in `MILESTONE_29_RETROSPECTIVE.md` §5:
+sweep the full acceptance suite when a UI element's semantic
+shape changes — vitest + tsc cannot catch stale Playwright
+selectors.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M30.0 planning + §0.a M29 CI regression correction | Full active memo at `MILESTONE_30_PLANNING.md` — all §5 locks + §0.a subsection. §5.a locked as NEW Template edit / delete UI under the primary operational-coverage lens + substrate-compound-value continuation framing (fourth link). §5.b D1 = new `admin/accounting/journal-entry-templates/<pk>/` detail endpoint (PATCH + DELETE), full-replace line semantics, DELETE idempotent + soft, PATCH silently drops `is_active` from body (D5); D2 = additive-mode pattern (rename + `mode?: "create" | "edit"` + `initialTemplate` + `onEdited` + controlled-open pair); D3 = row Delete button + inline `Dialog` confirmation with mandated "Deactivate template?" copy + "historical entries not affected" reassurance; D4 = row Edit button + controlled-open dialog wiring; D5 = soft-delete integrity by construction (no FK); D6 = 22 backend tests (later 33 actual); D7 = 18 frontend tests (later 18 actual); D8 = single new `test.describe("edit-delete", ...)` block; §5.f = DoD exception path at M30.1 (fifth precedent) + direct satisfaction at M30.2. **§0.a amendment:** test-assertion update at `accounting_je_template.spec.ts:291–306` from `getByLabel("Line 1 debit").toHaveValue(...)` to `getByTestId("je-line-<i>-<side>-chip").toContainText(...)` matching the M29.2 chip UI. Handoff at `docs/handoffs/SESSION_200_m30_inc0_planning.md`. | Planning-time as-recommended streak → 9. §0.a pushed under exception to restore red `main`. |
+| M30.1 backend substrate | Backend: `services/accounting/template.py` gains `update_journal_entry_template(*, pk, dealership, name, description, lines)` (atomic; full-replace of lines; preserves `is_active`; same error surface as create) + `delete_journal_entry_template(*, pk, dealership)` (soft-delete via `is_active = False`; idempotent — already-inactive returns row without state change so `updated_at` doesn't advance) + extends `get_journal_entry_template` with `include_inactive: bool = False` kwarg (mirrors `list_journal_entry_templates` pattern; internal edit + delete + future Restore callers opt in). `views_accounting.py` gains `JournalEntryTemplateUpdateRequestSerializer` (mirrors create; `is_active` intentionally omitted so PATCH silently drops it per D5) + `admin_journal_entry_template_detail(request, pk)` view for PATCH + DELETE reusing `_M131_PERMS`. `urls.py` adds `admin/accounting/journal-entry-templates/<int:pk>/` URL. **Zero migration** — soft-delete reuses M28.1's `is_active` field. Frontend + acceptance untouched. | Backend baseline **4,871 → 4,904** (+33 net = 17 new `test_m30_journal_entry_template_edit_delete_service.py` + 15 endpoint extensions on `test_m28_journal_entry_template_endpoint.py` + 1 model guardrail on `test_m28_journal_entry_template_model.py`). `manage.py check` clean. `makemigrations --check` clean. Audit **156 → 157 endpoints (+1), 122 covered unchanged, 34 → 35 backend-only (+1), 315 → 317 service verbs (+2)**. DoD exception path invoked as **fifth precedent** (M26 + M27.1 + M28.1 + M29.1 + M30.1). Zero-drift permission-class streak preserved at **29 → 30** (new endpoint reused `_M131_PERMS` verbatim). |
+| M30.2 UI + Playwright + close-out fold | Frontend: `NewJournalEntryTemplateDialog.tsx` renamed to `JournalEntryTemplateDialog.tsx` via `git mv` + import sweep in same commit (per `DOC_GOVERNANCE.md` §5); `Props` renamed; component gains additive `mode?: "create" \| "edit"` (default `"create"`, preserves M29.2 behavior byte-identical), `initialTemplate?`, `onEdited?`, controlled-open `open?` + `onOpenChange?` pair (baked-in `+ New template` trigger only renders when uncontrolled). Edit-mode `useEffect` populates form fields from `initialTemplate` on open transition via new `templateToDraftLines` helper. `handleSubmit` branches on mode: create → `createJournalEntryTemplate`, edit → `updateJournalEntryTemplate(initialTemplate.id, payload)`. Dialog title reads "Edit template" (edit) vs "New recurring template" (create); submit label reads "Save changes" (edit) vs "Save template" (create); new test-ids `tmpl-dialog-title`, `tmpl-edit-submit`. `AccountingJournalEntriesPage.tsx` gets row-level Edit + Delete buttons (`tmpl-edit-trigger-<pk>`, `tmpl-delete-trigger-<pk>`), a conditional edit-mode dialog mount, an inline delete confirmation `TemplateDeleteConfirmDialog` (built on the existing `Dialog` primitive — no shadcn `AlertDialog` dependency added) with mandated D3 copy ("Deactivate template?" title + "Historical journal entries created from this template are not affected" + "You can restore this template later" + Cancel/Deactivate buttons, destructive variant on Deactivate), plus `handleEditClick`, `handleEdited`, `handleDeleteClick`, `handleDeleteConfirm` handlers with success badge (`tmpl-edit-success-badge`). `accountingApi.ts` gains `updateJournalEntryTemplate(pk, payload)` (wraps `authPatchJSON`) + `deleteJournalEntryTemplate(pk)` (wraps `authDelete`; catches `ApiError.status === 404` and returns void — race-safe). Playwright: single new `test.describe("edit-delete", ...)` block extension of `accounting_je_template.spec.ts` covering create fixture → instantiate → historical-JE snapshot → edit template (rename + change amounts) → verify historical JE unchanged → delete template (confirm mandated copy visible) → verify template gone from list → reload page (soft-delete persists) → verify historical JE still visible. **Load-bearing assertions:** historical JE description AND `total_debit` unchanged after edit AND after delete — the M30.0 §4.7 (b) soft-delete integrity contract asserted through the shipped UI. | Backend baseline **4,904 unchanged** at M30.2 (frontend + Playwright only). Frontend Vitest **282 → 300 pass** across 36 files (+18: `JournalEntryTemplateDialog.test.tsx` +8 edit-mode branches (populate, "Edit template" title, "Save changes" label, baked-in trigger not rendered controlled, PATCH call, onEdited fires, onOpenChange(false) on success, inline error on rejection) + `AccountingJournalEntriesPage.test.tsx` +5 (row Edit + Delete buttons, Edit opens edit-mode dialog, Delete opens confirmation with mandated copy, Delete confirm calls wrapper + refetches, Delete failure surfaces inline without closing) + `accountingApi.templates.test.ts` +6 (updateJournalEntryTemplate PATCH URL + payload, propagate 409; deleteJournalEntryTemplate DELETE URL, 404 as success, propagate 500)). Acceptance **20 → 21 journeys** (+1 edit-delete describe block; **27 tests / 0 failed / 36.5s on fresh DB**). Audit re-classifies M30.1 detail endpoint: **157 endpoints, 122 → 123 covered (+1), 35 → 34 backend-only (−1)**. **DoD posture:** M30.2 satisfies M21.0 §5.f Option B directly via the D8 combined edit-delete describe block — no exception path at the customer-facing increment. |
+| Test baseline | Backend **4,871 → 4,904** at M30.1 (+33 net across new M30 file + endpoint/model extensions); unchanged at M30.2 (frontend + Playwright only). Frontend Vitest **282 → 300** across 36 files (+18 M30.2 tests). Acceptance **20 → 21 journeys** (+1 M30.2 edit-delete describe block). `manage.py check` + `makemigrations --check` clean throughout. Per-increment delta: M30.0 = 0 (planning + §0.a test fix only); M30.1 = +33 backend + 0 frontend + 0 journey; M30.2 = 0 backend + +18 frontend + +1 journey. | Zero-drift permission-class streak **twenty-nine → thirty → thirty-one** consecutive milestones (M10 → M30) — M30.1's new detail endpoint reused `_M131_PERMS` verbatim; M30.2 added no endpoints. Planning-time as-recommended streak **8 → 9** at M30.0 close, unchanged at M30.1 + M30.2 (both pure implementation of the M30.0 locked plan). Substrate-compound-value continuation reached **4 links realized** (M27.1 gl-accounts → M28.1 template substrate → M29 variable-amount → M30 template CRUD closure). Additive-prop pattern (durable lesson (t)) re-applied successfully at M30.2 — first re-application; elevates from "surfaced" to "load-bearing across two milestones". |
+
+**M30 status:** M30 SHIPPED at SESSION_202 (M30.2 close +
+close-out fold — no separate M30.3). Coordinated M30 push
+awaits explicit user confirmation. Total M30 commits at push
+projected: **6** — `43b715b` (§0.a hotfix, already pushed),
+`1956ed7` (SESSION_200 planning handoff, local), `6bb5b0f`
+(SESSION_201 M30.1 backend, local), plus this session's M30.2
+implementation + close-out commits.
+
+**What is NOT shipped in Milestone 30** (deferred per
+`MILESTONE_30_PLANNING.md` §3):
+
+- **Restore / "Show inactive" UI toggle.** Endpoint exposure
+  (`?include_inactive=true`) remains an M28 §3 deferral. M30
+  ships Delete (deactivate) but not Restore; operators who
+  need to un-hide a template still need Django-shell access
+  in the interim.
+- **Hard-delete escape hatch.** DELETE at M30 always sets
+  `is_active = False`; no `?hard=true` query param. Deferred
+  pending operator evidence.
+- **Template mutation audit trail** (`edited_by_user`,
+  history rows). Deferred pending operator evidence during
+  pilot.
+- **Optimistic concurrency control on edit** (ETag /
+  `updated_at` check). Deferred until M (multi-operator
+  support) unblocks.
+- **Bulk delete / bulk edit.** Deferred pending operator
+  evidence.
+- All prior M29 §3 + M28 §3 + M27 §3 + M25 §4 deferrals —
+  unchanged.
 
 ---
 

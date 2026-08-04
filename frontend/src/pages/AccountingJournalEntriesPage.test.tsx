@@ -16,10 +16,12 @@ vi.mock("@/lib/accountingApi", async () => {
     fetchJournalEntries: vi.fn(),
     fetchGLAccounts: vi.fn(),
     fetchJournalEntryTemplates: vi.fn(),
+    deleteJournalEntryTemplate: vi.fn(),
   };
 });
 
 import {
+  deleteJournalEntryTemplate,
   fetchGLAccounts,
   fetchJournalEntries,
   fetchJournalEntryTemplates,
@@ -515,5 +517,143 @@ describe("AccountingJournalEntriesPage", () => {
     expect(line2Credit).toHaveAttribute("placeholder", "Enter amount");
     expect(line2Credit.className).toMatch(/ring-2 ring-amber-500/);
     expect(screen.getByLabelText("Line 2 debit")).toBeDisabled();
+  });
+
+
+  // ------------------------------------------------------------------
+  // Milestone 30 · Increment 2 — Edit + Delete row buttons + inline
+  // delete confirmation dialog.
+  // ------------------------------------------------------------------
+
+  it("M30.2 — template row renders Edit + Delete buttons", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 55, name: "Row-buttons target" }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    expect(
+      screen.getByTestId("tmpl-edit-trigger-55"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("tmpl-delete-trigger-55"),
+    ).toBeInTheDocument();
+  });
+
+  it("M30.2 — Edit click opens dialog in edit mode with initial values", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 77, name: "Edit-open target" }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("tmpl-edit-trigger-77"));
+    await waitFor(() => {
+      expect(screen.getByTestId("tmpl-dialog-title")).toHaveTextContent(
+        "Edit template",
+      );
+    });
+    // Populated with template values.
+    expect(screen.getByTestId("tmpl-name-input")).toHaveValue(
+      "Edit-open target",
+    );
+    // Submit button uses edit-mode test-id and label.
+    expect(screen.getByTestId("tmpl-edit-submit")).toHaveTextContent(
+      "Save changes",
+    );
+  });
+
+  it("M30.2 — Delete click opens confirmation dialog with mandated copy", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 88, name: "Confirmation target" }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("tmpl-delete-trigger-88"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("tmpl-delete-confirm-title"),
+      ).toHaveTextContent("Deactivate template?");
+    });
+    expect(screen.getByTestId("tmpl-delete-confirm-body")).toHaveTextContent(
+      /Historical journal entries created from this template are not affected/,
+    );
+    expect(screen.getByTestId("tmpl-delete-confirm-body")).toHaveTextContent(
+      /You can restore this template later/,
+    );
+    // Buttons present.
+    expect(screen.getByTestId("tmpl-delete-cancel")).toHaveTextContent(
+      "Cancel",
+    );
+    expect(screen.getByTestId("tmpl-delete-confirm")).toHaveTextContent(
+      "Deactivate",
+    );
+  });
+
+  it("M30.2 — Delete confirm calls deleteJournalEntryTemplate and refetches", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 99, name: "Delete flow target" }),
+    ]);
+    vi.mocked(deleteJournalEntryTemplate).mockReset();
+    vi.mocked(deleteJournalEntryTemplate).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    const fetchCallsBeforeDelete =
+      vi.mocked(fetchJournalEntryTemplates).mock.calls.length;
+    await user.click(screen.getByTestId("tmpl-delete-trigger-99"));
+    await user.click(screen.getByTestId("tmpl-delete-confirm"));
+    await waitFor(() => {
+      expect(deleteJournalEntryTemplate).toHaveBeenCalledWith(99);
+    });
+    await waitFor(() => {
+      expect(
+        vi.mocked(fetchJournalEntryTemplates).mock.calls.length,
+      ).toBeGreaterThan(fetchCallsBeforeDelete);
+    });
+    // Confirmation closes on success.
+    expect(
+      screen.queryByTestId("tmpl-delete-confirm-dialog"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("M30.2 — Delete failure surfaces inline error without closing", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 111, name: "Delete-failure target" }),
+    ]);
+    vi.mocked(deleteJournalEntryTemplate).mockReset();
+    vi.mocked(deleteJournalEntryTemplate).mockRejectedValue(
+      new Error("HTTP 500 Server error"),
+    );
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("tmpl-delete-trigger-111"));
+    await user.click(screen.getByTestId("tmpl-delete-confirm"));
+    await waitFor(() => {
+      expect(screen.getByTestId("tmpl-delete-error")).toHaveTextContent(
+        /HTTP 500/,
+      );
+    });
+    // Dialog stays open on error.
+    expect(
+      screen.getByTestId("tmpl-delete-confirm-dialog"),
+    ).toBeInTheDocument();
   });
 });

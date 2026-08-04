@@ -19,8 +19,8 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 157
-- **Consumed by frontend components (`covered`):** 122
-- **Backend-only (audit findings):** 35
+- **Consumed by frontend components (`covered`):** 123
+- **Backend-only (audit findings):** 34
   - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **3**
 - **Service verbs enumerated:** 317
 - **Distinct view modules importing service verbs:** 22
@@ -89,7 +89,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 39 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/` | `views.admin_condition_photo_attach` | `admin-condition-photo-attach` | api.ts:1313 `attachPhoto` | `covered` |
 | 40 | `admin/vehicles/<str:stock_number>/photos/<uuid:public_id>/` | `views.admin_condition_photo_delete` | `admin-condition-photo-delete` | api.ts:1320 `deletePhoto` | `covered` |
 | 41 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/local-upload/` | `views.admin_condition_photo_local_upload_receiver` | `admin-condition-photo-local-upload` | api.ts:1291 `uploadPhotoBytes` | `covered` |
-| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only, api.ts:1703 `fetchVendor` ⚠ wrapper-only | `covered` |
+| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only | `covered` |
 | 43 | `admin/vendors/<slug:slug>/` | `views_recon.admin_vendor_detail` | `admin-vendor-detail` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1709 `updateVendor` ⚠ wrapper-only | `defer-candidate-O2` |
 | 44 | `admin/vehicles/<str:stock_number>/recon/` | `views_recon.admin_recon_dashboard` | `admin-recon-dashboard` | api.ts:1717 `fetchReconDashboard` | `covered` |
 | 45 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/recon-decision/` | `views_recon.admin_recon_decision_create` | `admin-recon-decision-create` | api.ts:1728 `recordReconDecision` | `covered` |
@@ -187,18 +187,18 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 137 | `admin/bhph-repossessions/<int:pk>/mark-recovered/` | `views_repossessions.admin_repossession_mark_recovered` | `admin-repossession-mark-recovered` | bhphApi.ts:456 `markRepossessionRecovered` | `covered` |
 | 138 | `admin/bhph-repossessions/<int:pk>/mark-re-intaked/` | `views_repossessions.admin_repossession_mark_re_intaked` | `admin-repossession-mark-re-intaked` | bhphApi.ts:475 `markRepossessionReIntaked` | `covered` |
 | 139 | `admin/bhph/analytics/summary/` | `views_bhph_analytics.admin_bhph_analytics_summary` | `admin-bhph-analytics-summary` | bhphApi.ts:83 `fetchBhphAnalyticsSummary` | `covered` |
-| 140 | `admin/accounting/journal-entries/` | `views_accounting.admin_journal_entry_create` | `admin-journal-entry-create` | accountingApi.ts:377 `createJournalEntry` | `covered` |
-| 141 | `admin/accounting/journal-entries/<int:pk>/reverse/` | `views_accounting.admin_journal_entry_reverse` | `admin-journal-entry-reverse` | accountingApi.ts:260 `reverseJournalEntry` | `covered` |
-| 142 | `admin/accounting/journal-entries/<int:pk>/` | `views_accounting.admin_journal_entry_retrieve` | `admin-journal-entry-retrieve` | accountingApi.ts:236 `fetchJournalEntry` | `covered` |
-| 143 | `admin/accounting/trial-balance/` | `views_accounting.admin_trial_balance` | `admin-trial-balance` | accountingApi.ts:65 `fetchTrialBalance` | `covered` |
-| 144 | `admin/accounting/journal-entries/list/` | `views_accounting.admin_journal_entry_list` | `admin-journal-entry-list` | accountingApi.ts:201 `fetchJournalEntries` | `covered` |
-| 145 | `admin/accounting/cost-posting-failures/` | `views_accounting.admin_cost_posting_failures` | `admin-cost-posting-failures` | accountingApi.ts:310 `fetchCostPostingFailures` | `covered` |
-| 146 | `admin/accounting/trial-balance/snapshots/` | `views_accounting.admin_trial_balance_snapshot_create` | `admin-trial-balance-snapshot-create` | accountingApi.ts:124 `freezeTrialBalance` | `covered` |
-| 147 | `admin/accounting/trial-balance/snapshots/list/` | `views_accounting.admin_trial_balance_snapshot_list` | `admin-trial-balance-snapshot-list` | accountingApi.ts:142 `listTrialBalanceSnapshots` | `covered` |
-| 148 | `admin/accounting/trial-balance/snapshots/<int:pk>/` | `views_accounting.admin_trial_balance_snapshot_retrieve` | `admin-trial-balance-snapshot-retrieve` | accountingApi.ts:150 `fetchTrialBalanceSnapshot` | `covered` |
-| 149 | `admin/accounting/gl-accounts/` | `views_accounting.admin_gl_account_list` | `admin-gl-account-list` | accountingApi.ts:343 `fetchGLAccounts` | `covered` |
-| 150 | `admin/accounting/journal-entry-templates/` | `views_accounting.admin_journal_entry_template_list_or_create` | `admin-journal-entry-template-list-or-create` | accountingApi.ts:448 `fetchJournalEntryTemplates`, accountingApi.ts:456 `createJournalEntryTemplate` | `covered` |
-| 151 | `admin/accounting/journal-entry-templates/<int:pk>/` | `views_accounting.admin_journal_entry_template_detail` | `admin-journal-entry-template-detail` | — | `defer-candidate-O2` |
+| 140 | `admin/accounting/journal-entries/` | `views_accounting.admin_journal_entry_create` | `admin-journal-entry-create` | accountingApi.ts:383 `createJournalEntry` | `covered` |
+| 141 | `admin/accounting/journal-entries/<int:pk>/reverse/` | `views_accounting.admin_journal_entry_reverse` | `admin-journal-entry-reverse` | accountingApi.ts:266 `reverseJournalEntry` | `covered` |
+| 142 | `admin/accounting/journal-entries/<int:pk>/` | `views_accounting.admin_journal_entry_retrieve` | `admin-journal-entry-retrieve` | accountingApi.ts:242 `fetchJournalEntry` | `covered` |
+| 143 | `admin/accounting/trial-balance/` | `views_accounting.admin_trial_balance` | `admin-trial-balance` | accountingApi.ts:71 `fetchTrialBalance` | `covered` |
+| 144 | `admin/accounting/journal-entries/list/` | `views_accounting.admin_journal_entry_list` | `admin-journal-entry-list` | accountingApi.ts:207 `fetchJournalEntries` | `covered` |
+| 145 | `admin/accounting/cost-posting-failures/` | `views_accounting.admin_cost_posting_failures` | `admin-cost-posting-failures` | accountingApi.ts:316 `fetchCostPostingFailures` | `covered` |
+| 146 | `admin/accounting/trial-balance/snapshots/` | `views_accounting.admin_trial_balance_snapshot_create` | `admin-trial-balance-snapshot-create` | accountingApi.ts:130 `freezeTrialBalance` | `covered` |
+| 147 | `admin/accounting/trial-balance/snapshots/list/` | `views_accounting.admin_trial_balance_snapshot_list` | `admin-trial-balance-snapshot-list` | accountingApi.ts:148 `listTrialBalanceSnapshots` | `covered` |
+| 148 | `admin/accounting/trial-balance/snapshots/<int:pk>/` | `views_accounting.admin_trial_balance_snapshot_retrieve` | `admin-trial-balance-snapshot-retrieve` | accountingApi.ts:156 `fetchTrialBalanceSnapshot` | `covered` |
+| 149 | `admin/accounting/gl-accounts/` | `views_accounting.admin_gl_account_list` | `admin-gl-account-list` | accountingApi.ts:349 `fetchGLAccounts` | `covered` |
+| 150 | `admin/accounting/journal-entry-templates/` | `views_accounting.admin_journal_entry_template_list_or_create` | `admin-journal-entry-template-list-or-create` | accountingApi.ts:454 `fetchJournalEntryTemplates`, accountingApi.ts:462 `createJournalEntryTemplate` | `covered` |
+| 151 | `admin/accounting/journal-entry-templates/<int:pk>/` | `views_accounting.admin_journal_entry_template_detail` | `admin-journal-entry-template-detail` | accountingApi.ts:478 `updateJournalEntryTemplate`, accountingApi.ts:497 `deleteJournalEntryTemplate` | `covered` |
 | 152 | `admin/demo-store/feedback/` | `views_demo_store.admin_demo_store_feedback_create` | `admin-demo-store-feedback-create` | — | `defer-candidate-O2` |
 | 153 | `admin/pilots/create/` | `views_pilot_onboarding.admin_pilot_create` | `admin-pilot-create` | api.ts:2254 `createPilotDealership` | `covered` |
 | 154 | `admin/pilots/` | `views_pilot_onboarding.admin_pilot_list` | `admin-pilot-list` | api.ts:2248 `fetchPilotDealerships` | `covered` |
@@ -208,7 +208,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**35 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**34 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -218,7 +218,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (30)
+### defer-candidate-O2 (29)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -248,7 +248,6 @@ _None._
 - `admin/deal-writeups/` → `views_deal_writeups.admin_deal_writeup_create` (`admin-deal-writeup-create`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/approve/` → `views_deal_writeups.admin_deal_writeup_approve` (`admin-deal-writeup-approve`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/hand-off/` → `views_deal_writeups.admin_deal_writeup_hand_off` (`admin-deal-writeup-hand-off`). Imported service verbs: `get_current_dealership`
-- `admin/accounting/journal-entry-templates/<int:pk>/` → `views_accounting.admin_journal_entry_template_detail` (`admin-journal-entry-template-detail`). Imported service verbs: `get_current_dealership`
 - `admin/demo-store/feedback/` → `views_demo_store.admin_demo_store_feedback_create` (`admin-demo-store-feedback-create`). Imported service verbs: `get_current_dealership`
 
 ### defer-domain-milestone (0)
@@ -274,8 +273,7 @@ _None._
 ### views_accounting
 
 - **Endpoints:** 12
-- **Backend-only:** 1
-- **Backend-only dispositions in this module:** `defer-candidate-O2`
+- **Backend-only:** 0
 
 ### views_analytics
 

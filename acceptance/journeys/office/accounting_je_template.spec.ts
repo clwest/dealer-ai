@@ -602,6 +602,275 @@ test.describe(
 );
 
 
+// -------------------------------------------------------------------
+// Milestone 30 · Increment 2 (SESSION_202) — edit + soft-delete
+// workflow. One end-to-end journey covering:
+//   1. Create a fresh template (fixed lines) — establishes a baseline
+//      the operator will edit, then delete.
+//   2. Instantiate that template into a real journal entry and post
+//      it — establishes a historical JE that MUST remain unaffected
+//      by the later edit + delete (M30.0 §4.7 (b) soft-delete
+//      integrity contract by construction — no FK from JournalEntry
+//      to JournalEntryTemplate).
+//   3. Edit the template through the M30.2 row-level Edit button and
+//      the additive-mode dialog (mode="edit") — rename + change
+//      amounts; verify list refreshes with the new name + amounts.
+//   4. Verify the historical JE from step 2 STILL shows the original
+//      amounts + description — soft-delete integrity assertion (b).
+//   5. Delete the template via the row-level Delete button; assert
+//      the confirmation dialog has the mandated D3 copy ("Deactivate
+//      template?" + "historical entries not affected" + Cancel /
+//      Deactivate); confirm; verify template disappears from the
+//      active-only list.
+//   6. Refresh the page; verify template does not re-appear (soft-
+//      delete persists — this is the operator-visible half of the
+//      D5 no-FK contract).
+//   7. Verify the historical JE from step 2 STILL renders correctly
+//      after the delete — the JE list / detail surfaces are immune
+//      to template lifecycle by construction.
+// -------------------------------------------------------------------
+
+const EDIT_DELETE_FIXTURE_PREFIX = "[M30.2-tmpl-ed]";
+
+
+test.describe(
+  "Office / accounting workflow — template edit + soft-delete",
+  () => {
+    test("owner can edit + soft-delete a template through the shipped UI while historical JEs remain intact", async ({
+      page,
+      request,
+    }) => {
+      const runToken = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const templateName = `${EDIT_DELETE_FIXTURE_PREFIX} rent ${runToken}`;
+      const renamedName = `${templateName} (renamed)`;
+      const templateDescription = `Original description ${runToken}`;
+
+      const rentAcctId = await accountIdByCode(request, "800000");
+      const bankAcctId = await accountIdByCode(request, "110000");
+
+      // ----------------------------------------------------------------
+      // Step 1 — seed a fresh balanced template via admin API. Keeps
+      // this journey focused on edit + delete (create is covered by
+      // the M28.2 journey).
+      // ----------------------------------------------------------------
+      const seedResponse = await postWithCsrf(
+        request,
+        "/api/dealer-ai/admin/accounting/journal-entry-templates/",
+        {
+          name: templateName,
+          description: templateDescription,
+          lines: [
+            {
+              account_id: rentAcctId,
+              side: "debit",
+              amount: "100.00",
+              memo: "",
+            },
+            {
+              account_id: bankAcctId,
+              side: "credit",
+              amount: "100.00",
+              memo: "",
+            },
+          ],
+        },
+      );
+      expect(
+        seedResponse.status(),
+        "seed template POST should return 201",
+      ).toBe(201);
+      const seedBody = (await seedResponse.json()) as {
+        journal_entry_template: { id: number };
+      };
+      const templateId = seedBody.journal_entry_template.id;
+
+      // ----------------------------------------------------------------
+      // Step 2 — instantiate the template into a real JournalEntry
+      // and post it, establishing a historical JE that MUST remain
+      // unaffected by later edit + delete (M30.0 §4.7 (b) contract).
+      // ----------------------------------------------------------------
+      await page.goto("/dealer-ai-accounting/journal-entries");
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Journal Entries" }),
+      ).toBeVisible({ timeout: 15_000 });
+      await page.getByTestId("templates-toggle").click();
+
+      const instantiate = page.getByTestId(
+        `template-instantiate-${templateId}`,
+      );
+      await expect(instantiate).toBeVisible({ timeout: 15_000 });
+      await instantiate.click();
+
+      const instDialog = page.getByRole("dialog", {
+        name: /New journal entry/i,
+      });
+      await expect(instDialog).toBeVisible({ timeout: 15_000 });
+      await expect(instDialog.getByTestId("je-create-submit")).toBeEnabled();
+      await instDialog.getByTestId("je-create-submit").click();
+      await expect(instDialog).not.toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId("je-create-success-badge")).toBeVisible();
+
+      // Snapshot the historical JE via the admin API so we can
+      // deep-compare after the edit + delete.
+      const allEntriesBefore = await fetchAllJournalEntries(request);
+      const historicalEntry = allEntriesBefore.find(
+        (e) => e.description === templateDescription,
+      );
+      expect(
+        historicalEntry,
+        "historical JE from step 2 should exist with the pre-edit description",
+      ).toBeDefined();
+      expect(historicalEntry!.total_debit).toBe("100.00");
+      const historicalId = historicalEntry!.id;
+
+      // ----------------------------------------------------------------
+      // Step 3 — click the row Edit button; assert dialog opens in
+      // edit mode with pre-populated fields; change name + amounts;
+      // Save changes.
+      // ----------------------------------------------------------------
+      const editTrigger = page.getByTestId(`tmpl-edit-trigger-${templateId}`);
+      await expect(editTrigger).toBeVisible({ timeout: 15_000 });
+      await editTrigger.click();
+
+      const editDialog = page.getByRole("dialog", { name: /Edit template/i });
+      await expect(editDialog).toBeVisible({ timeout: 15_000 });
+      await expect(editDialog.getByTestId("tmpl-dialog-title")).toHaveText(
+        "Edit template",
+      );
+      await expect(editDialog.getByTestId("tmpl-name-input")).toHaveValue(
+        templateName,
+      );
+
+      // Rename + rewrite both amounts to $150.
+      await editDialog.getByTestId("tmpl-name-input").fill(renamedName);
+      await editDialog.getByLabel("Line 1 amount").fill("150.00");
+      await editDialog.getByLabel("Line 2 amount").fill("150.00");
+
+      const saveChanges = editDialog.getByTestId("tmpl-edit-submit");
+      await expect(saveChanges).toHaveText("Save changes");
+      await expect(saveChanges).toBeEnabled();
+      await saveChanges.click();
+      await expect(editDialog).not.toBeVisible({ timeout: 15_000 });
+
+      // List refresh — new name visible on the row.
+      await expect(
+        page.getByTestId(`template-row-${templateId}`),
+      ).toContainText(renamedName);
+
+      // Admin-API verification of the edit — template projection
+      // reflects the new name + amounts.
+      const templatesAfterEdit = await fetchTemplates(request);
+      const editedTemplate = templatesAfterEdit.find(
+        (t) => t.id === templateId,
+      );
+      expect(editedTemplate).toBeDefined();
+      expect(editedTemplate!.name).toBe(renamedName);
+      expect(editedTemplate!.is_active).toBe(true);
+      const editedAmounts = editedTemplate!.lines
+        .map((line) => line.amount)
+        .sort();
+      expect(editedAmounts).toEqual(["150.00", "150.00"]);
+
+      // ----------------------------------------------------------------
+      // Step 4 — verify the historical JE from step 2 is UNCHANGED.
+      // Load-bearing assertion for M30.0 §4.7 (b) — no FK from
+      // JournalEntry to JournalEntryTemplate, so template edits
+      // cannot cascade to any existing JE row.
+      // ----------------------------------------------------------------
+      const allEntriesAfterEdit = await fetchAllJournalEntries(request);
+      const historicalAfterEdit = allEntriesAfterEdit.find(
+        (e) => e.id === historicalId,
+      );
+      expect(
+        historicalAfterEdit,
+        "historical JE should still exist after template edit",
+      ).toBeDefined();
+      expect(
+        historicalAfterEdit!.description,
+        "historical JE description should NOT reflect template rename",
+      ).toBe(templateDescription);
+      expect(
+        historicalAfterEdit!.total_debit,
+        "historical JE total_debit should NOT reflect template amount change",
+      ).toBe("100.00");
+
+      // ----------------------------------------------------------------
+      // Step 5 — click the row Delete button; assert confirmation
+      // dialog has the D3-mandated copy; click Deactivate; verify
+      // template disappears from the active-only list.
+      // ----------------------------------------------------------------
+      const deleteTrigger = page.getByTestId(
+        `tmpl-delete-trigger-${templateId}`,
+      );
+      await expect(deleteTrigger).toBeVisible();
+      await deleteTrigger.click();
+
+      const confirmDialog = page.getByTestId("tmpl-delete-confirm-dialog");
+      await expect(confirmDialog).toBeVisible({ timeout: 15_000 });
+      await expect(
+        page.getByTestId("tmpl-delete-confirm-title"),
+      ).toHaveText("Deactivate template?");
+      await expect(
+        page.getByTestId("tmpl-delete-confirm-body"),
+      ).toContainText(
+        /Historical journal entries created from this template are not affected/,
+      );
+      await expect(
+        page.getByTestId("tmpl-delete-confirm-body"),
+      ).toContainText(/You can restore this template later/);
+      await expect(page.getByTestId("tmpl-delete-cancel")).toBeEnabled();
+      await expect(page.getByTestId("tmpl-delete-confirm")).toBeEnabled();
+
+      await page.getByTestId("tmpl-delete-confirm").click();
+      await expect(confirmDialog).not.toBeVisible({ timeout: 15_000 });
+
+      // Template disappears from the active-only list.
+      await expect(
+        page.getByTestId(`template-row-${templateId}`),
+      ).not.toBeVisible();
+
+      // ----------------------------------------------------------------
+      // Step 6 — refresh the page; verify template still gone
+      // (soft-delete persists — not just local state).
+      // ----------------------------------------------------------------
+      await page.reload();
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Journal Entries" }),
+      ).toBeVisible({ timeout: 15_000 });
+      await page.getByTestId("templates-toggle").click();
+      await expect(
+        page.getByTestId(`template-row-${templateId}`),
+      ).not.toBeVisible();
+
+      // Admin-API verification — active-only list excludes the
+      // deleted template; the row still exists in DB with
+      // is_active=False (guarded by no back-reference from JE).
+      const templatesAfterDelete = await fetchTemplates(request);
+      expect(
+        templatesAfterDelete.find((t) => t.id === templateId),
+        "soft-deleted template should not appear in active-only list",
+      ).toBeUndefined();
+
+      // ----------------------------------------------------------------
+      // Step 7 — historical JE STILL visible + correct after delete.
+      // Load-bearing assertion for the soft-delete integrity contract:
+      // JE list / detail surfaces are immune to template lifecycle.
+      // ----------------------------------------------------------------
+      const allEntriesAfterDelete = await fetchAllJournalEntries(request);
+      const historicalAfterDelete = allEntriesAfterDelete.find(
+        (e) => e.id === historicalId,
+      );
+      expect(
+        historicalAfterDelete,
+        "historical JE should still exist after template soft-delete",
+      ).toBeDefined();
+      expect(historicalAfterDelete!.description).toBe(templateDescription);
+      expect(historicalAfterDelete!.total_debit).toBe("100.00");
+    });
+  },
+);
+
+
 // DRF SessionAuthentication requires the ``X-CSRFToken`` header on
 // mutating requests. The persona storage state carries a ``csrftoken``
 // cookie; the browser's fetch/XHR wiring copies it into the header

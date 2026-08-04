@@ -16,7 +16,13 @@
 // open). Callers format for display via Intl.NumberFormat rather than
 // coercing to Number in the API layer — preserves precision boundaries.
 
-import { authGetJSON, authPostJSON } from "@/lib/authFetch";
+import {
+  ApiError,
+  authDelete,
+  authGetJSON,
+  authPatchJSON,
+  authPostJSON,
+} from "@/lib/authFetch";
 
 // ---------------------------------------------------------------------------
 // Trial balance (M13.3 endpoint)
@@ -457,4 +463,42 @@ export function createJournalEntryTemplate(
     "/admin/accounting/journal-entry-templates/",
     payload,
   ).then((body) => body.journal_entry_template);
+}
+
+
+// Milestone 30 · Increment 2 (SESSION_202) — template edit + soft-
+// delete wrappers on top of the M30.1 detail endpoint. Payload shape
+// is identical to CreateJournalEntryTemplatePayload; the backend
+// runs the same three-state balance validation as create.
+
+export function updateJournalEntryTemplate(
+  pk: number,
+  payload: CreateJournalEntryTemplatePayload,
+): Promise<JournalEntryTemplate> {
+  return authPatchJSON<JournalEntryTemplateResponse>(
+    `/admin/accounting/journal-entry-templates/${pk}/`,
+    payload,
+  ).then((body) => body.journal_entry_template);
+}
+
+/**
+ * Soft-deletes a template via DELETE on the detail endpoint. The
+ * backend sets ``is_active = False`` and returns 204 with an empty
+ * body. Idempotent — DELETE on an already-inactive template still
+ * returns 204.
+ *
+ * 404 is treated as success — race condition where the template
+ * was already deleted from another tab is indistinguishable from
+ * the operator's intent, so surface it as a normal completion
+ * rather than an error.
+ */
+export async function deleteJournalEntryTemplate(pk: number): Promise<void> {
+  try {
+    await authDelete(`/admin/accounting/journal-entry-templates/${pk}/`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return;
+    }
+    throw err;
+  }
 }
