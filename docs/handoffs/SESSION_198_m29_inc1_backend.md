@@ -9,7 +9,7 @@ milestone_status: active
 milestone_name: "Variable-Amount Journal Templates (on M28.1 template substrate + M27.1 gl-accounts substrate)"
 increment: 1
 increment_status: shipped
-commit: TBD
+commit: a4800dc
 ---
 
 # SESSION_198 — Milestone 29 · Increment 1 (M29.1 — backend substrate relaxation)
