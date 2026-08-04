@@ -15,15 +15,18 @@ vi.mock("@/lib/accountingApi", async () => {
     ...actual,
     fetchJournalEntries: vi.fn(),
     fetchGLAccounts: vi.fn(),
+    fetchJournalEntryTemplates: vi.fn(),
   };
 });
 
 import {
   fetchGLAccounts,
   fetchJournalEntries,
+  fetchJournalEntryTemplates,
   type GLAccount,
   type JournalEntryListEntry,
   type JournalEntryListPage,
+  type JournalEntryTemplate,
 } from "@/lib/accountingApi";
 import AccountingJournalEntriesPage from "@/pages/AccountingJournalEntriesPage";
 
@@ -95,12 +98,48 @@ async function renderPage() {
 }
 
 
+function makeTemplate(
+  overrides: Partial<JournalEntryTemplate> = {},
+): JournalEntryTemplate {
+  return {
+    id: 1,
+    name: "Monthly rent",
+    description: "Rent expense — monthly",
+    is_active: true,
+    line_count: 2,
+    lines: [
+      {
+        id: 1,
+        account_id: 1,
+        account_code: "615000",
+        side: "debit",
+        amount: "3500.00",
+        memo: "",
+        ordering: 0,
+      },
+      {
+        id: 2,
+        account_id: 2,
+        account_code: "110000",
+        side: "credit",
+        amount: "3500.00",
+        memo: "",
+        ordering: 1,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+
 describe("AccountingJournalEntriesPage", () => {
   beforeEach(() => {
     vi.mocked(fetchJournalEntries).mockReset();
     vi.mocked(fetchJournalEntries).mockResolvedValue(makePage());
     vi.mocked(fetchGLAccounts).mockReset();
     vi.mocked(fetchGLAccounts).mockResolvedValue(makeAccounts());
+    vi.mocked(fetchJournalEntryTemplates).mockReset();
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([]);
   });
 
   it("renders the h1 header", async () => {
@@ -255,5 +294,95 @@ describe("AccountingJournalEntriesPage", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByText(/coa unavailable/)).toBeInTheDocument();
+  });
+
+  // ---- Milestone 28 · Increment 2 templates section ---------------
+
+  it("renders the templates section with a count badge", async () => {
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    expect(screen.getByTestId("templates-section")).toBeInTheDocument();
+    expect(screen.getByTestId("templates-count")).toHaveTextContent("0");
+  });
+
+  it("renders the templates section empty state when expanded", async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    expect(
+      screen.getByText(/Save your first template/i),
+    ).toBeInTheDocument();
+  });
+
+  it("renders template rows with Instantiate buttons when expanded", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 7, name: "Monthly rent" }),
+      makeTemplate({ id: 8, name: "Depreciation" }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    // Count badge reflects the two templates.
+    expect(screen.getByTestId("templates-count")).toHaveTextContent("2");
+    // Expand the section to reveal rows.
+    await user.click(screen.getByTestId("templates-toggle"));
+    expect(screen.getByTestId("template-row-7")).toBeInTheDocument();
+    expect(screen.getByTestId("template-row-8")).toBeInTheDocument();
+    expect(screen.getByTestId("template-instantiate-7")).toBeInTheDocument();
+    expect(screen.getByTestId("template-instantiate-8")).toBeInTheDocument();
+  });
+
+  it("opens the JE dialog pre-populated when Instantiate is clicked", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 42, name: "Monthly rent" }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("template-instantiate-42"));
+
+    // JE dialog opens with description pre-populated from the template.
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { level: 2, name: /New journal entry/i }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("textbox", { name: /Description/i }),
+    ).toHaveValue("Rent expense — monthly");
+    // Line 1 debit (from template's debit-side line) pre-filled.
+    expect(screen.getByLabelText("Line 1 debit")).toHaveValue(3500);
+    // Line 2 credit (from template's credit-side line) pre-filled.
+    expect(screen.getByLabelText("Line 2 credit")).toHaveValue(3500);
+    // Balance indicator shows Balanced immediately.
+    expect(
+      screen.getByTestId("je-create-balance-indicator"),
+    ).toHaveTextContent(/Balanced/i);
+  });
+
+  it("surfaces a templates fetch error inline when expanded", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockRejectedValue(
+      new Error("templates unavailable"),
+    );
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await waitFor(() => {
+      expect(screen.getByText(/Could not load templates/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/templates unavailable/)).toBeInTheDocument();
   });
 });

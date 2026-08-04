@@ -15,7 +15,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { NewJournalEntryDialog } from "@/components/accounting/NewJournalEntryDialog";
+import {
+  NewJournalEntryDialog,
+  type NewJournalEntryInitialValues,
+} from "@/components/accounting/NewJournalEntryDialog";
+import { NewJournalEntryTemplateDialog } from "@/components/accounting/NewJournalEntryTemplateDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,10 +33,12 @@ import {
 import {
   fetchGLAccounts,
   fetchJournalEntries,
+  fetchJournalEntryTemplates,
   type GLAccount,
   type JournalEntry,
   type JournalEntryListEntry,
   type JournalEntryListPage,
+  type JournalEntryTemplate,
 } from "@/lib/accountingApi";
 
 
@@ -64,6 +70,26 @@ function formatPostedAt(iso: string): string {
 }
 
 
+function templateToInitialValues(
+  template: JournalEntryTemplate,
+): NewJournalEntryInitialValues {
+  return {
+    description: template.description,
+    // posted_at intentionally omitted — the JE dialog defaults to
+    // today's local date; templates don't specify posting timestamps.
+    lines: template.lines.map((line) => {
+      const amount = line.amount ?? "";
+      return {
+        account_id: line.account_id,
+        debit: line.side === "debit" ? amount : "",
+        credit: line.side === "credit" ? amount : "",
+        memo: line.memo,
+      };
+    }),
+  };
+}
+
+
 export default function AccountingJournalEntriesPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -76,6 +102,18 @@ export default function AccountingJournalEntriesPage() {
   const [accounts, setAccounts] = useState<GLAccount[]>([]);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [lastCreated, setLastCreated] = useState<JournalEntry | null>(null);
+
+  // Milestone 28 · Increment 2 — templates section state.
+  const [templates, setTemplates] = useState<JournalEntryTemplate[]>([]);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [templatesReloadTick, setTemplatesReloadTick] = useState(0);
+  const [templatesExpanded, setTemplatesExpanded] = useState(false);
+  const [lastCreatedTemplate, setLastCreatedTemplate] =
+    useState<JournalEntryTemplate | null>(null);
+  const [instantiateOpen, setInstantiateOpen] = useState(false);
+  const [instantiateInitial, setInstantiateInitial] = useState<
+    NewJournalEntryInitialValues | undefined
+  >(undefined);
 
   const refetchList = useCallback(() => {
     setReloadTick((tick) => tick + 1);
@@ -134,6 +172,31 @@ export default function AccountingJournalEntriesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    // Milestone 28 · Increment 2 — templates fetch on mount + on
+    // ``templatesReloadTick`` bump (after a new template is saved).
+    let cancelled = false;
+    async function loadTemplates() {
+      try {
+        const response = await fetchJournalEntryTemplates();
+        if (cancelled) return;
+        setTemplates(response);
+        setTemplatesError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setTemplatesError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load recurring templates.",
+        );
+      }
+    }
+    void loadTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, [templatesReloadTick]);
+
   const totalPages = result
     ? Math.max(1, Math.ceil(result.total_count / result.page_size))
     : 1;
@@ -154,6 +217,20 @@ export default function AccountingJournalEntriesPage() {
     },
     [page, refetchList],
   );
+
+  const handleTemplateCreated = useCallback(
+    (template: JournalEntryTemplate) => {
+      setLastCreatedTemplate(template);
+      setTemplatesReloadTick((tick) => tick + 1);
+      setTemplatesExpanded(true);
+    },
+    [],
+  );
+
+  const handleInstantiate = useCallback((template: JournalEntryTemplate) => {
+    setInstantiateInitial(templateToInitialValues(template));
+    setInstantiateOpen(true);
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -200,6 +277,21 @@ export default function AccountingJournalEntriesPage() {
       {loadState === "error" && errorMessage && (
         <p className="text-sm text-destructive">{errorMessage}</p>
       )}
+
+      {/* Second, controlled mount of NewJournalEntryDialog used by the
+          template Instantiate flow. The trigger is hidden — opening is
+          driven by the templates section row action. Kept adjacent to
+          the primary uncontrolled dialog so both share the same
+          accounts prop and success callback. */}
+      <NewJournalEntryDialog
+        accounts={accounts}
+        onCreated={handleCreated}
+        disabled={accounts.length < 2}
+        open={instantiateOpen}
+        onOpenChange={setInstantiateOpen}
+        initialValues={instantiateInitial}
+        hideTrigger
+      />
 
       {result && (
         <Card>
@@ -268,7 +360,126 @@ export default function AccountingJournalEntriesPage() {
           )}
         </Card>
       )}
+
+      {/* Milestone 28 · Increment 2 — recurring templates section.
+          Attached beneath the JE list card per M27.0 §5.b substrate-
+          attachment rule (no new route). Collapsed by default; the
+          primary flow is still JE origination. */}
+      <Card data-testid="templates-section">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div className="flex flex-col gap-1">
+            <CardTitle className="flex items-center gap-2">
+              Recurring templates
+              <Badge variant="outline" data-testid="templates-count">
+                {templates.length}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Save a recurring journal-entry recipe once; instantiate it
+              monthly without re-entering line items.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <NewJournalEntryTemplateDialog
+              accounts={accounts}
+              onCreated={handleTemplateCreated}
+              disabled={accounts.length < 2}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTemplatesExpanded((v) => !v)}
+              data-testid="templates-toggle"
+              aria-expanded={templatesExpanded}
+            >
+              {templatesExpanded ? "Collapse" : "Expand"}
+            </Button>
+          </div>
+        </CardHeader>
+        {templatesExpanded && (
+          <CardContent className="flex flex-col gap-3">
+            {templatesError && (
+              <p className="text-sm text-destructive" role="alert">
+                Could not load templates — {templatesError}.
+              </p>
+            )}
+            {lastCreatedTemplate && (
+              <div
+                role="status"
+                className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+                data-testid="tmpl-create-success-badge"
+              >
+                Template &ldquo;{lastCreatedTemplate.name}&rdquo; saved
+              </div>
+            )}
+            {templates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No templates yet. Save your first template using the
+                &ldquo;+ New template&rdquo; button.
+              </p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="py-2">Name</th>
+                    <th className="py-2">Description</th>
+                    <th className="py-2 text-right">Lines</th>
+                    <th className="py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {templates.map((template) => (
+                    <TemplateRow
+                      key={template.id}
+                      template={template}
+                      disabled={accounts.length < 2}
+                      onInstantiate={() => handleInstantiate(template)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </CardContent>
+        )}
+      </Card>
     </div>
+  );
+}
+
+
+function TemplateRow({
+  template,
+  disabled,
+  onInstantiate,
+}: {
+  template: JournalEntryTemplate;
+  disabled: boolean;
+  onInstantiate: () => void;
+}) {
+  return (
+    <tr
+      className="border-b border-border"
+      data-testid={`template-row-${template.id}`}
+    >
+      <td className="py-2 font-medium">{template.name}</td>
+      <td className="py-2 text-muted-foreground">
+        {template.description}
+      </td>
+      <td className="py-2 text-right tabular-nums">
+        {template.line_count}
+      </td>
+      <td className="py-2 text-right">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={onInstantiate}
+          data-testid={`template-instantiate-${template.id}`}
+        >
+          Instantiate
+        </Button>
+      </td>
+    </tr>
   );
 }
 

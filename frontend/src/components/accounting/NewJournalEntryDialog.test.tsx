@@ -279,3 +279,109 @@ describe("NewJournalEntryDialog", () => {
     });
   });
 });
+
+
+// Milestone 28 · Increment 2 (SESSION_196) — pre-populate + controlled-open
+// extensions covering the template Instantiate flow.
+
+describe("NewJournalEntryDialog — M28.2 template Instantiate flow", () => {
+  beforeEach(() => {
+    vi.mocked(createJournalEntry).mockReset();
+    vi.mocked(createJournalEntry).mockResolvedValue(makeCreatedEntry());
+  });
+
+  it("hides the built-in trigger when hideTrigger is set", () => {
+    render(
+      <NewJournalEntryDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+        open={false}
+        onOpenChange={vi.fn()}
+        hideTrigger
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /\+ New journal entry/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("pre-populates description + lines from initialValues on open", async () => {
+    render(
+      <NewJournalEntryDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+        open
+        onOpenChange={vi.fn()}
+        hideTrigger
+        initialValues={{
+          description: "Monthly rent",
+          lines: [
+            {
+              account_id: 1,
+              debit: "3500.00",
+              credit: "",
+              memo: "",
+            },
+            {
+              account_id: 2,
+              debit: "",
+              credit: "3500.00",
+              memo: "",
+            },
+          ],
+        }}
+      />,
+    );
+
+    // Description pre-filled.
+    expect(
+      screen.getByRole("textbox", { name: /Description/i }),
+    ).toHaveValue("Monthly rent");
+
+    // Line 1 debit pre-filled + account pre-selected.
+    expect(screen.getByLabelText("Line 1 debit")).toHaveValue(3500);
+    expect(screen.getByLabelText("Line 2 credit")).toHaveValue(3500);
+
+    // Balance indicator immediately reads "Balanced".
+    const indicator = screen.getByTestId("je-create-balance-indicator");
+    expect(indicator).toHaveTextContent(/Balanced/i);
+
+    // Submit enabled without any typing.
+    expect(screen.getByTestId("je-create-submit")).toBeEnabled();
+  });
+
+  it("submitting a pre-populated dialog posts the visible payload", async () => {
+    const onCreated = vi.fn();
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <NewJournalEntryDialog
+        accounts={makeAccounts()}
+        onCreated={onCreated}
+        open
+        onOpenChange={onOpenChange}
+        hideTrigger
+        initialValues={{
+          description: "Monthly rent",
+          lines: [
+            { account_id: 1, debit: "3500.00", credit: "", memo: "" },
+            { account_id: 2, debit: "", credit: "3500.00", memo: "" },
+          ],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByTestId("je-create-submit"));
+    await waitFor(() => {
+      expect(createJournalEntry).toHaveBeenCalledTimes(1);
+    });
+    const call = vi.mocked(createJournalEntry).mock.calls[0]![0];
+    expect(call.description).toBe("Monthly rent");
+    expect(call.lines[0]!.account_id).toBe(1);
+    expect(call.lines[0]!.debit).toBe("3500.00");
+    expect(call.lines[1]!.credit).toBe("3500.00");
+    expect(onCreated).toHaveBeenCalledTimes(1);
+    // Cancel-close side effect fired once submission succeeded.
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});

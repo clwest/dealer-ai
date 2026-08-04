@@ -3811,6 +3811,139 @@ future create/edit workflow scoping.
 
 ---
 
+### Milestone 28 — Recurring Journal Templates (on M27.1 shared GLAccount substrate) — SHIPPED at SESSION_196
+
+**Sessions:** SESSION_194 → SESSION_195 → SESSION_196 (M28.3
+close-out folded into M28.2 per §5.h evidence-sized Option B —
+both increments' §5.e Phase 1 + Phase 2 checks agreed cleanly).
+
+**Increment shape (per `MILESTONE_28_PLANNING.md` §5.f):**
+
+- **M28.0 (SESSION_194)** — planning refinement + target
+  selection + all §5 locks. Two architectural verifications
+  performed at open per user direction: (a) variable-amount
+  forward-compat check — confirmed `side` + nullable `amount`
+  accommodates future depreciation/utilities/payroll accrual
+  templates without a DB migration; (b) model duplication
+  analysis — rejected fusion of template-line into shipped
+  `JournalEntryLine` on separation-of-concerns +
+  preserve-existing-code grounds. Durable engineering-
+  practices refinement adopted from user pushback: *duplicate
+  small stable domain logic; extract only on evidence*.
+  Saved to memory as `feedback_duplicate_small_stable_logic.md`.
+- **M28.1 (SESSION_195)** — backend substrate + frontend
+  wrappers. New `JournalEntryTemplate` + `JournalEntryTemplateLine`
+  models (nullable `amount` as intentional forward-compat).
+  Shipped `JournalEntryLine` NOT modified (evidence-first
+  duplication of cross-tenant guard). New service module
+  `services/accounting/template.py` — 3 verbs + `TemplateLineInput`
+  + 4 new domain errors. New endpoint
+  `GET+POST admin/accounting/journal-entry-templates/` via
+  `@api_view(["GET","POST"])` reusing `_M131_PERMS`. New
+  frontend wrappers `fetchJournalEntryTemplates` +
+  `createJournalEntryTemplate`. No UI change; DoD exception
+  path invoked (third invocation after M26 + M27.1).
+- **M28.2 (SESSION_196)** — UI + Playwright + close-out fold.
+  New collapsible "Recurring templates" section on the
+  existing `AccountingJournalEntriesPage` (substrate-attachment
+  per M27.0 rule — no new route). New
+  `NewJournalEntryTemplateDialog` component (peer of the
+  M27.2 JE dialog; reuses `GLAccountPicker` + viewport-
+  constraint pattern). Extended `NewJournalEntryDialog` with
+  additive optional `initialValues` + controlled-open props
+  for the Instantiate flow. Row-level Instantiate action
+  opens a second, controlled mount of the JE dialog pre-
+  populated from the template; posting flows through the
+  existing M13.1 `createJournalEntry` wrapper (no new
+  posting endpoint). Playwright peer spec
+  `accounting_je_template.spec.ts` with two test cases
+  (create-template + instantiate-template) + one-case
+  extension to `accounting_je_create.spec.ts` (blank-path
+  regression guard). Instantiate spec uses a new
+  `postWithCsrf` helper — DRF SessionAuthentication requires
+  X-CSRFToken header on mutating requests, which
+  Playwright's APIRequestContext does not auto-populate.
+
+**Baselines at M28 close:**
+
+- Backend: **4,813 → 4,855 pass**, 1 skipped, 0 fail (+42 across
+  three new M28 test files at M28.1; unchanged at M28.2).
+- Frontend Vitest: **246 → 270 pass** across 34 → 36 files
+  (+24 total: 5 wrapper at M28.1 + 19 UI at M28.2).
+- Acceptance: **16 → 19 journeys** (+3 M28.2 cases in 2
+  files). Full run: 22 passed / 3 pre-existing shared-DB
+  failures unchanged from M27.2 (Candidate H remediation,
+  not M28 scope).
+- Audit: **155 → 156 endpoints / 121 → 122 covered /
+  34 backend-only / 312 → 315 service verbs**. New row 150
+  `admin/accounting/journal-entry-templates/` shipped +
+  flipped `covered` at M28.2.
+- Zero-drift permission-class streak: **28** (M10 → M28).
+- Planning-time as-recommended streak: **7** at M28.0 close
+  (extends M27 close of 6); unchanged through M28.1 + M28.2
+  (both pure implementation increments).
+
+**Durable planning + engineering lessons from M28** (all saved
+to memory):
+
+- **NEW at M28.0** — *Duplicate small stable domain logic;
+  extract only on evidence*
+  (`feedback_duplicate_small_stable_logic.md`). Short,
+  stable, domain-local logic stays local to its owning
+  model until divergence or measurable maintenance burden
+  supports extraction. DRY-for-its-own-sake is not evidence.
+- **REINFORCED at M28.0** — *Variable-amount forward-compat
+  via `side` + nullable `amount` separation*. Recorded as
+  architectural pattern in the M28 planning memo §5.b
+  commentary for future contributors.
+- **REINFORCED at M28.0** — *Recipes vs postings are
+  different domain concepts*. Fusion (via inheritance, mixin,
+  or flag) destroys separation of concerns and forces
+  defensive filters on every posting-query consumer.
+- **NEW at M28.1** — *Combined GET+POST endpoints count as
+  one audit row, not two*. Refines memo prediction pattern
+  for `@api_view(["GET","POST"])` endpoints. Empirical-
+  discovery-refinement precedent per M25.0 + M25.2 +
+  SESSION_189 + M27.0.
+- **NEW at M28.2** — *Playwright APIRequestContext does
+  NOT auto-populate `X-CSRFToken` from the storage-state
+  csrftoken cookie*. Browser fetch/XHR wiring does this
+  automatically; Playwright does not. Mutating requests
+  from the `request` fixture need an explicit CSRF header
+  extracted from `request.storageState()`. Helper pattern
+  now available at `accounting_je_template.spec.ts` for
+  future specs to import.
+- **NEW at M28.2** — *Numeric input value pre-population
+  may normalize trailing zeros* (`3500.00` → `3500`
+  depending on browser). Playwright assertions on `<input
+  type="number">` values should use regex when comparing
+  to a pre-formatted numeric string.
+
+**Non-goals for M28 (all held):**
+
+- Variable-amount templates — schema-reserved; no UI or
+  serializer support at M28.
+- Named template variables (one input drives many lines)
+  — not schema-reserved; future additive migration.
+- Template edit / update / delete UI — `is_active` at DB
+  layer only.
+- Historical-template back-reference on JournalEntry.
+- Server-side template search / pagination.
+- `?include_inactive=true` on the endpoint.
+- Save-as-template checkbox on the JE dialog — rejected
+  in favor of dedicated template dialog.
+- Standalone template detail page.
+- Modification to M13.1 JE-create endpoint or M27.1
+  gl-accounts endpoint.
+- Test-hygiene remediation (H) — 3 shared-DB non-idempotent
+  journeys unchanged from M27.2. Live M29+ candidate.
+- O2 (row-5 public-fetch-helper regex refinement) — M26 +
+  M27 + M28 deferral, unchanged. Live M29+ candidate.
+- O3 (rows-1–4 plain-string-literal investigation) — M26 +
+  M27 + M28 deferral, unchanged. Live M29+ candidate.
+
+---
+
 ## 5. Explicit non-goals and deferrals
 
 The following are documented in research but explicitly out of

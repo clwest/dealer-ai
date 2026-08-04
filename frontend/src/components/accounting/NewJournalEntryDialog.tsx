@@ -16,7 +16,7 @@
 // Balance indicator badge in the footer surfaces the delta in real
 // time so operators see the balance shift as they type.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +59,42 @@ function newLineDraft(): LineDraft {
 }
 
 
+/**
+ * Optional pre-populate seed for the dialog. When supplied, dialog
+ * fields are initialized from these values on each open transition.
+ * Introduced at M28.2 (SESSION_196) for the template-instantiate flow —
+ * clicking "Instantiate" on a template row builds an object of this
+ * shape and passes it to a second controlled mount of the dialog.
+ */
+export interface NewJournalEntryInitialValues {
+  description: string;
+  /** ISO YYYY-MM-DD. Defaults to today if omitted. */
+  postedAt?: string;
+  lines: Array<{
+    account_id: number;
+    /** Decimal-as-string. Zero when this line's amount lands on the
+     * opposite side. */
+    debit: string;
+    credit: string;
+    memo: string;
+  }>;
+}
+
+
+function draftFromInitialValues(
+  initial: NewJournalEntryInitialValues,
+): LineDraft[] {
+  if (initial.lines.length === 0) return [newLineDraft(), newLineDraft()];
+  return initial.lines.map((line) => ({
+    key: crypto.randomUUID(),
+    account_id: line.account_id,
+    debit: line.debit,
+    credit: line.credit,
+    memo: line.memo,
+  }));
+}
+
+
 function todayIsoDate(): string {
   // Returns YYYY-MM-DD in the operator's local timezone. The backend
   // JournalEntryCreateRequestSerializer accepts ISO 8601 date or
@@ -83,6 +119,21 @@ export interface NewJournalEntryDialogProps {
   accounts: GLAccount[];
   onCreated: (entry: JournalEntry) => void;
   disabled?: boolean;
+  /** Controlled-open mode. When both ``open`` and ``onOpenChange``
+   * are supplied, they override the internal open state (used by the
+   * M28.2 template Instantiate flow). Uncontrolled behavior — the
+   * built-in "+ New journal entry" trigger button plus internal open
+   * state — is preserved when omitted. */
+  open?: boolean;
+  onOpenChange?: (next: boolean) => void;
+  /** Optional pre-populate seed applied on each open transition. Used
+   * by the M28.2 template Instantiate flow to open the dialog with a
+   * template's description + lines already filled in. */
+  initialValues?: NewJournalEntryInitialValues;
+  /** When true, the built-in "+ New journal entry" trigger button is
+   * not rendered. Used by controlled mounts that trigger opening
+   * externally. Defaults to false (backward-compatible). */
+  hideTrigger?: boolean;
 }
 
 
@@ -90,16 +141,54 @@ export function NewJournalEntryDialog({
   accounts,
   onCreated,
   disabled = false,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  initialValues,
+  hideTrigger = false,
 }: NewJournalEntryDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [description, setDescription] = useState("");
-  const [postedAt, setPostedAt] = useState(todayIsoDate);
-  const [lines, setLines] = useState<LineDraft[]>(() => [
-    newLineDraft(),
-    newLineDraft(),
-  ]);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled =
+    controlledOpen !== undefined && controlledOnOpenChange !== undefined;
+  const open = isControlled ? (controlledOpen as boolean) : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (isControlled) {
+      (controlledOnOpenChange as (n: boolean) => void)(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
+
+  const initialDescription = initialValues?.description ?? "";
+  const initialPostedAt = initialValues?.postedAt ?? todayIsoDate();
+  const initialLines = (): LineDraft[] =>
+    initialValues
+      ? draftFromInitialValues(initialValues)
+      : [newLineDraft(), newLineDraft()];
+
+  const [description, setDescription] = useState(initialDescription);
+  const [postedAt, setPostedAt] = useState(initialPostedAt);
+  const [lines, setLines] = useState<LineDraft[]>(initialLines);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Re-seed fields on each open transition so re-opening a fresh
+  // dialog (either blank or from a different template) starts from a
+  // clean state derived from the current ``initialValues``.
+  const prevOpen = useRef(open);
+  useEffect(() => {
+    if (open && !prevOpen.current) {
+      setDescription(initialValues?.description ?? "");
+      setPostedAt(initialValues?.postedAt ?? todayIsoDate());
+      setLines(
+        initialValues
+          ? draftFromInitialValues(initialValues)
+          : [newLineDraft(), newLineDraft()],
+      );
+      setError(null);
+      setSubmitting(false);
+    }
+    prevOpen.current = open;
+  }, [open, initialValues]);
 
   const trimmedDescription = description.trim();
   const descriptionInvalid = trimmedDescription.length === 0;
@@ -144,9 +233,13 @@ export function NewJournalEntryDialog({
     !submitting;
 
   function reset() {
-    setDescription("");
-    setPostedAt(todayIsoDate());
-    setLines([newLineDraft(), newLineDraft()]);
+    setDescription(initialValues?.description ?? "");
+    setPostedAt(initialValues?.postedAt ?? todayIsoDate());
+    setLines(
+      initialValues
+        ? draftFromInitialValues(initialValues)
+        : [newLineDraft(), newLineDraft()],
+    );
     setError(null);
     setSubmitting(false);
   }
@@ -205,14 +298,16 @@ export function NewJournalEntryDialog({
         if (!next) reset();
       }}
     >
-      <Button
-        variant="default"
-        size="sm"
-        disabled={disabled || accounts.length < 2}
-        onClick={() => setOpen(true)}
-      >
-        + New journal entry
-      </Button>
+      {!hideTrigger && (
+        <Button
+          variant="default"
+          size="sm"
+          disabled={disabled || accounts.length < 2}
+          onClick={() => setOpen(true)}
+        >
+          + New journal entry
+        </Button>
+      )}
       <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col">
         <DialogHeader>
           <DialogTitle>New journal entry</DialogTitle>

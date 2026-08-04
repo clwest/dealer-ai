@@ -19,9 +19,9 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 156
-- **Consumed by frontend components (`covered`):** 121
-- **Backend-only (audit findings):** 35
-  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **4**
+- **Consumed by frontend components (`covered`):** 122
+- **Backend-only (audit findings):** 34
+  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **3**
 - **Service verbs enumerated:** 315
 - **Distinct view modules importing service verbs:** 22
 
@@ -89,7 +89,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 39 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/` | `views.admin_condition_photo_attach` | `admin-condition-photo-attach` | api.ts:1313 `attachPhoto` | `covered` |
 | 40 | `admin/vehicles/<str:stock_number>/photos/<uuid:public_id>/` | `views.admin_condition_photo_delete` | `admin-condition-photo-delete` | api.ts:1320 `deletePhoto` | `covered` |
 | 41 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/local-upload/` | `views.admin_condition_photo_local_upload_receiver` | `admin-condition-photo-local-upload` | api.ts:1291 `uploadPhotoBytes` | `covered` |
-| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only | `covered` |
+| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only, api.ts:1703 `fetchVendor` ⚠ wrapper-only | `covered` |
 | 43 | `admin/vendors/<slug:slug>/` | `views_recon.admin_vendor_detail` | `admin-vendor-detail` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1709 `updateVendor` ⚠ wrapper-only | `defer-candidate-O2` |
 | 44 | `admin/vehicles/<str:stock_number>/recon/` | `views_recon.admin_recon_dashboard` | `admin-recon-dashboard` | api.ts:1717 `fetchReconDashboard` | `covered` |
 | 45 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/recon-decision/` | `views_recon.admin_recon_decision_create` | `admin-recon-decision-create` | api.ts:1728 `recordReconDecision` | `covered` |
@@ -197,7 +197,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 147 | `admin/accounting/trial-balance/snapshots/list/` | `views_accounting.admin_trial_balance_snapshot_list` | `admin-trial-balance-snapshot-list` | accountingApi.ts:142 `listTrialBalanceSnapshots` | `covered` |
 | 148 | `admin/accounting/trial-balance/snapshots/<int:pk>/` | `views_accounting.admin_trial_balance_snapshot_retrieve` | `admin-trial-balance-snapshot-retrieve` | accountingApi.ts:150 `fetchTrialBalanceSnapshot` | `covered` |
 | 149 | `admin/accounting/gl-accounts/` | `views_accounting.admin_gl_account_list` | `admin-gl-account-list` | accountingApi.ts:343 `fetchGLAccounts` | `covered` |
-| 150 | `admin/accounting/journal-entry-templates/` | `views_accounting.admin_journal_entry_template_list_or_create` | `admin-journal-entry-template-list-or-create` | accountingApi.ts:447 `fetchJournalEntryTemplates` ⚠ wrapper-only, accountingApi.ts:455 `createJournalEntryTemplate` ⚠ wrapper-only | `defer-candidate-O2` |
+| 150 | `admin/accounting/journal-entry-templates/` | `views_accounting.admin_journal_entry_template_list_or_create` | `admin-journal-entry-template-list-or-create` | accountingApi.ts:447 `fetchJournalEntryTemplates`, accountingApi.ts:455 `createJournalEntryTemplate` | `covered` |
 | 151 | `admin/demo-store/feedback/` | `views_demo_store.admin_demo_store_feedback_create` | `admin-demo-store-feedback-create` | — | `defer-candidate-O2` |
 | 152 | `admin/pilots/create/` | `views_pilot_onboarding.admin_pilot_create` | `admin-pilot-create` | api.ts:2254 `createPilotDealership` | `covered` |
 | 153 | `admin/pilots/` | `views_pilot_onboarding.admin_pilot_list` | `admin-pilot-list` | api.ts:2248 `fetchPilotDealerships` | `covered` |
@@ -207,7 +207,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**35 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**34 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -217,7 +217,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (30)
+### defer-candidate-O2 (29)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -247,7 +247,6 @@ _None._
 - `admin/deal-writeups/` → `views_deal_writeups.admin_deal_writeup_create` (`admin-deal-writeup-create`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/approve/` → `views_deal_writeups.admin_deal_writeup_approve` (`admin-deal-writeup-approve`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/hand-off/` → `views_deal_writeups.admin_deal_writeup_hand_off` (`admin-deal-writeup-hand-off`). Imported service verbs: `get_current_dealership`
-- `admin/accounting/journal-entry-templates/` → `views_accounting.admin_journal_entry_template_list_or_create` (`admin-journal-entry-template-list-or-create`). Imported service verbs: `get_current_dealership`
 - `admin/demo-store/feedback/` → `views_demo_store.admin_demo_store_feedback_create` (`admin-demo-store-feedback-create`). Imported service verbs: `get_current_dealership`
 
 ### defer-domain-milestone (0)
@@ -273,8 +272,7 @@ _None._
 ### views_accounting
 
 - **Endpoints:** 11
-- **Backend-only:** 1
-- **Backend-only dispositions in this module:** `defer-candidate-O2`
+- **Backend-only:** 0
 
 ### views_analytics
 

@@ -234,6 +234,47 @@ test.describe(
       expect(creditLine?.account_code).toBe("400000");
     });
 
+    test(
+      "opening the '+ New journal entry' dialog directly (blank path) does not pre-populate — M28.2 regression guard",
+      async ({ page }) => {
+        // Regression guard for the M28.2 template Instantiate flow:
+        // the JE list page mounts NewJournalEntryDialog twice — once
+        // uncontrolled (this "+ New journal entry" trigger, always
+        // blank) and once controlled (external open, pre-populated
+        // from a template). This test asserts that clicking the blank
+        // trigger continues to open a blank dialog even after M28.2
+        // introduced the pre-populate path.
+        await page.goto("/dealer-ai-accounting/journal-entries");
+        const trigger = page.getByRole("button", {
+          name: /\+ New journal entry/i,
+        });
+        await expect(trigger).toBeEnabled({ timeout: 15_000 });
+        await trigger.click();
+
+        const dialog = page.getByRole("dialog", {
+          name: /New journal entry/i,
+        });
+        await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+        // Description empty.
+        await expect(
+          dialog.getByRole("textbox", { name: /Description/i }),
+        ).toHaveValue("");
+        // Debit + credit inputs on both default lines empty.
+        await expect(dialog.getByLabel("Line 1 debit")).toHaveValue("");
+        await expect(dialog.getByLabel("Line 1 credit")).toHaveValue("");
+        await expect(dialog.getByLabel("Line 2 debit")).toHaveValue("");
+        await expect(dialog.getByLabel("Line 2 credit")).toHaveValue("");
+        // No account preselected on either line — indicator shows
+        // "Enter amounts" (totalDebit == 0 && totalCredit == 0).
+        await expect(
+          dialog.getByTestId("je-create-balance-indicator"),
+        ).toContainText(/Enter amounts/i);
+        // Submit blocked (blank description + no accounts + no amounts).
+        await expect(dialog.getByTestId("je-create-submit")).toBeDisabled();
+      },
+    );
+
     test("cancel closes the dialog without persisting the entry", async ({
       page,
       request,
