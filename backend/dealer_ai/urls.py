@@ -1051,6 +1051,18 @@ urlpatterns = [
         views_accounting.admin_journal_entry_template_list_or_create,
         name="admin-journal-entry-template-list-or-create",
     ),
+    # Milestone 30 · Increment 1 (SESSION_201) — template detail
+    # endpoint supporting PATCH (full-replace edit) + DELETE (soft
+    # — sets is_active=False). Per MILESTONE_30_PLANNING.md §5.b
+    # D1. Reuses _M131_PERMS (zero-drift permission-class streak
+    # preserved at 29 → 30 intended at M30.1 → 31 intended at
+    # M30.2). No GET at M30 — the edit-mode dialog populates from
+    # the existing list response's projection.
+    path(
+        "admin/accounting/journal-entry-templates/<int:pk>/",
+        views_accounting.admin_journal_entry_template_detail,
+        name="admin-journal-entry-template-detail",
+    ),
     # Milestone 18 · Increment 5 (SESSION_151) — TesterFeedback POST.
     # Per MILESTONE_18_PLANNING.md §7 M18.5 + §5.e Option A. Reuses
     # ``IsSalesManagerOrOwnerAtActiveDealership`` (zero-drift streak

@@ -69,8 +69,10 @@ from .template import (
     TemplateLineInput,
     UnbalancedJournalEntryTemplateError,
     create_journal_entry_template,
+    delete_journal_entry_template,
     get_journal_entry_template,
     list_journal_entry_templates,
+    update_journal_entry_template,
 )
 from .trial_balance_close import (
     DuplicateTrialBalanceSnapshotError,
@@ -130,6 +132,7 @@ __all__ = [
     "VEHICLE_SALES_RETAIL_ACCOUNT_CODE",
     "compute_trial_balance",
     "create_journal_entry_template",
+    "delete_journal_entry_template",
     "detect_cost_posting_failures",
     "detect_unposted_bhph_payments",
     "detect_unposted_costs",
@@ -148,4 +151,5 @@ __all__ = [
     "post_vehicle_cost_journal",
     "reverse_journal_entry",
     "seed_default_coa",
+    "update_journal_entry_template",
 ]

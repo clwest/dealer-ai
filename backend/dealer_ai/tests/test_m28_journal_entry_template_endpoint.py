@@ -414,3 +414,276 @@ class TemplateListEndpointTests(TestCase):
         templates = response.json()["journal_entry_templates"]["templates"]
         names = [t["name"] for t in templates]
         self.assertEqual(names, ["MyTemplate"])
+
+
+# ======================================================================
+# Milestone 30 · Increment 1 (SESSION_201) — template detail endpoint.
+# ======================================================================
+#
+# Per MILESTONE_30_PLANNING.md §5.b D1 + D6. The new endpoint
+# ``admin/accounting/journal-entry-templates/<int:pk>/`` supports
+# PATCH (full-replace edit) + DELETE (soft — sets is_active=False).
+# No GET at M30 — the edit-mode dialog populates from the row
+# already loaded via the list response.
+
+DETAIL = "dealer_ai:admin-journal-entry-template-detail"
+
+
+class TemplateDetailEndpointTests(TestCase):
+    def setUp(self) -> None:
+        self.dealership = get_default_dealership()
+        self.rent, self.bank = _make_accounts(self.dealership)
+        self.client_ = _sm_client(username="sm-detail-tmpl-ep")
+        # Seed a template to edit / delete.
+        create_response = self.client_.post(
+            reverse(LIST_OR_CREATE),
+            {
+                "name": "Detail-target rent",
+                "description": "Original",
+                "lines": [
+                    {
+                        "account_id": self.rent.pk,
+                        "side": "debit",
+                        "amount": "3500.00",
+                    },
+                    {
+                        "account_id": self.bank.pk,
+                        "side": "credit",
+                        "amount": "3500.00",
+                    },
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        self.template_id = create_response.json()[
+            "journal_entry_template"
+        ]["id"]
+
+    def _valid_patch_body(self, name: str = "Detail-target rent (edited)") -> dict:
+        return {
+            "name": name,
+            "description": "Edited",
+            "lines": [
+                {
+                    "account_id": self.rent.pk,
+                    "side": "debit",
+                    "amount": "4000.00",
+                },
+                {
+                    "account_id": self.bank.pk,
+                    "side": "credit",
+                    "amount": "4000.00",
+                },
+            ],
+        }
+
+    def test_patch_returns_200_with_updated_projection(self) -> None:
+        response = self.client_.patch(
+            reverse(DETAIL, kwargs={"pk": self.template_id}),
+            self._valid_patch_body(),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        body = response.json()["journal_entry_template"]
+        self.assertEqual(body["id"], self.template_id)
+        self.assertEqual(body["name"], "Detail-target rent (edited)")
+        self.assertEqual(body["description"], "Edited")
+        self.assertEqual(body["is_active"], True)
+        self.assertEqual(body["lines"][0]["amount"], "4000.00")
+
+    def test_patch_full_replace_lines(self) -> None:
+        third = GLAccount.objects.create(
+            dealership=self.dealership,
+            code="EP30-671000",
+            name="Utilities",
+            account_type=GL_ACCOUNT_TYPE_EXPENSE,
+        )
+        body = {
+            "name": "Detail-target rent",
+            "description": "Now three lines",
+            "lines": [
+                {
+                    "account_id": self.rent.pk,
+                    "side": "debit",
+                    "amount": "3500.00",
+                },
+                {
+                    "account_id": third.pk,
+                    "side": "debit",
+                    "amount": "500.00",
+                },
+                {
+                    "account_id": self.bank.pk,
+                    "side": "credit",
+                    "amount": "4000.00",
+                },
+            ],
+        }
+        response = self.client_.patch(
+            reverse(DETAIL, kwargs={"pk": self.template_id}),
+            body,
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        body_out = response.json()["journal_entry_template"]
+        self.assertEqual(body_out["line_count"], 3)
+
+    def test_patch_missing_pk_returns_404(self) -> None:
+        response = self.client_.patch(
+            reverse(DETAIL, kwargs={"pk": 999_999}),
+            self._valid_patch_body(),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_patch_cross_tenant_returns_404(self) -> None:
+        # Create a template owned by another tenant; the current
+        # sales-manager client is scoped to get_default_dealership().
+        other = Dealership.objects.create(
+            slug="other-detail-patch", name="Other tenant"
+        )
+        other_template = JournalEntryTemplate.objects.create(
+            dealership=other, name="Foreign", description="—"
+        )
+        response = self.client_.patch(
+            reverse(DETAIL, kwargs={"pk": other_template.pk}),
+            self._valid_patch_body(),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_patch_invalid_payload_returns_400(self) -> None:
+        # Populated portion doesn't balance.
+        body = self._valid_patch_body()
+        body["lines"][1]["amount"] = "3999.99"
+        response = self.client_.patch(
+            reverse(DETAIL, kwargs={"pk": self.template_id}),
+            body,
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_patch_duplicate_name_returns_409(self) -> None:
+        # Seed another template with a name that PATCH will try to
+        # collide with.
+        second = self.client_.post(
+            reverse(LIST_OR_CREATE),
+            {
+                "name": "Second template",
+                "description": "—",
+                "lines": [
+                    {
+                        "account_id": self.rent.pk,
+                        "side": "debit",
+                        "amount": "1.00",
+                    },
+                    {
+                        "account_id": self.bank.pk,
+                        "side": "credit",
+                        "amount": "1.00",
+                    },
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(second.status_code, 201)
+        # Try to rename the original template to "Second template".
+        body = self._valid_patch_body(name="Second template")
+        response = self.client_.patch(
+            reverse(DETAIL, kwargs={"pk": self.template_id}),
+            body,
+            format="json",
+        )
+        self.assertEqual(response.status_code, 409)
+
+    def test_patch_silently_ignores_is_active_in_body(self) -> None:
+        """PATCH must not allow ``is_active`` mutation via body per
+        M30.0 §5.b D5. Activation flows through DELETE (soft) or a
+        future Restore verb only. Body key silently dropped."""
+        body = self._valid_patch_body()
+        body["is_active"] = False  # sneaky
+        response = self.client_.patch(
+            reverse(DETAIL, kwargs={"pk": self.template_id}),
+            body,
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        # is_active remains True.
+        self.assertTrue(
+            response.json()["journal_entry_template"]["is_active"]
+        )
+
+    def test_delete_returns_204(self) -> None:
+        response = self.client_.delete(
+            reverse(DETAIL, kwargs={"pk": self.template_id})
+        )
+        self.assertEqual(response.status_code, 204)
+        # Template disappears from active-only list.
+        list_response = self.client_.get(reverse(LIST_OR_CREATE))
+        templates = list_response.json()["journal_entry_templates"][
+            "templates"
+        ]
+        ids = [t["id"] for t in templates]
+        self.assertNotIn(self.template_id, ids)
+
+    def test_delete_missing_pk_returns_404(self) -> None:
+        response = self.client_.delete(
+            reverse(DETAIL, kwargs={"pk": 999_999})
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_cross_tenant_returns_404(self) -> None:
+        other = Dealership.objects.create(
+            slug="other-detail-delete", name="Other tenant"
+        )
+        other_template = JournalEntryTemplate.objects.create(
+            dealership=other, name="Foreign", description="—"
+        )
+        response = self.client_.delete(
+            reverse(DETAIL, kwargs={"pk": other_template.pk})
+        )
+        self.assertEqual(response.status_code, 404)
+        # Other tenant's template still active.
+        other_template.refresh_from_db()
+        self.assertTrue(other_template.is_active)
+
+    def test_delete_already_inactive_returns_204_idempotent(self) -> None:
+        # First DELETE — soft-hides.
+        first = self.client_.delete(
+            reverse(DETAIL, kwargs={"pk": self.template_id})
+        )
+        self.assertEqual(first.status_code, 204)
+        # Second DELETE — still 204.
+        second = self.client_.delete(
+            reverse(DETAIL, kwargs={"pk": self.template_id})
+        )
+        self.assertEqual(second.status_code, 204)
+
+    def test_patch_advisor_denied(self) -> None:
+        response = _advisor_client(username="adv-detail-tmpl").patch(
+            reverse(DETAIL, kwargs={"pk": self.template_id}),
+            self._valid_patch_body(),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_advisor_denied(self) -> None:
+        response = _advisor_client(username="adv-detail-tmpl-del").delete(
+            reverse(DETAIL, kwargs={"pk": self.template_id})
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_patch_unauthenticated_denied(self) -> None:
+        response = APIClient().patch(
+            reverse(DETAIL, kwargs={"pk": self.template_id}),
+            self._valid_patch_body(),
+            format="json",
+        )
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_delete_unauthenticated_denied(self) -> None:
+        response = APIClient().delete(
+            reverse(DETAIL, kwargs={"pk": self.template_id})
+        )
+        self.assertIn(response.status_code, (401, 403))

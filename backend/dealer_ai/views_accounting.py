@@ -60,6 +60,7 @@ from .services.accounting import (
     UnbalancedJournalEntryTemplateError,
     compute_trial_balance,
     create_journal_entry_template,
+    delete_journal_entry_template,
     detect_cost_posting_failures,
     freeze_trial_balance,
     get_journal_entry,
@@ -70,6 +71,7 @@ from .services.accounting import (
     list_trial_balance_snapshots,
     post_journal_entry,
     reverse_journal_entry,
+    update_journal_entry_template,
 )
 from .services.tenancy import get_current_dealership
 
@@ -883,4 +885,131 @@ def admin_journal_entry_template_list_or_create(request):
     return Response(
         {"journal_entry_template": _project_template(template)},
         status=status.HTTP_201_CREATED,
+    )
+
+
+# Milestone 30 · Increment 1 (SESSION_201) — template detail endpoint.
+#
+# Per MILESTONE_30_PLANNING.md §5.b D1. One new URL pattern at
+# ``admin/accounting/journal-entry-templates/<int:pk>/`` supporting
+# PATCH (full-replace edit of name/description/lines) + DELETE (soft
+# — sets ``is_active = False``). No GET at M30 — the edit-mode dialog
+# populates from the row already loaded via
+# ``fetchJournalEntryTemplates`` in the list response, which projects
+# all fields including lines.
+#
+# Reuses ``_M131_PERMS`` (zero-drift permission-class streak preserved
+# at 29 → 30 intended at M30.1 → 31 intended at M30.2).
+#
+# Domain-error → HTTP mapping (asserted in
+# test_m28_journal_entry_template_endpoint.py extensions at M30.1):
+#
+# - Template not found or cross-tenant → 404.
+# - PATCH with invalid payload (missing account, unbalanced, etc.)
+#   → 400 with the same error classes as create.
+# - PATCH with name collision inside the same tenant → 409
+#   (:class:`DuplicateJournalEntryTemplateNameError`).
+# - DELETE of already-inactive template → 204 (idempotent per D1).
+#
+# PATCH silently ignores ``is_active`` in the request body (field is
+# not defined on the update serializer). Activation is DELETE-only
+# per D5 design constraint — the edit path cannot re-activate or
+# deactivate; that flows through the DELETE verb (soft) or a future
+# Restore verb.
+
+
+class JournalEntryTemplateUpdateRequestSerializer(serializers.Serializer):
+    """M30.1 update payload — mirrors create shape verbatim.
+
+    Fields intentionally identical to
+    :class:`JournalEntryTemplateCreateRequestSerializer`. Any
+    ``is_active`` field in the request body is silently dropped
+    (not defined here) per D5: activation flows through DELETE
+    (soft) or a future Restore verb, never through edit.
+    """
+
+    name = serializers.CharField(max_length=200)
+    description = serializers.CharField(max_length=500)
+    lines = JournalEntryTemplateLineSerializer(many=True)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes(_M131_PERMS)
+def admin_journal_entry_template_detail(request, pk: int):
+    """PATCH / DELETE /admin/accounting/journal-entry-templates/<pk>/
+
+    PATCH performs a full-replace edit of the template's name,
+    description, and lines (small ordered set; partial-line-patch
+    rejected per M30.0 §5.b D1 for surface-vs-value ratio).
+    DELETE soft-deletes by setting ``is_active = False``; idempotent
+    (already-inactive returns 204 without state change).
+
+    Both fetch via
+    :func:`get_journal_entry_template` with ``include_inactive=True``
+    so a deactivate → future-reactivate path can find the row.
+    Cross-tenant or missing pk returns 404.
+    """
+    dealership = get_current_dealership(request)
+
+    if request.method == "DELETE":
+        template = delete_journal_entry_template(
+            pk=pk, dealership=dealership
+        )
+        if template is None:
+            return Response(
+                {"detail": "JournalEntryTemplate not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH branch.
+    serializer = JournalEntryTemplateUpdateRequestSerializer(
+        data=request.data
+    )
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    try:
+        lines = _resolve_template_lines(dealership, data["lines"])
+    except CrossTenantGLAccountError:
+        return Response(
+            {"detail": "GLAccount not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        template = update_journal_entry_template(
+            dealership=dealership,
+            pk=pk,
+            name=data["name"],
+            description=data["description"],
+            lines=lines,
+        )
+    except (
+        EmptyJournalEntryTemplateError,
+        InvalidJournalEntryTemplateLineError,
+        UnbalancedJournalEntryTemplateError,
+    ) as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    except CrossTenantGLAccountError:
+        return Response(
+            {"detail": "GLAccount not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except DuplicateJournalEntryTemplateNameError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+
+    if template is None:
+        return Response(
+            {"detail": "JournalEntryTemplate not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    return Response(
+        {"journal_entry_template": _project_template(template)},
+        status=status.HTTP_200_OK,
     )

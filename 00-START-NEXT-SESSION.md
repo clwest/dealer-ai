@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-04
-last_session_shipped: SESSION_200
+last_session_shipped: SESSION_201
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -33,263 +33,416 @@ milestone_28_status: shipped
 milestone_29_status: shipped
 milestone_30_status: active
 milestone_30_increment_0_status: shipped
-milestone_30_increment_1_status: pending
+milestone_30_increment_1_status: shipped
 milestone_30_increment_2_status: pending
-next_session: SESSION_201
+next_session: SESSION_202
 next_milestone: 30
 next_milestone_name: "Journal-Entry Template Edit / Delete UI (on M28.1 template substrate + M29.2 additive-prop pattern)"
-next_increment: 1
-next_increment_name: "M30.1 — Backend substrate (PATCH + DELETE detail endpoint + service verbs + tests)"
+next_increment: 2
+next_increment_name: "M30.2 — Frontend + Playwright (dialog consolidation, row Edit + Delete buttons, delete confirmation, D8 acceptance block)"
 ---
 
-# Next session — SESSION_201 · Milestone 30 · Increment 1 (M30.1 — backend substrate)
+# Next session — SESSION_202 · Milestone 30 · Increment 2 (M30.2 — frontend + Playwright)
 
-> **Milestone 30 opened at SESSION_200.** M30.0 planning +
-> §5 locks landed; target locked as **NEW Template edit /
-> delete UI** with two architectural verifications performed
-> at open (dialog consolidation → additive-mode pattern;
-> soft-delete integrity → clean by construction). Planning
-> memo at `docs/roadmap/MILESTONE_30_PLANNING.md`.
+> **M30.1 shipped at SESSION_201.** Backend substrate landed:
+> new `admin/accounting/journal-entry-templates/<int:pk>/`
+> detail endpoint (PATCH + DELETE), `update_journal_entry
+> _template` + `delete_journal_entry_template` service verbs,
+> `include_inactive: bool = False` kwarg on
+> `get_journal_entry_template` for API symmetry. Backend
+> baseline **4,871 → 4,904** (+33 M30.1 tests). Audit **156 →
+> 157 endpoints, 122 covered (unchanged), 34 → 35 backend-
+> only, 315 → 317 service verbs**. Zero migration (soft-delete
+> reuses M28.1 `is_active`). DoD exception path invoked as
+> **fifth precedent** (M26 + M27.1 + M28.1 + M29.1 + M30.1).
 >
-> **§0.a M30.0 amendment shipped mid-session (2026-08-04):**
-> first M29 CI acceptance run turned red because M29.2's
-> `LockedAmountChip` UI change broke a pre-existing M28.2
-> `getByLabel("Line 1 debit")` assertion in
-> `accounting_je_template.spec.ts:295`. Fix committed +
-> pushed as `43b715b` under a "restore red main"
-> push-cadence exception. Second CI run (post-correction):
-> **26 passed / 0 failed / 2m43s** — main restored to
-> shipped baseline. New durable lesson recorded in
-> `MILESTONE_29_RETROSPECTIVE.md` §5: sweep the full
-> acceptance suite when the semantic shape of an established
-> UI element changes (chip ↔ input, badge ↔ button, hidden ↔
-> visible); vitest + tsc cannot catch stale Playwright
-> selectors.
+> **Zero-drift permission-class streak advanced 29 → 30** (new
+> endpoint reuses `_M131_PERMS` verbatim; no new class).
+> Planning-time as-recommended streak unchanged at 9.
+> Substrate-compound-value continuation projected 3 → 4 at
+> M30.2 close (template CRUD closure).
 >
-> **Zero-drift permission-class streak preserved at 29
-> consecutive milestones** (M10 → M29). Projection at M30
-> close: 31 (M30.1 adds new detail endpoint reusing existing
-> permission class; M30.2 no permission change). Planning-
-> time as-recommended streak advanced 8 → 9 at M30.0 close
-> (§0.a is corrective, not scope selection). Substrate-
-> compound-value continuation projected to reach 4 links at
-> M30 close.
+> **SESSION_202 opens M30.2 — frontend + Playwright.**
+> Component rename via `git mv` + import sweep (same commit):
+> `NewJournalEntryTemplateDialog.tsx` →
+> `JournalEntryTemplateDialog.tsx`. Additive optional props
+> (`mode` / `initialTemplate` / `onEdited` / controlled-open
+> `open` + `onOpenChange`) applied to the renamed component.
+> Row-level Edit + Delete buttons attached to the templates
+> section of `AccountingJournalEntriesPage`. Inline delete
+> confirmation with mandated "Deactivate" copy. API wrappers
+> `updateJournalEntryTemplate` +
+> `deleteJournalEntryTemplate`. ~18 vitests. **One new
+> Playwright `test.describe("edit-delete", ...)` block**
+> extending `accounting_je_template.spec.ts` — journey count
+> **20 → 21**. **DoD satisfied directly** via D8 block. Two-
+> source agreement gate at close.
 >
-> **SESSION_201 opens M30.1 — backend substrate.** Add
-> `admin/accounting/journal-entry-templates/<int:pk>/`
-> detail endpoint supporting PATCH (full-replace) + DELETE
-> (soft — sets `is_active = False`). Add
-> `update_journal_entry_template` +
-> `delete_journal_entry_template` service verbs. Add
-> `include_inactive: bool = False` kwarg to
-> `get_journal_entry_template` for API symmetry. ~22 new
-> backend tests. DoD exception path invoked as **fifth
-> precedent** (M26 + M27.1 + M28.1 + M29.1 + M30.1). No
-> frontend, no acceptance change. Local commits only;
-> coordinated push at M30 close (distinct from the SESSION_
-> 200 §0.a push exception — that was a corrective hotfix).
+> **Coordinated push at M30 close.** M30.0 + M30.1 + M30.2
+> commits (plus hash-backfill follow-ups per convention) all
+> push together at M30.2 close, awaiting explicit user
+> confirmation.
 
-## First thing SESSION_201 must do
+## First thing SESSION_202 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean; local `HEAD` matches `origin/main`
-  at `43b715b` (M30.0 §0.a push) OR local `HEAD` ahead by
-  1 commit if the SESSION_200 handoff commit hasn't been
-  pushed (per planning-only cadence — it stays local until
-  M30 close).
-- `git log --oneline -10` — top should be either the
-  SESSION_200 handoff commit (local) or `43b715b` (if
-  handoff commit was already pushed or amended into a
-  merge base).
-- `python3 manage.py test dealer_ai` → **4,871 pass, 1
-  skipped, 0 fail** (unchanged from M29 close).
+- `git status` — clean; local `HEAD` ahead of `origin/main`
+  by 2 commits (SESSION_200 handoff commit `1956ed7` +
+  SESSION_201 M30.1 commit). `origin/main` at `43b715b`
+  (SESSION_200 §0.a push).
+- `git log --oneline -10` — top three should be
+  (a) SESSION_201 M30.1 commit, (b) `1956ed7` SESSION_200
+  handoff, (c) `43b715b` §0.a amendment.
+- `python3 manage.py test dealer_ai` → **4,904 pass, 1
+  skipped, 0 fail** (M30.1 baseline).
 - `cd frontend && npm test` → **282 pass** across 36 files
-  (unchanged).
+  (unchanged from M29.2 — no frontend changes at M30.1).
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations --check --dry-run` →
-  "No changes detected" (no migration for M30.1 — soft-
-  delete uses existing `is_active` field).
+  "No changes detected" (M30.2 is frontend + Playwright
+  only — zero backend changes expected).
 - `cd frontend && npx tsc --noEmit` clean.
 - `cd acceptance && npx tsc --noEmit` clean.
 - `redis-cli ping` → `PONG`.
-- `cat backend/db.acceptance.sqlite3 > /dev/null 2>&1 || rm
-  -f backend/db.acceptance.sqlite3` — proactively clear
-  stale acceptance DB state (M30.1 doesn't run Playwright,
-  but the DB may be left over from a prior session; fresh
-  state is cheaper than diagnosing shared-DB flakes).
+- `rm -f backend/db.acceptance.sqlite3` — proactively reset
+  acceptance DB per SESSION_200 §0.a durable lesson (v) —
+  local Playwright re-runs corrupt shared-DB state across
+  sessions; fresh state is cheaper than diagnosing flakes.
+- Audit artifact should read **157 / 122 / 35 / 317**
+  (M30.1 baseline).
 
-### 2. Regenerate the audit artifact (baseline hold check)
-
-```bash
-cd backend
-python3 -m dealer_ai.scripts.audit_operational_surface
-```
-
-Expected: **156 total / 122 covered / 34 backend-only / 315
-service verbs** (unchanged — M30.1 adds an endpoint but the
-audit artifact is regenerated at each milestone close, not
-mid-implementation). If the artifact drifts unexpectedly,
-investigate before locking §5.b implementation order.
-
-### 3. Implement per §5.b D1 + D6
+### 2. Implement per §5.b D2 + D4 + D7 (frontend)
 
 Follow the load-bearing decisions in
-`docs/roadmap/MILESTONE_30_PLANNING.md` §5.b:
+`docs/roadmap/MILESTONE_30_PLANNING.md` §5.b.
 
-**D1 backend endpoint:**
+**D2 — Dialog consolidation** (additive-mode pattern per
+M29.2 durable lesson (t)):
 
-- Add URL pattern in `backend/dealer_ai/urls.py`:
-  `admin/accounting/journal-entry-templates/<int:pk>/` →
-  `views_accounting.admin_journal_entry_template_detail`
-  with `url_name="admin-journal-entry-template-detail"`.
-- Add `admin_journal_entry_template_detail` view function
-  in `views_accounting.py` supporting `PATCH` + `DELETE`.
-  Reuse existing permission class (verify at open —
-  matches M28.1 combined-verb endpoint's class per §6
-  streak projection).
-- Reuse the M28.1 create serializer for PATCH payload
-  validation (or rename to
-  `JournalEntryTemplateWriteRequestSerializer` for
-  clarity — either is acceptable per §5.b D1).
-- PATCH: full-replace of name / description / lines;
-  silently drops `is_active` from body (activation is
-  DELETE-only, not edit-editable).
-- DELETE: sets `is_active = False`; idempotent (already-
-  inactive returns 204); response 204 no body.
-- Cross-tenant guard: both PATCH and DELETE fetch via
-  `get_journal_entry_template(pk=pk, dealership=dealership,
-  include_inactive=True)` — pass `include_inactive=True`
-  so the deactivate + future-reactivate path can find the
-  row. Cross-tenant → None → 404.
-- Error mapping: 404 for not-found / cross-tenant; 400
-  for invalid payload (empty / invalid line / unbalanced
-  populated portion); 409 for duplicate name inside tenant.
+- **Rename in the same commit as import sweep** (per
+  `DOC_GOVERNANCE.md` §5):
+  ```
+  git mv \
+    frontend/src/components/accounting/NewJournalEntryTemplateDialog.tsx \
+    frontend/src/components/accounting/JournalEntryTemplateDialog.tsx
+  git mv \
+    frontend/src/components/accounting/NewJournalEntryTemplateDialog.test.tsx \
+    frontend/src/components/accounting/JournalEntryTemplateDialog.test.tsx
+  ```
+- Update the component name inside the file:
+  `NewJournalEntryTemplateDialog` → `JournalEntryTemplateDialog`
+  (both the exported component and the `Props` interface).
+- **Sweep every import** — before commit, run
+  `git grep NewJournalEntryTemplateDialog frontend/ acceptance/`
+  and ensure the result is empty. Current known callers:
+  - `frontend/src/pages/AccountingJournalEntriesPage.tsx`
+    (imports the component + renders it in the templates
+    section header).
+  - `frontend/src/components/accounting/
+    NewJournalEntryTemplateDialog.test.tsx` (self-import,
+    handled by the file rename).
+- **Add additive props** with safe defaults:
+  ```ts
+  export interface JournalEntryTemplateDialogProps {
+    accounts: GLAccount[];
+    disabled?: boolean;
+    /** Default "create" — preserves M29.2 behavior byte-identical. */
+    mode?: "create" | "edit";
+    /** Required when mode === "edit". */
+    initialTemplate?: JournalEntryTemplate;
+    onCreated?: (template: JournalEntryTemplate) => void;
+    onEdited?: (template: JournalEntryTemplate) => void;
+    /** Controlled-open pair. When both supplied, baked-in
+     *  trigger is NOT rendered — parent controls open. When
+     *  absent (M29.2 default), baked-in "+ New template"
+     *  button renders. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+  }
+  ```
+- **Edit-mode population** — `useEffect([open,
+  initialTemplate, mode])`: when `mode === "edit"` and
+  `open` transitions true (or `initialTemplate` changes),
+  populate `name` / `description` / `lines` from
+  `initialTemplate` via a helper `templateToDraftLines
+  (initialTemplate)`. Reuses the existing reset() function
+  on close (M29.2 durable lesson (u) — reset every
+  state).
+- **Edit-mode submit** — `handleSubmit` branches on `mode`:
+  `create` → `createJournalEntryTemplate(payload)` +
+  `onCreated`; `edit` → `updateJournalEntryTemplate(pk,
+  payload)` + `onEdited`.
+- **Dialog title** — "New recurring template" (create) vs
+  "Edit template" (edit). Submit-button label — "Save
+  template" (create) vs "Save changes" (edit).
+- **Test-ids** — `tmpl-create-trigger` + `tmpl-create-
+  submit` preserved (unchanged); add `tmpl-edit-trigger-
+  <pk>` + `tmpl-edit-submit` for edit mode; add
+  `tmpl-dialog-title` on the DialogTitle element (used by
+  vitests to assert mode).
+- **Regression guard** — the 17 existing create-mode
+  vitests in the renamed test file must continue to pass
+  unchanged (safe-default path).
 
-**Service verbs** in
-`backend/dealer_ai/services/accounting/template.py`:
+**D3 — Delete confirmation UI** (see §5.b D3 in planning
+memo):
 
-- `update_journal_entry_template(*, pk, dealership,
-  name, description, lines)` → mirror
-  `create_journal_entry_template` shape; atomic write;
-  full-replace of lines; preserves `is_active` unchanged.
-- `delete_journal_entry_template(*, pk, dealership)` →
-  fetch via `get_journal_entry_template(include_inactive
-  =True)`; set `is_active = False`; save; return the
-  updated template (or None if not found).
-- Extend `get_journal_entry_template` signature to accept
-  `include_inactive: bool = False` — mirror
-  `list_journal_entry_templates` pattern.
+- Add row-level `Delete` button (variant outline, TrashIcon)
+  with `data-testid="tmpl-delete-trigger-<pk>"`.
+- Add row-level `Edit` button (variant outline, PencilIcon)
+  with `data-testid="tmpl-edit-trigger-<pk>"` alongside the
+  existing Instantiate button.
+- Add inline delete confirmation — shadcn `AlertDialog` (or
+  `Dialog` + overlay if AlertDialog is not yet imported).
+  Mandated copy (D3 explicit design constraint):
+  - Title: `Deactivate template?`
+  - Body: `Are you sure you want to deactivate "<name>"?
+    Historical journal entries created from this template
+    are not affected — they remain unchanged in the Journal
+    Entries list and in trial balance reports. You can
+    restore this template later. (Restore UX ships in a
+    future milestone.)`
+  - Footer: `[Cancel] [Deactivate]` (destructive variant
+    on Deactivate).
+- On confirm: call
+  `deleteJournalEntryTemplate(pk)`; bump
+  `templatesReloadTick` on success; treat 404 as success
+  (race-safe); optionally show a success badge for ~3s.
 
-**D6 backend tests** (~22 total):
+**D4 — Edit UI wiring** on
+`AccountingJournalEntriesPage.tsx`:
 
-- New file `test_m30_journal_entry_template_edit_delete_
-  service.py` (~14 tests) — see planning memo D6 for the
-  full list.
-- Extension of `test_m28_journal_entry_template_endpoint
-  .py` (~7 tests).
-- Extension of `test_m28_journal_entry_template_model.py`
-  (~1 test).
+```ts
+const [editingTemplate, setEditingTemplate] =
+  useState<JournalEntryTemplate | null>(null);
+const editDialogOpen = editingTemplate !== null;
+
+function handleEditClick(template) { setEditingTemplate(template); }
+function handleEditDialogOpenChange(open) {
+  if (!open) setEditingTemplate(null);
+}
+function handleEdited(template) {
+  setLastEditedTemplate(template);
+  setEditingTemplate(null);
+  setTemplatesReloadTick((tick) => tick + 1);
+}
+
+{editingTemplate && (
+  <JournalEntryTemplateDialog
+    accounts={accounts}
+    mode="edit"
+    initialTemplate={editingTemplate}
+    onEdited={handleEdited}
+    open={editDialogOpen}
+    onOpenChange={handleEditDialogOpenChange}
+  />
+)}
+```
+
+The standalone create-mode `<JournalEntryTemplateDialog />`
+at the templates section header continues to render as
+today (baked-in trigger).
+
+**API wrappers** in
+`frontend/src/lib/accountingApi.ts`:
+
+- `updateJournalEntryTemplate(pk, payload)` — PATCH the
+  detail endpoint; return the projected updated template
+  or throw on error. Payload shape identical to
+  `CreateJournalEntryTemplatePayload`.
+- `deleteJournalEntryTemplate(pk)` — DELETE the detail
+  endpoint; return `void` on 204; return `void` on 404
+  (race-safe — the template is gone either way).
+
+**D7 — Frontend test surface additions** (~18 vitests):
+
+- **Renamed file** — 17 existing create-mode tests pass
+  unchanged.
+- **Extensions in the renamed file** (~8 tests): edit-mode
+  populates from initialTemplate; edit-mode submit calls
+  updateJournalEntryTemplate; edit-mode success fires
+  onEdited; edit-mode dialog title reads "Edit template";
+  edit-mode submit label reads "Save changes"; controlled-
+  open state respected; reset on close; inline error
+  surfaces on edit failure.
+- **`AccountingJournalEntriesPage.test.tsx`** extension
+  (~5 tests): template row renders Edit + Delete buttons;
+  Edit click opens dialog in edit mode with initial values;
+  Delete click opens confirmation dialog with mandated
+  copy; Delete confirm calls deleteJournalEntryTemplate +
+  refetches; Delete 404 treated as success.
+- **`accountingApi.templates.test.ts`** extension (~4 tests):
+  updateJournalEntryTemplate wraps PATCH correctly;
+  updateJournalEntryTemplate returns projection;
+  deleteJournalEntryTemplate wraps DELETE correctly;
+  deleteJournalEntryTemplate treats 404 as success.
+
+### 3. Implement per §5.b D8 (Playwright)
+
+**Extend** `acceptance/journeys/office/accounting_je
+_template.spec.ts` with **one new `test.describe("edit-
+delete", ...)` block** containing a single end-to-end
+journey:
+
+1. **Create a fresh template** ("M30 edit fixture", 2 lines,
+   fixed $100/$100). Assert 201 + template appears in list.
+2. **Instantiate the template into a JournalEntry** and post
+   it — establishes a historical JE. Assert JE appears in
+   list.
+3. **Edit the template** — click row's Edit button; assert
+   `tmpl-dialog-title` reads "Edit template" and form pre-
+   populated; change name to "M30 edit fixture (renamed)";
+   change amounts to $150/$150; click Save changes; assert
+   dialog closes + list refreshes + new name visible.
+4. **Verify historical JE unchanged** — assert JE from step
+   2 still shows $100/$100 with original description.
+   **Load-bearing assertion** for §4.7 criterion (b) —
+   historical JEs are immune to template mutations.
+5. **Delete the template** — click row's Delete button;
+   assert confirmation dialog opens with "Deactivate
+   template?" title + "historical entries not affected"
+   body; click Deactivate; assert confirmation closes +
+   template disappears from list.
+6. **Verify template gone from operator list** — refresh
+   page; assert template does not re-appear.
+7. **Verify historical JE still visible after delete** —
+   assert JE from step 2 still renders correctly.
+
+**Journey count:** 20 → 21.
 
 ### 4. Two-source agreement gate at close
 
-- `python3 manage.py test dealer_ai` → expected **4,871 →
-  ~4,893** (+~22 M30.1 tests).
-- `python3 manage.py check` clean.
-- `python3 manage.py makemigrations --check --dry-run` →
-  "No changes detected".
+- `python3 manage.py test dealer_ai` → **4,904 pass, 1
+  skip** (unchanged — no backend changes at M30.2).
+- `cd frontend && npm test` → **282 → ~300 pass** (+~18
+  M30.2 vitests). All 36 → 37 test files (renamed dialog
+  test file + 3 extended files).
+- `cd frontend && npx tsc --noEmit` clean.
+- `cd acceptance && npx tsc --noEmit` clean.
 - `python3 -m dealer_ai.scripts.audit_operational_surface`
-  — expected to show new endpoint row at index 151 (or
-  wherever URL patterns naturally sort). Verify:
-  - Backend endpoints: 156 → **157** (+1 detail endpoint).
-  - Covered: 122 (unchanged — no frontend consumer at
-    M30.1; the endpoint gains its frontend wrapper at
-    M30.2).
-  - Backend-only: 34 → **35** (+1 — the new detail endpoint
-    lands backend-only until M30.2).
-  - Service verbs: 315 → **~317** (+2 for
-    `update_journal_entry_template` +
-    `delete_journal_entry_template`; get kwarg is a
-    signature change, not a new verb).
+  — expected re-classification of the M30.1 detail endpoint
+  row at index 151 from `defer-candidate-O2` to `covered`
+  when the frontend wrappers are detected. Coverage summary
+  should read **157 / 123 covered / 34 backend-only / 317
+  service verbs**.
+- Playwright acceptance suite locally on fresh DB — expect
+  **all journeys green** (26 → 27 tests with the new D8
+  block, or however Playwright counts the new describe
+  block as tests).
+- Frontend routes: 20 (unchanged — no new route added).
+- Grep sweep: `git grep NewJournalEntryTemplateDialog
+  frontend/ acceptance/` should return empty (rename +
+  import sweep complete). Also grep
+  `getByLabel\("Line \d+ (debit|credit)"\)` — should still
+  return the pre-existing correct-by-context sites only.
+  M30.2 does not change the amount-cell shape.
 
-### 5. DoD compliance check (fifth exception invocation)
+### 5. DoD compliance check
 
-M30.1 §3 in the handoff must document:
+M30.2 §3 in the handoff must name the D8 acceptance journey
+extension: single new `test.describe("edit-delete", ...)`
+block in `accounting_je_template.spec.ts`, journey count
+20 → 21. **DoD satisfied directly** — no exception path at
+M30.2.
 
-> "M30.1 is a backend-only substrate that adds PATCH +
-> DELETE verbs on a new detail endpoint with zero operator-
-> facing behavior change. The M28.2 templates section and
-> M29.2 Instantiate flow continue to work unchanged. No
-> Playwright change required at this sub-increment;
-> existing `accounting_je_template.spec.ts` +
-> `accounting_je_create.spec.ts` regression coverage
-> intact. Operator-facing surface lands at M30.2. DoD
-> exception path invoked as fifth precedent (M26 + M27.1
-> + M28.1 + M29.1 + M30.1)."
+### 6. Ship the M30.2 handoff + coordinated M30 close push
 
-### 6. Ship the M30.1 handoff
+- `docs/handoffs/SESSION_202_m30_inc2_frontend.md`.
+- Flip milestone_30_status: shipped, milestone_30_increment
+  _2_status: shipped in `00-START-NEXT-SESSION.md`
+  frontmatter.
+- Overwrite `00-START-NEXT-SESSION.md` for SESSION_203
+  M31.0 planning.
+- Update `MILESTONE_30_PLANNING.md` status: shipped.
+- Author `docs/roadmap/MILESTONE_30_RETROSPECTIVE.md` with
+  §1–§9 following the M29 retrospective shape (planned
+  scope, what actually shipped, deviations, deferrals,
+  durable lessons — especially whether additive-prop lesson
+  (t) survives the M30.2 re-application, streak accounting,
+  baselines, corrections, evidence-based candidates for
+  M31).
+- Update `docs/CAPABILITY_MATRIX.md` §7ε with M30 shipped
+  surface.
+- Update `docs/roadmap/IMPLEMENTATION_ROADMAP.md` — mark
+  M30 shipped.
+- **Coordinated M30 close push** — await explicit user
+  confirmation. Expected M30 commits at push: **7** — one
+  for §0.a amendment (already pushed as `43b715b` at
+  SESSION_200), SESSION_200 handoff (`1956ed7` local),
+  SESSION_201 M30.1 commit + hash backfill, SESSION_202
+  M30.2 commit + hash backfill, plus the M30 close-out
+  documentation commit. Actual count may vary by 1–2
+  depending on how the rename commit + implementation
+  commits get grouped.
 
-- `docs/handoffs/SESSION_201_m30_inc1_backend.md`.
-- **Do NOT push** — M30.1 is an implementation increment
-  in a milestone that hasn't yet reached close; coordinated
-  push at M30 close (M30.2 handoff push per convention).
+## Non-goals for SESSION_202
 
-## Non-goals for SESSION_201
-
-- ❌ Do NOT ship any frontend code — M30.1 is backend-only.
-- ❌ Do NOT modify the acceptance suite — M30.1 uses the
-  DoD exception path; acceptance changes land at M30.2.
-- ❌ Do NOT force-push or amend the SESSION_200 §0.a
-  commit `43b715b` (already pushed to origin).
-- ❌ Do NOT modify M1–M29 shipped surface.
-- ❌ Do NOT skip the two-source agreement gate at close.
-- ❌ Do NOT expose `?include_inactive=true` at the endpoint
-  layer (M28 §3 deferral — the kwarg lands on the service
-  layer only at M30.1; endpoint exposure is a separate
-  future milestone).
-- ❌ Do NOT expose `is_active` mutation via PATCH (D5
-  design constraint — silently drop it from body).
-- ❌ Do NOT add hard-delete escape hatch (M30 §3 deferral).
-- ❌ Do NOT add template mutation audit trail
-  (`edited_by_user`, history rows — M30 §3 deferral).
-- ❌ Do NOT re-litigate the two SESSION_200 architectural
-  verifications (dialog consolidation + soft-delete
-  integrity — both locked at M30.0).
-- ❌ Do NOT push under exception; the §0.a hotfix pattern
-  used at SESSION_200 was strictly for restoring red main
-  and does not generalize to normal implementation
-  increments.
+- ❌ Do NOT ship any backend code — M30.1 shipped the
+  backend substrate; M30.2 is frontend + Playwright only.
+- ❌ Do NOT modify backend endpoints, service verbs,
+  serializers, or models — the M30.1 surface is locked at
+  the M30.2 close of the milestone.
+- ❌ Do NOT skip the rename import sweep — `git grep
+  NewJournalEntryTemplateDialog` must be empty before
+  commit; TypeScript will catch missed imports at
+  `tsc --noEmit` regardless, but the grep guards against
+  string-based references in comments / test-ids that
+  drift.
+- ❌ Do NOT expose Restore UI at M30.2 (deferred; requires
+  `?include_inactive=true` endpoint exposure which is M28
+  §3 deferral).
+- ❌ Do NOT expose hard-delete UI (M30 §3 deferral).
+- ❌ Do NOT add optimistic-concurrency ETags on edit (M30
+  §3 deferral — single-operator MVP).
+- ❌ Do NOT push under exception — M30 coordinated-push
+  cadence applies. Push at M30.2 close awaits explicit user
+  confirmation.
+- ❌ Do NOT change the amount-cell UI shape on
+  `NewJournalEntryDialog` — SESSION_200 §0.a durable
+  lesson (v) applies: any semantic-shape change on an
+  established UI element requires a full acceptance-suite
+  selector sweep. M30.2 preserves M29.2's chip/input
+  behavior verbatim.
 
 ## Baseline expected at close
 
-- Backend: **4,871 → ~4,893 pass** (+~22 M30.1 tests), 1
-  skip, 0 fail.
-- Frontend Vitest: 282 pass (unchanged — no frontend
-  changes at M30.1).
-- Acceptance: 20 journeys (unchanged).
-- Audit coverage: 122 / 157 (+1 endpoint, all backend-only
-  until M30.2).
-- Backend-only endpoints: 34 → 35.
-- Service verbs: 315 → ~317.
-- Migrations: `0001`–`0050` unchanged.
-- Permission classes: 7 actual (unchanged — new endpoint
-  reuses M28.1's class).
-- Frontend surfaces: unchanged.
-- Frontend operator routes: 20 unchanged.
-- DRF admin surface: 116 → 117 (+1 detail endpoint).
+- Backend: **4,904 pass** (unchanged from M30.1).
+- Frontend Vitest: **282 → ~300 pass** (+~18 M30.2 vitests);
+  36 → 37 test files (renamed dialog test file counts as
+  the same file post-rename; extensions add tests to
+  existing files).
+- Acceptance: **20 → 21 journeys** (+1 D8 edit-delete
+  block).
+- Audit coverage: **122 → 123 covered** (+1 — M30.1 detail
+  endpoint re-classified from backend-only to covered);
+  backend-only 35 → 34 (-1).
+- DRF admin surface: 117 (unchanged).
+- Frontend operator routes: 20 (unchanged — no new route).
+- Permission classes: 7 actual (unchanged).
+- Migrations: `0001`–`0050` (unchanged).
+- Component rename applied: `NewJournalEntryTemplateDialog`
+  → `JournalEntryTemplateDialog` (+ sibling test file).
+- New frontend files: none (rename preserves file count).
+- New backend files: none (M30.1 shipped the backend).
 
 ## NEXT TASK
 
-Start SESSION_201 with (a) starting-state verification
-including proactive acceptance DB reset; (b) audit-artifact
-baseline hold check; (c) implement §5.b D1 (backend
-endpoint + URL + service verbs + `include_inactive` kwarg
-symmetry) + D6 (backend tests); (d) run full backend suite
-+ verify M28.1 + M29.1 regression tests unchanged; (e)
-two-source agreement gate at close (test count + audit
-delta reconcile); (f) DoD exception path documented in §3;
-(g) ship the M30.1 handoff local-only; (h) do not push
-(coordinated push at M30 close).
+Start SESSION_202 with (a) starting-state verification
+(including acceptance DB reset); (b) component rename via
+`git mv` + import sweep + component-name update in the
+same commit; (c) additive props on the renamed component
+per D2/D4; (d) row-level Edit + Delete buttons on
+`AccountingJournalEntriesPage` per D3; (e) inline delete
+confirmation with mandated copy per D3; (f) API wrappers
+per D7; (g) vitests per D7 (~18 tests); (h) new D8
+Playwright `test.describe("edit-delete", ...)` block; (i)
+two-source agreement gate at close (audit re-classifies
+M30.1 endpoint to `covered`); (j) DoD satisfied directly
+via D8 (no exception path); (k) ship M30.2 handoff +
+retrospective + capability matrix update + roadmap flip;
+(l) **coordinated M30 close push awaiting explicit user
+confirmation**.
 
 ---
 
@@ -298,122 +451,116 @@ delta reconcile); (f) DoD exception path documented in §3;
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-   (M30 target added; M30.0 shipped, M30.1 pending at
-   SESSION_201 open, M30.2 pending at SESSION_202 open)
+   (M30.0 + M30.1 shipped; M30.2 pending at SESSION_202
+   open; M30 shipped after M30.2 close)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
 5. `docs/roadmap/MILESTONE_30_PLANNING.md`
    (M30 governing contract + §0.a M29 CI regression
    correction record + all §5 locks + two architectural
    verifications at §4.6 and §4.7)
 6. `docs/roadmap/MILESTONE_29_RETROSPECTIVE.md`
-   §5 (durable lessons — especially the M29.2 additive-prop
-   pattern (t) that M30.2 re-applies, and the new
-   acceptance-selector-sweep lesson added at SESSION_200
-   §0.a) + §8 (corrections)
+   §5 (durable lessons — (t) additive-prop pattern that
+   M30.2 re-applies; (u) reset every override / annotation
+   state; (v) sweep the full acceptance suite on UI shape
+   change — all three actively load-bearing on M30.2) +
+   §8 (corrections)
 7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (post-M29 baseline — 156 endpoints / **122 covered** /
-   34 backend-only; M30.1 projected 157 / 122 / 35; M30.2
-   projected 157 / 123 / 34)
+   (M30.1 baseline — 157 endpoints / **122 covered** / 35
+   backend-only / 317 service verbs; M30.2 projected 157
+   / 123 covered / 34 backend-only / 317 service verbs)
 8. `docs/CAPABILITY_MATRIX.md` §7z (M25) + §7α (M26) +
    §7β (M27) + §7γ (M28) + §7δ (M29 shipped surface) —
    M30 shipped surface lands at §7ε after M30.2 close
-9. `docs/handoffs/SESSION_200_m30_inc0_planning.md`
-   (M30.0 shipped + §0.a M29 CI regression correction)
-10. Memory record `feedback_duplicate_small_stable_logic.md`
-    (M28.0 origin — informs M30.2 D2 dialog-consolidation
-    decision by limiting duplication to short, stable,
+9. `docs/handoffs/SESSION_201_m30_inc1_backend.md`
+   (M30.1 shipped — backend substrate)
+10. `docs/handoffs/SESSION_200_m30_inc0_planning.md`
+    (M30.0 shipped + §0.a M29 CI regression correction)
+11. Memory record `feedback_duplicate_small_stable_logic.md`
+    (M28.0 origin — informs the M30.2 D2 additive-mode
+    choice by capping duplication at short, stable,
     domain-local logic; the 200+ lines of shared dialog
-    machinery exceed that threshold, hence additive-mode)
-11. Memory record
+    machinery in the template dialog exceed that threshold)
+12. Memory record
     `feedback_verify_fk_discoverability_before_lock.md`
-    (M27.0 origin — verified for M30 at planning §4.2)
+    (M27.0 origin — verified at M30.0 §4.2)
 
 Narrative docs are claims. Rules + research + code +
 regenerated artifact are facts.
 
 ---
 
-## Operational state (post-SESSION_200 — Milestone 30 · Increment 0 SHIPPED, §0.a amendment landed)
+## Operational state (post-SESSION_201 — M30 · Increment 1 SHIPPED)
 
 - **Backend (local):** Django on `:8001`. Migrations
   `0001`–`0050` (unchanged since M28.1). Test baseline:
-  **4,871 pass**, 1 skipped, 0 fail.
+  **4,904 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`. `tsc --noEmit` +
   `vite build` clean. **Vitest baseline: 282 pass** across
-  36 test files.
+  36 test files (unchanged — no frontend changes at M30.1).
 - **Frontend (prod):** NONE.
 - **Acceptance workspace (local):** Playwright 1.49 + TS
-  5.6 operational; **20 journeys** total. §0.a fix
-  restored `accounting_je_template.spec.ts:213` to green
-  on the M29.2 `LockedAmountChip` UI.
+  5.6 operational; **20 journeys** total.
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`. Latest run
   (30926157616 on `43b715b`) **26 passed / 0 failed /
-  2m43s**. First M29 run (30919344101 on `e01cfde`) was
-  RED — corrected under §0.a M30.0 amendment.
+  2m43s** (M29 CI green post-§0.a).
 - **Async runtime:** Celery 5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1 DatabaseScheduler. 10
   scheduled task families registered.
-- **Milestones shipped:** M1 → **M29**. **M30.0 shipped**
-  at SESSION_200 (planning + §5 locks + §0.a M29 CI
-  regression correction). M30.1 pending SESSION_201; M30.2
-  pending SESSION_202.
-- **DRF admin surface:** **116** endpoints (unchanged
-  since M28.1; M30.1 will add 1 detail endpoint).
-- **Frontend operator routes:** 20 (unchanged;
-  M30.2 attaches Edit + Delete buttons to existing rows
-  on the JE list page, no new route).
+- **Milestones shipped:** M1 → M29, plus **M30.0 + M30.1
+  shipped** at SESSION_200 + SESSION_201. M30.2 pending
+  SESSION_202; M30 close awaits M30.2.
+- **DRF admin surface:** **117** endpoints (M28.1 116 → +1
+  at M30.1). M30.2 does not add endpoints.
+- **Frontend operator routes:** 20 (unchanged; M30.2
+  attaches Edit + Delete buttons to existing rows on the JE
+  list page, no new route).
 - **Public endpoints:** +1 M6.5 showroom (unchanged).
-- **Service surface:** M30.1 will add
-  `update_journal_entry_template` +
-  `delete_journal_entry_template` verbs + `include_
-  inactive` kwarg on `get_journal_entry_template`.
+- **Service surface:** M30.1 added `update_journal_entry
+  _template` + `delete_journal_entry_template` verbs +
+  `include_inactive` kwarg on `get_journal_entry_template`.
+  M30.2 adds no service verbs.
 - **Frontend surfaces:** M30.2 will rename
   `NewJournalEntryTemplateDialog.tsx` →
-  `JournalEntryTemplateDialog.tsx` and add additive
-  `mode` / `initialTemplate` / `onEdited` / `open` /
-  `onOpenChange` props; attach Edit + Delete row buttons
-  to the templates section; add an inline delete
-  confirmation dialog.
+  `JournalEntryTemplateDialog.tsx`; add additive `mode` /
+  `initialTemplate` / `onEdited` / `open` / `onOpenChange`
+  props; attach Edit + Delete row buttons to the templates
+  section; add inline delete confirmation dialog.
 - **Tenancy carriers:** 52 (unchanged).
 - **Permission classes:** **7 actual** — zero-drift streak
-  **twenty-nine consecutive milestones** (M10 → M29).
+  **thirty consecutive milestones** (M10 → M30.1). M30.1
+  reused `_M131_PERMS` on the new detail endpoint verbatim.
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages (unchanged).
 - **Deterministic rules:** unchanged.
-- **Milestone 30 · Increment 0 status:** SHIPPED
-  (SESSION_200 close-out landed the planning memo + §0.a
-  M29 CI regression correction + M29 retrospective update).
+- **Milestone 30 · Increment 1 status:** SHIPPED
+  (SESSION_201 close-out landed the backend substrate:
+  detail endpoint + two service verbs + `include_inactive`
+  kwarg + ~33 backend tests; audit artifact regenerated
+  to 157 / 122 / 35 / 317).
 - **Audit tooling status:** unchanged from M26.1. Coverage
-  **122 / 156** (unchanged from M29.2 close; M30.1
-  projected 122 / 157; M30.2 projected 123 / 157).
-- **§0.a M30.0 amendment status:** SHIPPED at `43b715b`;
-  pushed to origin/main under the "restore red main"
-  push-cadence exception. Second CI run confirmed green.
-- **Planning-time streak: 9** (at M30.0 close; advanced
-  from 8 at M29.2 close). §0.a is corrective, not scope
-  selection.
-- **DoD amendment (M21.0 §5.f Option B):** every future
-  customer-facing milestone must add or update at least
-  one Playwright operational journey, or explicitly
-  document in §3 why no journey change is required. M26
-  invoked the exception path (audit-tooling infrastructure);
-  M27.1 second; M28.1 third; M29.1 fourth (backend
-  serializer + service substrate relaxation); M29.2
-  satisfied DoD directly; **M30.1 projected to invoke as
-  fifth precedent** (backend PATCH + DELETE substrate
-  with no operator-facing behavior change).
-- **M30 audit coverage at open:** 156 endpoints, **122
-  covered / 34 backend-only** (unchanged from M29.2 close;
-  M30.1 projected +1 backend-only → 157 / 122 / 35;
-  M30.2 projected +1 covered → 157 / 123 / 34).
-- **Durable lessons carried into M30+:** all (a)–(u) from
-  the M29 close-state list continue to apply. **NEW at
-  SESSION_200 §0.a** — lesson (v): *when changing the
-  semantic shape of an established UI element (chip ↔
-  input, badge ↔ button, hidden ↔ visible), sweep the
-  full acceptance suite for stale selectors + assertions
-  on that element — vitest + tsc + frontend build cannot
-  catch stale Playwright selectors*. Recorded in
-  `MILESTONE_29_RETROSPECTIVE.md` §5.
+  **122 / 157** (M29.2 122 / 156 → M30.1 122 / 157 with
+  new endpoint auto-classified backend-only until M30.2
+  attaches wrappers).
+- **§0.a M30.0 amendment status:** SHIPPED at `43b715b`
+  (pushed to origin/main SESSION_200 under push-cadence
+  exception). Second CI run confirmed green.
+- **Planning-time streak: 9** (at M30.0 close; M30.1 pure
+  implementation; unchanged at M30.1 close).
+- **DoD amendment (M21.0 §5.f Option B):** M26 first
+  invocation; M27.1 second; M28.1 third; M29.1 fourth;
+  **M30.1 fifth invocation** (backend-only PATCH + DELETE
+  substrate with no operator-facing behavior change).
+  Pattern well-established.
+- **M30.1 audit coverage at close:** 157 endpoints, **122
+  covered / 35 backend-only** (delta +1 endpoint, +1
+  backend-only from M29.2 close; +2 service verbs).
+- **Durable lessons carried into M30+:** all (a)–(v) from
+  the SESSION_200 close-state list continue to apply.
+  M30.1 did not surface any new durable lesson (pure
+  implementation of an M30.0-locked plan). M30.2's D2
+  rename + additive-mode work will be the first re-
+  application of lesson (t) — success there elevates the
+  lesson from "surfaced" to "load-bearing across two
+  milestones."

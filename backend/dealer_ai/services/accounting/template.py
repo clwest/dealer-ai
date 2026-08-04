@@ -1,24 +1,42 @@
 """Milestone 28 · Increment 1 (SESSION_195) — journal-entry template verbs.
 Milestone 29 · Increment 1 (SESSION_198) — variable-amount relaxation.
+Milestone 30 · Increment 1 (SESSION_201) — edit + soft-delete verbs.
 
-Three verbs per MILESTONE_28_PLANNING.md §5.b M28.1. Templates are
-*recipes*, not *postings* — the actual posting still flows through
+Five verbs per MILESTONE_28_PLANNING.md §5.b M28.1 +
+MILESTONE_30_PLANNING.md §5.b D1. Templates are *recipes*, not
+*postings* — the actual posting still flows through
 :func:`services.accounting.post_journal_entry` (M13.1) when an operator
-instantiates a template. This module only handles template CRUD-adjacent
-work (create, list, get).
+instantiates a template. This module handles template CRUD.
 
 - :func:`create_journal_entry_template` — atomic write of a
   JournalEntryTemplate + its lines. Refuses duplicate names within
   a tenant, unbalanced populated-line sets, cross-tenant account
   references, and empty / malformed lines.
 - :func:`list_journal_entry_templates` — tenant-scoped active-only list.
-- :func:`get_journal_entry_template` — tenant-scoped read.
+- :func:`get_journal_entry_template` — tenant-scoped read; accepts
+  ``include_inactive: bool = False`` (M30.1 symmetry with the list
+  verb) so the future Restore-inactive path and internal
+  edit / delete callers can opt into fetching soft-hidden rows.
+- :func:`update_journal_entry_template` — M30.1. Atomic edit of a
+  template's name / description / lines. Full-replace of lines
+  (small ordered set, typically 2–5; partial patch adds serializer
+  surface without operator value per M30.0 §5.b D1). Preserves
+  ``is_active`` (activation is DELETE-only per D5). Same error
+  surface as create.
+- :func:`delete_journal_entry_template` — M30.1. Soft-delete —
+  sets ``is_active = False`` and returns the updated row.
+  Idempotent (DELETE of an already-inactive template returns the
+  same row without state change; the endpoint layer maps to 204).
+  Historical JournalEntry rows instantiated from this template
+  are untouched by construction — no FK exists (M28.0 §5.b domain
+  separation).
 
 Immutability posture (per M28.0 §5.b architectural verification): a
 JournalEntryTemplate is editable in principle — templates are recipes,
-not the ledger. At M28+M29 no edit / update / delete endpoints are
-shipped (§3 deferral); the ``is_active`` soft-hide flag exists at the
-DB layer for future use.
+not the ledger. M30.1 spends the reservation: edit + soft-delete
+operator surfaces land at the endpoint layer; the ``is_active`` flag
+is now backed by a DELETE verb (no ``is_active`` mutation via edit —
+that's a D5 design constraint).
 
 **M29 variable-amount posture** (per MILESTONE_29_PLANNING.md §5.b D1).
 A template line's ``amount`` may be ``None`` — the side + GL account
@@ -265,16 +283,151 @@ def list_journal_entry_templates(
 
 
 def get_journal_entry_template(
-    *, pk: int, dealership: Dealership
+    *,
+    pk: int,
+    dealership: Dealership,
+    include_inactive: bool = False,
 ) -> Optional[JournalEntryTemplate]:
     """Tenant-scoped JournalEntryTemplate read.
 
-    Returns ``None`` when the pk doesn't exist or belongs to another
-    tenant (fail-closed — the endpoint layer maps to 404).
+    Returns ``None`` when the pk doesn't exist, belongs to another
+    tenant, or is soft-deleted (``is_active = False``) unless
+    ``include_inactive=True`` (fail-closed — the endpoint layer
+    maps ``None`` to 404).
+
+    The ``include_inactive`` kwarg mirrors
+    :func:`list_journal_entry_templates` for API symmetry (M30.1).
+    Internal callers that must operate on soft-hidden rows (edit,
+    delete, future Restore) opt in explicitly; the default keeps
+    the public endpoint surface fail-closed on deactivated
+    templates.
     """
+    qs = JournalEntryTemplate.objects.filter(
+        pk=pk, dealership=dealership
+    )
+    if not include_inactive:
+        qs = qs.filter(is_active=True)
     try:
-        return JournalEntryTemplate.objects.get(
-            pk=pk, dealership=dealership
-        )
+        return qs.get()
     except JournalEntryTemplate.DoesNotExist:
         return None
+
+
+@transaction.atomic
+def update_journal_entry_template(
+    *,
+    pk: int,
+    dealership: Dealership,
+    name: str,
+    description: str,
+    lines: list[TemplateLineInput],
+) -> Optional[JournalEntryTemplate]:
+    """Full-replace edit of a JournalEntryTemplate + its lines.
+
+    Fetches the template with ``include_inactive=True`` so soft-
+    hidden rows remain editable in principle. Returns ``None`` when
+    the pk doesn't exist or belongs to another tenant (endpoint
+    layer maps to 404). ``is_active`` is preserved as-is — activation
+    changes flow through :func:`delete_journal_entry_template`
+    (soft-delete) or a future Restore verb.
+
+    Refuses the same conditions as :func:`create_journal_entry_template`:
+
+    - Fewer than 2 lines
+      (:class:`EmptyJournalEntryTemplateError` — 400).
+    - Any line with non-positive amount or bad ``side`` value
+      (:class:`InvalidJournalEntryTemplateLineError` — 400).
+      ``amount = None`` remains accepted as an M29 variable line.
+    - Any line whose ``account`` belongs to another tenant
+      (:class:`CrossTenantGLAccountError` — 404).
+    - Sum of populated debit-side amounts != sum of populated
+      credit-side amounts
+      (:class:`UnbalancedJournalEntryTemplateError` — 400). Fully-
+      variable templates trivially balance (both sums zero).
+    - Duplicate name within the tenant
+      (:class:`DuplicateJournalEntryTemplateNameError` — 409;
+      DB-enforced via unique constraint).
+
+    **Full-replace semantics** (per MILESTONE_30_PLANNING.md §5.b
+    D1). All existing template lines are deleted; the new ``lines``
+    argument becomes the complete replacement set. Rationale:
+    template lines are a small ordered set (typically 2–5); a
+    partial line patch adds serializer + service surface without
+    operator value and risks silent line-ID reuse bugs. The
+    ``JournalEntryTemplateLine.template`` FK uses ``CASCADE`` on
+    template delete + this bulk-delete + bulk-create replacement
+    is atomic within the ``@transaction.atomic`` decorator.
+    """
+    template = get_journal_entry_template(
+        pk=pk, dealership=dealership, include_inactive=True
+    )
+    if template is None:
+        return None
+
+    _validate_template_lines(dealership, lines)
+
+    template.name = name
+    template.description = description
+    try:
+        template.save(update_fields=["name", "description", "updated_at"])
+    except IntegrityError as exc:
+        raise DuplicateJournalEntryTemplateNameError(
+            f"A JournalEntryTemplate named '{name}' already exists "
+            "in this dealership."
+        ) from exc
+
+    # Full-replace of lines: delete existing + bulk_create the new
+    # set. Both operations run inside the @transaction.atomic
+    # decorator so partial state is impossible on failure.
+    template.lines.all().delete()
+    JournalEntryTemplateLine.objects.bulk_create(
+        [
+            JournalEntryTemplateLine(
+                template=template,
+                dealership=dealership,
+                account=line.account,
+                side=line.side,
+                amount=_as_decimal(line.amount) if line.amount is not None else None,
+                memo=line.memo,
+                ordering=line.ordering,
+            )
+            for line in lines
+        ]
+    )
+    template.refresh_from_db()
+    return template
+
+
+def delete_journal_entry_template(
+    *, pk: int, dealership: Dealership
+) -> Optional[JournalEntryTemplate]:
+    """Soft-delete a JournalEntryTemplate by setting ``is_active = False``.
+
+    Fetches with ``include_inactive=True`` so a repeat DELETE on an
+    already-inactive row returns the same soft-hidden row without
+    state change (idempotent). Returns ``None`` when the pk doesn't
+    exist or belongs to another tenant (endpoint layer maps to
+    404); otherwise returns the updated row (endpoint layer maps
+    to 204).
+
+    **Soft-delete integrity** (per MILESTONE_30_PLANNING.md §4.7).
+    No FK exists from :class:`JournalEntry` to
+    :class:`JournalEntryTemplate` (M28.0 §5.b domain separation).
+    Historical journal entries instantiated from this template are
+    a snapshot copy of the template's line values at instantiation
+    time and hold no back-reference. Setting ``is_active = False``
+    therefore has zero effect on any existing journal entry, trial
+    balance, snapshot, or JE list / detail surface. The
+    :func:`list_journal_entry_templates` verb filters
+    ``is_active=True`` by default, so operator-visible template
+    lists automatically exclude soft-deleted rows on next refetch.
+    """
+    template = get_journal_entry_template(
+        pk=pk, dealership=dealership, include_inactive=True
+    )
+    if template is None:
+        return None
+    if template.is_active:
+        template.is_active = False
+        template.save(update_fields=["is_active", "updated_at"])
+    return template

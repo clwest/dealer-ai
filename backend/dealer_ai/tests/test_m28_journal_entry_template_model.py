@@ -320,3 +320,23 @@ class JournalEntryTemplateModelTests(TestCase):
         self.assertEqual(
             template.lines.filter(amount__isnull=True).count(), 2
         )
+
+    # ------------------------------------------------------------------
+    # M30 (SESSION_201) — auto-now updated_at guard for edit UI
+    # ------------------------------------------------------------------
+
+    def test_m30_updated_at_advances_on_save(self) -> None:
+        """The M30.2 edit UI relies on the model's ``updated_at``
+        auto-now field advancing when a template row is saved.
+        Guardrail against a future migration accidentally
+        dropping the ``auto_now`` posture."""
+        template = JournalEntryTemplate.objects.create(
+            dealership=self.dealership,
+            name="Timestamp guardrail",
+            description="Original",
+        )
+        original_updated_at = template.updated_at
+        template.description = "Edited"
+        template.save(update_fields=["description", "updated_at"])
+        template.refresh_from_db()
+        self.assertGreater(template.updated_at, original_updated_at)
