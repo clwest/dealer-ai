@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Journal-Entry Template Restore / \"Show inactive\" UI (lifecycle-completion on M28.1 substrate + M30.1 include_inactive kwarg)"
 increment: 1
 increment_status: shipped
-commit: pending
-commit_notes: "M31.1 commits stay local per M31 coordinated-push cadence; hash backfill via a follow-up commit. NOT pushed. Coordinated push at M31 close after explicit user confirmation."
+commit: b0e21a8
+commit_notes: "M31.1 commit landed as b0e21a8; hash backfilled via a follow-up commit. NOT pushed. Coordinated push at M31 close after explicit user confirmation."
 ---
 
 # SESSION_204 — Milestone 31 · Increment 1 (M31.1 — backend substrate)
