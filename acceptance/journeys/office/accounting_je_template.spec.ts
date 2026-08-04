@@ -376,6 +376,226 @@ async function accountIdByCode(
 }
 
 
+// -------------------------------------------------------------------
+// Milestone 29 · Increment 2 (SESSION_199) — variable-amount workflow.
+// One end-to-end journey covering all six user-specified assertions
+// from MILESTONE_29_PLANNING.md §5.b D8 in sequence:
+//   1. Create a variable-amount template.
+//   2. Instantiate visibly requests the missing amounts.
+//   3. An unbalanced entry cannot be submitted.
+//   4. A balanced entry posts successfully.
+//   5. The saved template remains unchanged afterward.
+//   6. The resulting journal entry appears correctly in list/detail.
+// -------------------------------------------------------------------
+
+const VARIABLE_FIXTURE_PREFIX = "[M29.2-tmpl-var]";
+
+
+test.describe(
+  "Office / accounting workflow — variable-amount templates",
+  () => {
+    test("owner can create, instantiate, and post a variable-amount template through the shipped UI", async ({
+      page,
+      request,
+    }) => {
+      const runToken = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const templateName = `${VARIABLE_FIXTURE_PREFIX} depreciation ${runToken}`;
+      const templateDescription = `Monthly depreciation ${runToken}`;
+
+      // ----------------------------------------------------------------
+      // §5.b D8.1 — Create a variable-amount template.
+      // ----------------------------------------------------------------
+      await page.goto("/dealer-ai-accounting/journal-entries");
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Journal Entries" }),
+      ).toBeVisible({ timeout: 15_000 });
+      await page.getByTestId("templates-toggle").click();
+
+      const trigger = page.getByTestId("tmpl-create-trigger");
+      await expect(trigger).toBeEnabled({ timeout: 15_000 });
+      await trigger.click();
+      const createDialog = page.getByRole("dialog", {
+        name: /New recurring template/i,
+      });
+      await expect(createDialog).toBeVisible({ timeout: 15_000 });
+
+      await createDialog.getByTestId("tmpl-name-input").fill(templateName);
+      await createDialog
+        .getByTestId("tmpl-description-input")
+        .fill(templateDescription);
+
+      // Line 1: debit, 800000 Rent Expense, VARIABLE.
+      const line1 = createDialog.getByTestId("tmpl-line-0");
+      await line1.getByRole("searchbox").fill("800");
+      await line1.getByTestId("gl-account-option-800000").click();
+      await line1.getByTestId("tmpl-line-0-variable").check();
+      // Amount input should now be disabled with the variable placeholder.
+      await expect(
+        line1.getByTestId("tmpl-line-0-amount"),
+      ).toBeDisabled();
+      await expect(
+        line1.getByTestId("tmpl-line-0-amount"),
+      ).toHaveAttribute("placeholder", "Set at instantiate");
+
+      // Line 2: credit, 110000 Bank — Operating, VARIABLE.
+      const line2 = createDialog.getByTestId("tmpl-line-1");
+      await line2.getByRole("searchbox").fill("Bank");
+      await line2.getByTestId("gl-account-option-110000").click();
+      await line2.getByTestId("tmpl-line-1-side").selectOption("credit");
+      await line2.getByTestId("tmpl-line-1-variable").check();
+
+      // Balance indicator shows the variable-mode badge, not "Unbalanced".
+      await expect(
+        createDialog.getByTestId("tmpl-create-variable-balance-note"),
+      ).toBeVisible();
+      await expect(
+        createDialog.getByTestId("tmpl-create-balance-indicator"),
+      ).not.toContainText(/Unbalanced/i);
+
+      const createSubmit = createDialog.getByTestId("tmpl-create-submit");
+      await expect(createSubmit).toBeEnabled();
+      await createSubmit.click();
+      await expect(createDialog).not.toBeVisible({ timeout: 15_000 });
+
+      // ----------------------------------------------------------------
+      // §5.b D8.5 (pre) — Snapshot the saved template projection so
+      //                   we can deep-compare after instantiate to
+      //                   prove immutability.
+      // ----------------------------------------------------------------
+      const templatesBefore = await fetchTemplates(request);
+      const created = templatesBefore.find(
+        (tmpl) => tmpl.name === templateName,
+      );
+      expect(
+        created,
+        `admin API should surface the variable-amount template`,
+      ).toBeDefined();
+      const templateId = created!.id;
+      expect(created!.lines).toHaveLength(2);
+      expect(created!.lines.every((l) => l.amount === null)).toBe(true);
+      const snapshot = JSON.parse(JSON.stringify(created));
+
+      // ----------------------------------------------------------------
+      // §5.b D8.2 — Instantiate visibly requests the missing amounts.
+      // ----------------------------------------------------------------
+      const instantiateBtn = page.getByTestId(
+        `template-instantiate-${templateId}`,
+      );
+      await expect(instantiateBtn).toBeVisible({ timeout: 15_000 });
+      await instantiateBtn.click();
+
+      const jeDialog = page.getByRole("dialog", {
+        name: /New journal entry/i,
+      });
+      await expect(jeDialog).toBeVisible({ timeout: 15_000 });
+      await expect(
+        jeDialog.getByRole("textbox", { name: /Description/i }),
+      ).toHaveValue(templateDescription);
+
+      // Variable-debit line 1: debit editable + "Enter amount" placeholder;
+      // credit disabled.
+      const line1Debit = jeDialog.getByLabel("Line 1 debit");
+      await expect(line1Debit).not.toBeDisabled();
+      await expect(line1Debit).toHaveAttribute(
+        "placeholder",
+        "Enter amount",
+      );
+      await expect(jeDialog.getByLabel("Line 1 credit")).toBeDisabled();
+      // Variable-credit line 2: mirror.
+      await expect(jeDialog.getByLabel("Line 2 debit")).toBeDisabled();
+      const line2Credit = jeDialog.getByLabel("Line 2 credit");
+      await expect(line2Credit).not.toBeDisabled();
+      await expect(line2Credit).toHaveAttribute(
+        "placeholder",
+        "Enter amount",
+      );
+      // No chips on either line (both are variable).
+      await expect(
+        jeDialog.getByTestId("je-line-0-debit-chip"),
+      ).not.toBeAttached();
+      await expect(
+        jeDialog.getByTestId("je-line-1-credit-chip"),
+      ).not.toBeAttached();
+
+      // ----------------------------------------------------------------
+      // §5.b D8.3 — Unbalanced entry submission blocked.
+      // ----------------------------------------------------------------
+      await line1Debit.fill("450.00");
+      await line2Credit.fill("451.00");
+      await expect(
+        jeDialog.getByTestId("je-create-balance-indicator"),
+      ).toContainText(/Unbalanced by \$1\.00/);
+      const jeSubmit = jeDialog.getByTestId("je-create-submit");
+      await expect(jeSubmit).toBeDisabled();
+
+      // ----------------------------------------------------------------
+      // §5.b D8.4 — Balanced entry posts successfully.
+      // ----------------------------------------------------------------
+      await line2Credit.fill("450.00");
+      await expect(
+        jeDialog.getByTestId("je-create-balance-indicator"),
+      ).toContainText(/Balanced/i);
+      await expect(jeSubmit).toBeEnabled();
+      await jeSubmit.click();
+      await expect(jeDialog).not.toBeVisible({ timeout: 15_000 });
+      await expect(
+        page.getByTestId("je-create-success-badge"),
+      ).toBeVisible({ timeout: 15_000 });
+
+      // ----------------------------------------------------------------
+      // §5.b D8.5 — Saved template unchanged. Re-fetch and deep-
+      //             compare projection to the pre-instantiate snapshot.
+      // ----------------------------------------------------------------
+      const templatesAfter = await fetchTemplates(request);
+      const stillThere = templatesAfter.find((t) => t.id === templateId);
+      expect(
+        stillThere,
+        `template should still exist post-instantiate`,
+      ).toBeDefined();
+      expect(
+        stillThere,
+        `template projection should be byte-identical to pre-instantiate snapshot (no template mutation on instantiate)`,
+      ).toEqual(snapshot);
+
+      // ----------------------------------------------------------------
+      // §5.b D8.6 — Resulting JE appears correctly in list/detail.
+      // ----------------------------------------------------------------
+      const entries = await fetchAllJournalEntries(request);
+      const posted = entries.find((e) =>
+        e.description.includes(runToken),
+      );
+      expect(
+        posted,
+        `admin API should surface the posted variable-amount JE`,
+      ).toBeDefined();
+      expect(Number(posted!.total_debit)).toBeCloseTo(450, 2);
+
+      const detailUrl = `/api/dealer-ai/admin/accounting/journal-entries/${posted!.id}/`;
+      const detailResponse = await request.get(detailUrl);
+      expect(detailResponse.status()).toBe(200);
+      const detailBody = (await detailResponse.json()) as {
+        journal_entry: {
+          description: string;
+          lines: Array<{
+            account_code: string;
+            debit: string;
+            credit: string;
+          }>;
+        };
+      };
+      const detail = detailBody.journal_entry;
+      expect(detail.description).toBe(templateDescription);
+      const debitLine = detail.lines.find((l) => Number(l.debit) > 0);
+      const creditLine = detail.lines.find((l) => Number(l.credit) > 0);
+      expect(debitLine?.account_code).toBe("800000");
+      expect(Number(debitLine?.debit)).toBeCloseTo(450, 2);
+      expect(creditLine?.account_code).toBe("110000");
+      expect(Number(creditLine?.credit)).toBeCloseTo(450, 2);
+    });
+  },
+);
+
+
 // DRF SessionAuthentication requires the ``X-CSRFToken`` header on
 // mutating requests. The persona storage state carries a ``csrftoken``
 // cookie; the browser's fetch/XHR wiring copies it into the header

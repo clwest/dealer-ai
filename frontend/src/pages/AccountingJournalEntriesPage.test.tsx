@@ -360,11 +360,23 @@ describe("AccountingJournalEntriesPage", () => {
     expect(
       screen.getByRole("textbox", { name: /Description/i }),
     ).toHaveValue("Rent expense — monthly");
-    // Line 1 debit (from template's debit-side line) pre-filled.
-    expect(screen.getByLabelText("Line 1 debit")).toHaveValue(3500);
-    // Line 2 credit (from template's credit-side line) pre-filled.
-    expect(screen.getByLabelText("Line 2 credit")).toHaveValue(3500);
-    // Balance indicator shows Balanced immediately.
+    // M29.2 — fixed template lines render as read-only chips with an
+    // Override pencil; the amounts are visible but the amount inputs
+    // themselves do not exist until Override is clicked.
+    expect(
+      screen.getByTestId("je-line-0-debit-chip"),
+    ).toHaveTextContent(/\$3500\.00/);
+    expect(
+      screen.getByTestId("je-line-1-credit-chip"),
+    ).toHaveTextContent(/\$3500\.00/);
+    expect(
+      screen.getByTestId("je-line-0-debit-override"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("je-line-1-credit-override"),
+    ).toBeInTheDocument();
+    // Balance indicator shows Balanced immediately (chip values still
+    // populate the underlying debit/credit state).
     expect(
       screen.getByTestId("je-create-balance-indicator"),
     ).toHaveTextContent(/Balanced/i);
@@ -384,5 +396,124 @@ describe("AccountingJournalEntriesPage", () => {
       expect(screen.getByText(/Could not load templates/i)).toBeInTheDocument();
     });
     expect(screen.getByText(/templates unavailable/)).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------
+  // M29 (SESSION_199) — variable-amount instantiate wiring
+  // ---------------------------------------------------------------
+
+  it("M29 — instantiating a fully-variable template renders both lines with amber ring", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({
+        id: 99,
+        name: "Monthly depreciation",
+        description: "Depreciation per asset per period",
+        lines: [
+          {
+            id: 1,
+            account_id: 1,
+            account_code: "671000",
+            side: "debit",
+            amount: null,
+            memo: "",
+            ordering: 0,
+          },
+          {
+            id: 2,
+            account_id: 2,
+            account_code: "160000",
+            side: "credit",
+            amount: null,
+            memo: "",
+            ordering: 1,
+          },
+        ],
+      }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("template-instantiate-99"));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { level: 2, name: /New journal entry/i }),
+      ).toBeInTheDocument();
+    });
+    // No chips (nothing is fixed).
+    expect(
+      screen.queryByTestId("je-line-0-debit-chip"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("je-line-1-credit-chip"),
+    ).not.toBeInTheDocument();
+    // Variable-debit line 1: debit amber-ringed + editable; credit
+    // disabled empty.
+    const line1Debit = screen.getByLabelText("Line 1 debit");
+    expect(line1Debit).not.toBeDisabled();
+    expect(line1Debit.className).toMatch(/ring-2 ring-amber-500/);
+    expect(screen.getByLabelText("Line 1 credit")).toBeDisabled();
+    // Variable-credit line 2: mirror.
+    const line2Credit = screen.getByLabelText("Line 2 credit");
+    expect(line2Credit).not.toBeDisabled();
+    expect(line2Credit.className).toMatch(/ring-2 ring-amber-500/);
+    expect(screen.getByLabelText("Line 2 debit")).toBeDisabled();
+  });
+
+  it("M29 — instantiating a mixed template renders one chip and one amber-ring", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({
+        id: 100,
+        name: "Utilities monthly",
+        description: "Base fee fixed; usage varies",
+        lines: [
+          {
+            id: 1,
+            account_id: 1,
+            account_code: "671000",
+            side: "debit",
+            amount: "25.00",
+            memo: "Base fee",
+            ordering: 0,
+          },
+          {
+            id: 2,
+            account_id: 2,
+            account_code: "110000",
+            side: "credit",
+            amount: null,
+            memo: "Variable usage",
+            ordering: 1,
+          },
+        ],
+      }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("template-instantiate-100"));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { level: 2, name: /New journal entry/i }),
+      ).toBeInTheDocument();
+    });
+    // Line 1 (fixed debit): chip + Override present.
+    expect(
+      screen.getByTestId("je-line-0-debit-chip"),
+    ).toHaveTextContent(/\$25\.00/);
+    expect(
+      screen.getByTestId("je-line-0-debit-override"),
+    ).toBeInTheDocument();
+    // Line 2 (variable credit): amber-ring editable + placeholder;
+    // debit side disabled.
+    const line2Credit = screen.getByLabelText("Line 2 credit");
+    expect(line2Credit).toHaveAttribute("placeholder", "Enter amount");
+    expect(line2Credit.className).toMatch(/ring-2 ring-amber-500/);
+    expect(screen.getByLabelText("Line 2 debit")).toBeDisabled();
   });
 });

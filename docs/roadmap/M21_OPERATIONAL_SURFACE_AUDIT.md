@@ -197,7 +197,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 147 | `admin/accounting/trial-balance/snapshots/list/` | `views_accounting.admin_trial_balance_snapshot_list` | `admin-trial-balance-snapshot-list` | accountingApi.ts:142 `listTrialBalanceSnapshots` | `covered` |
 | 148 | `admin/accounting/trial-balance/snapshots/<int:pk>/` | `views_accounting.admin_trial_balance_snapshot_retrieve` | `admin-trial-balance-snapshot-retrieve` | accountingApi.ts:150 `fetchTrialBalanceSnapshot` | `covered` |
 | 149 | `admin/accounting/gl-accounts/` | `views_accounting.admin_gl_account_list` | `admin-gl-account-list` | accountingApi.ts:343 `fetchGLAccounts` | `covered` |
-| 150 | `admin/accounting/journal-entry-templates/` | `views_accounting.admin_journal_entry_template_list_or_create` | `admin-journal-entry-template-list-or-create` | accountingApi.ts:447 `fetchJournalEntryTemplates`, accountingApi.ts:455 `createJournalEntryTemplate` | `covered` |
+| 150 | `admin/accounting/journal-entry-templates/` | `views_accounting.admin_journal_entry_template_list_or_create` | `admin-journal-entry-template-list-or-create` | accountingApi.ts:448 `fetchJournalEntryTemplates`, accountingApi.ts:456 `createJournalEntryTemplate` | `covered` |
 | 151 | `admin/demo-store/feedback/` | `views_demo_store.admin_demo_store_feedback_create` | `admin-demo-store-feedback-create` | — | `defer-candidate-O2` |
 | 152 | `admin/pilots/create/` | `views_pilot_onboarding.admin_pilot_create` | `admin-pilot-create` | api.ts:2254 `createPilotDealership` | `covered` |
 | 153 | `admin/pilots/` | `views_pilot_onboarding.admin_pilot_list` | `admin-pilot-list` | api.ts:2248 `fetchPilotDealerships` | `covered` |

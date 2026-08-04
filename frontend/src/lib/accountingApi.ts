@@ -391,12 +391,11 @@ export function createJournalEntry(
 // posts through the M13.1 create endpoint via ``createJournalEntry``.
 //
 // The nullable ``amount`` field on a template line is *intentional
-// forward-compat* for variable-amount templates (depreciation,
-// utilities, payroll accruals). At M28 the create serializer requires
-// non-null, so shipped payloads always populate amount; a future
-// variable-amount milestone relaxes that requirement + adds an
-// instantiation-prompt UI. See MILESTONE_28_PLANNING.md §5.b
-// commentary.
+// forward-compat* realized at M29 for variable-amount templates
+// (depreciation, utilities, payroll accruals). M28 always populated
+// amount; M29.1 relaxes the serializer to accept null on a per-line
+// basis (side + GL fixed at create-time, amount supplied at
+// instantiation). See MILESTONE_29_PLANNING.md §5.b D1 + D2.
 
 export type JournalEntryTemplateLineSide = "debit" | "credit";
 
@@ -405,8 +404,8 @@ export interface JournalEntryTemplateLine {
   account_id: number;
   account_code: string;
   side: JournalEntryTemplateLineSide;
-  /** null reserved for future variable-amount templates; M28 always
-   * returns a Decimal-as-string. */
+  /** null → variable line (amount supplied at instantiation, per
+   *  M29). Decimal-as-string → fixed line. */
   amount: string | null;
   memo: string;
   ordering: number;
@@ -432,8 +431,10 @@ interface JournalEntryTemplateResponse {
 export interface CreateJournalEntryTemplateLine {
   account_id: number;
   side: JournalEntryTemplateLineSide;
-  /** M28 serializer requires non-null. */
-  amount: string;
+  /** Decimal-as-string for a fixed line; ``null`` for a variable
+   *  line (M29.1 serializer accepts null; amount supplied at
+   *  instantiation). */
+  amount: string | null;
   memo?: string;
 }
 

@@ -1,8 +1,9 @@
 // Milestone 28 · Increment 2 (SESSION_196) — journal-entry template create dialog.
+// Milestone 29 · Increment 2 (SESSION_199) — "Variable amount" checkbox.
 //
 // Peer of the M27.2 NewJournalEntryDialog. Persists a *recipe* (name +
-// description + lines with side + amount) via the M28.1
-// createJournalEntryTemplate wrapper. Templates are recipes, not
+// description + lines with side + amount or variable-marker) via the
+// M28.1 createJournalEntryTemplate wrapper. Templates are recipes, not
 // postings — no posted_at field, no reversal semantics.
 //
 // Reuses the M27.2 GLAccountPicker verbatim + the same viewport-
@@ -15,8 +16,15 @@
 //   2. Description is non-empty (trimmed).
 //   3. Every line has an account picked.
 //   4. Every line has chosen side (debit or credit).
-//   5. Every line has positive amount > 0.
-//   6. Σ debit-side amounts === Σ credit-side amounts (balanced).
+//   5. Every FIXED line (is_variable=false) has positive amount > 0.
+//      Variable lines (is_variable=true) submit as amount: null and
+//      skip the amount check — the operator supplies the amount at
+//      instantiate time.
+//   6. The populated (non-variable) portion balances:
+//      Σ populated-debit === Σ populated-credit. Fully-variable
+//      templates trivially balance (both sums zero — accepted, since
+//      the M13.1 posting service will enforce full balance at
+//      instantiate time).
 
 import { useState } from "react";
 
@@ -48,6 +56,9 @@ interface TemplateLineDraft {
   side: JournalEntryTemplateLineSide;
   amount: string;
   memo: string;
+  /** M29 — when true, submits as ``amount: null`` and the operator
+   *  is prompted for the amount at instantiate time. */
+  is_variable: boolean;
 }
 
 
@@ -60,6 +71,7 @@ function newTemplateLineDraft(
     side,
     amount: "",
     memo: "",
+    is_variable: false,
   };
 }
 
@@ -104,24 +116,37 @@ export function NewJournalEntryTemplateDialog({
     side: line.side,
     amount: parseMoney(line.amount),
     memo: line.memo,
+    is_variable: line.is_variable,
   }));
 
-  const hasInvalidNumber = parsedLines.some((line) =>
-    Number.isNaN(line.amount),
+  // Variable lines skip amount + number validation — they submit as
+  // amount: null and the operator supplies the amount at instantiate
+  // time.
+  const hasInvalidNumber = parsedLines.some(
+    (line) => !line.is_variable && Number.isNaN(line.amount),
   );
   const missingAccount = parsedLines.some(
     (line) => line.account_id === null,
   );
-  const missingAmount = parsedLines.some((line) => line.amount <= 0);
+  const missingAmount = parsedLines.some(
+    (line) => !line.is_variable && line.amount <= 0,
+  );
 
-  const totalDebit = parsedLines
+  const hasVariableLine = parsedLines.some((line) => line.is_variable);
+  const populatedLines = parsedLines.filter((line) => !line.is_variable);
+  const totalDebit = populatedLines
     .filter((line) => line.side === "debit")
     .reduce((sum, line) => sum + (line.amount || 0), 0);
-  const totalCredit = parsedLines
+  const totalCredit = populatedLines
     .filter((line) => line.side === "credit")
     .reduce((sum, line) => sum + (line.amount || 0), 0);
   const balanceDelta = Math.round((totalDebit - totalCredit) * 100) / 100;
-  const isBalanced = balanceDelta === 0 && totalDebit > 0;
+  // Populated portion must self-balance. Fully-variable templates
+  // trivially pass (both sums zero). Fully-fixed templates preserve
+  // M28.2 behavior (must have totalDebit > 0).
+  const isBalanced = hasVariableLine
+    ? balanceDelta === 0
+    : balanceDelta === 0 && totalDebit > 0;
 
   const canSubmit =
     !nameInvalid &&
@@ -173,7 +198,7 @@ export function NewJournalEntryTemplateDialog({
       lines: parsedLines.map((line) => ({
         account_id: line.account_id as number,
         side: line.side,
-        amount: (line.amount || 0).toFixed(2),
+        amount: line.is_variable ? null : (line.amount || 0).toFixed(2),
         memo: line.memo,
       })),
     };
@@ -280,6 +305,7 @@ export function NewJournalEntryTemplateDialog({
             totalCredit={totalCredit}
             balanceDelta={balanceDelta}
             isBalanced={isBalanced}
+            hasVariableLine={hasVariableLine}
           />
 
           {error && (
@@ -389,13 +415,36 @@ function TemplateLineRow({
             inputMode="decimal"
             step="0.01"
             min="0"
-            value={line.amount}
+            value={line.is_variable ? "" : line.amount}
             onChange={(event) => onChange({ amount: event.target.value })}
-            disabled={disabled}
+            disabled={disabled || line.is_variable}
+            placeholder={line.is_variable ? "Set at instantiate" : ""}
             aria-label={`Line ${index + 1} amount`}
+            data-testid={`tmpl-line-${index}-amount`}
           />
         </label>
       </div>
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          checked={line.is_variable}
+          onChange={(event) =>
+            onChange({
+              is_variable: event.target.checked,
+              // Clear the amount input when marking variable so a
+              // stale populated value doesn't get re-marshaled if the
+              // operator toggles back.
+              ...(event.target.checked ? { amount: "" } : {}),
+            })
+          }
+          disabled={disabled}
+          aria-label={`Line ${index + 1} variable amount`}
+          data-testid={`tmpl-line-${index}-variable`}
+        />
+        <span className="text-muted-foreground">
+          Variable amount (supplied at instantiate)
+        </span>
+      </label>
       <label className="flex flex-col gap-1 text-xs">
         <span className="text-muted-foreground">Memo (optional)</span>
         <Input
@@ -416,11 +465,13 @@ function TemplateBalanceIndicator({
   totalCredit,
   balanceDelta,
   isBalanced,
+  hasVariableLine,
 }: {
   totalDebit: number;
   totalCredit: number;
   balanceDelta: number;
   isBalanced: boolean;
+  hasVariableLine: boolean;
 }) {
   const debit = totalDebit.toFixed(2);
   const credit = totalCredit.toFixed(2);
@@ -433,12 +484,23 @@ function TemplateBalanceIndicator({
       data-testid="tmpl-create-balance-indicator"
     >
       <span className="tabular-nums text-muted-foreground">
-        Debits ${debit} · Credits ${credit}
+        {hasVariableLine
+          ? `Populated debits $${debit} · Populated credits $${credit}`
+          : `Debits $${debit} · Credits $${credit}`}
       </span>
       {isBalanced ? (
-        <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-          Balanced
-        </span>
+        hasVariableLine ? (
+          <span
+            className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+            data-testid="tmpl-create-variable-balance-note"
+          >
+            Balance validated at instantiate
+          </span>
+        ) : (
+          <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+            Balanced
+          </span>
+        )
       ) : (
         <span className="rounded-md bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
           {totalDebit === 0 && totalCredit === 0

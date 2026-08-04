@@ -307,4 +307,130 @@ describe("NewJournalEntryTemplateDialog", () => {
     await user.click(removes[2]!);
     expect(screen.queryByTestId("tmpl-line-2")).not.toBeInTheDocument();
   });
+
+  // ----------------------------------------------------------------
+  // M29 (SESSION_199) — "Variable amount" checkbox coverage
+  // ----------------------------------------------------------------
+
+  it("M29 — variable checkbox disables the amount input", async () => {
+    const user = userEvent.setup();
+    render(
+      <NewJournalEntryTemplateDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+      />,
+    );
+    await openDialog(user);
+    const line0Amount = screen.getByTestId("tmpl-line-0-amount");
+    expect(line0Amount).not.toBeDisabled();
+    await user.click(screen.getByTestId("tmpl-line-0-variable"));
+    expect(line0Amount).toBeDisabled();
+    expect(line0Amount).toHaveAttribute(
+      "placeholder",
+      "Set at instantiate",
+    );
+    // Unchecking re-enables it.
+    await user.click(screen.getByTestId("tmpl-line-0-variable"));
+    expect(line0Amount).not.toBeDisabled();
+  });
+
+  it("M29 — balance indicator suppresses fixed-only wording when any line is variable", async () => {
+    const user = userEvent.setup();
+    render(
+      <NewJournalEntryTemplateDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+      />,
+    );
+    await openDialog(user);
+    // Baseline (no variable lines): "Enter amounts" surface.
+    expect(
+      screen.getByTestId("tmpl-create-balance-indicator"),
+    ).toHaveTextContent(/Enter amounts/i);
+    await user.click(screen.getByTestId("tmpl-line-0-variable"));
+    await user.click(screen.getByTestId("tmpl-line-1-variable"));
+    // Fully-variable template: variable-note badge appears; no
+    // "Unbalanced" wording.
+    expect(
+      screen.getByTestId("tmpl-create-variable-balance-note"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("tmpl-create-balance-indicator"),
+    ).not.toHaveTextContent(/Unbalanced/i);
+  });
+
+  it("M29 — fully-variable template posts amount: null on both lines", async () => {
+    const onCreated = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <NewJournalEntryTemplateDialog
+        accounts={makeAccounts()}
+        onCreated={onCreated}
+      />,
+    );
+    await openDialog(user);
+    await user.type(
+      screen.getByTestId("tmpl-name-input"),
+      "Monthly depreciation",
+    );
+    await user.type(
+      screen.getByTestId("tmpl-description-input"),
+      "Depreciation per asset per period",
+    );
+    // Line 1: debit, Rent Expense, variable.
+    await user.click(screen.getAllByTestId("gl-account-option-615000")[0]!);
+    await user.click(screen.getByTestId("tmpl-line-0-variable"));
+    // Line 2: credit, Bank — Operating, variable.
+    await user.selectOptions(
+      screen.getByTestId("tmpl-line-1-side"),
+      "credit",
+    );
+    await user.click(screen.getAllByTestId("gl-account-option-110000")[0]!);
+    await user.click(screen.getByTestId("tmpl-line-1-variable"));
+    await user.click(screen.getByTestId("tmpl-create-submit"));
+    await waitFor(() => {
+      expect(createJournalEntryTemplate).toHaveBeenCalledTimes(1);
+    });
+    const payload = vi.mocked(createJournalEntryTemplate).mock.calls[0]![0];
+    expect(payload.lines).toHaveLength(2);
+    expect(payload.lines[0]!.amount).toBeNull();
+    expect(payload.lines[1]!.amount).toBeNull();
+    expect(payload.lines[0]!.side).toBe("debit");
+    expect(payload.lines[1]!.side).toBe("credit");
+  });
+
+  it("M29 — mixed template validates fixed-portion balance", async () => {
+    const user = userEvent.setup();
+    render(
+      <NewJournalEntryTemplateDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+      />,
+    );
+    await openDialog(user);
+    await user.type(
+      screen.getByTestId("tmpl-name-input"),
+      "Mixed template",
+    );
+    await user.type(
+      screen.getByTestId("tmpl-description-input"),
+      "Fixed debit + variable credit",
+    );
+    // Line 1: fixed debit $500.
+    await user.click(screen.getAllByTestId("gl-account-option-615000")[0]!);
+    await user.type(screen.getByLabelText("Line 1 amount"), "500.00");
+    // Line 2: variable credit.
+    await user.selectOptions(
+      screen.getByTestId("tmpl-line-1-side"),
+      "credit",
+    );
+    await user.click(screen.getAllByTestId("gl-account-option-110000")[0]!);
+    await user.click(screen.getByTestId("tmpl-line-1-variable"));
+    // Populated portion is imbalanced ($500 debit vs $0 credit).
+    // Submit stays disabled.
+    expect(screen.getByTestId("tmpl-create-submit")).toBeDisabled();
+    expect(
+      screen.getByTestId("tmpl-create-balance-indicator"),
+    ).toHaveTextContent(/Unbalanced by \$500\.00/);
+  });
 });

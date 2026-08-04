@@ -79,14 +79,31 @@ function templateToInitialValues(
     // today's local date; templates don't specify posting timestamps.
     lines: template.lines.map((line) => {
       const amount = line.amount ?? "";
+      const isVariable = line.amount === null;
       return {
         account_id: line.account_id,
         debit: line.side === "debit" ? amount : "",
         credit: line.side === "credit" ? amount : "",
         memo: line.memo,
+        // M29.2 — signal the variable side so the JE dialog can
+        // amber-ring the right input and disable the opposite side.
+        variableSide: isVariable ? line.side : undefined,
       };
     }),
   };
+}
+
+
+/**
+ * M29.2 — index-aligned lockedLines array derived from the template
+ * lines' amount posture. A fixed line (amount !== null) → locked
+ * chip; a variable line (amount === null) → amber-ring editable
+ * input on the correct side.
+ */
+function templateToLockedLines(
+  template: JournalEntryTemplate,
+): readonly boolean[] {
+  return template.lines.map((line) => line.amount !== null);
 }
 
 
@@ -113,6 +130,11 @@ export default function AccountingJournalEntriesPage() {
   const [instantiateOpen, setInstantiateOpen] = useState(false);
   const [instantiateInitial, setInstantiateInitial] = useState<
     NewJournalEntryInitialValues | undefined
+  >(undefined);
+  // M29.2 — index-aligned lock configuration derived from the
+  // template being instantiated. undefined for blank-entry mounts.
+  const [instantiateLocks, setInstantiateLocks] = useState<
+    readonly boolean[] | undefined
   >(undefined);
 
   const refetchList = useCallback(() => {
@@ -229,6 +251,7 @@ export default function AccountingJournalEntriesPage() {
 
   const handleInstantiate = useCallback((template: JournalEntryTemplate) => {
     setInstantiateInitial(templateToInitialValues(template));
+    setInstantiateLocks(templateToLockedLines(template));
     setInstantiateOpen(true);
   }, []);
 
@@ -290,6 +313,7 @@ export default function AccountingJournalEntriesPage() {
         open={instantiateOpen}
         onOpenChange={setInstantiateOpen}
         initialValues={instantiateInitial}
+        lockedLines={instantiateLocks}
         hideTrigger
       />
 

@@ -165,4 +165,87 @@ describe("createJournalEntryTemplate", () => {
       }),
     ).rejects.toThrow(/HTTP 409/);
   });
+
+  it("M29 — posts amount: null on the wire for variable lines", async () => {
+    const template = fixtureTemplate({
+      id: 99,
+      name: "Monthly depreciation",
+      lines: [
+        {
+          id: 1,
+          account_id: 42,
+          account_code: "615000",
+          side: "debit",
+          amount: null,
+          memo: "",
+          ordering: 0,
+        },
+        {
+          id: 2,
+          account_id: 17,
+          account_code: "110000",
+          side: "credit",
+          amount: null,
+          memo: "",
+          ordering: 1,
+        },
+      ],
+    });
+    authPostJSONMock.mockResolvedValue({
+      journal_entry_template: template,
+    });
+    const payload: CreateJournalEntryTemplatePayload = {
+      name: "Monthly depreciation",
+      description: "Depreciation per asset per period",
+      lines: [
+        { account_id: 42, side: "debit", amount: null },
+        { account_id: 17, side: "credit", amount: null },
+      ],
+    };
+    await createJournalEntryTemplate(payload);
+    expect(authPostJSONMock).toHaveBeenCalledWith(
+      "/admin/accounting/journal-entry-templates/",
+      payload,
+    );
+    // Explicit assertion: null passed through unchanged (no coercion
+    // to "0.00" or ""); wire contract preserved.
+    const wire = authPostJSONMock.mock.calls[0]![1] as
+      CreateJournalEntryTemplatePayload;
+    expect(wire.lines[0]!.amount).toBeNull();
+    expect(wire.lines[1]!.amount).toBeNull();
+  });
+
+  it("M29 — mixed populated + null amounts round-trip through fetch", async () => {
+    // Analog of the fetch null test above but for a mixed template
+    // (fixed base fee + variable usage). Nulls and Decimal strings
+    // both survive projection without cross-contamination.
+    const template = fixtureTemplate({
+      lines: [
+        {
+          id: 1,
+          account_id: 42,
+          account_code: "615000",
+          side: "debit",
+          amount: "25.00",
+          memo: "Utility base fee",
+          ordering: 0,
+        },
+        {
+          id: 2,
+          account_id: 17,
+          account_code: "110000",
+          side: "credit",
+          amount: null,
+          memo: "Utility usage (variable)",
+          ordering: 1,
+        },
+      ],
+    });
+    authGetJSONMock.mockResolvedValue({
+      journal_entry_templates: { templates: [template] },
+    });
+    const result = await fetchJournalEntryTemplates();
+    expect(result[0]!.lines[0]!.amount).toBe("25.00");
+    expect(result[0]!.lines[1]!.amount).toBeNull();
+  });
 });

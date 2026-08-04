@@ -3395,6 +3395,70 @@ per §5.h.
 
 ---
 
+## 7δ. Variable-Amount Journal Templates — spending the M28.1 nullable-amount reservation (Milestone 29, shipped)
+
+Milestone 29 (opened SESSION_197 M29.0 planning; M29.1 backend
+substrate SESSION_198; M29.2 UI + Playwright + close-out
+SESSION_199) delivers **variable-amount recurring journal
+templates** — the intended payoff of the M28.1 `amount = NULL`
+schema reservation. Accounting staff can now persist templates
+for depreciation, utilities, and payroll accruals (whose amounts
+vary period-to-period) and be prompted for the amounts at
+instantiation. M29 is the third link in the substrate-compound-
+value lineage (M27.1 gl-accounts → M28.1 template substrate →
+M29 variable-amount extension). **Zero DB migration required**;
+M28.1 migration `0050` reserved the nullable column exactly for
+this milestone.
+
+**One implementation-boundary verification performed at M29.0
+open** (per user direction, before locking §5.b D3): the M27.2
+`NewJournalEntryDialog` already supports optional
+`initialValues` cleanly via an open-transition `useEffect`
+(lines 178–191) with a `reset()` on close (line 235). An
+additive `lockedLines?: readonly boolean[]` prop was chosen
+over a thin `InstantiateJournalEntryDialog` wrapper — safe
+default `undefined` → blank-entry path byte-identical to M27.2
+baseline; existing regression tests pass unchanged. The wrapper
+alternative was rejected because the read-only-chip UI must
+render inside the per-line amount cell, which cannot be
+composed from outside without exposing a render slot (larger
+API surface change).
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M29.0 planning refinement + target selection | Full active memo at `MILESTONE_29_PLANNING.md` — all §5 locks resolved at SESSION_197 open under the primary operational-coverage lens + substrate-compound-value continuation framing. §5.a locked as NEW variable-amount templates; §5.b D1 = serializer `allow_null=True` + service three-state balance logic (null → variable; positive → contribute; zero/negative → reject); D2 = per-line "Variable amount" checkbox on `NewJournalEntryTemplateDialog`; D3 (Option A) = additive `lockedLines` prop + Override toggle on `NewJournalEntryDialog`; D4 = zero cross-line coupling (no silent debit/credit mirror); D5 = template immutability at instantiate; D6 = new M29 service test file + endpoint/model extensions; D7 = frontend vitest extensions (+~11); D8 = single combined `test.describe("variable-amount", ...)` block in `accounting_je_template.spec.ts` (journey 19 → 20); §5.e = two-increment split (M29.1 backend + M29.2 frontend + Playwright); §5.f = DoD exception path at M29.1 (fourth precedent) + direct satisfaction at M29.2. Seven binding user-stated constraints recorded from confirmation message; handoff at `docs/handoffs/SESSION_197_m29_inc0_planning.md`. | Planning-time as-recommended streak → 8. No code, no push. |
+| M29.1 backend substrate relaxation | Backend: `_validate_template_lines` in `services/accounting/template.py` replaces the "amount required" branch with three-state logic — (a) `amount is None` → variable line, skip balance contribution (side + GL still validated); (b) `amount > 0` → fixed line, contributes to populated debit/credit sum; (c) `amount <= 0` → reject as `InvalidJournalEntryTemplateLineError`. Balance check runs against populated portion only: `sum(populated debit) == sum(populated credit)`. Three legitimate template shapes now accepted: **fully fixed** (M28.1 preserved), **fully variable** (both sums zero, trivially balances), **mixed** (populated portion self-balances or rejects). Cross-tenant guard reordered to apply to variable lines. `JournalEntryTemplateLineSerializer.amount` gains `allow_null=True` in `views_accounting.py`. Module + error-class + `TemplateLineInput` + `create_journal_entry_template` docstrings refreshed; `JournalEntryTemplateLine` model docstring refreshed from "future" to "M29.1 spent the reservation". **Zero model field changes; no migration.** Frontend + acceptance untouched. | Backend baseline **4,855 → 4,871** (+16 net = +11 new `test_m29_variable_amount_template_service.py` (11 tests: fully-variable accepted, null-preservation, mixed with balanced populated portion, mixed with imbalanced populated portion rejected, zero populated rejected, negative populated rejected, bad-side rejected on variable, cross-tenant rejected on variable, side+ordering+memo preserved, rounding-imbalance rejected in 3-line mixed, fully-populated regression guard) + 4 endpoint extensions (POST fully-variable 201, POST mixed 4-line 201, POST imbalanced-populated 400, GET projection returns `amount: null` for variable) + 2 model extensions (mixed round-trip; fully-variable 2-line queried via `amount__isnull`) − 1 removed `test_refuses_null_amount_at_m28` from the M28.1 file). `makemigrations --check` clean. Audit **156 / 122 / 34 / 315** identity. DoD exception path invoked (fourth precedent M26 + M27.1 + M28.1 + M29.1). Zero-drift permission-class streak preserved at 28. |
+| M29.2 UI + Playwright + close-out fold | Frontend: `NewJournalEntryTemplateDialog.tsx` gains a per-line "Variable amount" checkbox (`tmpl-line-{i}-variable`) that disables the amount input and sets `is_variable` state; on submit, variable lines serialize as `amount: null` on the wire. Balance indicator shows a distinct "Balance validated at instantiate" amber badge (`tmpl-create-variable-balance-note`) when any line is variable, and validates the populated (non-variable) portion only. `NewJournalEntryDialog.tsx` gains an additive optional `lockedLines?: readonly boolean[]` prop + internal `overridden: Set<number>` state cleared on all four reset paths (open transition, `initialValues` change, `lockedLines` change, `reset()` call, and `onOpenChange(false)`) — override state cannot leak between instantiations or between template ↔ blank-entry sessions. `NewJournalEntryInitialValues.lines[i]` gains optional `variableSide?: "debit" \| "credit"` for the amber-ring signal. Per-line amount cell rendering branches: (a) `lockedLines[i] === true && !overridden.has(i)` → read-only chip `"$X.XX (from template)"` (`je-line-{i}-{side}-chip`) + inline Override pencil (`je-line-{i}-{side}-override`); (b) `lockedLines[i] === false` → amber-ring editable input (`ring-2 ring-amber-500`) with "Enter amount" placeholder on `line.variableSide`, opposite side disabled empty; (c) `lockedLines` undefined → normal editable inputs (M27.2 behavior byte-identical). `AccountingJournalEntriesPage.templateToInitialValues` populates `variableSide` for null-amount lines; new `templateToLockedLines` maps `line.amount !== null` per index; `handleInstantiate` stashes both into new `instantiateLocks` state; the controlled dialog mount receives `lockedLines={instantiateLocks}`. Blank-entry path untouched (never sets `lockedLines`). Wire contract: `CreateJournalEntryTemplateLine.amount` changes from `string` to `string \| null`. Playwright: single combined `test.describe("variable-amount", ...)` block extension of `accounting_je_template.spec.ts` covering all six user-specified assertions in one end-to-end journey — (1) create fully-variable template through the UI; (2) instantiate shows amber ring + "Enter amount" placeholders on both sides + no chips; (3) type mismatched amounts → "Unbalanced by $1.00" + Post button disabled; (4) correct amounts → Balanced → Post → success; (5) re-fetch template via admin API and deep-compare to pre-instantiate snapshot (byte-identical — template not mutated); (6) posted JE appears in list + detail with correct description + account codes + amounts on the right sides. | Backend baseline **4,871 unchanged** at M29.2 (frontend + Playwright only). Frontend Vitest **270 → 282 pass** across 36 files (+12: `NewJournalEntryTemplateDialog.test.tsx` +4 (variable checkbox disables input, balance indicator suppresses fixed-only wording, fully-variable posts amount:null, mixed template validates fixed-portion balance) + `NewJournalEntryDialog.test.tsx` +4 (**M29 blank-entry regression guard** — no chips, no Overrides, no amber ring when lockedLines undefined; lockedLines[i]===true renders chip + Override; clicking Override transitions to editable input; variable line renders amber ring on correct side + disables opposite side) + `AccountingJournalEntriesPage.test.tsx` +2 (fully-variable template renders both amber-rings; mixed template renders one chip + one amber-ring) + `accountingApi.templates.test.ts` +2 (posts amount:null on wire; mixed populated+null round-trip through fetch)). Existing M28.2 Instantiate test updated to assert chip + Override presence (behavior intentionally changed per D3 Option A — no longer editable pre-populated inputs; explicit shift from M28.2 UX). Acceptance **19 → 20 journeys** (+1 variable-amount describe block). Audit **156 / 122 / 34 / 315** identity (no endpoint drift; line-ref refresh on row 150). **DoD posture:** M29.2 satisfies M21.0 §5.f Option B directly via the D8 combined variable-amount describe block — no exception path at the customer-facing increment. |
+| Test baseline | Backend **4,855 → 4,871** at M29.1 (+16 net across new M29 file + endpoint/model extensions − 1 obsolete null-rejection); unchanged at M29.2 (frontend + Playwright only). Frontend Vitest **270 → 282** across 36 files (+12 M29.2 tests). Acceptance **19 → 20 journeys** (+1 M29.2 combined describe block). `manage.py check` + `makemigrations --check` clean throughout. Per-increment delta: M29.0 = 0 (planning); M29.1 = +16 backend + 0 frontend + 0 journey; M29.2 = 0 backend + +12 frontend + +1 journey. | Zero-drift permission-class streak **twenty-eight → twenty-nine** consecutive milestones (M10 → M29) — M29 shipped no new endpoints (M29.1 backend was a serializer + service relaxation on the existing M28.1 combined-verb endpoint). Planning-time as-recommended streak **7 → 8** at M29.0 close, unchanged at M29.1 + M29.2 (both pure implementation of the M29.0 locked plan). |
+
+**M29 status:** M29 SHIPPED at SESSION_199 (M29.2 close +
+close-out fold — no separate M29.3). Coordinated M29 push
+awaits explicit user confirmation.
+
+**What is NOT shipped in Milestone 29** (deferred per
+`MILESTONE_29_PLANNING.md` §3):
+
+- **Template edit / delete UI.** `is_active` remains at DB
+  layer; still no operator surface. Held as a strong-
+  candidate for a future milestone.
+- **Named / shared template variables** (one operator input
+  drives multiple line amounts). Reaffirmed as an M28 §3
+  deferral; would require additive schema + UI work.
+- **Server-recorded instantiation audit trail.** No
+  `last_instantiated_at` or `instantiation_count` field on
+  `JournalEntryTemplate` — preserves D5 template-immutability
+  posture. Additive if operator evidence demands it later.
+- **"Repeat last amounts" affordance** at instantiate (help
+  the operator recall the previous period's values).
+- **Historical-template back-reference** on `JournalEntry`
+  (unchanged from M28 §3).
+- **Server-side template search / pagination** (unchanged).
+- **`?include_inactive=true`** endpoint exposure (unchanged).
+- **Standalone template detail page** (unchanged).
+- All prior M28 §3 + M27 §3 + M25 §4 deferrals — unchanged.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

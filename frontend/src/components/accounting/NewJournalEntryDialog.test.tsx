@@ -385,3 +385,168 @@ describe("NewJournalEntryDialog — M28.2 template Instantiate flow", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
+
+
+// Milestone 29 · Increment 2 (SESSION_199) — variable-amount UI (D3
+// additive lockedLines prop + Override toggle + regression guard).
+
+describe("NewJournalEntryDialog — M29.2 variable-amount UI", () => {
+  beforeEach(() => {
+    vi.mocked(createJournalEntry).mockReset();
+    vi.mocked(createJournalEntry).mockResolvedValue(makeCreatedEntry());
+  });
+
+  it("M29 REGRESSION GUARD — blank-entry path unchanged when lockedLines is undefined", async () => {
+    // This test explicitly locks the M27.2 blank-entry contract:
+    // opening the dialog without lockedLines renders normal editable
+    // inputs for both debit and credit on every line, with no chip,
+    // no Override pencil, no amber ring.
+    render(
+      <NewJournalEntryDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+        open
+        onOpenChange={vi.fn()}
+        hideTrigger
+      />,
+    );
+
+    // Two default lines with normal editable inputs on both sides.
+    expect(screen.getByLabelText("Line 1 debit")).toBeInTheDocument();
+    expect(screen.getByLabelText("Line 1 credit")).toBeInTheDocument();
+    expect(screen.getByLabelText("Line 2 debit")).toBeInTheDocument();
+    expect(screen.getByLabelText("Line 2 credit")).toBeInTheDocument();
+    // No chip anywhere.
+    expect(
+      screen.queryByTestId("je-line-0-debit-chip"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("je-line-1-credit-chip"),
+    ).not.toBeInTheDocument();
+    // No Override buttons anywhere.
+    expect(
+      screen.queryByRole("button", { name: /Override/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("M29 — lockedLines[i] === true renders the populated side as a read-only chip with Override", async () => {
+    render(
+      <NewJournalEntryDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+        open
+        onOpenChange={vi.fn()}
+        hideTrigger
+        initialValues={{
+          description: "Monthly rent",
+          lines: [
+            { account_id: 1, debit: "3500.00", credit: "", memo: "" },
+            { account_id: 2, debit: "", credit: "3500.00", memo: "" },
+          ],
+        }}
+        lockedLines={[true, true]}
+      />,
+    );
+
+    // Debit chip on line 0 + Credit chip on line 1.
+    expect(
+      screen.getByTestId("je-line-0-debit-chip"),
+    ).toHaveTextContent(/\$3500\.00/);
+    expect(
+      screen.getByTestId("je-line-1-credit-chip"),
+    ).toHaveTextContent(/\$3500\.00/);
+    // Override pencils on both.
+    expect(
+      screen.getByTestId("je-line-0-debit-override"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("je-line-1-credit-override"),
+    ).toBeInTheDocument();
+    // The unpopulated side of a fixed line is disabled empty input.
+    expect(screen.getByLabelText("Line 1 credit")).toBeDisabled();
+    expect(screen.getByLabelText("Line 2 debit")).toBeDisabled();
+  });
+
+  it("M29 — clicking Override transitions a locked line to editable input", async () => {
+    const user = userEvent.setup();
+    render(
+      <NewJournalEntryDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+        open
+        onOpenChange={vi.fn()}
+        hideTrigger
+        initialValues={{
+          description: "Monthly rent",
+          lines: [
+            { account_id: 1, debit: "3500.00", credit: "", memo: "" },
+            { account_id: 2, debit: "", credit: "3500.00", memo: "" },
+          ],
+        }}
+        lockedLines={[true, true]}
+      />,
+    );
+
+    // Precondition: chip.
+    expect(
+      screen.getByTestId("je-line-0-debit-chip"),
+    ).toBeInTheDocument();
+    // Click Override on the line 0 debit chip.
+    await user.click(screen.getByTestId("je-line-0-debit-override"));
+    // Now the chip is gone; a normal editable input is present.
+    expect(
+      screen.queryByTestId("je-line-0-debit-chip"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Line 1 debit")).toBeInTheDocument();
+    // Line 1's chip is unaffected — Override is per-line.
+    expect(
+      screen.getByTestId("je-line-1-credit-chip"),
+    ).toBeInTheDocument();
+  });
+
+  it("M29 — variable line renders with amber ring on the correct side and disabled opposite side", async () => {
+    render(
+      <NewJournalEntryDialog
+        accounts={makeAccounts()}
+        onCreated={vi.fn()}
+        open
+        onOpenChange={vi.fn()}
+        hideTrigger
+        initialValues={{
+          description: "Monthly depreciation",
+          lines: [
+            {
+              account_id: 1,
+              debit: "",
+              credit: "",
+              memo: "",
+              variableSide: "debit",
+            },
+            {
+              account_id: 2,
+              debit: "",
+              credit: "",
+              memo: "",
+              variableSide: "credit",
+            },
+          ],
+        }}
+        lockedLines={[false, false]}
+      />,
+    );
+
+    // Variable-debit line 1: debit editable + amber-ring class +
+    // "Enter amount" placeholder; credit disabled.
+    const line1Debit = screen.getByLabelText("Line 1 debit");
+    expect(line1Debit).not.toBeDisabled();
+    expect(line1Debit).toHaveAttribute("placeholder", "Enter amount");
+    expect(line1Debit.className).toMatch(/ring-2 ring-amber-500/);
+    expect(screen.getByLabelText("Line 1 credit")).toBeDisabled();
+    // Variable-credit line 2: mirror config.
+    expect(screen.getByLabelText("Line 2 debit")).toBeDisabled();
+    const line2Credit = screen.getByLabelText("Line 2 credit");
+    expect(line2Credit).not.toBeDisabled();
+    expect(line2Credit).toHaveAttribute("placeholder", "Enter amount");
+    expect(line2Credit.className).toMatch(/ring-2 ring-amber-500/);
+  });
+});

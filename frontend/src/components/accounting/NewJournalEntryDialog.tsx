@@ -1,4 +1,7 @@
 // Milestone 27 · Increment 2 (SESSION_193) — journal-entry create dialog.
+// Milestone 28 · Increment 2 (SESSION_196) — controlled-open + initialValues.
+// Milestone 29 · Increment 2 (SESSION_199) — additive lockedLines +
+//                                           per-line Override toggle.
 //
 // Attached to the existing AccountingJournalEntriesPage as a modal
 // dialog per M27.0 §5.b substrate-attachment rule (no new frontend
@@ -15,6 +18,25 @@
 //   4. Σ debits === Σ credits (balanced).
 // Balance indicator badge in the footer surfaces the delta in real
 // time so operators see the balance shift as they type.
+//
+// M29.2 — `lockedLines?: readonly boolean[]` is an ADDITIVE prop
+// (safe default undefined → blank-entry byte-identical). When
+// supplied by a consumer (the template Instantiate flow):
+//   - lockedLines[i] === true  → fixed line; the populated side
+//                                renders as a read-only chip with
+//                                an inline Override pencil.
+//   - lockedLines[i] === false → variable line; the input side
+//                                (per initialValues.lines[i].
+//                                variableSide) renders with an
+//                                amber ring + "Enter amount"
+//                                placeholder; the opposite side is
+//                                disabled empty.
+//   - lockedLines === undefined → blank-entry path (M27.2 behavior
+//                                 preserved byte-identical).
+// Internal overridden: Set<number> tracks which locked lines the
+// operator has toggled to editable. It resets on every dialog open
+// transition, every reset() call, and on any lockedLines /
+// initialValues reference change.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -45,6 +67,11 @@ interface LineDraft {
   debit: string;
   credit: string;
   memo: string;
+  /** M29.2 — set by the template Instantiate flow to signal that
+   *  this line is variable and the operator must type an amount on
+   *  this specific side. Absent for blank-entry and fixed-template
+   *  lines. */
+  variableSide?: "debit" | "credit";
 }
 
 
@@ -77,6 +104,12 @@ export interface NewJournalEntryInitialValues {
     debit: string;
     credit: string;
     memo: string;
+    /** M29.2 — for a variable line, names which side the operator is
+     *  expected to enter into (matching the template's stored ``side``).
+     *  Both ``debit`` and ``credit`` will be empty strings in that
+     *  case; the dialog uses this hint to amber-ring the correct
+     *  input and disable the opposite side. Absent for fixed lines. */
+    variableSide?: "debit" | "credit";
   }>;
 }
 
@@ -91,6 +124,7 @@ function draftFromInitialValues(
     debit: line.debit,
     credit: line.credit,
     memo: line.memo,
+    variableSide: line.variableSide,
   }));
 }
 
@@ -134,6 +168,16 @@ export interface NewJournalEntryDialogProps {
    * not rendered. Used by controlled mounts that trigger opening
    * externally. Defaults to false (backward-compatible). */
   hideTrigger?: boolean;
+  /** M29.2 — per-line lock configuration for template instantiation.
+   *  Index-aligned with initialValues.lines. When lockedLines[i] ===
+   *  true, the amount cell for line i renders as a read-only chip
+   *  ("$X.XX (from template)") with an inline "Override" pencil that
+   *  toggles line i to editable. When lockedLines[i] === false, the
+   *  line is variable and renders with an amber ring +
+   *  "Enter amount" placeholder on the initialValues[i].variableSide.
+   *  When lockedLines is undefined (blank-entry path), all inputs
+   *  render as normal editable inputs — behavioral no-op. */
+  lockedLines?: readonly boolean[];
 }
 
 
@@ -145,6 +189,7 @@ export function NewJournalEntryDialog({
   onOpenChange: controlledOnOpenChange,
   initialValues,
   hideTrigger = false,
+  lockedLines,
 }: NewJournalEntryDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled =
@@ -170,10 +215,18 @@ export function NewJournalEntryDialog({
   const [lines, setLines] = useState<LineDraft[]>(initialLines);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // M29.2 — indices of locked lines the operator has explicitly
+  // toggled to editable via the Override pencil. Cleared on every
+  // reset path so no override state leaks between instantiations.
+  const [overridden, setOverridden] = useState<Set<number>>(
+    () => new Set(),
+  );
 
   // Re-seed fields on each open transition so re-opening a fresh
   // dialog (either blank or from a different template) starts from a
   // clean state derived from the current ``initialValues``.
+  // M29.2 — also re-seed on lockedLines reference change so a
+  // template swap without a close-reopen also clears prior overrides.
   const prevOpen = useRef(open);
   useEffect(() => {
     if (open && !prevOpen.current) {
@@ -186,9 +239,10 @@ export function NewJournalEntryDialog({
       );
       setError(null);
       setSubmitting(false);
+      setOverridden(new Set());
     }
     prevOpen.current = open;
-  }, [open, initialValues]);
+  }, [open, initialValues, lockedLines]);
 
   const trimmedDescription = description.trim();
   const descriptionInvalid = trimmedDescription.length === 0;
@@ -242,6 +296,9 @@ export function NewJournalEntryDialog({
     );
     setError(null);
     setSubmitting(false);
+    // M29.2 — clear override state so a subsequent instantiation
+    // doesn't inherit prior overrides.
+    setOverridden(new Set());
   }
 
   function updateLine(key: string, patch: Partial<LineDraft>) {
@@ -361,18 +418,31 @@ export function NewJournalEntryDialog({
             </div>
 
             <div className="flex flex-col gap-3">
-              {lines.map((line, index) => (
-                <LineRow
-                  key={line.key}
-                  index={index}
-                  line={line}
-                  accounts={accounts}
-                  canRemove={lines.length > 2}
-                  disabled={submitting}
-                  onChange={(patch) => updateLine(line.key, patch)}
-                  onRemove={() => removeLine(line.key)}
-                />
-              ))}
+              {lines.map((line, index) => {
+                const isLocked =
+                  lockedLines?.[index] === true &&
+                  !overridden.has(index);
+                const isVariable = lockedLines?.[index] === false;
+                return (
+                  <LineRow
+                    key={line.key}
+                    index={index}
+                    line={line}
+                    accounts={accounts}
+                    canRemove={lines.length > 2}
+                    disabled={submitting}
+                    locked={isLocked}
+                    variable={isVariable}
+                    onOverride={() =>
+                      setOverridden(
+                        (current) => new Set([...current, index]),
+                      )
+                    }
+                    onChange={(patch) => updateLine(line.key, patch)}
+                    onRemove={() => removeLine(line.key)}
+                  />
+                );
+              })}
             </div>
           </div>
 
@@ -422,6 +492,9 @@ function LineRow({
   accounts,
   canRemove,
   disabled,
+  locked,
+  variable,
+  onOverride,
   onChange,
   onRemove,
 }: {
@@ -430,10 +503,27 @@ function LineRow({
   accounts: GLAccount[];
   canRemove: boolean;
   disabled: boolean;
+  /** M29.2 — render the populated side as a read-only chip with an
+   *  Override pencil. Defaults to false for the blank-entry path. */
+  locked: boolean;
+  /** M29.2 — this line is a template variable line. The side named by
+   *  ``line.variableSide`` renders with an amber ring + placeholder;
+   *  the opposite side is disabled. Defaults to false. */
+  variable: boolean;
+  /** M29.2 — invoked when the operator clicks the Override pencil on
+   *  a locked line. Parent transitions the line to editable. */
+  onOverride: () => void;
   onChange: (patch: Partial<LineDraft>) => void;
   onRemove: () => void;
 }) {
   const labelId = `je-line-${line.key}-label`;
+  const populatedSide: "debit" | "credit" | null = locked
+    ? line.debit && Number(line.debit) > 0
+      ? "debit"
+      : line.credit && Number(line.credit) > 0
+        ? "credit"
+        : null
+    : null;
   return (
     <div
       className="flex flex-col gap-2 rounded-md border border-border p-3"
@@ -443,7 +533,7 @@ function LineRow({
         <span id={labelId} className="text-xs font-medium uppercase text-muted-foreground">
           Line {index + 1}
         </span>
-        {canRemove && (
+        {canRemove && !locked && (
           <button
             type="button"
             className="text-xs text-muted-foreground underline"
@@ -458,35 +548,89 @@ function LineRow({
         accounts={accounts}
         value={line.account_id}
         onChange={(id) => onChange({ account_id: id })}
-        disabled={disabled}
+        disabled={disabled || locked}
         labelledBy={labelId}
       />
       <div className="grid grid-cols-2 gap-2">
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-muted-foreground">Debit</span>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={line.debit}
-            onChange={(event) => onChange({ debit: event.target.value })}
-            disabled={disabled}
-            aria-label={`Line ${index + 1} debit`}
-          />
+          {locked && populatedSide === "debit" ? (
+            <LockedAmountChip
+              value={line.debit}
+              onOverride={onOverride}
+              disabled={disabled}
+              index={index}
+              side="debit"
+            />
+          ) : (
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={line.debit}
+              onChange={(event) =>
+                onChange({ debit: event.target.value })
+              }
+              disabled={
+                disabled ||
+                (variable && line.variableSide === "credit") ||
+                (locked && populatedSide === "credit")
+              }
+              placeholder={
+                variable && line.variableSide === "debit"
+                  ? "Enter amount"
+                  : undefined
+              }
+              className={
+                variable && line.variableSide === "debit"
+                  ? "ring-2 ring-amber-500"
+                  : undefined
+              }
+              aria-label={`Line ${index + 1} debit`}
+              data-testid={`je-line-${index}-debit`}
+            />
+          )}
         </label>
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-muted-foreground">Credit</span>
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0"
-            value={line.credit}
-            onChange={(event) => onChange({ credit: event.target.value })}
-            disabled={disabled}
-            aria-label={`Line ${index + 1} credit`}
-          />
+          {locked && populatedSide === "credit" ? (
+            <LockedAmountChip
+              value={line.credit}
+              onOverride={onOverride}
+              disabled={disabled}
+              index={index}
+              side="credit"
+            />
+          ) : (
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={line.credit}
+              onChange={(event) =>
+                onChange({ credit: event.target.value })
+              }
+              disabled={
+                disabled ||
+                (variable && line.variableSide === "debit") ||
+                (locked && populatedSide === "debit")
+              }
+              placeholder={
+                variable && line.variableSide === "credit"
+                  ? "Enter amount"
+                  : undefined
+              }
+              className={
+                variable && line.variableSide === "credit"
+                  ? "ring-2 ring-amber-500"
+                  : undefined
+              }
+              aria-label={`Line ${index + 1} credit`}
+              data-testid={`je-line-${index}-credit`}
+            />
+          )}
         </label>
       </div>
       <label className="flex flex-col gap-1 text-xs">
@@ -499,6 +643,53 @@ function LineRow({
           aria-label={`Line ${index + 1} memo`}
         />
       </label>
+    </div>
+  );
+}
+
+
+/**
+ * M29.2 — read-only display of a template-locked amount plus an
+ * inline "Override" pencil that transitions the line to editable.
+ * Rendered only when NewJournalEntryDialog receives lockedLines[i]
+ * === true from a consumer (the template Instantiate flow).
+ */
+function LockedAmountChip({
+  value,
+  onOverride,
+  disabled,
+  index,
+  side,
+}: {
+  value: string;
+  onOverride: () => void;
+  disabled: boolean;
+  index: number;
+  side: "debit" | "credit";
+}) {
+  const display = value ? `$${Number(value).toFixed(2)}` : "$0.00";
+  return (
+    <div
+      className="flex h-9 items-center justify-between rounded-md border border-border bg-muted/40 px-2 text-sm"
+      data-testid={`je-line-${index}-${side}-chip`}
+    >
+      <span
+        className="tabular-nums text-muted-foreground"
+        aria-label={`Line ${index + 1} ${side} amount (from template)`}
+      >
+        {display}
+        <span className="ml-1 text-xs italic">(from template)</span>
+      </span>
+      <button
+        type="button"
+        onClick={onOverride}
+        disabled={disabled}
+        className="text-xs text-primary underline"
+        aria-label={`Override line ${index + 1} ${side} amount`}
+        data-testid={`je-line-${index}-${side}-override`}
+      >
+        Override
+      </button>
     </div>
   );
 }

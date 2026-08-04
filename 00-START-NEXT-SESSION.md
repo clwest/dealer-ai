@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-04
-last_session_shipped: SESSION_198
+last_session_shipped: SESSION_199
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -30,58 +30,100 @@ milestone_25_status: shipped
 milestone_26_status: shipped
 milestone_27_status: shipped
 milestone_28_status: shipped
-milestone_29_status: active
-next_session: SESSION_199
-next_milestone: 29
-next_milestone_name: "Variable-Amount Journal Templates (on M28.1 template substrate + M27.1 gl-accounts substrate)"
-next_increment: 2
-next_increment_name: "M29.2 — Frontend + Playwright (Variable-amount checkbox at create; Override-toggle chip at instantiate; combined variable-amount describe block)"
+milestone_29_status: shipped
+next_session: SESSION_200
+next_milestone: 30
+next_milestone_name: "(target selection pending — locked at M30.0 open)"
+next_increment: 0
+next_increment_name: "M30.0 — Planning refinement + target selection"
 ---
 
-# Next session — SESSION_199 · Milestone 29 · Increment 2 (M29.2 — frontend + Playwright)
+# Next session — SESSION_200 · Milestone 30 · Increment 0 (M30.0 — planning refinement + target selection)
 
 > **Milestone 29 — Variable-Amount Journal Templates —
-> M29.1 SHIPPED at SESSION_198.** Backend substrate
-> relaxation landed. `JournalEntryTemplateLineSerializer.
-> amount` accepts null; `_validate_template_lines` runs
-> three-state logic (null → variable line; positive → fixed
-> contributes to balance; zero-or-negative → reject). Full
-> balance check runs against the populated portion only.
-> Fully-variable + mixed + fully-fixed templates all accepted
-> at create; imbalanced-populated portion rejected. Backend
-> baseline **4,855 → 4,871 (+16 net)**. Frontend + acceptance
-> untouched. DoD exception path invoked as fourth precedent
-> (M26 + M27.1 + M28.1 + M29.1).
+> SHIPPED at SESSION_199.** M29.0 planning + M29.1 backend
+> substrate + M29.2 frontend + Playwright all landed;
+> close-out folded into M29.2 per §5.h Option B. Backend
+> baseline 4,855 → 4,871 (+16 at M29.1). Frontend Vitest 270
+> → 282 (+12 at M29.2). Acceptance 19 → 20 journeys (+1 M29.2
+> combined variable-amount describe block).
 >
-> **M29.2 is the operator-facing UI increment** —
-> "Variable amount" checkbox on
-> `NewJournalEntryTemplateDialog`, additive `lockedLines`
-> prop on `NewJournalEntryDialog` + Override toggle,
-> Playwright journey extension per §5.b D8. DoD satisfied
-> directly.
+> **Zero-drift permission-class streak advanced 28 → 29
+> consecutive milestones** (M10 → M29). Planning-time as-
+> recommended streak reached **8** at M29.0 close, unchanged
+> at M29.1 + M29.2 (both pure implementation). Historical
+> run of 89 across M10 → M23 preserved for the record.
 >
-> **Zero-drift permission-class streak preserved at 28**
-> (M10 → M28); M29.1 was backend-only, no new endpoints.
-> M29.2 is UI-only, no endpoint or permission-class
-> changes. Projected to advance to 29 at M29 close.
+> **Substrate-compound-value continuation reached 3 links
+> realized** (M27.1 gl-accounts → M28.1 templates → M29
+> variable-amount extension). M29 spent the M28.1 nullable-
+> amount schema reservation via migration 0050 — zero new
+> migrations across M29.
 >
-> **Planning-time as-recommended streak: 8** (unchanged;
-> M29.1 was pure implementation).
+> **Coordinated push at M29 close pending.** All M29 work is
+> local-only; awaits explicit user confirmation before push.
+> Expected M29 commits at push: **6** (M29.0 planning + hash
+> backfill + M29.1 substrate + hash backfill + M29.2 close +
+> hash backfill).
+>
+> **Two durable design principles surfaced or reinforced at
+> M29** (see `MILESTONE_29_RETROSPECTIVE.md` §5):
+> (a) *additive-prop pattern for UI reuse* — NEW at M29.2;
+>     prefer additive optional prop with safe default over
+>     thin wrapper when divergent UI must render inside an
+>     existing cell; recorded in retrospective §5;
+> (b) *reset every override / annotation state in every reset
+>     path* — NEW at M29.2; failure mode is UI state leaking
+>     between usage contexts (e.g., overrides from template A
+>     leak into template B);
+> (c) *DoD exception path for infrastructure-only sub-
+>     increments* — REINFORCED at fourth invocation (M26 +
+>     M27.1 + M28.1 + M29.1);
+> (d) *substrate-compound-value continuation across
+>     milestones* — REINFORCED at third link realized.
+>
+> **Five NEW M30+ candidates surfaced or elevated during M29**
+> (per `MILESTONE_29_RETROSPECTIVE.md` §9):
+> (a) **NEW template edit / delete UI** — third increment on
+>     the M28+M29 template surface; would use the M29.2
+>     chip/Override infrastructure;
+> (b) **NEW C — F&I chargeback substrate** — would extend the
+>     substrate-compound-value lineage to a fourth link on
+>     M27.1;
+> (c) NEW O2 — Row 5 public-fetch-helper regex refinement
+>     (M26/M27/M28/M29 deferral, unchanged);
+> (d) NEW O3 — Rows-1–4 plain-string-literal investigation
+>     (M26/M27/M28/M29 deferral, unchanged);
+> (e) H — Test-hygiene remediation — same 3 shared-DB non-
+>     idempotent journeys unchanged from M27.2 → M28.2 →
+>     M29.2 close.
+>
+> **SESSION_200 opens M30.0 — planning refinement + target
+> selection.** No target locked yet — the candidate list
+> surfaces at open (elevated: NEW template edit/delete UI,
+> NEW C F&I substrate, O2, O3, H; gated: T/U/L/M; deferred
+> pending evidence: D; deferred stable: G; plus all M29 §3 +
+> M28 §3 + M27 §3 + M25 §4 deferrals still valid). The
+> assistant recommends one option with rationale grounded in
+> the durable primary operational-coverage lens (or a
+> substrate-compound-value continuation / substrate-integrity
+> reframe if evidence supports it); the user confirms or
+> redirects.
 
-## First thing SESSION_199 must do
+## First thing SESSION_200 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean; local `HEAD` ahead of `origin/main`
-  by **4 commits** (M29.0 planning + hash backfill +
-  M29.1 substrate + hash backfill).
-- `git log --oneline -5` — top should be the M29.1
-  hash-backfill commit (or the M29.1 substrate commit if
-  not yet backfilled).
+- `git status` — clean; local `HEAD` matches `origin/main`
+  post-M29 push (if pushed) OR local `HEAD` ahead by 6
+  commits (M29.0 planning + hash backfill + M29.1 substrate +
+  hash backfill + M29.2 close + hash backfill) if push not
+  yet executed.
+- `git log --oneline -10` — top should be the M29.2 hash-
+  backfill commit; six M29 commits total.
 - `python3 manage.py test dealer_ai` → **4,871 pass, 1
   skipped, 0 fail**.
-- `cd frontend && npm test` → **270 pass** (unchanged
-  from M28.2 close).
+- `cd frontend && npm test` → **282 pass** across 36 files.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations --check --dry-run` →
   "No changes detected."
@@ -89,246 +131,189 @@ next_increment_name: "M29.2 — Frontend + Playwright (Variable-amount checkbox 
 - `cd acceptance && npx tsc --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. No CI to monitor
+### 2. If M29 pushed — monitor first M29 CI run
 
-M29.0 + M29.1 not pushed; coordinated push at M29 close.
-Skip the CI verification step.
+If M29 has been pushed, verify the CI acceptance workflow
+status via:
 
-### 3. Audit artifact unchanged
+```bash
+gh run list --workflow=acceptance --branch=main --limit 5
+gh run view <run-id> --log
+```
 
-Optional at M29.2 open (endpoint surface unchanged from
-M28.2 close). If regenerated, expected identity:
-**156 total / 122 covered / 34 backend-only / 315 service
-verbs**.
+**If red:** address as §0.a M30.0 amendments before opening
+§5.a.
 
-### 4. Implement §5.b D2 — "Variable amount" checkbox at create
+**If green:** M29 is CI-verified shipped; proceed to §3.
 
-Per `docs/roadmap/MILESTONE_29_PLANNING.md` §5.b D2:
+### 3. Regenerate the audit artifact
 
-- **`frontend/src/components/accounting/
-  NewJournalEntryTemplateDialog.tsx`** — add a per-line
-  "**Variable amount**" checkbox next to the amount input.
-- When checked:
-  - Amount input disables + visually greys out.
-  - Submitted line body has `amount: null`.
-- When unchecked (default):
-  - Amount input required non-null > 0.
-  - M28.1/M28.2 create-time behavior preserved.
-- **Client-side balance indicator at create-time:** if
-  any line is variable, the balance indicator shows
-  "Variable amounts — balance validated at instantiate
-  time." Otherwise, M28.2 behavior preserved unchanged.
+Before candidate presentation, rerun the audit tooling to
+confirm the M29.2 baseline holds:
 
-### 5. Implement §5.b D3 — Instantiation UI visual distinction
+```bash
+cd backend
+python3 -m dealer_ai.scripts.audit_operational_surface
+```
 
-Per `docs/roadmap/MILESTONE_29_PLANNING.md` §5.b D3
-(Option A locked at M29.0).
+Expected: **156 total / 122 covered / 34 backend-only / 315
+service verbs**. If the artifact drifts from this,
+investigate before scope-locking.
 
-**Additive prop pattern on `NewJournalEntryDialog`:**
+### 4. Present the M30 candidate list
 
-- **`frontend/src/components/accounting/
-  NewJournalEntryDialog.tsx`** — add one new optional prop:
+Per the M29 retrospective §9 evidence:
 
-  ```ts
-  /** M29 — per-line locking for template instantiation.
-   *  Index-aligned with initialValues.lines. When
-   *  lockedLines[i] === true, the amount cell renders as
-   *  a read-only chip with an inline "Override" pencil.
-   *  When lockedLines is undefined (blank-entry path),
-   *  all inputs are editable — behavioral no-op. */
-  lockedLines?: readonly boolean[];
-  ```
-- **Internal state** `overridden: Set<number>` initialized
-  `() => new Set()`. Cleared in five reset paths:
-  1. Open false → true transition (extend `useEffect` at
-     lines 178–191).
-  2. `initialValues` reference change (already in deps).
-  3. `lockedLines` reference change (add to deps).
-  4. `reset()` invocation (line 235).
-  5. Dialog close via `onOpenChange(false)` (already
-     invokes `reset()`).
-- **Line-row amount cell rendering** — branch:
-  - `lockedLines?.[i] === true && !overridden.has(i)` →
-    read-only chip `"$X,XXX.XX (from template)"` + inline
-    Override pencil.
-  - Else → existing editable input untouched.
-- **Variable line highlighting** — when
-  `lockedLines?.[i] === false`, add an amber ring CSS
-  class + "Enter amount" placeholder to the (existing)
-  input. No new state.
+**Elevated (highest recommendation strength at M30.0):**
 
-**Consumer wiring in
-`frontend/src/pages/AccountingJournalEntriesPage.tsx`:**
+- **NEW template edit / delete UI.** Third increment on the
+  M28+M29 template surface. Substrate to build on: M28.2
+  templates section + M29.2 chip/Override infrastructure.
+  Small-to-moderate scope; direct operator-facing value
+  (mid-year chart-of-accounts correction; deactivate stale
+  templates without DB access). Would extend the M28/M29
+  template surface into a third increment on the same
+  lineage.
+- **NEW C — F&I chargeback substrate.** Would reuse M27.1
+  gl-accounts substrate. Continues the substrate-compound-
+  value lineage into a fourth link if operator evidence
+  surfaces during a pilot.
+- **NEW O2 — Row 5 public-fetch-helper regex refinement**
+  (M26/M27/M28/M29 deferral, unchanged). Requires SESSION-189-
+  §3-style tracing at M30.0 open. Blast radius unknown.
+- **NEW O3 — Rows-1–4 plain-string-literal investigation**
+  (M26/M27/M28/M29 deferral). Requires tracing.
+- **H — Test-hygiene remediation.** Three shared-DB non-
+  idempotent journeys unchanged from M27.2 → M28.2 → M29.2
+  close.
 
-- **`handleInstantiate`** computes `lockedLines` from the
-  template:
-  ```ts
-  setInstantiateLocks(
-    template.lines.map((line) => line.amount !== null),
-  );
-  ```
-- Fixed line (`amount !== null`) → locked = true.
-- Variable line (`amount === null`) → locked = false.
-- Blank-entry path never sets `lockedLines` — undefined →
-  behavior byte-identical.
+**Gated (unchanged from M29 close):**
 
-### 6. Implement §5.b D7 — Frontend test surface additions
+- T (real tester feedback); U (hosted-demo substrate); L
+  (first-live-pilot staging); M (multi-operator support —
+  breaks the zero-drift streak with intent).
 
-- **`NewJournalEntryTemplateDialog.test.tsx`** extension
-  (~4 tests): variable checkbox toggles amount input
-  disable/enable; posts `amount: null`; balance indicator
-  suppressed when variable; mixed template validates
-  fixed-portion balance.
-- **`NewJournalEntryDialog.test.tsx`** extension (~3 tests):
-  `lockedLines` undefined → blank-entry behavior unchanged
-  (**explicit M27.2 regression guard**); `lockedLines[0]
-  === true` → chip rendered; clicking Override toggles to
-  editable input + clears on close.
-- **`AccountingJournalEntriesPage.test.tsx`** extension
-  (~2 tests): variable-line renders with amber ring;
-  `handleInstantiate` passes correct `lockedLines`.
-- **`accountingApi.templates.test.ts`** extension (~2
-  tests): create-template with null amount serializes as
-  `amount: null` on the wire; projection preserves `null`
-  through fetch.
-- Expected frontend baseline: **270 → ~281 (+~11)**.
+**Deferred pending evidence (unchanged):**
 
-### 7. Implement §5.b D8 — Playwright journey extension
+- D (LLM router / cost caps).
 
-Per `docs/roadmap/MILESTONE_29_PLANNING.md` §5.b D8:
+**Deferred but stable:**
 
-**Extend** `acceptance/journeys/office/accounting_je_template.spec.ts`
-with a **single new `test.describe("variable-amount",
-...)` block** containing an end-to-end journey that covers
-all six user-specified assertions from constraint #7:
+- G (dashboard testid hardening).
 
-1. Create a variable-amount template (fill create dialog,
-   check "Variable amount" on at least one line, submit,
-   assert 201 + list appearance).
-2. Instantiate visibly requests missing amounts (open JE
-   dialog via row's Instantiate; assert variable lines
-   have amber ring + "Enter amount" placeholder; assert
-   fixed lines render as read-only chips with Override
-   pencil).
-3. Unbalanced entry submission blocked (type mismatched
-   amounts; Post button stays disabled; balance indicator
-   reads "Unbalanced by $X.XX").
-4. Balanced entry posts successfully (correct amounts,
-   click Post, assert dialog closes + success badge or
-   list refresh).
-5. Saved template unchanged (re-fetch via `postWithCsrf`
-   or direct `request.get`, deep-compare projection to
-   pre-instantiate snapshot; assert byte-identical).
-6. Resulting JE appears in list/detail (assert row in JE
-   list + open detail dialog, assert entered amounts +
-   account codes match).
+**Deferred at M29 §3 (all valid for later re-entry):**
 
-Journey count: **19 → 20**.
+Fully-variable UX polish ("Repeat last amounts");
+server-recorded instantiation audit trail; named / shared
+template variables.
 
-**No blank-path regression at M29.** The existing M27.2 +
-M28.2-extended `accounting_je_create.spec.ts` blank-entry
-journey continues to cover the `lockedLines === undefined`
-path directly — no additional regression spec required.
+**Deferred at M28 §3 (unchanged):**
 
-### 8. DoD satisfied directly
+Historical-template back-reference on `JournalEntry`; server-
+side template search / pagination; `?include_inactive=true`
+endpoint exposure; standalone template detail page.
 
-Per MILESTONE_29_PLANNING.md §5.f: M29.2 DoD satisfied
-directly via the D8 journey extension. No exception path
-required (unlike M29.1).
+**Deferred at M27 §3 + M25 §4 (unchanged):**
 
-### 9. Two-source agreement gate
+Standalone Chart of Accounts page/route; JE edit/update;
+`posted_by_user` override; advanced picker filtering;
+server-side gl-accounts search / pagination;
+`?include_inactive=true` on gl-accounts; secondary
+"+ Record test drive" launch point; clickable "Referred by"
+nav; named-platform webhook adapters; attribution rollups;
+vehicle-picker advanced filters.
 
-Per M26.1 durable lesson: at increment close, verify no
-endpoint drift by comparing the M21 audit artifact against
-the git diff. Expected: **zero endpoint diff** at M29.2
-(no new views, no permission classes evolved). Zero-drift
-streak advances to **29 consecutive milestones**.
+Present each with two-sentence scope + operator pain
+resolved + dependency notes, then present the recommendation.
 
-### 10. Ship the M29.2 handoff
+### 5. Recommend a target for §5.a
 
-- `docs/handoffs/SESSION_199_m29_inc2_frontend.md`.
-- **Do NOT push** — M29.2 is the milestone close increment;
-  ship the M29 retrospective + capability matrix update +
-  audit artifact refresh (if any) at close; coordinated
-  push follows explicit user confirmation.
-- Commit locally with a message like: `"Milestone 29 ·
-  Increment 2 — Variable-amount UI + Playwright
-  (SESSION_199)"`.
+Ground the recommendation in the **primary operational-
+coverage lens** ("which candidate most increases operational
+coverage for a dealership employee?") OR its reframes
+(substrate-compound-value continuation per M27.1 → M28.1 →
+M29 precedent; substrate-integrity per M26 precedent) if
+evidence supports it.
 
-### 11. Milestone 29 close-out (fold or separate SESSION_200?)
+**Standing question from M29 retrospective §9:** should the
+substrate-compound-value framing continue for a fourth link
+(template edit/delete UI on the M28+M29 base, OR F&I
+chargeback substrate on the M27.1 base), or should M30 spend
+the substrate-integrity audit-refinement path (O2 + O3 as a
+combined M26-analogous milestone)? Evidence at M29 close
+does not force either path.
 
-Per M28.3 precedent, the M28 planning §5.h Option B fold
-was invoked when both increments' §5.e Phase 1 + Phase 2
-verifications passed cleanly. M29.2 SHOULD be the close-out
-increment (M29 has only two increments); no separate M29.3
-close-out is needed. At M29.2 close:
+**Alternatively:** if the M29 CI run surfaces regression
+work at M30.0, address as §0.a amendments first.
 
-- Refresh `docs/CAPABILITY_MATRIX.md` §7δ with M29 shipped
-  surface.
-- Author `docs/roadmap/MILESTONE_29_RETROSPECTIVE.md`.
-- Regenerate the audit artifact if row 150 needs any
-  refresh (expected: unchanged).
-- Overwrite this file with the SESSION_200 M30.0 opening
-  brief (target selection pending, planning-only).
+### 6. Draft §5.b–§5.h load-bearing decisions
 
-## Non-goals for SESSION_199
+Once §5.a locks, draft the standard six-to-eight load-bearing
+decisions.
 
-- ❌ Do NOT touch backend service or serializer code —
-  M29.1 already shipped the substrate; M29.2 is UI-only.
-- ❌ Do NOT introduce a new `InstantiateJournalEntryDialog`
-  wrapper — per M29.0 D3 lock, additive-prop pattern on
-  `NewJournalEntryDialog` is the chosen implementation.
-- ❌ Do NOT modify the base `NewJournalEntryDialog` beyond:
-  (a) the new `lockedLines` optional prop, (b) the
-  internal `overridden` state, (c) extending the existing
-  `useEffect` deps + reset paths, (d) the amount-cell
-  branch. Nothing else in the dialog should become
-  template-aware.
-- ❌ Do NOT change the M27.2 blank-entry test file
-  expectations — the additive prop with safe default
-  guarantees byte-identical behavior. Any diff there is a
-  bug.
-- ❌ Do NOT create new endpoints — zero-drift streak must
-  advance to 29 at M29 close.
-- ❌ Do NOT introduce named / shared template variables
-  (M28 §3 deferral reaffirmed).
-- ❌ Do NOT add historical back-reference on
-  `JournalEntry` (M28 §3 deferral reaffirmed).
-- ❌ Do NOT add a template edit / delete UI at M29 (M28
-  §3 deferred candidate — separate future milestone).
+### 7. Verify BOTH intake AND downstream UI surfaces + FK discoverability before locking §5.b + §5.d
+
+**M24.1-open + M25.0 + M25.2-open + SESSION_189 §3 +
+SESSION_190 §2 + M27.0 §7 + M28.0 §7 + M29.0 §7
+durable lesson.** Every planning-open surface verification
+must cover both intake AND downstream paths, including
+audit-substrate accuracy checks when audit is load-bearing
+on the selection, and **verify FK / identifier discoverability
+for any create/edit workflow candidate**.
+
+### 8. DoD compliance check
+
+Per the M21.0 §5.f amendment: the M30 active memo §3 must
+either name a Playwright journey addition or extension OR
+explicitly document why no journey change is required
+(M26 + M27.1 + M28.1 + M29.1 precedents for the exception
+path — pattern now well-established).
+
+### 9. Expand M30 planning skeleton
+
+Draft fresh per the standard active-memo shape (no existing
+skeleton at close of M29).
+
+### 10. Ship the M30.0 handoff
+
+- `docs/handoffs/SESSION_200_m30_inc0_planning.md`.
+- **Do NOT push** — M30.0 is planning only; coordinated push
+  at M30 close.
+
+## Non-goals for SESSION_200
+
+- ❌ Do NOT ship any backend or frontend code — planning-
+  only session.
+- ❌ Do NOT open any M30 implementation increment.
 - ❌ Do NOT force-push or amend earlier commits.
-- ❌ Do NOT skip the DoD direct-satisfaction step.
-- ❌ Do NOT skip the two-source agreement gate.
-- ❌ Do NOT push M29 — coordinated push at M29 close after
-  explicit user confirmation.
+- ❌ Do NOT modify M1–M29 shipped surface.
+- ❌ Do NOT modify the acceptance suite unless CI regression
+  fixes land as §0.a M30.0 amendments.
+- ❌ Do NOT skip the DoD compliance check.
+- ❌ Do NOT skip the downstream / substrate / FK-
+  discoverability verification (M24–M29 durable lessons).
+- ❌ Do NOT re-litigate the M29.0 D3 implementation-boundary
+  verification (the additive-prop pattern was locked and
+  proven correct at M29.2).
 
-## Baseline expected at close (M29.2)
+## Baseline expected at close
 
-- Backend suite: **4,871 pass** (unchanged from M29.1
-  close; M29.2 is frontend + acceptance only).
-- Frontend Vitest: **270 → ~281 (+~11)** across new + 
-  extended files.
-- Acceptance: **19 → 20 journeys** (D8 combined
-  variable-amount describe block).
-- Audit coverage: **122 / 156** (unchanged).
-- DRF admin surface: **116 endpoints** (unchanged).
-- Permission classes: **7 actual** (unchanged; zero-drift
-  streak advances to 29).
-- Migration count: **0050** (unchanged).
+Backend + frontend + acceptance unchanged from M29 close.
+Only planning docs change.
 
 ## NEXT TASK
 
-Start SESSION_199 with (a) starting-state verification;
-(b) implement §5.b D2 (Variable-amount checkbox); (c)
-implement §5.b D3 (additive lockedLines prop + Override
-toggle); (d) implement §5.b D7 (frontend tests); (e)
-implement §5.b D8 (combined Playwright describe block);
-(f) run full frontend + acceptance suite with M27.2
-regression guard intact; (g) two-source agreement gate;
-(h) M29 close-out (CAPABILITY_MATRIX §7δ + retrospective +
-audit refresh); (i) ship
-`docs/handoffs/SESSION_199_m29_inc2_frontend.md`; (j) local
-commit only, no push.
+Start SESSION_200 with (a) starting-state verification;
+(b) if M29 pushed, monitor first M29 CI run + fix any
+regressions as §0.a M30.0 amendments; (c) regenerate the
+audit artifact and confirm 122/156 holds; (d) present the
+candidate list with recommendation + rationale under the
+primary operational-coverage lens (or substrate-compound-
+value continuation / substrate-integrity reframe if evidence
+supports it); (e) await user confirmation of §5.a; (f) draft
+§5.b–§5.h; (g) DoD compliance check on §3 draft;
+(h) expand the M30 planning memo; (i) ship the M30.0
+handoff.
 
 ---
 
@@ -337,90 +322,109 @@ commit only, no push.
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
+   (M29 shipped section landed at M29.2)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_29_PLANNING.md`
-   (M29.0 active memo — all §5 locks; M29.1 shipped;
-   M29.2 pending)
-6. `docs/roadmap/MILESTONE_28_RETROSPECTIVE.md` §5
-   (durable lessons)
+5. `docs/roadmap/MILESTONE_29_RETROSPECTIVE.md`
+   §3 (deviations) + §5 (durable lessons) + §9
+   (standing M30 question)
+6. `docs/roadmap/MILESTONE_29_PLANNING.md`
+   (M29 governing contract + all §5 locks + M29.0
+   implementation-boundary verification)
 7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (baseline **122 / 156** — expected identity at M29.2
-   close)
-8. `docs/CAPABILITY_MATRIX.md` §7γ (M28 shipped surface;
-   §7δ pending at M29.2 close)
-9. `docs/handoffs/SESSION_197_m29_inc0_planning.md`
-   (M29.0 shipped)
-10. `docs/handoffs/SESSION_198_m29_inc1_backend.md`
-    (M29.1 shipped)
-11. Memory records:
-    - `feedback_duplicate_small_stable_logic.md`
-    - `feedback_verify_fk_discoverability_before_lock.md`
-    - `feedback_prefer_updating_authoritative_docs.md`
-    - `feedback_terminal_output_discipline.md`
+   (post-M29 baseline — 156 endpoints / **122 covered** /
+   34 backend-only)
+8. `docs/CAPABILITY_MATRIX.md` §7z (M25) + §7α (M26) +
+   §7β (M27) + §7γ (M28) + §7δ (M29 shipped surface)
+9. `docs/handoffs/SESSION_199_m29_inc2_frontend.md`
+   (M29.2 shipped + M29 close-out fold)
+10. Memory record `feedback_duplicate_small_stable_logic.md`
+    (M28.0 origin — governs future refactor scoping)
+11. Memory record `feedback_verify_fk_discoverability_before_lock.md`
+    (M27.0 origin — reinforced through M29.0)
 
 Narrative docs are claims. Rules + research + code +
 regenerated artifact are facts.
 
 ---
 
-## Operational state (post-SESSION_198 — Milestone 29 M29.1 shipped)
+## Operational state (post-SESSION_199 — Milestone 29 SHIPPED)
 
 - **Backend (local):** Django on `:8001`. Migrations
   `0001`–`0050` (unchanged since M28.1). Test baseline:
-  **4,871 pass**, 1 skipped, 0 fail (was 4,855 at M28
-  close; +16 at M29.1: +11 M29 service + 4 M29 endpoint +
-  2 M29 model − 1 M28.1 obsolete null-rejection).
+  **4,871 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`. `tsc --noEmit` +
-  `vite build` clean. **Vitest baseline: 270 pass**
-  across 36 test files (unchanged from M28 close).
+  `vite build` clean. **Vitest baseline: 282 pass** across
+  36 test files.
 - **Frontend (prod):** NONE.
-- **Acceptance workspace (local):** Playwright 1.49 +
-  TS 5.6 operational; **19 journeys** total.
+- **Acceptance workspace (local):** Playwright 1.49 + TS
+  5.6 operational; **20 journeys** total.
 - **Acceptance (CI):** live on
-  `.github/workflows/acceptance.yml`. Last verified
-  green on the M28.2 hash-backfill push (2m36s).
+  `.github/workflows/acceptance.yml`. First real M29 CI run
+  pending on the M29 push (executes at M29 close after
+  explicit user confirmation).
 - **Async runtime:** Celery 5.5.3 + Redis 6.4.0 +
-  `django-celery-beat` 2.8.1 DatabaseScheduler.
-- **Milestones shipped:** M1 → **M28**. M29 open (M29.0
-  + M29.1 shipped; M29.2 pending).
-- **DRF admin surface:** **116** endpoints (unchanged
-  since M28.1).
+  `django-celery-beat` 2.8.1 DatabaseScheduler. 10 scheduled
+  task families registered.
+- **Milestones shipped:** M1 → **M29**. M30 target
+  selection pending (SESSION_200).
+- **DRF admin surface:** **116** endpoints (unchanged since
+  M28.1).
 - **Frontend operator routes:** 20 (unchanged).
 - **Public endpoints:** +1 M6.5 showroom (unchanged).
-- **Service surface:** all M1–M28 packages unchanged.
-  M29.1 relaxed `_validate_template_lines` in
-  `services/accounting/template.py` (three-state logic).
-- **Frontend surfaces:** unchanged at M29.1. M29.2 will
-  add the "Variable amount" checkbox to
-  `NewJournalEntryTemplateDialog`, the additive
-  `lockedLines` prop + `overridden` internal state on
-  `NewJournalEntryDialog`, and the Override toggle UI.
+- **Service surface:** all M1–M28 packages unchanged. M29.1
+  refined `_validate_template_lines` in
+  `services/accounting/template.py` (three-state balance
+  logic).
+- **Frontend surfaces:** M29.2 added the "Variable amount"
+  checkbox to `NewJournalEntryTemplateDialog`; the additive
+  `lockedLines` prop + internal `overridden: Set<number>`
+  state + `LockedAmountChip` sub-component + `variableSide`
+  amber-ring on `NewJournalEntryDialog`; extended
+  `AccountingJournalEntriesPage` `handleInstantiate` with
+  `templateToLockedLines` wiring.
 - **Tenancy carriers:** 52 (unchanged).
 - **Permission classes:** **7 actual** — zero-drift streak
-  **28 consecutive milestones** (M10 → M28). Projected
-  to advance to 29 at M29 close.
+  **twenty-nine consecutive milestones** (M10 → M29).
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages (unchanged).
 - **Deterministic rules:** unchanged.
-- **Milestone 29 status:** OPEN. M29.0 shipped (planning
-  memo + handoff); M29.1 shipped (backend substrate
-  relaxation); M29.2 pending (frontend + Playwright).
-- **Audit tooling status:** unchanged from M26.1.
-  Coverage **122 / 156** (matches M28.2 close exactly).
-- **§9 evidence:** M29.1 delivered on the M28.1 forward-
-  compat schema reservation. Backend accepts variable-
-  amount templates; UI awaits M29.2.
-- **Planning-time streak: 8** (unchanged from M29.0
-  close). M29.1 was pure implementation.
-- **DoD amendment (M21.0 §5.f Option B):** M29.1 invoked
-  the exception path as fourth precedent (M26 + M27.1
-  + M28.1 + M29.1). M29.2 satisfies DoD directly.
-- **M29.1 audit coverage:** **156 endpoints, 122 covered /
-  34 backend-only** (unchanged; no new endpoints). Two-
-  source agreement gate passed.
-- **Durable lessons carried into M29.2:** all M28-close
-  lessons continue to apply. M29.1 reinforces (i) *DoD
-  exception path applies cleanly to infrastructure-only
-  sub-increments* (fourth invocation). No new durable
-  lessons surfaced at M29.1; may surface at M29.2 close.
+- **Milestone 29 status:** SHIPPED (SESSION_199 close-out
+  landed all documentation + status flips + M30 handoff +
+  coordinated close-out session-local commits, awaits
+  explicit user push confirmation).
+- **Audit tooling status:** unchanged from M26.1. Coverage
+  **122 / 156** (unchanged from M28.2 close).
+- **§9 evidence for M30:** NEW template edit / delete UI
+  (elevated — third increment on the M28+M29 template
+  surface); NEW C F&I chargeback substrate (elevated —
+  fourth substrate-compound-value link on M27.1); NEW O2 +
+  NEW O3 (unchanged from M26+M27+M28+M29); H (test-hygiene —
+  same 3 failing journeys unchanged from M27.2+M28.2+M29.2);
+  plus gated T/U/L/M, deferred D, deferred stable G, plus
+  M29 §3 + M28 §3 + M27 §3 + M25 §4 deferrals.
+- **Planning-time streak: 8** (at M29.2 close; unchanged
+  from M29.0 as-recommended; M29.1 + M29.2 both pure
+  implementation; historical run of 89 across M10 → M23
+  preserved).
+- **DoD amendment (M21.0 §5.f Option B):** every future
+  customer-facing milestone must add or update at least one
+  Playwright operational journey, or explicitly document in
+  §3 why no journey change is required. M26 invoked the
+  exception path (audit-tooling infrastructure); M27.1 was
+  the second invocation; M28.1 was the third invocation;
+  **M29.1 was the fourth invocation** (backend serializer +
+  service substrate relaxation); M29.2 satisfied DoD
+  directly via new `variable-amount` describe block.
+- **M29 audit coverage at close:** 156 endpoints, **122
+  covered / 34 backend-only** (unchanged from M28.2 close;
+  no new endpoint at M29). Two-source agreement confirmed
+  both M29.1 and M29.2 coverage numbers.
+- **Durable lessons carried into M30+:** all (a)–(s) from
+  the M28 close-state list continue to apply. M29 adds two
+  new: (t) **NEW at M29.2** — *additive-prop pattern for UI
+  reuse* — prefer additive optional prop with safe default
+  over thin wrapper when divergent UI must render inside an
+  existing cell; (u) **NEW at M29.2** — *reset every
+  override / annotation state in every reset path* — failure
+  mode is UI state leaking between usage contexts.
