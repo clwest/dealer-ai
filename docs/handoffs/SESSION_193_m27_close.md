@@ -9,7 +9,7 @@ milestone_status: shipped
 milestone_name: "Journal-Entry Creation UI (via shared GLAccount substrate)"
 increment: 2
 increment_status: shipped
-commit: pending-post-push
+commit: 9d3a152
 ---
 
 # SESSION_193 — Milestone 27 · Increment 2 (M27.2 — JE-create dialog + Playwright) + close-out fold
