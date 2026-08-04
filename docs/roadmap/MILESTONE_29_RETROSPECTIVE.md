@@ -179,6 +179,37 @@ principles are NEW at M29 or reinforced enough to record:
   apply to any future UI state that annotates a subset of a
   reusable component's line list.
 
+- **(NEW at M29.2, surfaced post-close via CI) When changing
+  the semantic shape of an established UI element, sweep the
+  full acceptance suite for stale selectors + assertions on
+  that element.** M29.2 changed the amount cell on
+  `NewJournalEntryDialog` for fixed template lines from
+  `<Input aria-label="Line N debit">` to `<LockedAmountChip
+  data-testid="je-line-N-side-chip" aria-label="Line N side
+  amount (from template)">`. Vitest + `tsc --noEmit` +
+  frontend build all pass under the new shape (the vitests
+  were updated as part of D7; TypeScript is structurally
+  unaware of which locator the test file passes to
+  `getByLabel`). The pre-existing M28.2 Playwright assertion
+  at `accounting_je_template.spec.ts:295` continued to call
+  `dialog.getByLabel("Line 1 debit").toHaveValue(...)` — an
+  aria-label that no longer resolves against the chip — and
+  turned the first M29 CI acceptance run red on push.
+  Failure mode: local pre-push signals (vitest, tsc,
+  frontend build) are structurally incapable of catching
+  stale Playwright selector assertions; only running the
+  acceptance suite locally or waiting for CI surfaces the
+  regression. Mitigation for future milestones: when a
+  planned UI change alters the DOM shape (chip ↔ input,
+  badge ↔ button, hidden ↔ visible) of an element that
+  earlier Playwright journeys touch, add a §5.b sub-decision
+  to the planning memo mandating a `grep` sweep across
+  `acceptance/journeys/**/*.spec.ts` for stale locators on
+  that element AND either update the assertions in the same
+  increment OR run the full acceptance suite locally before
+  push. Recorded here as §0.a M30.0 amendment (see
+  `MILESTONE_30_PLANNING.md` §0.a) and in §8 corrections.
+
 - **(REINFORCED, fourth invocation) DoD exception path for
   infrastructure-only sub-increments.** M29.1 marks the fourth
   invocation of the M21.0 §5.f Option B path (M26 + M27.1 +
@@ -249,7 +280,25 @@ principles are NEW at M29 or reinforced enough to record:
 
 ## 8. Corrections (post-close)
 
-None yet.
+- **2026-08-04 (SESSION_200) — §0.a M30.0 amendment.** First
+  M29 CI acceptance run turned red on the M29.2 push. Root
+  cause: M29.2 changed the amount-cell UI on
+  `NewJournalEntryDialog` for fixed template lines from a
+  labeled `<Input>` to a `LockedAmountChip` (chip test-id
+  `je-line-<i>-<side>-chip`, aria-label
+  `Line <i> <side> amount (from template)`), but did not
+  sweep the pre-existing M28.2 assertion at
+  `acceptance/journeys/office/accounting_je_template.spec.ts:
+  295–300` (`dialog.getByLabel("Line 1 debit").toHaveValue(
+  /^1275(\.00)?$/)`) — that aria-label no longer resolves.
+  Vitest + `tsc --noEmit` + frontend build cannot catch
+  stale Playwright selector assertions. Fix landed as a
+  single-file test-assertion update (chip test-id +
+  `toContainText(/\$1275\.00/)`) verified by isolated re-
+  run then full-suite re-run on a fresh acceptance DB (26
+  passed / 0 failed). See `MILESTONE_30_PLANNING.md` §0.a
+  for the full amendment record and §5 new durable lesson
+  above for the mitigation pattern.
 
 ## 9. Evidence-based candidates for M30
 

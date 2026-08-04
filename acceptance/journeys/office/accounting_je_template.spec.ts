@@ -288,15 +288,21 @@ test.describe(
       const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       await expect(dialog.getByLabel(/Posted at/i)).toHaveValue(todayIso);
 
-      // Line amounts pre-populated on the correct sides. Numeric
-      // inputs may render the value as "1275" or "1275.00" depending
-      // on how the browser normalizes trailing zeros on set — regex
-      // matches both.
-      await expect(dialog.getByLabel("Line 1 debit")).toHaveValue(
-        /^1275(\.00)?$/,
+      // M29.2 — fully-fixed template lines render the populated side
+      // as a read-only ``LockedAmountChip`` (test-id
+      // ``je-line-<index>-<side>-chip``) instead of a labeled
+      // ``<Input>``. The chip renders the pre-populated value as
+      // ``$1275.00 (from template)``; the underlying line state still
+      // carries the numeric value, so submit + balance behavior below
+      // remain unchanged. Historical assertion at this call site used
+      // ``getByLabel("Line 1 debit").toHaveValue(...)`` — that
+      // matched the M28.2 ``<Input>`` shape and no longer resolves
+      // after M29.2's chip UI. §0.a M30.0 amendment restored parity.
+      await expect(dialog.getByTestId("je-line-0-debit-chip")).toContainText(
+        /\$1275\.00/,
       );
-      await expect(dialog.getByLabel("Line 2 credit")).toHaveValue(
-        /^1275(\.00)?$/,
+      await expect(dialog.getByTestId("je-line-1-credit-chip")).toContainText(
+        /\$1275\.00/,
       );
 
       // Balance indicator immediately reads Balanced.
