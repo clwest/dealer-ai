@@ -1,15 +1,20 @@
 // Milestone 11 · Increment 6 (SESSION_119) — Sales operator UI API client.
+// Extended at Milestone 32 · Increment 2 (SESSION_208) with the M11.3
+// DealWriteup wrappers (create / approve / hand-off) + M32.1 read
+// wrappers (list / detail).
 //
-// Consumes the M11.1–M11.5 admin surfaces:
+// Consumes the M11.1–M11.5 + M32.1 admin surfaces:
 //
 //   POST /admin/leads/walk-in/                          (M11.1)
 //   POST /admin/leads/phone/                            (M11.1)
 //   POST /admin/leads/referral/                         (M11.1)
 //   POST /admin/leads/webhook/                          (M11.1)
 //   POST /admin/test-drives/                            (M11.2)
-//   POST /admin/deal-writeups/                          (M11.3, UI deferred)
-//   POST /admin/deal-writeups/<pk>/approve/             (M11.3, UI deferred)
-//   POST /admin/deal-writeups/<pk>/hand-off/            (M11.3, UI deferred)
+//   POST /admin/deal-writeups/                          (M11.3)
+//   POST /admin/deal-writeups/<pk>/approve/             (M11.3)
+//   POST /admin/deal-writeups/<pk>/hand-off/            (M11.3)
+//   GET  /admin/deal-writeups/list/                     (M32.1)
+//   GET  /admin/deal-writeups/<pk>/                     (M32.1)
 //   POST /admin/follow-up-cadences/                     (M11.4)
 //   POST /admin/follow-up-cadences/<pk>/pause/          (M11.4)
 //   GET  /admin/follow-up-tasks/                        (M11.4)
@@ -19,10 +24,9 @@
 //   POST /admin/be-backs/<pk>/mark-returned/            (M11.5)
 //   POST /admin/be-backs/<pk>/mark-no-show/             (M11.5)
 //
-// M11.6 §5.f.2 scope: leads / test-drives / follow-ups / be-backs
-// pages ship; deal-writeup UI deferred. This module exposes the
-// full surface (writeup verbs included) so the follow-on doesn't
-// need to re-declare types.
+// M32.2 wires the M11.3 writeup verbs into the sales-manager
+// Writeups tab on LeadDetailModal per MILESTONE_32_PLANNING.md
+// §5.b D4-revised² + D5 + D6 + D7 + §5.e M32.2.
 //
 // All money on the wire is Decimal-as-string per the M9.5 + M10.1
 // convention; timestamps are ISO-8601.
@@ -449,4 +453,142 @@ export async function markBeBackNoShow(
     { notes },
   );
   return res.be_back;
+}
+
+// ---------------------------------------------------------------------------
+// Deal writeup (M11.3 verbs + M32.1 read wrappers)
+// ---------------------------------------------------------------------------
+//
+// M32.2 wires the M11.3 backend verbs into the sales-manager Writeups
+// tab. State is derived at the projection layer from timestamp
+// presence: pending / approved / handed_off (see
+// `derivedWriteupState()` helper).
+
+export type DealWriteupState = "pending" | "approved" | "handed_off";
+
+export interface DealWriteupProjection {
+  id: number;
+  lead_id: number;
+  vehicle_id: number;
+  dealership_id: number;
+  vehicle_price: string | null;
+  trade_allowance: string | null;
+  down_payment: string | null;
+  monthly_payment_target: string | null;
+  term_months_target: number | null;
+  apr_target: string | null;
+  write_up_at: string;
+  written_up_by_user_id: number | null;
+  sales_manager_approved_at: string | null;
+  sales_manager_approved_by_user_id: number | null;
+  handed_off_to_fandi_at: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateDealWriteupRequest {
+  lead_id: number;
+  vehicle_id: number;
+  write_up_at?: string | null;
+  vehicle_price?: string | null;
+  trade_allowance?: string | null;
+  down_payment?: string | null;
+  monthly_payment_target?: string | null;
+  term_months_target?: number | null;
+  apr_target?: string | null;
+  notes?: string;
+}
+
+interface DealWriteupEnvelope {
+  deal_writeup: DealWriteupProjection;
+}
+
+interface DealWriteupListEnvelope {
+  deal_writeups: DealWriteupProjection[];
+}
+
+interface DealWriteupHandoffEnvelope {
+  deal_writeup: DealWriteupProjection;
+  credit_application: {
+    id: number;
+    lead_id: number | null;
+    source_format: string;
+    captured_at: string;
+  };
+}
+
+export interface DealWriteupListFilters {
+  leadId?: number;
+  state?: DealWriteupState;
+}
+
+/**
+ * Derive UI state from timestamp presence.
+ *
+ * Mirrors the backend service verb `list_deal_writeups` derivation
+ * (`services/deal_writeups/deal_writeup.py`). Kept in sync manually —
+ * both surfaces read the same three timestamp fields on the writeup.
+ */
+export function derivedWriteupState(
+  writeup: DealWriteupProjection,
+): DealWriteupState {
+  if (writeup.handed_off_to_fandi_at !== null) return "handed_off";
+  if (writeup.sales_manager_approved_at !== null) return "approved";
+  return "pending";
+}
+
+export async function listDealWriteups(
+  filters: DealWriteupListFilters = {},
+): Promise<DealWriteupProjection[]> {
+  const params = new URLSearchParams();
+  if (filters.leadId !== undefined) {
+    params.set("lead_id", String(filters.leadId));
+  }
+  if (filters.state !== undefined) {
+    params.set("state", filters.state);
+  }
+  const qs = params.toString();
+  const res = await authGetJSON<DealWriteupListEnvelope>(
+    `/admin/deal-writeups/list/${qs ? `?${qs}` : ""}`,
+  );
+  return res.deal_writeups;
+}
+
+export async function getDealWriteup(
+  pk: number,
+): Promise<DealWriteupProjection> {
+  const res = await authGetJSON<DealWriteupEnvelope>(
+    `/admin/deal-writeups/${pk}/`,
+  );
+  return res.deal_writeup;
+}
+
+export async function createDealWriteup(
+  payload: CreateDealWriteupRequest,
+): Promise<DealWriteupProjection> {
+  const res = await authPostJSON<DealWriteupEnvelope>(
+    "/admin/deal-writeups/",
+    payload,
+  );
+  return res.deal_writeup;
+}
+
+export async function approveDealWriteup(
+  pk: number,
+): Promise<DealWriteupProjection> {
+  const res = await authPostJSON<DealWriteupEnvelope>(
+    `/admin/deal-writeups/${pk}/approve/`,
+    {},
+  );
+  return res.deal_writeup;
+}
+
+export async function handOffDealWriteup(
+  pk: number,
+): Promise<DealWriteupHandoffEnvelope> {
+  return authPostJSON<DealWriteupHandoffEnvelope>(
+    `/admin/deal-writeups/${pk}/hand-off/`,
+    {},
+  );
 }

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import AssignmentDropdown from "@/components/AssignmentDropdown";
+import { LeadWriteupsPanel } from "@/components/sales/LeadWriteupsPanel";
 import { RecordTestDriveForm } from "@/components/sales/RecordTestDriveForm";
 import {
   buildLeadHandoff,
@@ -526,6 +527,26 @@ export default function LeadDetailModal({
                     </div>
                   ) : null}
                 </section>
+
+                {/* M32.2 — Deal writeups panel. Sales-manager-only by
+                    transitivity of the modal itself (backend
+                    `admin_lead_detail` requires
+                    IsSalesManagerOrOwnerAtActiveDealership;
+                    advisors cannot open the modal at all per
+                    D4-revised²). Collapsed by default; reveals a
+                    per-lead writeup list with Approve + Send-to-F&I
+                    inline actions and a "+ New writeup" form. */}
+                <LeadWriteupsPanel
+                  leadId={detail.lead.id}
+                  leadName={detail.lead.name}
+                  suggestedVehicles={detail.interested_vehicles.map((v) => ({
+                    id: v.id,
+                    stock_number: v.stock_number,
+                    display_name: v.display_name,
+                    price: v.price,
+                    image_url: v.image_url,
+                  }))}
+                />
 
                 {/* Summary */}
                 <section>

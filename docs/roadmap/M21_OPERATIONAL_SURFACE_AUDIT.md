@@ -19,9 +19,9 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 161
-- **Consumed by frontend components (`covered`):** 124
-- **Backend-only (audit findings):** 37
-  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **3**
+- **Consumed by frontend components (`covered`):** 128
+- **Backend-only (audit findings):** 33
+  - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **4**
 - **Service verbs enumerated:** 321
 - **Distinct view modules importing service verbs:** 22
 
@@ -76,7 +76,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 26 | `auth/login/` | `views.auth_login` | `auth-login` | — | `intentional-omission` |
 | 27 | `auth/logout/` | `views.auth_logout` | `auth-logout` | — | `intentional-omission` |
 | 28 | `auth/me/` | `views.auth_me` | `auth-me` | — | `intentional-omission` |
-| 29 | `admin/vehicles/` | `views.admin_vehicle_list` | `admin-vehicle-list` | salesApi.ts:256 `listAdminVehicles` | `covered` |
+| 29 | `admin/vehicles/` | `views.admin_vehicle_list` | `admin-vehicle-list` | salesApi.ts:260 `listAdminVehicles` | `covered` |
 | 30 | `admin/vehicles/<str:stock_number>/ledger/` | `views.admin_vehicle_ledger` | `admin-vehicle-ledger` | api.ts:1008 `fetchVehicleLedger` | `covered` |
 | 31 | `admin/vehicles/<str:stock_number>/acquisition/` | `views.admin_vehicle_acquisition_upsert` | `admin-vehicle-acquisition` | api.ts:1015 `upsertVehicleAcquisition` | `covered` |
 | 32 | `admin/vehicles/<str:stock_number>/costs/` | `views.admin_vehicle_cost_create` | `admin-vehicle-cost-create` | api.ts:1025 `createVehicleCost` | `covered` |
@@ -154,26 +154,26 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 104 | `admin/compliance-records/<int:pk>/` | `views_f_and_i.admin_compliance_update` | `admin-compliance-update` | fAndIApi.ts:201 `updateCompliance` | `covered` |
 | 105 | `admin/deal-jackets/<int:contract_pk>/` | `views_f_and_i.admin_deal_jacket_read` | `admin-deal-jacket-read` | fAndIApi.ts:150 `fetchDealJacket` | `covered` |
 | 106 | `admin/f-and-i/deals/` | `views_f_and_i.admin_f_and_i_deals_list` | `admin-f-and-i-deals-list` | fAndIApi.ts:61 `fetchDeals` | `covered` |
-| 107 | `admin/leads/walk-in/` | `views_leads.admin_lead_walk_in_create` | `admin-lead-walk-in-create` | salesApi.ts:105 `createWalkInLead` | `covered` |
-| 108 | `admin/leads/phone/` | `views_leads.admin_lead_phone_create` | `admin-lead-phone-create` | salesApi.ts:115 `createPhoneLead` | `covered` |
-| 109 | `admin/leads/referral/` | `views_leads.admin_lead_referral_create` | `admin-lead-referral-create` | salesApi.ts:122 `createReferralLead` | `covered` |
-| 110 | `admin/leads/webhook/` | `views_leads.admin_lead_webhook_create` | `admin-lead-webhook-create` | salesApi.ts:132 `createWebhookLead` ⚠ wrapper-only | `defer-candidate-O2` |
-| 111 | `admin/test-drives/` | `views_test_drives.admin_test_drive_create` | `admin-test-drive-create` | salesApi.ts:177 `createTestDrive` | `covered` |
-| 112 | `admin/test-drives/list/` | `views_test_drives.admin_test_drive_list` | `admin-test-drive-list` | salesApi.ts:203 `listTestDrives` | `covered` |
-| 113 | `admin/deal-writeups/` | `views_deal_writeups.admin_deal_writeup_create` | `admin-deal-writeup-create` | — | `defer-candidate-O2` |
-| 114 | `admin/deal-writeups/<int:pk>/approve/` | `views_deal_writeups.admin_deal_writeup_approve` | `admin-deal-writeup-approve` | — | `defer-candidate-O2` |
-| 115 | `admin/deal-writeups/<int:pk>/hand-off/` | `views_deal_writeups.admin_deal_writeup_hand_off` | `admin-deal-writeup-hand-off` | — | `defer-candidate-O2` |
-| 116 | `admin/deal-writeups/list/` | `views_deal_writeups.admin_deal_writeup_list` | `admin-deal-writeup-list` | — | `defer-candidate-O2` |
-| 117 | `admin/deal-writeups/<int:pk>/` | `views_deal_writeups.admin_deal_writeup_detail` | `admin-deal-writeup-detail` | — | `defer-candidate-O2` |
-| 118 | `admin/follow-up-cadences/` | `views_follow_ups.admin_follow_up_cadence_create` | `admin-follow-up-cadence-create` | salesApi.ts:318 `createCadence` | `covered` |
-| 119 | `admin/follow-up-cadences/<int:pk>/pause/` | `views_follow_ups.admin_follow_up_cadence_pause` | `admin-follow-up-cadence-pause` | salesApi.ts:328 `pauseCadence` | `covered` |
-| 120 | `admin/follow-up-tasks/` | `views_follow_ups.admin_follow_up_task_list` | `admin-follow-up-task-list` | salesApi.ts:344 `listFollowUpTasks` | `covered` |
-| 121 | `admin/follow-up-tasks/<int:pk>/complete/` | `views_follow_ups.admin_follow_up_task_complete` | `admin-follow-up-task-complete` | salesApi.ts:353 `completeTask` | `covered` |
-| 122 | `admin/follow-up-tasks/<int:pk>/skip/` | `views_follow_ups.admin_follow_up_task_skip` | `admin-follow-up-task-skip` | salesApi.ts:364 `skipTask` | `covered` |
-| 123 | `admin/be-backs/` | `views_be_backs.admin_be_back_create` | `admin-be-back-create` | salesApi.ts:402 `createBeBack` | `covered` |
-| 124 | `admin/be-backs/list/` | `views_be_backs.admin_be_back_list` | `admin-be-back-list` | salesApi.ts:424 `listBeBacks` | `covered` |
-| 125 | `admin/be-backs/<int:pk>/mark-returned/` | `views_be_backs.admin_be_back_mark_returned` | `admin-be-back-mark-returned` | salesApi.ts:436 `markBeBackReturned` | `covered` |
-| 126 | `admin/be-backs/<int:pk>/mark-no-show/` | `views_be_backs.admin_be_back_mark_no_show` | `admin-be-back-mark-no-show` | salesApi.ts:447 `markBeBackNoShow` | `covered` |
+| 107 | `admin/leads/walk-in/` | `views_leads.admin_lead_walk_in_create` | `admin-lead-walk-in-create` | salesApi.ts:109 `createWalkInLead` | `covered` |
+| 108 | `admin/leads/phone/` | `views_leads.admin_lead_phone_create` | `admin-lead-phone-create` | salesApi.ts:119 `createPhoneLead` | `covered` |
+| 109 | `admin/leads/referral/` | `views_leads.admin_lead_referral_create` | `admin-lead-referral-create` | salesApi.ts:126 `createReferralLead` | `covered` |
+| 110 | `admin/leads/webhook/` | `views_leads.admin_lead_webhook_create` | `admin-lead-webhook-create` | salesApi.ts:136 `createWebhookLead` ⚠ wrapper-only | `defer-candidate-O2` |
+| 111 | `admin/test-drives/` | `views_test_drives.admin_test_drive_create` | `admin-test-drive-create` | salesApi.ts:181 `createTestDrive` | `covered` |
+| 112 | `admin/test-drives/list/` | `views_test_drives.admin_test_drive_list` | `admin-test-drive-list` | salesApi.ts:207 `listTestDrives` | `covered` |
+| 113 | `admin/deal-writeups/` | `views_deal_writeups.admin_deal_writeup_create` | `admin-deal-writeup-create` | salesApi.ts:570 `createDealWriteup` | `covered` |
+| 114 | `admin/deal-writeups/<int:pk>/approve/` | `views_deal_writeups.admin_deal_writeup_approve` | `admin-deal-writeup-approve` | salesApi.ts:580 `approveDealWriteup` | `covered` |
+| 115 | `admin/deal-writeups/<int:pk>/hand-off/` | `views_deal_writeups.admin_deal_writeup_hand_off` | `admin-deal-writeup-hand-off` | salesApi.ts:590 `handOffDealWriteup` | `covered` |
+| 116 | `admin/deal-writeups/list/` | `views_deal_writeups.admin_deal_writeup_list` | `admin-deal-writeup-list` | salesApi.ts:552 `listDealWriteups` | `covered` |
+| 117 | `admin/deal-writeups/<int:pk>/` | `views_deal_writeups.admin_deal_writeup_detail` | `admin-deal-writeup-detail` | salesApi.ts:561 `getDealWriteup` ⚠ wrapper-only | `defer-candidate-O2` |
+| 118 | `admin/follow-up-cadences/` | `views_follow_ups.admin_follow_up_cadence_create` | `admin-follow-up-cadence-create` | salesApi.ts:322 `createCadence` | `covered` |
+| 119 | `admin/follow-up-cadences/<int:pk>/pause/` | `views_follow_ups.admin_follow_up_cadence_pause` | `admin-follow-up-cadence-pause` | salesApi.ts:332 `pauseCadence` | `covered` |
+| 120 | `admin/follow-up-tasks/` | `views_follow_ups.admin_follow_up_task_list` | `admin-follow-up-task-list` | salesApi.ts:348 `listFollowUpTasks` | `covered` |
+| 121 | `admin/follow-up-tasks/<int:pk>/complete/` | `views_follow_ups.admin_follow_up_task_complete` | `admin-follow-up-task-complete` | salesApi.ts:357 `completeTask` | `covered` |
+| 122 | `admin/follow-up-tasks/<int:pk>/skip/` | `views_follow_ups.admin_follow_up_task_skip` | `admin-follow-up-task-skip` | salesApi.ts:368 `skipTask` | `covered` |
+| 123 | `admin/be-backs/` | `views_be_backs.admin_be_back_create` | `admin-be-back-create` | salesApi.ts:406 `createBeBack` | `covered` |
+| 124 | `admin/be-backs/list/` | `views_be_backs.admin_be_back_list` | `admin-be-back-list` | salesApi.ts:428 `listBeBacks` | `covered` |
+| 125 | `admin/be-backs/<int:pk>/mark-returned/` | `views_be_backs.admin_be_back_mark_returned` | `admin-be-back-mark-returned` | salesApi.ts:440 `markBeBackReturned` | `covered` |
+| 126 | `admin/be-backs/<int:pk>/mark-no-show/` | `views_be_backs.admin_be_back_mark_no_show` | `admin-be-back-mark-no-show` | salesApi.ts:451 `markBeBackNoShow` | `covered` |
 | 127 | `admin/bhph-notes/` | `views_bhph_notes.admin_bhph_note_create` | `admin-bhph-note-create` | bhphApi.ts:165 `createBhphNote` | `covered` |
 | 128 | `admin/bhph-notes/list/` | `views_bhph_notes.admin_bhph_note_list` | `admin-bhph-note-list` | bhphApi.ts:117 `listBhphNotes` | `covered` |
 | 129 | `admin/bhph-notes/<int:pk>/` | `views_bhph_notes.admin_bhph_note_retrieve` | `admin-bhph-note-retrieve` | bhphApi.ts:131 `getBhphNote` | `covered` |
@@ -212,7 +212,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**37 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**33 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -222,7 +222,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (32)
+### defer-candidate-O2 (28)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -250,10 +250,6 @@ _None._
 - `admin/funding/<int:pk>/` → `views_f_and_i.admin_funding_update` (`admin-funding-update`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/chargebacks/` → `views_f_and_i.admin_chargeback_create` (`admin-chargeback-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/leads/webhook/` → `views_leads.admin_lead_webhook_create` (`admin-lead-webhook-create`). Imported service verbs: `get_current_dealership`, `registered_platforms`
-- `admin/deal-writeups/` → `views_deal_writeups.admin_deal_writeup_create` (`admin-deal-writeup-create`). Imported service verbs: `get_current_dealership`
-- `admin/deal-writeups/<int:pk>/approve/` → `views_deal_writeups.admin_deal_writeup_approve` (`admin-deal-writeup-approve`). Imported service verbs: `get_current_dealership`
-- `admin/deal-writeups/<int:pk>/hand-off/` → `views_deal_writeups.admin_deal_writeup_hand_off` (`admin-deal-writeup-hand-off`). Imported service verbs: `get_current_dealership`
-- `admin/deal-writeups/list/` → `views_deal_writeups.admin_deal_writeup_list` (`admin-deal-writeup-list`). Imported service verbs: `get_current_dealership`
 - `admin/deal-writeups/<int:pk>/` → `views_deal_writeups.admin_deal_writeup_detail` (`admin-deal-writeup-detail`). Imported service verbs: `get_current_dealership`
 - `admin/demo-store/feedback/` → `views_demo_store.admin_demo_store_feedback_create` (`admin-demo-store-feedback-create`). Imported service verbs: `get_current_dealership`
 
@@ -320,7 +316,7 @@ _None._
 ### views_deal_writeups
 
 - **Endpoints:** 5
-- **Backend-only:** 5
+- **Backend-only:** 1
 - **Backend-only dispositions in this module:** `defer-candidate-O2`
 
 ### views_delivery

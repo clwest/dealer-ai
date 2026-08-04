@@ -143,8 +143,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               {/* Milestone 11 · Increment 6 — sales operator UI
                   (four MVP pages per §5.f Option B / Option C: leads
                   channel filter, test-drive log, follow-up work-
-                  queue, be-back list). DealWriteup UI deferred to
-                  a follow-on. */}
+                  queue, be-back list). The M11.3 DealWriteup UI
+                  landed at M32.2 (SESSION_208) as a Writeups panel
+                  inside LeadDetailModal per MILESTONE_32_PLANNING.md
+                  §5.b D4-revised². */}
               <Route
                 path="dealer-ai-sales/leads"
                 element={<DealerAiSalesLeads />}

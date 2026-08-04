@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-04
-last_session_shipped: SESSION_207
+last_session_shipped: SESSION_208
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -34,60 +34,76 @@ milestone_29_status: shipped
 milestone_30_status: shipped
 milestone_31_status: shipped
 milestone_32_status: active
-next_session: SESSION_208
+next_session: SESSION_209
 next_milestone: 32
 next_milestone_name: "Deal Writeups: Sales-Manager-to-F&I Handoff (writeup CRUD substrate + sales-manager UI + F&I intake queue + provenance-FK migration)"
-next_increment: 2
-next_increment_name: "M32.2 — Sales-manager UI + sales-side Playwright"
+next_increment: 3
+next_increment_name: "M32.3 — F&I intake UI + F&I-side Playwright + new f_and_i_manager persona"
 ---
 
-# Next session — SESSION_208 · Milestone 32 · Increment 2 (M32.2 — sales-manager UI + sales-side Playwright)
+# Next session — SESSION_209 · Milestone 32 · Increment 3 (M32.3 — F&I intake UI + F&I-side Playwright + new f_and_i_manager persona)
 
-> **M32.1 backend substrate shipped at SESSION_207.** Migration
-> 0051 (nullable OneToOneField); 3 new service verbs
-> (`list_deal_writeups`, `get_deal_writeup`,
-> `list_credit_applications`); 3 new endpoints (writeup list,
-> writeup detail, CA list — all on distinct `/list/` sibling
-> URLs to preserve M10.1 + M11.3 shipped URL config); 1 new
-> error class (`DealWriteupAlreadyLinkedError`); 4 docstring
-> updates on shipped M11.3/M10.1 files; +62 tests including
-> mandatory `test_writeup_cannot_link_to_multiple_credit_applications`
-> exercising all three defense layers of the D9-revised²
-> provenance-FK guard. **Baselines at M32.1 close:** backend
-> 4,995 pass (+62); frontend 319 (unchanged); acceptance 22
-> (unchanged); audit **161 / 124 / 37 / 321**. DoD exception
-> path invocation #7. Zero-drift permission-class streak 33
-> → 34.
+> **M32.2 sales-manager UI shipped at SESSION_208.** Five new
+> `salesApi.ts` wrappers (removes shipped-source "UI deferred"
+> promise); three new co-located components
+> (`DealWriteupForm`, `WriteupConfirmDialogs`,
+> `LeadWriteupsPanel`); LeadDetailModal wiring; 35 new Vitest
+> tests (+4 test files); new Playwright describe block
+> `sales-manager-writeup-handoff` proving the full sales-side
+> workflow through the real UI with D5-revised + D6
+> irreversibility copy asserted verbatim. **DoD satisfied
+> directly** — no exception. **Two §0.a M32.2 amendments** vs
+> the M32.0 memo (see `docs/handoffs/SESSION_208_m32_inc2_sales_ui.md`
+> §7): (1) technical assertion switched from F&I-gated CA list
+> to sales-role-accessible writeup detail endpoint (F&I role
+> not available in M32.2); (2) M32.3 spec will live at a
+> distinct file under a new `f_and_i_manager` project entry in
+> playwright.config.ts (file-per-persona strengthens the
+> independence guarantee).
 >
-> **SESSION_208 opens M32.2 sales-manager UI.** Writeups tab
-> on `LeadDetailModal` (manager-only by transitivity per
-> D4-revised²); inline four-square form; inline Approve +
-> Send-to-F&I buttons with two confirmation dialogs
-> (D5-revised state-machine-truthful approve copy; D6
-> irreversibility hand-off copy); state visual signals per
-> D7 (Badge + row aria-label + testids). Removal of
-> `salesApi.ts:10-25` "UI deferred" comments. **New Playwright
-> describe block `sales-manager-writeup-handoff`** — sales-side
-> only in M32.2, uses existing `sales_manager` persona (no new
-> persona in M32.2 — that lands at M32.3 per D11). Six-step
-> journey proves create → Pending → Approve → Approved →
-> Send-to-F&I → Handed off through the real UI, with inline
-> technical assertion that the CA was created.
+> **Baselines at M32.2 close:** backend **4,995 pass**
+> (unchanged); frontend **319 → 354 pass** (+35 tests / +4
+> files); acceptance **22 → 23 spec files / 29 tests / 30.5s**;
+> audit **161 / 128 / 33 / 321** (+4 covered for writeup
+> create/approve/hand-off/list; -4 backend-only). Zero-drift
+> permission-class streak 34 → 35.
 >
-> **DoD satisfied directly** — no exception on customer-facing.
+> **SESSION_209 opens M32.3 F&I intake UI + F&I-side Playwright
+> + new f_and_i_manager persona.** New persona addition per D11
+> (personas.ts + login.setup.ts + AUTH_STORAGE.fAndIManager +
+> new project entry in playwright.config.ts + idempotent
+> `seed_journey_fandi_intake_receipt` seed command provisioning
+> both persona and independent `Intake Iris` fixture). New
+> `fetchCreditApplications` wrapper in `fAndIApi.ts`. New
+> `DealerFandIIncoming.tsx` page at `/dealer-ai-f-and-i/incoming`
+> per D8-revised (non-navigational rows; all triage info
+> rendered inline — F&I role cannot access `admin_lead_detail`).
+> "Incoming" nav link in F&I side nav. ~20 Vitest tests. New
+> Playwright describe block `fandi-intake-receipt` at
+> `journeys/f_and_i_manager/fandi_intake_receipt.spec.ts` using
+> new persona + pre-seeded independent fixture (deterministic
+> under any test order or parallelism).
+>
+> **After M32.3 ships:** M32 close-out fold per M31 precedent
+> — `CAPABILITY_MATRIX.md` §7η, audit re-baseline,
+> `IMPLEMENTATION_ROADMAP.md` milestone_32_status flip,
+> retrospective at `docs/roadmap/MILESTONE_32_RETROSPECTIVE.md`.
+>
+> **DoD satisfied directly** — no exception.
 
-## First thing SESSION_208 must do
+## First thing SESSION_209 must do
 
 ### 1. Verify starting state
 
 - `git status` — clean; local `HEAD` ahead of `origin/main` by
-  4 commits (SESSION_206 planning + hash-backfill; SESSION_207
-  substrate + hash-backfill).
-- `git log --oneline -6` — top should be SESSION_207 M32.1
+  6 commits (SESSION_206 planning + hash-backfill;
+  SESSION_207 substrate + hash-backfill; SESSION_208 UI +
+  hash-backfill).
+- `git log --oneline -8` — top should be SESSION_208 M32.2
   hash-backfill; check for expected M32 commit sequence.
 - `python3 manage.py test dealer_ai` → **4,995 pass, 1 skipped,
   0 fail**.
-- `cd frontend && npm test` → **319 pass** across 36 files.
+- `cd frontend && npm test` → **354 pass** across 40 files.
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations --check --dry-run` → "No
   changes detected."
@@ -97,135 +113,190 @@ next_increment_name: "M32.2 — Sales-manager UI + sales-side Playwright"
 - `rm -f backend/db.acceptance.sqlite3` — proactive reset per
   SESSION_200 §0.a durable lesson (v).
 
-### 2. Confirm working from M32.0 planning memo
+### 2. Confirm working from M32.0 planning memo + M32.2 amendments
 
-Read `docs/roadmap/MILESTONE_32_PLANNING.md` §5.b D4-revised²
-+ D5 + D6 + D7 + §5.e M32.2 before touching frontend code.
-Reference `docs/handoffs/SESSION_207_m32_inc1_backend.md` §9
-for M32.2 first-thing sequence.
+Read `docs/roadmap/MILESTONE_32_PLANNING.md` §5.b D3 + D8-revised
++ D11 + §5.e M32.3 before touching code. **Consult the
+SESSION_208 handoff §7 amendments** — Amendment 2 changes M32.3
+to a separate spec file under a new `f_and_i_manager` project
+entry in playwright.config.ts.
 
 Key pre-reads:
 
-- **D4-revised²** — no visible-but-disabled tab for advisor
-  viewers. Advisors cannot open `LeadDetailModal` at all
-  (backend 403 on lead detail fetch). No advisor Writeups-
-  specific UI ships.
-- **D5** — approve copy is state-machine-truthful (no false
-  re-approval advertisement). Approved rows hide the Approve
-  button.
-- **D6** — irreversibility copy verbatim per M32.0 §5.b D6.
-- **D7** — three-signal a11y (Badge + row aria-label +
-  double-marker testids).
-- **M28.0 `feedback_duplicate_small_stable_logic.md`** — all
-  new inline dialog components co-located inside
-  `LeadDetailModal`, not extracted to a shared abstraction.
+- **D3** — CA list endpoint already shipped at M32.1 with fail-
+  explicit validation (`intake=true` only accepted; `intake=false`
+  → 400; projection includes writeup context via D9-revised²
+  FK). M32.3 wires the wrapper + page.
+- **D8-revised** — F&I intake rows are **non-navigational** —
+  no lead-detail link (would 403 for F&I). All triage fields
+  rendered inline: lead name/phone/email; vehicle
+  stock/description; four-square terms; CA notes verbatim;
+  written-up-by; approved-by; hand-off timestamp.
+- **D11** — new `f_and_i_manager` persona requires four files
+  updated: `personas.ts`, `login.setup.ts`, `playwright.config.ts`,
+  and a new seed command registered in `SEED_COMMANDS`.
+- **SESSION_208 handoff §7 Amendment 2** — spec lives at
+  `journeys/f_and_i_manager/fandi_intake_receipt.spec.ts`;
+  needs new project entry with
+  `testMatch: /journeys\/f_and_i_manager\/.*\.spec\.ts/` and
+  `storageState: AUTH_STORAGE.fAndIManager`.
 
-### 3. Ship M32.2 sales-manager UI
+### 3. Ship the new f_and_i_manager persona
 
-Per §5.e M32.2:
+Per D11 + M32.2 §7 Amendment 2:
 
-- **Frontend wrappers** (`salesApi.ts`): 5 new —
-  `listDealWriteups`, `getDealWriteup`, `createDealWriteup`,
-  `approveDealWriteup`, `handOffDealWriteup`. **Remove**
-  `salesApi.ts:10-25` "UI deferred" comments.
-- **`LeadDetailModal`**: new "Writeups" tab (manager-only by
-  transitivity per D4-revised²).
-- **New inline components** (co-located):
-  - `DealWriteupForm` — four-square form with vehicle picker
-    (reuses `listAdminVehicles` from `RecordTestDriveForm`).
-  - `WriteupApproveConfirmDialog` — D5-revised copy.
-  - `WriteupHandoffConfirmDialog` — D6 irreversibility copy.
-- **State visual signals** per D7.
-- **~34 Vitest tests** covering form validation, POST paths,
-  list rendering by state, approve happy path + copy verbatim,
-  hand-off happy path + irreversibility copy verbatim, state
-  badge + testid assertions, non-manager modal 403 error
-  branch, comment removal verification.
+- **`acceptance/support/auth/personas.ts`** — add entry with
+  `username: "acceptance-f-and-i-manager"`, `password`, and
+  role hint.
+- **`acceptance/playwright.config.ts`** —
+  - Add `fAndIManager: path.join(HERE, ".auth/f_and_i_manager.json")`
+    to `AUTH_STORAGE`.
+  - Add new project entry with
+    `testMatch: /journeys\/f_and_i_manager\/.*\.spec\.ts/` and
+    `storageState: AUTH_STORAGE.fAndIManager`.
+- **`acceptance/support/auth/login.setup.ts`** —
+  - Add `setup("authenticate as f_and_i_manager", ...)` task.
+  - Register new seed command in `SEED_COMMANDS`.
+- **New management command
+  `backend/dealer_ai/management/commands/seed_journey_fandi_intake_receipt.py`**
+  — idempotent per M20 lesson; provisions:
+  - `acceptance-f-and-i-manager` user with
+    `f_and_i_manager` role at default dealership.
+  - `Intake Iris` lead.
+  - `FANDI-INTAKE-1` vehicle.
+  - Approved deal writeup on that lead+vehicle with realistic
+    four-square terms.
+  - Handed-off CA via real `hand_off_to_fandi` code path (uses
+    the M32.1 provenance FK).
 
-### 4. Playwright — new sales-side describe block
+### 4. Ship M32.3 F&I intake UI
 
-Per §5.e M32.2:
+Per §5.e M32.3:
 
-- **New spec** `acceptance/journeys/sales_to_fandi_handoff.spec.ts`
-  with `test.describe("sales-manager-writeup-handoff", …)`.
-- Uses existing `sales_manager` persona (existing storageState;
-  no new persona in M32.2).
-- **Six-step journey** proving create → Pending → Approve →
-  Approved → Send-to-F&I → Handed off through the real UI.
-- **Inline technical assertion** via
-  `page.request.get('/admin/credit-applications/list/?intake=true')`
-  after hand-off to prove the CA was created on the backend
-  side (F&I UI ships in M32.3).
-- Extend `seed_journey_sales_operational_entry` if needed for
-  isolation (add a fresh lead/vehicle) — idempotent per M20
-  lesson.
-- Journey count 22 → **23**.
+- **Frontend wrapper `fetchCreditApplications`** in
+  `fAndIApi.ts` — consumes GET
+  `/admin/credit-applications/list/` with optional `intake`,
+  `leadId`, `since` filters + typed projection matching the
+  M32.1 D3 endpoint shape (including `writeup_context`).
+- **New page `DealerFandIIncoming.tsx`** at
+  `/dealer-ai-f-and-i/incoming`:
+  - Backend-gated on
+    `IsFinanceManagerOrOwnerAtActiveDealership` via the D3
+    endpoint. UI shows access-denied branch on 403.
+  - Non-navigational rows per D8-revised. Every triage field
+    rendered inline (no `<a>` wrapping; no click handlers).
+  - Filter controls (intake / lead search / since).
+  - Empty state: *"No incoming applications. Credit
+    applications from sales-manager hand-offs appear here."*
+- **F&I nav "Incoming" link** — extend existing F&I nav
+  component; adjacent to "Deals".
+- **~20 Vitest tests** — page rendering, filter passthrough,
+  empty state, inline field rendering (lead + vehicle + terms
+  + notes + attribution + hand-off timestamp), non-
+  navigational-row assertions (no `<a>` wrapping / no click
+  handler / no cursor-pointer), advisor 403 branch, nav link
+  visibility per role.
 
-### 5. Verify M32.2 close baselines
+### 5. Playwright — new F&I-side describe block
 
-- Backend suite: **4,995 pass** (unchanged — no backend changes
-  in M32.2).
-- Frontend Vitest: **319 → ~353 pass** (+~34).
-- Acceptance: **22 → 23 journeys**; full-suite run green
-  (fresh-DB reset first).
-- `cd frontend && npx tsc --noEmit` clean.
-- `cd acceptance && npx tsc --noEmit` clean.
-- `git grep "UI deferred" frontend/` → empty (removal
-  verified).
-- Audit: **161 / 124 → ~126 / 37 → 35 backend-only** (three
-  writeup endpoints re-cover as UI wires them up; CA list
-  remains backend-only until M32.3 F&I UI).
+Per §5.e M32.3 + M32.2 §7 Amendment 2:
 
-### 6. DoD satisfied directly
+- **New spec** at
+  `acceptance/journeys/f_and_i_manager/fandi_intake_receipt.spec.ts`
+  with `test.describe("fandi-intake-receipt", …)`.
+- Uses new `f_and_i_manager` persona (via project storageState).
+- Reads pre-seeded `Intake Iris` fixture deterministically
+  by lead name / writeup pk from seed output.
+- **Fully independent of M32.2 fixture** — distinct rows; no
+  shared state; test order irrelevant; parallelism-safe.
+- Steps:
+  1. Navigate to `/dealer-ai-f-and-i/incoming`.
+  2. Assert row for `Intake Iris` fixture appears with full
+     inline data: lead name/phone/email; vehicle stock; four-
+     square terms verbatim; written-up-by; approved-by;
+     hand-off timestamp.
+  3. Assert row is non-navigational (no `<a>` wrapping / no
+     click handler / no cursor-pointer).
+  4. Assert notes carries the M11.3 `Deal write-up #<pk>
+     handoff:` prefix + four-square summary.
 
-No exception. Sales-manager UI ships operator surface; new
-`sales-manager-writeup-handoff` describe block satisfies DoD
-directly. Documented in §3 of the M32.2 handoff.
+### 6. Verify M32.3 close baselines
 
-### 7. Ship the M32.2 handoff
+- Backend suite: **4,995 pass** (unchanged — no backend
+  changes in M32.3 aside from seed command).
+- Frontend Vitest: **354 → ~374 pass** (+~20 M32.3 tests).
+- Acceptance journeys (spec files): 23 → **24**.
+- Acceptance suite tests: 29 → **~31+ tests** (accounting for
+  new persona setup + new journey).
+- `tsc --noEmit` clean across frontend + acceptance.
+- Audit: 161 endpoints; 128 → **129** covered (CA list #90
+  becomes covered via `fetchCreditApplications` wrapper); 33
+  → **32** backend-only.
 
-- `docs/handoffs/SESSION_208_m32_inc2_sales_ui.md`.
-- Follow M31.2 handoff shape.
-- **Do NOT push** — coordinated push at M32 close.
+### 7. DoD satisfied directly
 
-## Non-goals for SESSION_208
+No exception. F&I intake UI ships operator surface; new
+`fandi-intake-receipt` describe block satisfies DoD directly.
+Documented in §3 of the M32.3 handoff.
 
-- ❌ Do NOT ship any F&I UI or `f_and_i_manager` persona work
-  — M32.3 scope.
-- ❌ Do NOT modify any M32.1 backend code (except if a
-  regression surfaces as §0.a M32.2 amendment).
+### 8. Ship the M32.3 handoff + M32 close-out fold
+
+- `docs/handoffs/SESSION_209_m32_inc3_fandi_ui.md`.
+- **M32 close-out fold per M31 precedent:**
+  - `docs/CAPABILITY_MATRIX.md` §7η — add M32 shipped surface.
+  - `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` — final
+    baseline.
+  - `docs/roadmap/IMPLEMENTATION_ROADMAP.md` —
+    milestone_32_status: shipped.
+  - `docs/roadmap/MILESTONE_32_RETROSPECTIVE.md` — new file;
+    §5 durable-lesson candidates (Playwright-independent-
+    fixture; verification-driven revision cycles; historical-
+    migration-immutability); §9 M33+ candidates.
+- **Coordinated push at M32 close** — after explicit user
+  confirmation. Expected 6–8 commits per §9 of M32.2
+  handoff.
+
+## Non-goals for SESSION_209
+
+- ❌ Do NOT modify M32.1 backend code or M32.2 frontend code
+  (except if regressions surface as §0.a M32.3 amendments).
 - ❌ Do NOT modify M11.3 shipped endpoint functions or URLs.
 - ❌ Do NOT modify historical migrations.
-- ❌ Do NOT ship advisor-visible Writeups tab surface (per
-  D4-revised² non-goal — advisors cannot open the modal).
-- ❌ Do NOT advertise re-approval as an operator workflow (per
-  D5-revised — hide Approve button on non-`pending` rows).
-- ❌ Do NOT push.
+- ❌ Do NOT modify `admin_lead_detail` role gating — F&I-scoped
+  lead-context view is a M33+ evidence-gated deferral per
+  §5.h.
+- ❌ Do NOT add F&I-workflow state extensions to intake rows
+  (In progress / Structuring / etc.) — M32 intake rows carry
+  only "Incoming" state.
+- ❌ Do NOT push until explicit user confirmation post-M32
+  close-out fold.
 
 ## Baseline expected at close
 
 - Backend: 4,995 pass (unchanged).
-- Frontend: 319 → ~353 pass.
-- Acceptance: 22 → 23 journeys.
-- Audit: 161 endpoints / 124 → ~126 covered / 37 → 35 backend-
-  only (writeup endpoints re-cover via UI; CA list stays
-  backend-only until M32.3).
+- Frontend: 354 → ~374 pass.
+- Acceptance: 23 → 24 spec files / 29 → ~31 tests.
+- Audit: 161 endpoints / 128 → 129 covered / 33 → 32 backend-
+  only / 321 service verbs.
 
 ## NEXT TASK
 
-Start SESSION_208 with (a) starting-state verification;
-(b) confirm working from M32.0 planning memo (D4-revised² + D5
-+ D6 + D7 + §5.e M32.2); (c) ship M32.2 sales-manager UI —
-`salesApi.ts` wrappers + `LeadDetailModal` Writeups tab +
-inline `DealWriteupForm` + inline confirmation dialogs +
-state visual signals + ~34 Vitest tests; (d) ship new
-Playwright describe block `sales-manager-writeup-handoff`
-using existing `sales_manager` persona; (e) verify M32.2 close
-baselines (frontend ~353 pass; acceptance 23 journeys; `git
-grep "UI deferred"` empty); (f) DoD satisfied directly (no
-exception); (g) ship the M32.2 handoff at
-`docs/handoffs/SESSION_208_m32_inc2_sales_ui.md`; **do NOT
-push** — coordinated push at M32 close.
+Start SESSION_209 with (a) starting-state verification;
+(b) confirm working from M32.0 planning memo + M32.2 handoff §7
+amendments (D3 + D8-revised + D11 + §5.e M32.3 + Amendments 1+2);
+(c) ship new `f_and_i_manager` persona (personas.ts +
+login.setup.ts + playwright.config.ts + seed command
+provisioning `Intake Iris` fixture); (d) ship M32.3 F&I intake
+UI (`fetchCreditApplications` wrapper + `DealerFandIIncoming.tsx`
+page + F&I nav link + ~20 Vitest tests); (e) new Playwright
+spec `journeys/f_and_i_manager/fandi_intake_receipt.spec.ts`
+using pre-seeded `Intake Iris` fixture; (f) verify M32.3 close
+baselines (frontend ~374 pass; acceptance 24 journeys / ~31
+tests; audit 128 → 129 covered); (g) DoD satisfied directly
+(no exception); (h) ship the M32.3 handoff + M32 close-out
+fold (CAPABILITY_MATRIX §7η, roadmap flip, retrospective);
+(i) **coordinated M32 close push after explicit user
+confirmation**.
 
 ---
 
@@ -235,41 +306,38 @@ push** — coordinated push at M32 close.
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. **`docs/roadmap/MILESTONE_32_PLANNING.md`** §5.b D4-revised²
-   + D5 + D6 + D7 + §5.e M32.2 (governing contract for M32.2)
-6. `docs/handoffs/SESSION_206_m32_inc0_planning.md` (M32.0
-   planning close-out)
-7. `docs/handoffs/SESSION_207_m32_inc1_backend.md` (M32.1
-   backend close-out)
-8. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` (post-M32.1
-   baseline — 161 / 124 / 37 / 321)
-9. `docs/roadmap/MILESTONE_11_PLANNING.md` §7 M11.3 (M11.3
-   DealWriteup entity origin)
-10. Memory record `feedback_duplicate_small_stable_logic.md`
-    (M28.0 origin — governs M32.2 co-located inline-dialog
-    choice)
-11. Memory record
-    `feedback_playwright_as_operational_contract.md` (M32.2
-    Playwright is the operational contract for sales-manager
-    handoff journey)
+5. **`docs/roadmap/MILESTONE_32_PLANNING.md`** §5.b D3 +
+   D8-revised + D11 + §5.e M32.3 (governing contract for M32.3)
+6. `docs/handoffs/SESSION_206_m32_inc0_planning.md` (M32.0)
+7. `docs/handoffs/SESSION_207_m32_inc1_backend.md` (M32.1)
+8. **`docs/handoffs/SESSION_208_m32_inc2_sales_ui.md`** §7
+   Amendment 2 (spec file placement for M32.3)
+9. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` (post-M32.2
+   baseline — 161 / 128 / 33 / 321)
+10. `docs/roadmap/MILESTONE_11_PLANNING.md` §7 M11.3
+11. Memory record `feedback_duplicate_small_stable_logic.md`
+12. Memory record
+    `feedback_playwright_as_operational_contract.md`
 
 Narrative docs are claims. Rules + research + code +
 regenerated artifact are facts.
 
 ---
 
-## Operational state (post-SESSION_207 — Milestone 32.1 SHIPPED)
+## Operational state (post-SESSION_208 — Milestone 32.2 SHIPPED)
 
 - **Backend (local):** Django on `:8001`. Migrations
-  `0001`–`0051` (M32.1 added `0051_m32_credit_application_deal_writeup_fk`).
-  Test baseline: **4,995 pass**, 1 skipped, 0 fail.
+  `0001`–`0051`. Test baseline: **4,995 pass**, 1 skipped, 0
+  fail.
 - **Backend (prod):** NOT active.
-- **Frontend (local):** Vite on `:5173`. **Vitest baseline: 319
-  pass** across 36 test files. M32.2 will add ~34 tests →
-  ~353.
+- **Frontend (local):** Vite on `:5173`. **Vitest baseline:
+  354 pass** across 40 test files (was 319/36 at M32.1 close;
+  +35 tests / +4 files at M32.2).
 - **Frontend (prod):** NONE.
 - **Acceptance workspace (local):** Playwright 1.49 + TS 5.6
-  operational; **22 journeys** total. M32.2 will add +1 → 23.
+  operational; **23 journeys** total (was 22 at M32.1 close;
+  +1 for M32.2 `sales_to_fandi_handoff.spec.ts`). Full-suite
+  run: 29 passed / 30.5s.
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`. Latest run on
   `origin/main` at `08fef5f` (M31.2 hash-backfill): 28 passed
@@ -277,46 +345,46 @@ regenerated artifact are facts.
 - **Async runtime:** Celery 5.5.3 + Redis 6.4.0 +
   `django-celery-beat` 2.8.1 DatabaseScheduler.
 - **Milestones shipped:** M1 → M31. **M32 in progress —
-  M32.0 planning + M32.1 backend substrate shipped;** M32.2 +
-  M32.3 next.
-- **DRF admin surface:** 118 → **121** endpoints (+3 at M32.1:
-  writeup list + writeup detail + CA list).
+  M32.0 + M32.1 + M32.2 shipped;** M32.3 next.
+- **DRF admin surface:** 121 endpoints (unchanged from M32.1;
+  M32.3 ships no new backend endpoints).
 - **Frontend operator routes:** 20 (unchanged; M32.3 will add
   `/dealer-ai-f-and-i/incoming`).
-- **Service surface:** 318 → **321** verbs (+3 at M32.1).
-- **Frontend surfaces:** unchanged; M32.2 will add sales-
-  manager Writeups tab on `LeadDetailModal`; M32.3 will add
+- **Service surface:** 321 verbs (unchanged).
+- **Frontend surfaces:** M32.2 added sales-manager Writeups
+  tab on `LeadDetailModal` via `LeadWriteupsPanel` +
+  `DealWriteupForm` + `WriteupConfirmDialogs`; M32.3 will add
   new `DealerFandIIncoming.tsx` page.
 - **Tenancy carriers:** 52 (unchanged).
 - **Permission classes:** **7 actual** — zero-drift streak
-  **thirty-four consecutive milestones** (M10 → M32.1).
-  Projected 35 → 36 at M32.2 → M32.3 close.
+  **thirty-five consecutive milestones** (M10 → M32.2).
+  Projected 36 at M32.3 close.
 - **AI safety stack:** 17 scrub stages (unchanged).
-- **Milestone 32 status:** ACTIVE (M32.0 + M32.1 shipped;
-  M32.2 next).
+- **Milestone 32 status:** ACTIVE (M32.0 + M32.1 + M32.2
+  shipped; M32.3 next).
 - **Audit tooling status:** unchanged from M26.1. Coverage
-  **124 / 161** (M32.1 close; 3 new endpoints classified as
-  backend-only transitionally, re-cover at M32.2 + M32.3).
-- **§9 evidence for M33+:** unchanged from M32.0 — NEW C F&I
-  chargeback substrate (still pilot-evidence-gated); NEW O2
-  + NEW O3; H test-hygiene; gated T/U/L/M; deferred D;
-  deferred stable G; new M32 §3 deferrals per M32.0 §5.h.
-- **Planning-time streak: 11 (unchanged at M32.1 — pure
-  implementation).**
+  **128 / 161** (M32.2 close; +4 vs M32.1 for writeup
+  create/approve/hand-off/list; +1 more expected at M32.3 for
+  CA list once F&I UI wrapper lands).
+- **§9 evidence for M33+:** unchanged from M32.0 + M32.1.
+- **Planning-time streak: 11** (unchanged; M32.2 is pure
+  implementation per plan with one §0.a amendment on
+  Playwright technical assertion).
 - **DoD amendment (M21.0 §5.f Option B):** M32.1 = seventh
   invocation of exception path (M26 + M27.1 + M28.1 + M29.1 +
-  M30.1 + M31.1 + M32.1). M32.2 + M32.3 satisfy DoD directly.
-- **First schema-level pairing constraint at M32.1** — the
-  nullable OneToOneField backpointer; three-layer defense
-  documented + tested (mandatory
-  `test_writeup_cannot_link_to_multiple_credit_applications`).
-- **First F&I-role-gated list endpoint at M32.1** —
-  `admin_credit_application_list`.
-- **Historical-migration-immutability discipline preserved** —
-  migration 0034 untouched; architectural evolution recorded
-  in currently-mutable surfaces only.
-- **Durable lessons carried into M32.2+:** all (a)–(x) from
-  the SESSION_202 close-state list plus M31-elevated (w) +
-  (x). M32 may elevate at retrospective:
-  Playwright-independent-fixture (new at M32.3),
-  verification-driven revision cycles (surfaced at M32.0).
+  M30.1 + M31.1 + M32.1); M32.2 satisfies directly; M32.3
+  satisfies directly (pending).
+- **Two §0.a M32.2 amendments** (SESSION_208 handoff §7):
+  Amendment 1 — technical assertion switched to sales-role-
+  accessible writeup detail endpoint; Amendment 2 — M32.3
+  spec at a distinct file under new `f_and_i_manager`
+  project (file-per-persona; strengthens R11 independence
+  guarantee).
+- **First operator UI to reach M11.3 DealWriteup surface** —
+  9 sessions after M11.3 shipped; closes shipped-source
+  deferral promise called out in M32.0 §5.a Evidence #1.
+- **Durable lessons carried into M32.3+:** all (a)–(x) plus
+  M31-elevated (w) + (x). Candidate lessons at M32
+  retrospective: (y) Playwright-independent-fixture pattern
+  (M32.3); (z) verification-driven revision cycles (M32.0);
+  (aa) historical-migration-immutability discipline (M32.1).
