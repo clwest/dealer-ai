@@ -7566,10 +7566,14 @@ class JournalEntryTemplateLine(models.Model):
     avoids a future migration + backfill.
 
     **``amount IS NULL`` posture is intentional forward-compat**, not
-    accidental permissiveness. At M28 the create serializer requires
-    ``amount`` to be non-null; a future variable-amount milestone
-    relaxes that constraint and adds an instantiation-prompt UI. No
-    schema migration required.
+    accidental permissiveness. M28.1 shipped the schema with the null
+    reservation but the create serializer required non-null. M29.1
+    (SESSION_198) spent the reservation: the serializer accepts
+    ``amount = null``, the service layer treats it as a *variable*
+    line (side + GL fixed at create-time, amount supplied at
+    instantiate time), and the M29.2 UI adds a "Variable amount"
+    checkbox at create + Override toggle at instantiate. No schema
+    migration was required across M29.
 
     **Cross-tenant guard.** ``clean()`` implements its own cross-
     tenant validator inline (~5 lines) — mirrors, but does not share,

@@ -738,10 +738,15 @@ def admin_gl_account_list(request):
 class JournalEntryTemplateLineSerializer(serializers.Serializer):
     account_id = serializers.IntegerField()
     side = serializers.ChoiceField(choices=[("debit", "debit"), ("credit", "credit")])
-    # At M28 amount is required non-null; future variable-amount work
-    # will allow null. Kept as a DecimalField for consistent parsing +
-    # Decimal-as-string wire posture (matches JournalEntryLine).
-    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    # M29 (SESSION_198) — ``amount = None`` marks the line as
+    # variable: the side + GL account are fixed at create-time, but
+    # the amount is supplied at instantiation. A non-null amount
+    # marks the line as fixed and must be > 0 (enforced by the
+    # service layer). Kept as a DecimalField for consistent parsing
+    # + Decimal-as-string wire posture (matches JournalEntryLine).
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, allow_null=True
+    )
     memo = serializers.CharField(
         required=False, allow_blank=True, default=""
     )

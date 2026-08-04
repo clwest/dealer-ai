@@ -257,3 +257,66 @@ class JournalEntryTemplateModelTests(TestCase):
         )
         # Meta.ordering = ["name"] — asc.
         self.assertEqual(names, ["Alpha", "Mu", "Zeta"])
+
+    # ------------------------------------------------------------------
+    # M29 (SESSION_198) — variable-amount model-layer coverage
+    # ------------------------------------------------------------------
+
+    def test_m29_mixed_variable_and_fixed_lines_roundtrip(self) -> None:
+        """A template can hold both populated and null lines together;
+        each line's amount round-trips through the ORM unchanged."""
+        template = JournalEntryTemplate.objects.create(
+            dealership=self.dealership,
+            name="Mixed variable and fixed",
+            description="—",
+        )
+        JournalEntryTemplateLine.objects.create(
+            template=template,
+            dealership=self.dealership,
+            account=self.rent,
+            side="debit",
+            amount=Decimal("500.00"),
+            ordering=0,
+        )
+        JournalEntryTemplateLine.objects.create(
+            template=template,
+            dealership=self.dealership,
+            account=self.bank,
+            side="credit",
+            amount=None,
+            ordering=1,
+        )
+        lines = list(template.lines.all().order_by("ordering"))
+        self.assertEqual(lines[0].amount, Decimal("500.00"))
+        self.assertIsNone(lines[1].amount)
+        self.assertEqual(lines[0].side, "debit")
+        self.assertEqual(lines[1].side, "credit")
+
+    def test_m29_fully_variable_template_two_lines_null_ok(self) -> None:
+        """A fully-variable template stores two null-amount lines
+        without violating any model constraint."""
+        template = JournalEntryTemplate.objects.create(
+            dealership=self.dealership,
+            name="Fully variable depreciation",
+            description="—",
+        )
+        JournalEntryTemplateLine.objects.create(
+            template=template,
+            dealership=self.dealership,
+            account=self.rent,
+            side="debit",
+            amount=None,
+            ordering=0,
+        )
+        JournalEntryTemplateLine.objects.create(
+            template=template,
+            dealership=self.dealership,
+            account=self.bank,
+            side="credit",
+            amount=None,
+            ordering=1,
+        )
+        self.assertEqual(template.lines.count(), 2)
+        self.assertEqual(
+            template.lines.filter(amount__isnull=True).count(), 2
+        )

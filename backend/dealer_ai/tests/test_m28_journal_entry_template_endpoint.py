@@ -189,6 +189,139 @@ class TemplateCreateEndpointTests(TestCase):
         )
         self.assertEqual(second.status_code, 409)
 
+    # ------------------------------------------------------------------
+    # M29 (SESSION_198) — variable-amount endpoint coverage
+    # ------------------------------------------------------------------
+
+    def _variable_body(self, name: str = "Monthly depreciation") -> dict:
+        """Fully-variable template body (both lines have amount=null)."""
+        return {
+            "name": name,
+            "description": "Depreciation per asset per period",
+            "lines": [
+                {
+                    "account_id": self.rent.pk,
+                    "side": "debit",
+                    "amount": None,
+                },
+                {
+                    "account_id": self.bank.pk,
+                    "side": "credit",
+                    "amount": None,
+                },
+            ],
+        }
+
+    def test_post_m29_fully_variable_returns_201(self) -> None:
+        response = self.client_.post(
+            reverse(LIST_OR_CREATE),
+            self._variable_body(),
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        body = response.json()["journal_entry_template"]
+        self.assertEqual(body["line_count"], 2)
+        self.assertEqual(body["lines"][0]["amount"], None)
+        self.assertEqual(body["lines"][1]["amount"], None)
+        self.assertEqual(body["lines"][0]["side"], "debit")
+        self.assertEqual(body["lines"][1]["side"], "credit")
+
+    def test_post_m29_mixed_populated_and_variable_returns_201(self) -> None:
+        # Two-line mix: fixed $25 debit + $25 credit balances the
+        # populated portion; two additional variable lines complete the
+        # 4-line template (utility base fee + variable usage).
+        base_debit = GLAccount.objects.create(
+            dealership=self.dealership,
+            code="EP29-671001",
+            name="Utility Base Fee",
+            account_type=GL_ACCOUNT_TYPE_EXPENSE,
+        )
+        base_credit = GLAccount.objects.create(
+            dealership=self.dealership,
+            code="EP29-110001",
+            name="Utility Bank",
+            account_type=GL_ACCOUNT_TYPE_ASSET,
+        )
+        body = {
+            "name": "Utilities monthly",
+            "description": "Fixed base + variable usage",
+            "lines": [
+                {
+                    "account_id": self.rent.pk,
+                    "side": "debit",
+                    "amount": "25.00",
+                },
+                {
+                    "account_id": self.bank.pk,
+                    "side": "credit",
+                    "amount": "25.00",
+                },
+                {
+                    "account_id": base_debit.pk,
+                    "side": "debit",
+                    "amount": None,
+                },
+                {
+                    "account_id": base_credit.pk,
+                    "side": "credit",
+                    "amount": None,
+                },
+            ],
+        }
+        response = self.client_.post(
+            reverse(LIST_OR_CREATE), body, format="json"
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        body_out = response.json()["journal_entry_template"]
+        self.assertEqual(body_out["line_count"], 4)
+        amounts = [line["amount"] for line in body_out["lines"]]
+        self.assertIn("25.00", amounts)
+        self.assertIn(None, amounts)
+
+    def test_post_m29_mixed_with_imbalanced_populated_returns_400(
+        self,
+    ) -> None:
+        body = {
+            "name": "One-sided fixed",
+            "description": "Fixed debit only — populated portion unbalanced",
+            "lines": [
+                {
+                    "account_id": self.rent.pk,
+                    "side": "debit",
+                    "amount": "500.00",
+                },
+                {
+                    "account_id": self.bank.pk,
+                    "side": "credit",
+                    "amount": None,
+                },
+            ],
+        }
+        response = self.client_.post(
+            reverse(LIST_OR_CREATE), body, format="json"
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+
+    def test_get_m29_projection_returns_null_amount_for_variable_lines(
+        self,
+    ) -> None:
+        create_response = self.client_.post(
+            reverse(LIST_OR_CREATE),
+            self._variable_body(name="Projection variable"),
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        list_response = self.client_.get(reverse(LIST_OR_CREATE))
+        self.assertEqual(list_response.status_code, 200)
+        templates = list_response.json()["journal_entry_templates"][
+            "templates"
+        ]
+        variable = next(
+            t for t in templates if t["name"] == "Projection variable"
+        )
+        for line in variable["lines"]:
+            self.assertIsNone(line["amount"])
+
     def test_post_advisor_denied(self) -> None:
         response = _advisor_client().post(
             reverse(LIST_OR_CREATE),

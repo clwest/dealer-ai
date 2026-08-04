@@ -5,10 +5,10 @@ Behaviors asserted:
 - `create_journal_entry_template` happy path posts template + lines
   atomically with expected ordering and amounts.
 - Refuses fewer than 2 lines (EmptyJournalEntryTemplateError → 400).
-- Refuses lines with null / non-positive amount, bad ``side`` value
+- Refuses lines with zero / negative amount or bad ``side`` value
   (InvalidJournalEntryTemplateLineError → 400).
 - Refuses cross-tenant GLAccount (CrossTenantGLAccountError → 404).
-- Refuses unbalanced debit-side vs credit-side totals
+- Refuses unbalanced populated debit-side vs credit-side totals
   (UnbalancedJournalEntryTemplateError → 400).
 - Refuses duplicate name within tenant
   (DuplicateJournalEntryTemplateNameError → 409).
@@ -16,6 +16,12 @@ Behaviors asserted:
   by name; `include_inactive=True` opt-in surfaces inactive too.
 - `get_journal_entry_template` returns None for cross-tenant or
   missing pk (fail-closed).
+
+Note: null-amount lines are accepted at M29 as variable lines — see
+``test_m29_variable_amount_template_service.py`` for that coverage.
+The M28.1 null-rejection test (``test_refuses_null_amount_at_m28``)
+was removed at M29.1 close, since the behavior it asserted was
+intentionally lifted.
 """
 
 from __future__ import annotations
@@ -122,26 +128,6 @@ class CreateJournalEntryTemplateTests(TestCase):
                         side="debit",
                         amount=Decimal("100.00"),
                     )
-                ],
-            )
-
-    def test_refuses_null_amount_at_m28(self) -> None:
-        with self.assertRaises(InvalidJournalEntryTemplateLineError):
-            create_journal_entry_template(
-                dealership=self.dealership,
-                name="Null amount",
-                description="—",
-                lines=[
-                    TemplateLineInput(
-                        account=self.rent,
-                        side="debit",
-                        amount=None,
-                    ),
-                    TemplateLineInput(
-                        account=self.bank,
-                        side="credit",
-                        amount=Decimal("100.00"),
-                    ),
                 ],
             )
 
