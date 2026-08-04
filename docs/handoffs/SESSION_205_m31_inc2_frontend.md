@@ -10,8 +10,8 @@ milestone_name: "Journal-Entry Template Restore / \"Show inactive\" UI (lifecycl
 increment: 2
 increment_status: shipped
 close_out_fold: true
-commit: pending
-commit_notes: "M31.2 commits + M31 close-out fold stay local per M31 coordinated-push cadence; hash backfill via a follow-up commit. NOT pushed. Coordinated M31 close push awaits explicit user confirmation."
+commit: 4b5f5b9
+commit_notes: "M31.2 + M31 close-out fold commit landed as 4b5f5b9; hash backfilled via a follow-up commit. NOT pushed. Coordinated M31 close push awaits explicit user confirmation."
 ---
 
 # SESSION_205 — Milestone 31 · Increment 2 (M31.2 — frontend + Playwright) + M31 close-out fold
