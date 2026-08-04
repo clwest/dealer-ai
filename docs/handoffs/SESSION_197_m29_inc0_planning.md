@@ -9,7 +9,7 @@ milestone_status: active
 milestone_name: "Variable-Amount Journal Templates (on M28.1 template substrate + M27.1 gl-accounts substrate)"
 increment: 0
 increment_status: shipped
-commit: TBD
+commit: 4a26163
 ---
 
 # SESSION_197 — Milestone 29 · Increment 0 (M29.0 — planning refinement + target selection)
