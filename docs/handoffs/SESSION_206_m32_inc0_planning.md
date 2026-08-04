@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Deal Writeups: Sales-Manager-to-F&I Handoff (writeup CRUD substrate + sales-manager UI + F&I intake queue + provenance-FK migration)"
 increment: 0
 increment_status: shipped
-commit: null
-commit_notes: "M32.0 planning session — local commit expected at close per M28.0 / M29.0 / M30.0 / M31.0 planning-only cadence; hash backfill via a subsequent commit; NOT pushed. Coordinated push at M32 close after explicit user confirmation."
+commit: c3d46fd
+commit_notes: "M32.0 planning session — local commit landed as c3d46fd at close per M28.0 / M29.0 / M30.0 / M31.0 planning-only cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated push at M32 close after explicit user confirmation."
 ---
 
 # SESSION_206 — Milestone 32 · Increment 0 (M32.0 — planning refinement + target selection)
