@@ -1,7 +1,7 @@
 ---
 state: active
-date: 2026-08-03
-last_session_shipped: SESSION_196
+date: 2026-08-04
+last_session_shipped: SESSION_197
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -30,123 +30,57 @@ milestone_25_status: shipped
 milestone_26_status: shipped
 milestone_27_status: shipped
 milestone_28_status: shipped
-next_session: SESSION_197
+milestone_29_status: active
+next_session: SESSION_198
 next_milestone: 29
-next_milestone_name: "(target selection pending — locked at M29.0 open)"
-next_increment: 0
-next_increment_name: "M29.0 — Planning refinement + target selection"
+next_milestone_name: "Variable-Amount Journal Templates (on M28.1 template substrate + M27.1 gl-accounts substrate)"
+next_increment: 1
+next_increment_name: "M29.1 — Backend substrate relaxation (serializer allow_null + service three-state balance logic)"
 ---
 
-# Next session — SESSION_197 · Milestone 29 · Increment 0 (M29.0 — planning refinement + target selection)
+# Next session — SESSION_198 · Milestone 29 · Increment 1 (M29.1 — backend substrate relaxation)
 
-> **Milestone 28 — Recurring Journal Templates (on M27.1
-> shared GLAccount substrate) — SHIPPED at SESSION_196.**
-> Three-session milestone (SESSION_194 → SESSION_195 →
-> SESSION_196). M28.3 close-out folded into M28.2 per §5.h
-> Option B — both increments' §5.e Phase 1 + Phase 2 checks
-> passed cleanly on the first regeneration. **Backend
-> baseline 4,813 → 4,855 (+42 across three M28 test files
-> at M28.1); unchanged at M28.2. Frontend Vitest 246 → 270
-> pass (+24 across accountingApi.templates.test.ts +
-> NewJournalEntryTemplateDialog + NewJournalEntryDialog
-> extensions + AccountingJournalEntriesPage extensions).
-> Acceptance 16 → 19 journeys (+3 across
-> `accounting_je_template.spec.ts` + blank-path extension in
-> `accounting_je_create.spec.ts`).** Full acceptance run: 22
-> passed / 3 pre-existing shared-DB failures unchanged from
-> M27.2 (Candidate H remediation, not M28 scope). Audit
-> coverage **121 / 155 → 122 / 156** (row 150
-> `admin/accounting/journal-entry-templates/` shipped +
-> flipped `covered` at M28.2).
+> **Milestone 29 — Variable-Amount Journal Templates — OPEN
+> (planning-only at M29.0, shipped at SESSION_197).**
+> Two-increment structure locked at M29.0 per §5.e of
+> `docs/roadmap/MILESTONE_29_PLANNING.md`. M29.1 is backend-
+> only; M29.2 is the operator-facing frontend + acceptance
+> journey.
 >
-> **Zero-drift permission-class streak extends 27 → 28**
-> consecutive milestones (M10 → M28). Both new M28 endpoints
-> (GET + POST via `@api_view(["GET","POST"])`) reuse
-> `_M131_PERMS`; zero permission classes evolved.
+> **M29.0 shipped:** planning memo authored at
+> `docs/roadmap/MILESTONE_29_PLANNING.md` with all §5 locks;
+> handoff at `docs/handoffs/SESSION_197_m29_inc0_planning.md`.
+> M29.0 is **local-only** at open of SESSION_198 (coordinated
+> push at M29 close per M28 precedent).
 >
-> **Planning-time as-recommended streak reached 7** (was 6
-> at M27.2 close; +1 at M28.0 with target A locked as
-> recommended after four alternatives presented + two
-> architectural verifications performed + one durable
-> engineering-practices refinement adopted from user
-> pushback on helper extraction). Historical run of 89
-> across M10 → M23 preserved for the record. M28.1 + M28.2
-> both pure implementation increments executing the M28.0
-> locked plan — streak unchanged.
+> **Planning-time as-recommended streak reached 8** (was 7 at
+> M28.2 close; +1 at M29.0 with target locked as recommended
+> after five-alternative comparison + one implementation-
+> boundary verification). Historical run of 89 across M10 →
+> M23 preserved for the record.
 >
-> **Coordinated push at M28 close pending.** All M28 work
-> is local-only; awaits explicit user confirmation before
-> push. Expected M28 commits at push: 6 (M28.0 planning +
-> hash backfill + M28.1 substrate + hash backfill + M28.2
-> close + hash backfill).
->
-> **Seven durable design principles surfaced or reinforced
-> at M28** (see `MILESTONE_28_RETROSPECTIVE.md` §5):
-> (a) *duplicate small stable domain logic; extract only on
-> evidence* — NEW at M28.0, saved to memory as
-> `feedback_duplicate_small_stable_logic.md`; governs all
-> future refactor scoping;
-> (b) *variable-amount forward-compat via `side` + nullable
-> `amount` separation* — new architectural pattern;
-> documented in model docstring;
-> (c) *recipes vs postings are different domain concepts* —
-> fusion destroys separation of concerns and forces defensive
-> filters on every posting-query consumer;
-> (d) *verify FK / identifier discoverability at planning-
-> open* — REINFORCED (M27.0 origin);
-> (e) *DoD exception path for infrastructure-only sub-
-> increments* — third invocation (M26 + M27.1 + M28.1),
-> pattern established;
-> (f) *combined GET+POST endpoints count as ONE audit row,
-> not two* — NEW at M28.1; refines memo-prediction pattern
-> for `@api_view(["GET","POST"])`;
-> (g) *Playwright APIRequestContext does NOT auto-populate
-> `X-CSRFToken` from storage-state csrftoken cookie* — NEW
-> at M28.2; `postWithCsrf` helper available for future specs.
->
-> **Five NEW M29+ candidates surfaced or elevated during
-> M28**:
-> (a) **NEW variable-amount templates** — would relax M28.1
-> serializer's non-null `amount` + add instantiation-prompt
-> UI; zero DB migration (schema reserved at M28.1); direct
-> operator gain for depreciation / utilities / payroll
-> accruals; recorded as intended payoff of M28 §5.b forward-
-> compat design;
-> (b) **NEW template edit / delete UI** — currently
-> `is_active` at DB layer with no operator surface;
-> (c) **O2 row-5 public-fetch-helper regex refinement**
-> (M26/M27/M28 deferral, unchanged);
-> (d) **O3 rows-1–4 plain-string-literal investigation**
-> (M26/M27/M28 deferral, unchanged);
-> (e) **H test-hygiene remediation** — same 3 shared-DB
-> non-idempotent journeys unchanged from M27.2 confirmed at
-> M28.2 full-suite run.
->
-> **SESSION_197 opens M29.0 — planning refinement + target
-> selection.** No target locked yet — the candidate list
-> surfaces at open (elevated: NEW variable-amount templates,
-> NEW template edit/delete UI, O2, O3, H; gated: T / U / L /
-> M; deferred pending evidence: D / C; deferred stable: G;
-> plus all M28 §3 deferrals + all M27 §3 deferrals + all
-> M25 §4 deferrals still valid). The assistant recommends
-> one option with rationale grounded in the durable primary
-> operational-coverage lens (or a reframe if evidence
-> supports it); the user confirms or redirects.
+> **Zero-drift permission-class streak preserved at 28**
+> (M10 → M28); M29.0 planning-only. M29.1 backend-only + no
+> new endpoints — streak projected to advance to 29 at M29
+> close.
 
-## First thing SESSION_197 must do
+## First thing SESSION_198 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean; local `HEAD` matches
-  `origin/main` post-M28 push (if pushed) OR local `HEAD`
-  ahead by 6 commits (M28.0 planning + hash backfill + M28.1
-  substrate + hash backfill + M28.2 close + hash backfill)
-  if push not yet executed.
-- `git log --oneline -10` — top should be the M28.2 hash-
-  backfill commit; six M28 commits total.
+- `git status` — clean; local `HEAD` ahead of `origin/main`
+  by **2 commits** (M29.0 planning memo + handoff hash
+  backfill will follow this session's ship + local commit,
+  bringing it to 4 by SESSION_198 open). Expect local HEAD
+  at `60af5cf` + 2 (if M29.0 hash-backfill commit not yet
+  made) or + 3 (if it was).
+- `git log --oneline -10` — top should be the M29.0 hash-
+  backfill commit (or the M29.0 memo + handoff commit if
+  not yet backfilled).
 - `python3 manage.py test dealer_ai` → **4,855 pass, 1
-  skipped, 0 fail**.
-- `cd frontend && npm test` → **270 pass**.
+  skipped, 0 fail** (unchanged from M28.2 close — M29.0
+  is planning only).
+- `cd frontend && npm test` → **270 pass** (unchanged).
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations --check --dry-run` →
   "No changes detected."
@@ -154,214 +88,152 @@ next_increment_name: "M29.0 — Planning refinement + target selection"
 - `cd acceptance && npx tsc --noEmit` clean.
 - `redis-cli ping` → `PONG`.
 
-### 2. If M28 pushed — monitor first M28 CI run
+### 2. No CI to monitor
 
-If M28 has been pushed, verify the CI acceptance workflow
-status via:
+M29.0 was not pushed; coordinated push at M29 close. Skip
+the CI verification step.
 
-```bash
-gh run list --workflow=acceptance --branch=main --limit 5
-gh run view <run-id> --log
-```
+### 3. Audit artifact unchanged
 
-**If red:** address as §0.a M29.0 amendments before opening
-§5.a.
+Optional at M29.1 open (endpoint surface unchanged from
+M28.2 close). If regenerated, expected identity:
+**156 total / 122 covered / 34 backend-only / 315 service
+verbs**.
 
-**If green:** M28 is CI-verified shipped; proceed to §3.
+### 4. Implement §5.b D1 — serializer + service relaxation
 
-### 3. Regenerate the audit artifact
+Per `docs/roadmap/MILESTONE_29_PLANNING.md` §5.b D1:
 
-Before candidate presentation, rerun the audit tooling to
-confirm the M28.2 baseline holds:
+- **`backend/dealer_ai/views_accounting.py`
+  `JournalEntryTemplateLineSerializer.amount`:** add
+  `allow_null=True`. No other serializer changes.
+- **`backend/dealer_ai/services/accounting/template.py`
+  `_validate_template_lines`:** replace the "amount required"
+  branch (currently lines 140–144) with three-state logic:
+  1. `amount is None` → skip balance contribution; do not
+     raise.
+  2. `amount is not None and amount > 0` → contribute to
+     debit-side or credit-side sum per `side`.
+  3. `amount is not None and amount <= 0` → raise
+     `InvalidJournalEntryTemplateLineError` (existing
+     behavior preserved).
+- **Balance check:** run against populated (non-null) lines
+  only. Accept three legitimate template shapes: fully
+  fixed (M28.1 behavior preserved); fully variable (both
+  sums zero, trivially equal); mixed (populated portion
+  must balance).
+- **Update the model docstring at `models.py:7568`** if
+  wording needs refinement post-M29.1 (optional; the
+  existing docstring already predicts this milestone).
 
-```bash
-cd backend
-python3 -m dealer_ai.scripts.audit_operational_surface
-```
+### 5. Implement §5.b D6 — backend test surface additions
 
-Expected: **156 total / 122 covered / 34 backend-only /
-315 service verbs**. If the artifact drifts from this,
-investigate before scope-locking.
+Per `docs/roadmap/MILESTONE_29_PLANNING.md` §5.b D6:
 
-### 4. Present the M29 candidate list
+- **New file** `backend/dealer_ai/tests/
+  test_m29_variable_amount_template_service.py` (~15 tests).
+  Cover the eight named cases in the memo plus edge cases
+  (max lines, mixed with cross-tenant reject, tenant-scoped
+  read).
+- **Extension** of
+  `backend/dealer_ai/tests/test_m28_journal_entry_template_endpoint.py`
+  (~4 tests). Cover the four named cases in the memo.
+- **Extension** of
+  `backend/dealer_ai/tests/test_m28_journal_entry_template_model.py`
+  (~2 tests). Cover model-level null-amount coercion +
+  clean().
+- **No instantiate-flow backend tests** — reuses M13.1
+  posting-service coverage.
+- Expected backend baseline: **4,855 → ~4,876 (+~21)**.
 
-Per the M28 retrospective §9 evidence:
+### 6. Verify M28.1 regression at close
 
-**Elevated (highest recommendation strength at M29.0):**
+- Run backend suite. Verify existing M28.1 test files pass
+  unchanged (regression guard on `_validate_template_lines`
+  relaxation): every fully-populated-lines template in the
+  M28.1 endpoint tests continues to succeed.
+- Run `manage.py check` + `makemigrations --check --dry-run`
+  clean — no migration expected (model schema unchanged
+  from `0050`).
 
-- **NEW variable-amount templates.** Relax M28.1 serializer's
-  non-null `amount` constraint + add instantiation-prompt UI
-  when instantiating a template with NULL-amount lines. Zero
-  DB migration (schema reserved at M28.1 exactly for this
-  case). Direct operator gain for accounting staff posting
-  depreciation, utilities, payroll accruals. Recorded as
-  intended payoff of M28 §5.b forward-compat design.
-  Substrate-compound-value framing continuation of M27.1 +
-  M28.1.
-- **NEW template edit / delete UI.** Currently `is_active`
-  exists at DB layer with no operator surface. If operator
-  evidence supports mid-year chart-of-accounts edits or
-  template deactivation, promote. Small-to-moderate scope.
-- **NEW O2 — Row 5 public-fetch-helper regex refinement**
-  (M26/M27/M28 deferral). Requires SESSION-189-§3-style
-  tracing at M29.0 open. Blast radius unknown.
-- **NEW O3 — Rows-1–4 plain-string-literal investigation**
-  (M26/M27/M28 deferral). Requires tracing at M29.0 open.
-- **H — Test-hygiene remediation.** 3 shared-DB
-  non-idempotent journeys confirmed at M28.2 full-suite
-  run (unchanged from M27.2 close). Compound CI-stability
-  value grows as suite grows.
+### 7. DoD exception path (fourth precedent)
 
-**Gated (unchanged from M28 close):**
+Per `docs/roadmap/MILESTONE_29_PLANNING.md` §5.f:
 
-- **T** — process real tester feedback.
-- **U** — hosted-demo substrate.
-- **L** — first-live-pilot staging.
-- **M** — multi-operator support (breaks zero-drift streak
-  with intent).
+- M29.1 is a **backend-only substrate relaxation with no
+  operator-facing behavior change**. Playwright coverage
+  remains intact via existing
+  `accounting_je_template.spec.ts` + `accounting_je_create.spec.ts`
+  regression.
+- Fourth precedent (M26 + M27.1 + M28.1 + M29.1).
+- SESSION_198 handoff §3 must explicitly document why no
+  journey change is required at this sub-increment.
 
-**Deferred pending evidence (unchanged):**
+### 8. Two-source agreement gate
 
-- **D** — LLM router / cost caps.
-- **C** — F&I chargeback substrate (would reuse M27.1
-  gl-accounts substrate).
+Per M26.1 durable lesson: at increment close, verify no
+endpoint drift by comparing the M21 audit artifact against
+the git diff. Expected: **zero endpoint diff** at M29.1
+(no new views, no permission classes evolved).
 
-**Deferred but stable:**
+### 9. Ship the M29.1 handoff
 
-- **G** — dashboard testid hardening.
+- `docs/handoffs/SESSION_198_m29_inc1_backend.md`.
+- **Do NOT push** — M29.1 is a mid-milestone increment;
+  coordinated push at M29 close per M28 precedent.
+- Commit locally with a message like: `"Milestone 29 ·
+  Increment 1 — Variable-amount template substrate
+  relaxation (SESSION_198)"`.
 
-**Deferred at M28 §3 (all valid for later re-entry):**
+## Non-goals for SESSION_198
 
-Named template variables (multi-line shared input);
-historical-template back-reference on JournalEntry;
-server-side template search / pagination;
-`?include_inactive=true` endpoint exposure; save-as-template
-checkbox on JE dialog; standalone template detail page.
-
-**Deferred at M27 §3 (all valid for later re-entry):**
-
-Standalone Chart of Accounts page/route; JE edit/update;
-`posted_by_user` override; advanced picker filtering;
-server-side gl-accounts search / pagination;
-`?include_inactive=true` on gl-accounts.
-
-**Deferred at M25 §4 (all valid for later re-entry):**
-
-Secondary "+ Record test drive" launch point; clickable
-"Referred by" nav; named-platform webhook adapters;
-attribution rollups; vehicle-picker advanced filters.
-
-Present each with two-sentence scope + operator pain
-resolved + dependency notes, then present the recommendation.
-
-### 5. Recommend a target for §5.a
-
-Ground the recommendation in the **primary operational-
-coverage lens** ("which candidate most increases
-operational coverage for a dealership employee?") OR its
-reframe (planning-substrate integrity, per M26 precedent;
-substrate-compound-value continuation, per M27.1 → M28
-precedent) if evidence supports it.
-
-Elevated candidates evaluated under the primary lens:
-
-- **NEW variable-amount templates** — direct operator-facing;
-  small-to-moderate scope; second consumer of M28.1 template
-  substrate on top of the M27.1 gl-accounts substrate;
-  compound value on compound value.
-- **NEW template edit / delete UI** — direct operator-
-  facing; smaller scope than variable-amount templates but
-  arguably higher-frequency operational value (mid-year
-  edits are more common than depreciation-style variable
-  templates).
-- **NEW O2 audit refinement** — indirect (planning-substrate
-  accuracy). Wins on compound-infrastructure grounds ONLY if
-  active mis-selection defects surface.
-- **NEW O3 audit refinement** — indirect; scope unknown
-  pre-tracing.
-- **H (test-hygiene)** — indirect (CI stability); high
-  compound value as suite grows; 3-journey population is
-  bounded.
-
-**Standing question from M28 retrospective §9:** should
-the substrate-integrity audit-refinement path (O2 + O3
-M26-analogous) be spent, OR the substrate-compound-value
-continuation (variable-amount templates would be the next
-operator-facing consumer of the M28.1 substrate)? Evidence
-at M28 close does not force either path.
-
-**Alternatively:** if the M28 CI run surfaces regression
-work at M29.0, address as §0.a amendments first.
-
-### 6. Draft §5.b–§5.h load-bearing decisions
-
-Once §5.a locks, draft the standard six-to-eight
-load-bearing decisions.
-
-### 7. Verify BOTH intake AND downstream UI surfaces + FK discoverability before locking §5.b + §5.d
-
-**M24.1-open + M25.0 + M25.2-open + SESSION_189 §3 +
-SESSION_190 §2 + M27.0 §7 + M28.0 §7 durable lesson
-reinforced across M24 through M28.** Every planning-open
-surface verification must cover both intake AND downstream
-paths, including audit-substrate accuracy checks when
-audit is load-bearing on the selection, and **verify FK /
-identifier discoverability for any create/edit workflow
-candidate**.
-
-### 8. DoD compliance check
-
-Per the M21.0 §5.f amendment: the M29 active memo §3
-must either name a Playwright journey addition or
-extension OR explicitly document why no journey change
-is required (M26 + M27.1 + M28.1 precedents for the
-exception path).
-
-### 9. Expand M29 planning skeleton
-
-Draft fresh per the standard active-memo shape (no
-existing skeleton at close of M28).
-
-### 10. Ship the M29.0 handoff
-
-- `docs/handoffs/SESSION_197_m29_inc0_planning.md`.
-- **Do NOT push** — M29.0 is planning only; coordinated
-  push at M29 close.
-
-## Non-goals for SESSION_197
-
-- ❌ Do NOT ship any backend or frontend code — planning-
-  only session.
-- ❌ Do NOT open any M29 implementation increment.
+- ❌ Do NOT ship any frontend code — M29.2 territory.
+- ❌ Do NOT extend or create any Playwright journeys — M29.2
+  territory.
+- ❌ Do NOT modify the `JournalEntryTemplate` /
+  `JournalEntryTemplateLine` model schema — the M28.1
+  reserved-nullable-amount column is the entire schema
+  substrate for M29.
+- ❌ Do NOT create any new endpoints — M29 preserves the
+  zero-drift permission-class streak.
 - ❌ Do NOT force-push or amend earlier commits.
-- ❌ Do NOT modify M1–M28 shipped surface.
-- ❌ Do NOT modify the acceptance suite unless CI
-  regression fixes land as §0.a M29.0 amendments.
-- ❌ Do NOT skip the DoD compliance check.
-- ❌ Do NOT skip the downstream / substrate / FK-
-  discoverability verification (M24–M28 durable lessons).
-- ❌ Do NOT re-litigate the M28.0 architectural
-  verifications (variable-amount forward-compat + duplication
-  analysis) — both were correct; carry forward as durable.
+- ❌ Do NOT modify M1–M28 shipped surface (other than the
+  narrow `_validate_template_lines` branch relaxation
+  covered by D1).
+- ❌ Do NOT skip the DoD exception-path documentation.
+- ❌ Do NOT skip the two-source agreement gate.
+- ❌ Do NOT skip the M28.1 regression guard.
+- ❌ Do NOT push M29.0 or M29.1 — coordinated push at M29
+  close.
 
-## Baseline expected at close
+## Baseline expected at close (M29.1)
 
-Backend + frontend unchanged from M28 close. Acceptance
-suite unchanged. Only planning docs change.
+- Backend suite: **4,855 → ~4,876 (+~21)** — new
+  `test_m29_variable_amount_template_service.py` (~15)
+  + extension of `test_m28_journal_entry_template_endpoint.py`
+  (~4) + extension of `test_m28_journal_entry_template_model.py`
+  (~2).
+- Frontend Vitest: **270 pass** (unchanged — M29.2
+  territory).
+- Acceptance: **19 journeys** (unchanged — M29.2 territory).
+- Audit coverage: **122 / 156** (unchanged — no new
+  endpoints).
+- DRF admin surface: **116 endpoints** (unchanged).
+- Permission classes: **7 actual** (unchanged — zero-drift
+  streak preserved).
+- Migration count: **0050** (unchanged — no new migration).
 
 ## NEXT TASK
 
-Start SESSION_197 with (a) starting-state verification,
-(b) if M28 pushed, monitor first M28 CI run + fix any
-regressions as §0.a M29.0 amendments, (c) regenerate the
-audit artifact and confirm 122/156 holds, (d) present
-the candidate list with recommendation + rationale
-under the primary operational-coverage lens (or
-substrate-integrity or substrate-compound-value reframe
-if evidence supports it), (e) await user confirmation
-of §5.a, (f) draft §5.b–§5.h, (g) DoD compliance check
-on §3 draft, (h) expand the M29 planning memo, (i) ship
-the M29.0 handoff.
+Start SESSION_198 with (a) starting-state verification;
+(b) implement §5.b D1 (serializer allow_null + service
+three-state relaxation); (c) implement §5.b D6 (new test
+file + two extensions); (d) run backend suite and verify
++~21 tests with M28.1 regression guard intact;
+(e) two-source agreement gate; (f) DoD exception path
+documentation in §3 of the handoff; (g) ship
+`docs/handoffs/SESSION_198_m29_inc1_backend.md`;
+(h) local commit only, no push.
 
 ---
 
@@ -370,176 +242,93 @@ the M29.0 handoff.
 1. `docs/PROJECT_RULES.md`
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
-   (M28 shipped section landed at M28.2)
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_28_RETROSPECTIVE.md`
-   §3 (deviations) + §5 (durable lessons) + §9
-   (standing M29 question)
-6. `docs/roadmap/MILESTONE_28_PLANNING.md`
-   (M28 governing contract + all §5 locks + M28.0
-   two architectural verifications + evidence-first
-   duplication decision)
+5. `docs/roadmap/MILESTONE_29_PLANNING.md`
+   (M29.0 active memo — all §5 locks)
+6. `docs/roadmap/MILESTONE_28_RETROSPECTIVE.md` §5
+   (durable lessons) + §9 (M29 candidate lineage)
 7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md`
-   (post-M28 baseline — 156 endpoints /
-   **122 covered** / 34 backend-only)
-8. `docs/CAPABILITY_MATRIX.md` §7z (M25 shipped surface)
-   + §7α (M26 audit refinement) + §7β (M27 shipped
-   surface) + §7γ (M28 shipped surface)
-9. `docs/handoffs/SESSION_196_m28_close.md`
-   (M28.2 shipped + M28.3 close-out fold)
-10. Memory record
-    `feedback_duplicate_small_stable_logic.md`
-    (NEW at M28.0)
-11. Memory record
-    `feedback_verify_fk_discoverability_before_lock.md`
-    (M27.0 origin — verified at M28.0 §7)
+   (baseline **122 / 156** — expected identity at M29.1
+   close)
+8. `docs/CAPABILITY_MATRIX.md` §7γ (M28 shipped surface)
+9. `docs/handoffs/SESSION_197_m29_inc0_planning.md`
+   (M29.0 shipped)
+10. Memory records:
+    - `feedback_duplicate_small_stable_logic.md` (M28.0
+      origin — governs the substrate-relaxation refactor
+      scoping at M29.1)
+    - `feedback_verify_fk_discoverability_before_lock.md`
+      (M27.0 origin — verified at M29.0 §4.2)
+    - `feedback_prefer_updating_authoritative_docs.md`
+    - `feedback_terminal_output_discipline.md`
 
 Narrative docs are claims. Rules + research + code +
 regenerated artifact are facts.
 
 ---
 
-## Operational state (post-SESSION_196 — Milestone 28 SHIPPED)
+## Operational state (post-SESSION_197 — Milestone 29 OPEN, M29.0 shipped)
 
-- **Backend (local):** Django on `:8001`.
-  Migrations `0001`–`0050`. Test baseline: **4,855
-  pass**, 1 skipped, 0 fail.
+- **Backend (local):** Django on `:8001`. Migrations
+  `0001`–`0050` (unchanged since M28.1). Test baseline:
+  **4,855 pass**, 1 skipped, 0 fail.
 - **Backend (prod):** NOT active.
-- **Frontend (local):** Vite on `:5173`.
-  `tsc --noEmit` + `vite build` clean.
-  **Vitest baseline: 270 pass** across 36 test files.
+- **Frontend (local):** Vite on `:5173`. `tsc --noEmit` +
+  `vite build` clean. **Vitest baseline: 270 pass** across
+  36 test files.
 - **Frontend (prod):** NONE.
-- **Acceptance workspace (local):** Playwright 1.49
-  + TS 5.6 operational; **19 journeys** total.
-  Full acceptance run: 22 passed / 3 pre-existing
-  shared-DB failures unchanged from M27.2 close
-  (Candidate H remediation, not M28 scope).
+- **Acceptance workspace (local):** Playwright 1.49 +
+  TS 5.6 operational; **19 journeys** total.
 - **Acceptance (CI):** live on
-  `.github/workflows/acceptance.yml`. First real
-  M28 CI run pending on the M28 push (executes at
-  M28 close after explicit user confirmation).
+  `.github/workflows/acceptance.yml`. Last verified green
+  on the M28.2 hash-backfill push (2m36s at SESSION_197
+  open).
 - **Async runtime:** Celery 5.5.3 + Redis 6.4.0 +
-  `django-celery-beat` 2.8.1 DatabaseScheduler.
-  10 scheduled task families registered.
-- **Milestones shipped:** M1 → **M28**. M29 target
-  selection pending (SESSION_197).
-- **DRF admin surface:** **116** endpoints (was 115
-  at M27 close; +1 for M28.1 combined-verb
-  `journal-entry-templates` endpoint).
-- **Frontend operator routes:** 20 (unchanged — M28.2
-  attached to existing JE list route).
+  `django-celery-beat` 2.8.1 DatabaseScheduler. 10
+  scheduled task families registered.
+- **Milestones shipped:** M1 → **M28**. M29 open (M29.0
+  shipped; M29.1 + M29.2 pending).
+- **DRF admin surface:** **116** endpoints (unchanged
+  since M28.1).
+- **Frontend operator routes:** 20 (unchanged).
 - **Public endpoints:** +1 M6.5 showroom (unchanged).
-- **Service surface:** all M1–M27 packages
-  unchanged. M28.1 adds three new template service
-  verbs + one dataclass + four domain errors to
-  `services/accounting/template.py`.
-- **Frontend surfaces:** M28.2 added one new
-  component (`NewJournalEntryTemplateDialog`);
-  extended `NewJournalEntryDialog` with additive
-  props; extended `AccountingJournalEntriesPage`
-  with templates section + Instantiate wiring +
-  second controlled JE dialog mount.
+- **Service surface:** all M1–M28 packages unchanged.
+  M29.1 will narrowly relax `_validate_template_lines` in
+  `services/accounting/template.py` per §5.b D1.
+- **Frontend surfaces:** unchanged at M29.0. M29.2 will
+  add the "Variable amount" checkbox to
+  `NewJournalEntryTemplateDialog`, the additive
+  `lockedLines` prop + `overridden` internal state on
+  `NewJournalEntryDialog`, and the Override toggle UI.
 - **Tenancy carriers:** 52 (unchanged).
-- **Permission classes:** **7 actual** —
-  zero-drift streak **twenty-eight consecutive
-  milestones** (M10 → M28).
+- **Permission classes:** **7 actual** — zero-drift streak
+  **28 consecutive milestones** (M10 → M28). Projected to
+  advance to 29 at M29 close.
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages (unchanged).
 - **Deterministic rules:** unchanged.
-- **Milestone 28 status:** SHIPPED (SESSION_196
-  close-out landed all documentation + status
-  flips + M29 handoff + coordinated close-out
-  session-local commits, awaits explicit user
-  push confirmation).
-- **Audit tooling status:** unchanged from M26.1
-  (parser fix + regression suite + shared
-  substrate). Coverage 122 / 156 (was 121 / 155
-  at M27 close; +1 covered row at M28.2 +1
-  total row at M28.1).
-- **§9 evidence for M29:** NEW variable-amount
-  templates (elevated — would extend M28.1
-  substrate compound value); NEW template edit /
-  delete UI (elevated); NEW O2 + NEW O3 (unchanged
-  from M26+M27+M28); H (test-hygiene — same 3
-  failing journeys unchanged from M27.2+M28.2);
-  plus gated T/U/L/M, deferred D/C, deferred stable
-  G, plus M28 §3 deferrals (named template
-  variables, template detail page, server-side
-  search/pagination, `?include_inactive=true`
-  endpoint, etc.), plus M27 §3 + M25 §4 deferrals.
-- **Planning-time streak: 7** (at M28.2 close;
-  unchanged from M28.0 as-recommended; M28.1 +
-  M28.2 both pure implementation; historical run
-  of 89 across M10 → M23 preserved for the record).
-- **DoD amendment (M21.0 §5.f Option B):** every
-  future customer-facing milestone must add or
-  update at least one Playwright operational
-  journey, or explicitly document in §3 why no
-  journey change is required. M26 invoked the
-  exception path (audit-tooling infrastructure);
-  M27.1 was the second invocation; M28.1 was the
-  third invocation (template substrate + wrappers);
-  M28.2 satisfied DoD directly via new
-  `accounting_je_template.spec.ts` + JE-create
-  extension.
-- **M28 audit coverage at close:** 156 endpoints,
-  **122 covered / 34 backend-only** (was 121 / 34
-  at M27 close; §5.e two-source agreement
-  confirmed both increments' coverage numbers).
-- **Durable lessons carried into M29+:** (a) one
-  operational workflow beats two overlapping
-  (M25.0); (b) planning-open verification must
-  cover persistence path (M25.0 §5.b + M25.2
-  §5.e); (c) additive-forever JSONField beats
-  CharField (M25.0 §5.b); (d) record empirical-
-  discovery refinements honestly (M25.0 + M25.2
-  + SESSION_189 §3 + SESSION_190 §2 + M28.1); (e)
-  modal-attached collapsible + success badge >
-  toast (M25.2 — reinforced at M27.2 JE-create +
-  M28.2 template dialog); (f) dependency-
-  injectable helpers over network mocks in unit
-  tests (M25.2); (g) audit correctness is
-  supporting infrastructure — every accuracy gain
-  compounds (M25.3 → M26); (h) two-source
-  agreement is the mechanical guard against
-  baseline drift (M26.1; reinforced at M27.1 +
-  M27.2 + M28.1 + M28.2 §5.e checks); (i) DoD
-  exception path applies cleanly to
-  infrastructure-only sub-increments (M26 +
-  M27.1 + M28.1 — third invocation); (j) verify
-  FK / identifier discoverability at planning-
-  open for any create/edit workflow (M27.0
-  origin; reinforced at M28.0); (k) substrate-
-  attachment beats parallel-surface for adjacent
-  workflows (M27.0 §7; reinforced at M28.2 —
-  templates section attached to existing JE list
-  page); (l) shared-infrastructure framing over
-  one-off substrate (M27.1 origin; validated by
-  M28.1 template substrate becoming the second
-  operator-facing consumer of the M27.1 gl-
-  accounts substrate); (m) modal dialogs with >3
-  sections need `max-h-[90vh] flex-col` +
-  scrollable inner body from the start (M27.2 —
-  reused at M28.2 template dialog); (n) **NEW at
-  M28.0** — recipes vs postings are different
-  domain concepts; fusing them via inheritance /
-  flags destroys separation of concerns; (o)
-  **NEW at M28.0** — variable-amount forward-
-  compat via `side` + nullable `amount`
-  separation; (p) **NEW at M28.0** — duplicate
-  small stable domain logic; extract only on
-  evidence (short, stable, domain-local logic
-  stays local; extraction is evidence-gated, not
-  DRY-driven); (q) **NEW at M28.1** — combined
-  GET+POST endpoints count as ONE audit row, not
-  two (refines memo-prediction pattern for
-  `@api_view(["GET","POST"])`); (r) **NEW at
-  M28.2** — Playwright APIRequestContext does
-  NOT auto-populate `X-CSRFToken` from storage-
-  state csrftoken cookie (`postWithCsrf` helper
-  pattern available for future specs); (s)
-  **NEW at M28.2** — numeric input value pre-
-  population may normalize trailing zeros;
-  Playwright assertions on `<input type="number">`
-  values should use regex when comparing to
-  pre-formatted numeric strings.
+- **Milestone 29 status:** OPEN. M29.0 shipped
+  (SESSION_197 planning memo + handoff); M29.1 pending
+  (SESSION_198 backend substrate); M29.2 pending
+  (SESSION_199 frontend + Playwright).
+- **Audit tooling status:** unchanged from M26.1. Coverage
+  **122 / 156** (matches M28.2 close exactly).
+- **§9 evidence carried into M29.1:** all seven binding
+  constraints from the SESSION_197 confirmation message
+  recorded in `SESSION_197_m29_inc0_planning.md` §6 and
+  memo §5.b D1–D8.
+- **Planning-time streak: 8** (at M29.0 close; historical
+  run of 89 across M10 → M23 preserved).
+- **DoD amendment (M21.0 §5.f Option B):** M29.1 will
+  invoke the exception path as fourth precedent (M26 +
+  M27.1 + M28.1 + M29.1) — infrastructure-only sub-
+  increment; §3 of the handoff must document why no
+  journey change is required. M29.2 satisfies DoD
+  directly.
+- **M29.0 audit coverage:** **156 endpoints, 122 covered /
+  34 backend-only** (unchanged from M28.2 close). No new
+  endpoint at M29 (see §5.b D1).
+- **Durable lessons carried into M29:** all (a)–(s) from
+  the M28 close-state list continue to apply. M29.0 adds
+  no new durable lessons at this planning increment;
+  M29.1 + M29.2 may surface new ones at close.
