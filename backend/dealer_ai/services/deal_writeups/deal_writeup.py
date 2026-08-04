@@ -1,14 +1,28 @@
-"""Milestone 11 · Increment 3 (SESSION_116) — DealWriteup write verbs.
+"""Milestone 11 · Increment 3 (SESSION_116) — DealWriteup verbs
+(extended at M32.1 SESSION_207 with list + detail read verbs).
 
-Three verbs backing the M11.3 DealWriteup entity:
+Five verbs total:
 
-- :func:`record_deal_writeup` — create.
-- :func:`approve_deal_writeup` — sales-manager approval (sets
-  ``sales_manager_approved_at`` + ``sales_manager_approved_by_user``).
-- :func:`hand_off_to_fandi` — sets ``handed_off_to_fandi_at`` and
-  server-side creates a matching :class:`CreditApplication` per
-  §5.e Option A. The auto-created CA carries the writeup's terms in
-  its ``notes`` field per SESSION_116 §0.a M11.3 amendment.
+- :func:`record_deal_writeup` (M11.3) — create.
+- :func:`approve_deal_writeup` (M11.3) — sales-manager approval
+  (sets ``sales_manager_approved_at`` +
+  ``sales_manager_approved_by_user``).
+- :func:`hand_off_to_fandi` (M11.3, extended at M32.1) — sets
+  ``handed_off_to_fandi_at`` and server-side creates a matching
+  :class:`CreditApplication` per §5.e Option A. **M32.1 extension:**
+  also sets the ``deal_writeup`` OneToOneField backpointer on the
+  created CA per ``MILESTONE_32_PLANNING.md`` §5.b D9-revised²,
+  making pairing deterministic for the F&I intake queue. The
+  auto-created CA carries the writeup's terms in its ``notes``
+  field per SESSION_116 §0.a M11.3 amendment.
+- :func:`list_deal_writeups` (**M32.1**) — tenant-scoped list read
+  for the sales-manager Writeups tab. Optional ``state`` filter
+  (``pending`` / ``approved`` / ``handed_off``, derived from
+  timestamp presence) and optional ``lead`` filter. Fail-explicit
+  filter validation per D1 — callers pass typed args; endpoint
+  layer handles query-string parsing + 400 mapping.
+- :func:`get_deal_writeup` (**M32.1**) — pure read verb by pk.
+  Tenant-scoped; returns ``None`` on unknown / cross-tenant pk.
 
 State-machine invariants:
 
@@ -16,7 +30,11 @@ State-machine invariants:
   (:class:`WriteupNotApprovedError`).
 - Handoff is idempotent per writeup
   (:class:`WriteupAlreadyHandedOffError`) — a second call refuses
-  rather than creating a duplicate CA.
+  rather than creating a duplicate CA. Composed at M32.1 with the
+  DB OneToOne constraint on ``CreditApplication.deal_writeup`` and
+  the service-layer
+  :class:`services.f_and_i.DealWriteupAlreadyLinkedError` — three-
+  layer defense against duplicate pairings.
 """
 
 from __future__ import annotations
@@ -188,6 +206,11 @@ def hand_off_to_fandi(
       - ``notes`` = structured summary of the four-square terms
         (see :func:`_format_handoff_notes`).
       - ``lead`` = ``writeup.lead``.
+      - **M32.1: ``deal_writeup`` = ``writeup``** — sets the
+        OneToOneField backpointer on the created CA per
+        ``MILESTONE_32_PLANNING.md`` §5.b D9-revised². Makes the
+        writeup ↔ CA pairing deterministic for the F&I intake
+        queue's projection layer.
     - Returns ``(writeup, credit_application)``.
 
     Raises :class:`WriteupNotApprovedError` if the writeup has not
@@ -196,6 +219,16 @@ def hand_off_to_fandi(
     has a handoff timestamp — idempotency guard prevents duplicate
     CreditApplication rows (which would trigger M10.1 §5.e
     retention-clock duplication).
+
+    **M32.1 three-layer defense against duplicate pairings:** the
+    ``WriteupAlreadyHandedOffError`` guard here catches the
+    writeup-side second-call path; the M32.1
+    :class:`services.f_and_i.DealWriteupAlreadyLinkedError` (raised
+    by ``record_credit_application`` when its ``deal_writeup=``
+    kwarg references an already-paired writeup) catches any
+    alternate caller; the DB OneToOneField unique constraint on
+    :attr:`CreditApplication.deal_writeup` catches bypass-service
+    direct ORM writes.
 
     The atomic block covers the timestamp update + CA creation so
     a mid-handoff failure never leaves the writeup marked handed-off
@@ -224,5 +257,120 @@ def hand_off_to_fandi(
         source_format=source_format,
         lead=writeup.lead,
         notes=_format_handoff_notes(writeup),
+        deal_writeup=writeup,
     )
     return writeup, credit_app
+
+
+# ---------------------------------------------------------------------------
+# Milestone 32 · Increment 1 — read verbs
+# ---------------------------------------------------------------------------
+
+DEAL_WRITEUP_STATE_PENDING = "pending"
+DEAL_WRITEUP_STATE_APPROVED = "approved"
+DEAL_WRITEUP_STATE_HANDED_OFF = "handed_off"
+
+DEAL_WRITEUP_STATES = (
+    DEAL_WRITEUP_STATE_PENDING,
+    DEAL_WRITEUP_STATE_APPROVED,
+    DEAL_WRITEUP_STATE_HANDED_OFF,
+)
+
+
+def get_deal_writeup(
+    *, pk: int, dealership: "Dealership"
+) -> Optional[DealWriteup]:
+    """Milestone 32 · Increment 1 — return the tenant-scoped
+    DealWriteup for ``pk``, or ``None`` if unknown / cross-tenant.
+
+    Pure read verb. Never raises. Never leaks whether the row
+    exists in another tenant. Callers translate ``None`` to HTTP
+    404 per the fail-closed pattern from M2.6 / M3.6 / M4.6 /
+    M11.3.
+
+    Returns the row with ``lead`` + ``vehicle`` +
+    ``written_up_by_user`` + ``sales_manager_approved_by_user``
+    prefetched for the endpoint projection.
+    """
+    return (
+        DealWriteup.objects.filter(dealership=dealership, pk=pk)
+        .select_related(
+            "lead",
+            "vehicle",
+            "written_up_by_user",
+            "sales_manager_approved_by_user",
+        )
+        .first()
+    )
+
+
+def list_deal_writeups(
+    *,
+    dealership: "Dealership",
+    state: Optional[str] = None,
+    lead: Optional["CustomerLead"] = None,
+) -> list[DealWriteup]:
+    """Milestone 32 · Increment 1 — tenant-scoped DealWriteup list
+    for the sales-manager Writeups tab.
+
+    Returns writeups for ``dealership``, ordered newest-first by
+    ``write_up_at`` (matches
+    :attr:`DealWriteup.Meta.ordering = ["-write_up_at"]`).
+
+    Optional filters (composable):
+
+    - ``state`` — one of ``pending`` / ``approved`` /
+      ``handed_off``. Derived at query time from timestamp
+      presence, not from a stored column:
+      - ``pending``: ``sales_manager_approved_at IS NULL``
+      - ``approved``: ``sales_manager_approved_at IS NOT NULL AND
+        handed_off_to_fandi_at IS NULL``
+      - ``handed_off``: ``handed_off_to_fandi_at IS NOT NULL``
+      Any other string raises :class:`ValueError` — callers
+      (endpoint layer) translate to 400 per D1 fail-explicit
+      posture.
+    - ``lead`` — filter by lead FK. Cross-tenant lead not enforced
+      here (caller responsibility since the endpoint layer already
+      fetches the lead via tenant-scoped query); non-existent lead
+      simply returns empty list.
+
+    Pure read. Never raises except on unknown ``state`` value
+    (typed domain error, mapped to 400 by endpoint).
+
+    Design note: state derivation is a query-time projection, not
+    a materialized column. Advantages: single source of truth
+    (timestamps) — no cross-column-consistency invariant to
+    maintain. Disadvantages: cannot index the derived state
+    directly. At M11 scale + M32 scale this is fine; if evidence
+    surfaces need for query performance, revisit with a computed
+    column or GeneratedField.
+    """
+    if state is not None and state not in DEAL_WRITEUP_STATES:
+        raise ValueError(
+            f"Unknown state={state!r}. "
+            f"Valid values: {list(DEAL_WRITEUP_STATES)!r}."
+        )
+
+    qs = (
+        DealWriteup.objects.filter(dealership=dealership)
+        .select_related(
+            "lead",
+            "vehicle",
+            "written_up_by_user",
+            "sales_manager_approved_by_user",
+        )
+    )
+    if state == DEAL_WRITEUP_STATE_PENDING:
+        qs = qs.filter(sales_manager_approved_at__isnull=True)
+    elif state == DEAL_WRITEUP_STATE_APPROVED:
+        qs = qs.filter(
+            sales_manager_approved_at__isnull=False,
+            handed_off_to_fandi_at__isnull=True,
+        )
+    elif state == DEAL_WRITEUP_STATE_HANDED_OFF:
+        qs = qs.filter(handed_off_to_fandi_at__isnull=False)
+
+    if lead is not None:
+        qs = qs.filter(lead=lead)
+
+    return list(qs)

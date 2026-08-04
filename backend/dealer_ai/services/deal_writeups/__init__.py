@@ -21,19 +21,31 @@ Domain errors:
 from __future__ import annotations
 
 from .deal_writeup import (
+    DEAL_WRITEUP_STATE_APPROVED,
+    DEAL_WRITEUP_STATE_HANDED_OFF,
+    DEAL_WRITEUP_STATE_PENDING,
+    DEAL_WRITEUP_STATES,
     CrossTenantDealWriteupError,
     WriteupAlreadyHandedOffError,
     WriteupNotApprovedError,
     approve_deal_writeup,
+    get_deal_writeup,
     hand_off_to_fandi,
+    list_deal_writeups,
     record_deal_writeup,
 )
 
 __all__ = [
+    "DEAL_WRITEUP_STATE_APPROVED",
+    "DEAL_WRITEUP_STATE_HANDED_OFF",
+    "DEAL_WRITEUP_STATE_PENDING",
+    "DEAL_WRITEUP_STATES",
     "CrossTenantDealWriteupError",
     "WriteupAlreadyHandedOffError",
     "WriteupNotApprovedError",
     "approve_deal_writeup",
+    "get_deal_writeup",
     "hand_off_to_fandi",
+    "list_deal_writeups",
     "record_deal_writeup",
 ]

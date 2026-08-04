@@ -32,6 +32,9 @@ as sibling view functions — same pattern as :mod:`views_recon` /
 
 from __future__ import annotations
 
+from typing import Optional
+
+from django.utils.dateparse import parse_datetime
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -211,6 +214,201 @@ def admin_credit_application_create(request):
     return Response(
         {"credit_application": _project_credit_application(app)},
         status=status.HTTP_201_CREATED,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 32 · Increment 1 (SESSION_207) — F&I intake list endpoint.
+#
+# GET /admin/credit-applications/ — F&I intake queue read.
+#
+# Per MILESTONE_32_PLANNING.md §5.b D3. First F&I-role-gated list
+# endpoint (approve/handoff-adjacent surface finally has an F&I-
+# side receiver). Fail-explicit query validation — invalid values
+# return 400 with a clear message rather than silently unfiltering.
+# `intake=false` explicitly rejected — reserved-and-unavailable in
+# M32 to preserve semantic clarity; use `has_contract=true` (or
+# similar) in a future milestone if the "already-contracted" filter
+# surfaces evidence.
+#
+# Projection includes writeup-context fields via the D9-revised²
+# nullable OneToOneField backpointer added at M32.1 — deterministic
+# pairing at query time; no text-parsing of `notes`.
+# ---------------------------------------------------------------------------
+
+
+def _project_writeup_context(app: CreditApplication) -> dict:
+    """Milestone 32 · Increment 1 — nested writeup-context projection.
+
+    When ``app.deal_writeup`` is populated (hand-off-created CA per
+    M11.3 + M32.1), returns the four-square terms + attribution
+    fields the F&I intake row needs to render inline. When NULL
+    (direct-create CA via M10.1 or historical row), returns None so
+    the endpoint can emit ``writeup_context: null`` truthfully.
+    """
+    writeup = app.deal_writeup
+    if writeup is None:
+        return None  # type: ignore[return-value]
+    lead = writeup.lead
+    vehicle = writeup.vehicle
+    return {
+        "deal_writeup_id": writeup.pk,
+        "written_up_by_user_id": writeup.written_up_by_user_id,
+        "sales_manager_approved_by_user_id": (
+            writeup.sales_manager_approved_by_user_id
+        ),
+        "handed_off_to_fandi_at": (
+            writeup.handed_off_to_fandi_at.isoformat()
+            if writeup.handed_off_to_fandi_at
+            else None
+        ),
+        "lead": {
+            "id": lead.pk,
+            "name": lead.name,
+            "phone": lead.phone,
+            "email": lead.email,
+        },
+        "vehicle": {
+            "id": vehicle.pk,
+            "stock_number": vehicle.stock_number,
+            "year": vehicle.year,
+            "make": vehicle.make,
+            "model": vehicle.model,
+        },
+        "terms": {
+            "vehicle_price": (
+                str(writeup.vehicle_price)
+                if writeup.vehicle_price is not None
+                else None
+            ),
+            "trade_allowance": (
+                str(writeup.trade_allowance)
+                if writeup.trade_allowance is not None
+                else None
+            ),
+            "down_payment": (
+                str(writeup.down_payment)
+                if writeup.down_payment is not None
+                else None
+            ),
+            "monthly_payment_target": (
+                str(writeup.monthly_payment_target)
+                if writeup.monthly_payment_target is not None
+                else None
+            ),
+            "term_months_target": writeup.term_months_target,
+            "apr_target": (
+                str(writeup.apr_target)
+                if writeup.apr_target is not None
+                else None
+            ),
+        },
+    }
+
+
+def _project_credit_application_with_writeup(app: CreditApplication) -> dict:
+    """M32.1 projection: base CA projection + writeup context.
+
+    Extends :func:`_project_credit_application` (M10.1) with the
+    ``writeup_context`` nested object (or ``None`` when the CA has
+    no ``deal_writeup`` backpointer — direct-create or historical
+    row).
+    """
+    base = _project_credit_application(app)
+    base["writeup_context"] = _project_writeup_context(app)
+    return base
+
+
+_VALID_INTAKE_VALUES = frozenset(["true"])
+
+
+@api_view(["GET"])
+@permission_classes(_M101_PERMS)
+def admin_credit_application_list(request):
+    """GET: F&I intake queue (M32.1 read).
+
+    Fail-explicit filter validation per D3:
+
+    - Missing filter param → normal unfiltered behavior.
+    - Valid filter value → apply filter.
+    - Invalid value → 400 Bad Request with clear message.
+
+    Filter allowlists:
+    - ``intake`` — accepts only ``true`` (case-sensitive). Any
+      other value (including ``false``, ``1``, ``yes``, ``TRUE``,
+      empty) returns 400. When present as ``true``, filters to
+      CAs where no downstream Contract exists (pre-contract
+      incoming queue).
+    - ``lead_id`` — integer; malformed returns 400.
+    - ``since`` — ISO-8601 datetime string; malformed returns 400.
+    """
+    dealership = get_current_dealership(request)
+
+    # D3 fail-explicit `intake` validation.
+    intake_raw = request.query_params.get("intake")
+    intake = False
+    if intake_raw is not None:
+        if intake_raw not in _VALID_INTAKE_VALUES:
+            return Response(
+                {
+                    "detail": (
+                        f"Invalid value for intake: {intake_raw!r}. "
+                        "Expected: true (or omit)."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        intake = True
+
+    # D3 fail-explicit `lead_id` validation.
+    lead_id_raw = request.query_params.get("lead_id")
+    lead: Optional[CustomerLead] = None
+    if lead_id_raw is not None:
+        try:
+            lead_id = int(lead_id_raw)
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    "detail": (
+                        f"Invalid value for lead_id: {lead_id_raw!r}. "
+                        "Expected integer (or omit)."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        lead = _lookup_lead_or_404(dealership, lead_id)
+        if lead is None:
+            return Response(
+                {"credit_applications": []}, status=status.HTTP_200_OK
+            )
+
+    # D3 fail-explicit `since` validation.
+    since_raw = request.query_params.get("since")
+    since = None
+    if since_raw is not None:
+        parsed = parse_datetime(since_raw)
+        if parsed is None:
+            return Response(
+                {
+                    "detail": (
+                        f"Invalid value for since: {since_raw!r}. "
+                        "Expected ISO-8601 datetime (or omit)."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        since = parsed
+
+    apps = f_and_i_service.list_credit_applications(
+        dealership=dealership, intake=intake, lead=lead, since=since
+    )
+    return Response(
+        {
+            "credit_applications": [
+                _project_credit_application_with_writeup(a) for a in apps
+            ]
+        },
+        status=status.HTTP_200_OK,
     )
 
 

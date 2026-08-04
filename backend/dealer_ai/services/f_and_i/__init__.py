@@ -39,8 +39,10 @@ from __future__ import annotations
 
 from .credit_application import (
     CrossTenantCreditApplicationError,
+    DealWriteupAlreadyLinkedError,
     compute_retention_expires_at,
     get_credit_application,
+    list_credit_applications,
     record_credit_application,
 )
 from .deal_structure import (
@@ -102,10 +104,12 @@ from .compliance import (
 )
 
 __all__ = [
-    # M10.1 — credit application
+    # M10.1 — credit application (+ M32.1 additions)
     "CrossTenantCreditApplicationError",
+    "DealWriteupAlreadyLinkedError",
     "compute_retention_expires_at",
     "get_credit_application",
+    "list_credit_applications",
     "record_credit_application",
     # M10.2 — deal structure + ratio verbs
     "CrossTenantDealStructureError",

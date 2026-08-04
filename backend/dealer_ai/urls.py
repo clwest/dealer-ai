@@ -522,6 +522,18 @@ urlpatterns = [
         views_f_and_i.admin_credit_application_create,
         name="admin-credit-application-create",
     ),
+    # ---- Milestone 32 · Increment 1 — F&I intake list endpoint --------
+    # Per MILESTONE_32_PLANNING.md §5.b D3. F&I-role-gated (first F&I-
+    # role-gated list endpoint). Fail-explicit query validation —
+    # invalid `intake`, `lead_id`, or `since` values return 400. Uses
+    # `list/` suffix rather than method-dispatching at the same URL as
+    # the M10.1 create endpoint above, preserving M10.1's shipped
+    # POST-only URL config verbatim per §5.h non-goals.
+    path(
+        "admin/credit-applications/list/",
+        views_f_and_i.admin_credit_application_list,
+        name="admin-credit-application-list",
+    ),
     # ---- Milestone 10 · Increment 2 — F&I deal-structure API ----------
     # Role-gated on the same permission class as M10.1 (composed
     # via ``_M101_PERMS`` in views_f_and_i). Flat URL shape per
@@ -726,6 +738,24 @@ urlpatterns = [
         "admin/deal-writeups/<int:pk>/hand-off/",
         views_deal_writeups.admin_deal_writeup_hand_off,
         name="admin-deal-writeup-hand-off",
+    ),
+    # ---- Milestone 32 · Increment 1 — DealWriteup read endpoints -------
+    # Per MILESTONE_32_PLANNING.md §5.b D1 + D2. Same permission class
+    # as M11.3 create/approve/hand-off (``_M113_PERMS``). Fail-explicit
+    # query validation on the list endpoint per D1 — invalid `state`
+    # or `lead_id` values return 400 rather than silently unfiltering.
+    # Distinct URL from the M11.3 create URL: dispatch is by HTTP
+    # method (POST creates; GET lists). Detail endpoint is a new URL
+    # pattern with pk.
+    path(
+        "admin/deal-writeups/list/",
+        views_deal_writeups.admin_deal_writeup_list,
+        name="admin-deal-writeup-list",
+    ),
+    path(
+        "admin/deal-writeups/<int:pk>/",
+        views_deal_writeups.admin_deal_writeup_detail,
+        name="admin-deal-writeup-detail",
     ),
     # ---- Milestone 11 · Increment 4 — Follow-up cadence admin API ------
     # Five endpoints per MILESTONE_11_PLANNING.md §1.4 + §5.d Option A

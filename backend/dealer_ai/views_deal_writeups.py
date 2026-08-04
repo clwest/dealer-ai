@@ -27,6 +27,8 @@ Thin translation layer — no business logic. All logic lives in
 
 from __future__ import annotations
 
+from typing import Optional
+
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -40,11 +42,14 @@ from .models import (
 )
 from .permissions import IsSalesManagerOrOwnerAtActiveDealership
 from .services.deal_writeups import (
+    DEAL_WRITEUP_STATES,
     CrossTenantDealWriteupError,
     WriteupAlreadyHandedOffError,
     WriteupNotApprovedError,
     approve_deal_writeup,
+    get_deal_writeup,
     hand_off_to_fandi,
+    list_deal_writeups,
     record_deal_writeup,
 )
 from .services.tenancy import get_current_dealership
@@ -259,4 +264,84 @@ def admin_deal_writeup_hand_off(request, pk: int):
             "credit_application": _project_credit_application_minimal(credit_app),
         },
         status=status.HTTP_201_CREATED,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 32 · Increment 1 (SESSION_207) — read endpoints
+#
+# Per MILESTONE_32_PLANNING.md §5.b D1 + D2. Both endpoints reuse
+# _M113_PERMS (sales_manager / owner). Fail-explicit query
+# validation on the list endpoint per D1 — invalid `state` or
+# `lead_id` values return 400 with a clear message rather than
+# silently unfiltering. See M32.0 §5.b D1 rationale.
+# ---------------------------------------------------------------------------
+
+
+@api_view(["GET"])
+@permission_classes(_M113_PERMS)
+def admin_deal_writeup_list(request):
+    dealership = get_current_dealership(request)
+
+    # D1 fail-explicit `state` filter validation.
+    state_raw = request.query_params.get("state")
+    state: Optional[str] = None
+    if state_raw is not None:
+        if state_raw not in DEAL_WRITEUP_STATES:
+            return Response(
+                {
+                    "detail": (
+                        f"Invalid value for state: {state_raw!r}. "
+                        f"Expected one of {list(DEAL_WRITEUP_STATES)!r} "
+                        "(or omit)."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        state = state_raw
+
+    # D1 fail-explicit `lead_id` filter validation.
+    lead_id_raw = request.query_params.get("lead_id")
+    lead: Optional[CustomerLead] = None
+    if lead_id_raw is not None:
+        try:
+            lead_id = int(lead_id_raw)
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    "detail": (
+                        f"Invalid value for lead_id: {lead_id_raw!r}. "
+                        "Expected integer (or omit)."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Tenant-scoped lead lookup — cross-tenant or missing lead
+        # returns empty list (well-formed value; no rows).
+        lead = _lookup_lead_or_404(dealership, lead_id)
+        if lead is None:
+            return Response({"deal_writeups": []}, status=status.HTTP_200_OK)
+
+    writeups = list_deal_writeups(
+        dealership=dealership, state=state, lead=lead
+    )
+    return Response(
+        {"deal_writeups": [_project_writeup(w) for w in writeups]},
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["GET"])
+@permission_classes(_M113_PERMS)
+def admin_deal_writeup_detail(request, pk: int):
+    dealership = get_current_dealership(request)
+    writeup = get_deal_writeup(pk=pk, dealership=dealership)
+    if writeup is None:
+        return Response(
+            {"detail": "Deal writeup not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(
+        {"deal_writeup": _project_writeup(writeup)},
+        status=status.HTTP_200_OK,
     )

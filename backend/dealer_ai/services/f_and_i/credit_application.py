@@ -1,12 +1,17 @@
 """Milestone 10 · Increment 1 (SESSION_106) — CreditApplication verbs.
 
-Three verbs. All deterministic. Cross-tenant writes refuse at entry.
+Four verbs (three shipped at M10.1; one added at M32.1). All
+deterministic. Cross-tenant writes refuse at entry.
 
 - :func:`record_credit_application` — write path. Creates a
   :class:`CreditApplication` for a lead and/or sale, computes
   ``retention_expires_at`` from ``captured_at`` +
   :data:`dealer_ai.models.CREDIT_APP_RETENTION_YEARS`, and
   denormalizes it on the row. Refuses cross-tenant parents.
+  **M32.1 extension:** optional ``deal_writeup`` kwarg — sets
+  the provenance backpointer per D9-revised²; raises
+  :class:`DealWriteupAlreadyLinkedError` if the writeup already
+  has a paired CA (service-layer belt for the DB unique constraint).
 - :func:`get_credit_application` — pure read verb by pk. Tenant-
   scoped; returns ``None`` on unknown or cross-tenant pk (never
   raises, never leaks existence).
@@ -16,6 +21,13 @@ Three verbs. All deterministic. Cross-tenant writes refuse at entry.
   invariant is testable in isolation and the value can be
   re-derived on any row that predates the field ever being
   written.
+- :func:`list_credit_applications` (**M32.1**) — tenant-scoped
+  list read for the F&I intake queue. Optional filters:
+  ``intake=True`` filters to CAs without a Contract (pre-contract
+  incoming queue); ``lead=`` filters by CustomerLead; ``since=``
+  filters by ``captured_at >= since``. Fail-explicit filter
+  validation per D3 — callers pass typed args, endpoint layer
+  handles query-string parsing + 400 mapping.
 
 Retention discipline (locked at the model layer per
 ``MILESTONE_10_PLANNING.md`` §5.e). The service *computes*
@@ -52,6 +64,7 @@ from ...models import (
     CreditApplication,
     CustomerLead,
     Dealership,
+    DealWriteup,
     Sale,
 )
 
@@ -72,6 +85,29 @@ class CrossTenantCreditApplicationError(ValueError):
     Service-layer defense against cross-tenant writes — the model
     layer's :meth:`CreditApplication.clean` is the second line. Belt
     + suspenders; do not remove either.
+    """
+
+
+class DealWriteupAlreadyLinkedError(Exception):
+    """Milestone 32 · Increment 1 — raised when
+    :func:`record_credit_application` is called with a
+    ``deal_writeup`` that already has a paired CreditApplication.
+
+    Per ``MILESTONE_32_PLANNING.md`` §5.b D9-revised²: service-layer
+    belt for the database-layer OneToOneField unique constraint on
+    :attr:`CreditApplication.deal_writeup`. Kicks in before the DB
+    write so callers see a clean domain-typed error rather than a
+    Django ``IntegrityError``.
+
+    Composed with the M11.3 shipped
+    :class:`services.deal_writeups.WriteupAlreadyHandedOffError`
+    which catches the writeup-side second-hand-off path — this class
+    catches any alternate caller path
+    (:func:`record_credit_application` invoked directly with a
+    ``deal_writeup=`` kwarg referencing an already-paired writeup).
+
+    Endpoint layer maps to 409 CONFLICT — matches the M11.3
+    ``WriteupAlreadyHandedOffError`` HTTP shape.
     """
 
 
@@ -138,6 +174,7 @@ def record_credit_application(
     status: str = CREDIT_APP_STATUS_RECEIVED,
     captured_at: Optional[datetime] = None,
     notes: str = "",
+    deal_writeup: Optional[DealWriteup] = None,
 ) -> CreditApplication:
     """Create a :class:`CreditApplication` and populate
     ``retention_expires_at`` at write time.
@@ -159,6 +196,17 @@ def record_credit_application(
     not from row insert time, so a paper app captured hours or
     days before data-entry retains the true intake timestamp.
 
+    **M32.1 extension — ``deal_writeup`` provenance backpointer**
+    per ``MILESTONE_32_PLANNING.md`` §5.b D9-revised². When
+    provided, sets the OneToOneField backpointer on the created
+    CA. Raises :class:`DealWriteupAlreadyLinkedError` if the
+    writeup already has a paired CA (service-layer belt for the
+    DB unique constraint). Direct-create callers (M10.1 path)
+    omit the kwarg — field stays NULL. When ``deal_writeup`` is
+    provided, its ``dealership`` must match ``dealership`` — an
+    additional cross-tenant guard mirrors the ``lead`` / ``sale``
+    guards.
+
     Returns the persisted :class:`CreditApplication` with
     ``retention_expires_at`` populated from
     :func:`compute_retention_expires_at`.
@@ -172,6 +220,9 @@ def record_credit_application(
         _assert_same_tenant_lead(lead, dealership)
     if sale is not None:
         _assert_same_tenant_sale(sale, dealership)
+    if deal_writeup is not None:
+        _assert_same_tenant_deal_writeup(deal_writeup, dealership)
+        _assert_writeup_not_already_linked(deal_writeup)
 
     if source_format not in _VALID_FORMATS:
         raise ValueError(
@@ -198,4 +249,99 @@ def record_credit_application(
         captured_at=captured,
         retention_expires_at=retention_expires,
         notes=notes,
+        deal_writeup=deal_writeup,
     )
+
+
+def _assert_same_tenant_deal_writeup(
+    deal_writeup: DealWriteup, dealership: Dealership
+) -> None:
+    if deal_writeup.dealership_id != dealership.pk:
+        raise CrossTenantCreditApplicationError(
+            f"DealWriteup #{deal_writeup.pk} belongs to "
+            f"dealership_id={deal_writeup.dealership_id}, but the caller "
+            f"passed dealership_id={dealership.pk}."
+        )
+
+
+def _assert_writeup_not_already_linked(deal_writeup: DealWriteup) -> None:
+    """Belt for the DB OneToOneField unique constraint.
+
+    Raises :class:`DealWriteupAlreadyLinkedError` (clean domain
+    error) before the DB write when the writeup already has a
+    paired CA. Prevents the caller from seeing a Django
+    ``IntegrityError`` for a semantically-meaningful lifecycle
+    violation.
+
+    Uses ``CreditApplication.objects.filter(...).exists()`` rather
+    than accessing ``deal_writeup.credit_application`` (which
+    raises ``CreditApplication.DoesNotExist`` on the unpaired
+    case, making the None-path noisy).
+    """
+    if CreditApplication.objects.filter(deal_writeup=deal_writeup).exists():
+        raise DealWriteupAlreadyLinkedError(
+            f"DealWriteup #{deal_writeup.pk} already has a paired "
+            "CreditApplication. Refusing to create a duplicate "
+            "(see MILESTONE_32_PLANNING.md §5.b D9-revised²)."
+        )
+
+
+def list_credit_applications(
+    *,
+    dealership: Dealership,
+    intake: bool = False,
+    lead: Optional[CustomerLead] = None,
+    since: Optional[datetime] = None,
+) -> list[CreditApplication]:
+    """Milestone 32 · Increment 1 — tenant-scoped CA list for the
+    F&I intake queue.
+
+    Returns credit applications for ``dealership``, ordered newest-
+    first by ``captured_at`` then ``-created_at`` (matches
+    :attr:`CreditApplication.Meta.ordering`).
+
+    Optional filters (composable):
+
+    - ``intake=True`` — filter to CAs where no downstream Contract
+      exists (pre-contract incoming queue). Uses the model chain
+      :class:`CreditApplication` → :class:`DealStructure`
+      (``credit_application`` FK) → :class:`Contract`
+      (``deal_structure`` FK). A CA is "intake" when none of its
+      deal_structures has any contracts (including CAs with no
+      deal_structures at all — F&I has not yet begun structuring).
+      Default ``False`` returns unfiltered.
+    - ``lead=<CustomerLead>`` — filter by lead FK. Must be same-
+      tenant; cross-tenant lead raises
+      :class:`CrossTenantCreditApplicationError`.
+    - ``since=<datetime>`` — filter to ``captured_at >= since``.
+
+    Query strategy: single ``.filter(dealership=dealership)`` base
+    + composable filter application. Uses ``.exclude(...)`` for the
+    intake filter so CAs with no deal_structures survive (they are
+    the most-intake case — the M11.3 hand-off path creates the CA
+    before any deal_structure exists). ``.distinct()`` guards
+    against join multiplicity when a CA has multiple deal_structures.
+    No pagination (M10.7 / M11 precedent — 100-row soft cap
+    deferred per §5.h). Callers cap via slicing if needed.
+
+    Pure read — never raises except on cross-tenant lead.
+    """
+    if lead is not None:
+        _assert_same_tenant_lead(lead, dealership)
+
+    qs = (
+        CreditApplication.objects.filter(dealership=dealership)
+        .select_related("lead", "sale", "deal_writeup")
+    )
+    if intake:
+        # Exclude any CA whose deal_structures include at least one
+        # Contract row. CAs with no deal_structures survive (they are
+        # the pure intake case — hand-off just landed, F&I has not
+        # begun structuring). ``distinct()`` guards against duplicate
+        # rows when a CA has multiple deal_structures.
+        qs = qs.exclude(deal_structures__contracts__isnull=False).distinct()
+    if lead is not None:
+        qs = qs.filter(lead=lead)
+    if since is not None:
+        qs = qs.filter(captured_at__gte=since)
+    return list(qs)

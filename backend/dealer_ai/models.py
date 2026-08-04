@@ -4469,6 +4469,33 @@ class CreditApplication(models.Model):
     preserves the credit-application row (the retention-clock record
     of record) if either parent is deleted.
 
+    **M32.1 extension — provenance backpointer** per
+    ``MILESTONE_32_PLANNING.md`` §5.b D9-revised². Added a nullable
+    ``deal_writeup`` :class:`OneToOneField` to :class:`DealWriteup`;
+    set by :func:`services.deal_writeups.hand_off_to_fandi` when a
+    hand-off creates the CA. Direct-create callers (M10.1 path) omit
+    the kwarg and the field stays NULL. Historical rows pre-M32.1
+    also stay NULL — backfill-free by construction.
+
+    The OneToOne cardinality enforces "at most one CA per writeup"
+    at the database layer (unique index auto-generated). Three-layer
+    defense combines with the service-layer
+    :class:`services.f_and_i.DealWriteupAlreadyLinkedError` (raised
+    by :func:`services.f_and_i.record_credit_application` when the
+    incoming writeup is already paired) and the M11.3 shipped
+    :class:`services.deal_writeups.WriteupAlreadyHandedOffError`
+    (raised by :func:`services.deal_writeups.hand_off_to_fandi` for
+    the writeup-side second-call path).
+
+    Semantic — peer-with-optional-backpointer: retention-clock
+    ownership stays on the CA per M10.1 §5.e; the FK is a discovery
+    aid for the F&I intake queue, not a compositional link. The
+    M11.3 architectural preference for "no FK on either side"
+    evolved to this shape at M32.1 as pairing determinism became
+    load-bearing on the F&I intake UI. Historical migration 0034
+    is preserved as the M11.3 record; migration 0051 records the
+    evolution.
+
     **Retention clock — locked at the model layer.** ``captured_at``
     starts the clock; ``retention_expires_at`` is computed at write
     time as ``captured_at + CREDIT_APP_RETENTION_YEARS``. The
@@ -4521,6 +4548,42 @@ class CreditApplication(models.Model):
         null=True,
         blank=True,
         related_name="credit_applications",
+    )
+    # Milestone 32 · Increment 1 (SESSION_207) — provenance backpointer.
+    # Nullable OneToOneField to the DealWriteup whose hand-off produced
+    # this CA. Set by ``services.deal_writeups.hand_off_to_fandi`` inside
+    # its atomic block; NULL for CAs created via the M10.1 direct-create
+    # path (``services.f_and_i.record_credit_application`` without a
+    # ``deal_writeup=`` kwarg) and for all historical rows pre-M32.1.
+    #
+    # SET_NULL on writeup delete: the CA is the retention-clock record-
+    # of-record per M10.1 §5.e and outlives its parent writeup. The
+    # backpointer becoming NULL preserves the CA row and the audit trail
+    # in the notes field (M11.3 ``_format_handoff_notes`` prefix).
+    #
+    # OneToOneField (not ForeignKey + unique_constraint) makes the "at
+    # most one CA per writeup" invariant idempotent under any caller
+    # path — including alternate ORM writes and future migrations.
+    # Three-layer defense per M32.0 §5.b D9-revised²: DB unique via
+    # OneToOne + service ``DealWriteupAlreadyLinkedError`` (raised by
+    # ``record_credit_application`` when the incoming writeup is already
+    # paired) + M11.3 ``WriteupAlreadyHandedOffError`` (raised by
+    # ``hand_off_to_fandi`` for the writeup-side second-call path).
+    #
+    # Peer-with-optional-backpointer semantics: retention-clock
+    # ownership stays on the CA per M10.1 §5.e; the FK is a discovery
+    # aid for the F&I intake queue, not a compositional link. The M11.3
+    # architectural preference for "no FK on either side" evolved to
+    # this shape at M32.1 as pairing determinism became load-bearing on
+    # the F&I intake UI. See ``docs/roadmap/MILESTONE_32_PLANNING.md``
+    # §5.b D9-revised² for the evolutionary rationale; migration 0034
+    # is preserved as the historical M11.3 record.
+    deal_writeup = models.OneToOneField(
+        "DealWriteup",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="credit_application",
     )
     applicant_full_name = models.CharField(max_length=255)
     # Last-4 only at M10.1 (full-SSN handling deferred until the
@@ -6161,11 +6224,24 @@ class DealWriteup(models.Model):
     unapproved writeups are legitimate drafts.
 
     **Handoff link.** ``handed_off_to_fandi_at`` populated when the
-    handoff verb fires. Not FK to CreditApplication — the CA row
-    outlives the writeup for retention reasons (M10.1 §5.e locked
-    retention clock; deleting the writeup must not cascade to the CA).
-    The CA carries the reverse link via its own ``lead`` FK, which
-    matches the writeup's lead.
+    handoff verb fires. The CA row outlives the writeup for retention
+    reasons (M10.1 §5.e locked retention clock; deleting the writeup
+    must not cascade to the CA), so the FK direction is CA → writeup,
+    not the reverse.
+
+    **M32.1 provenance link** per ``MILESTONE_32_PLANNING.md`` §5.b
+    D9-revised²: :class:`CreditApplication` carries a nullable
+    ``deal_writeup`` :class:`OneToOneField` pointing back to the
+    writeup whose hand-off produced it. The reverse relation is
+    accessed as ``writeup.credit_application`` — but because it is
+    OneToOne and nullable, callers must handle the
+    :class:`CreditApplication.DoesNotExist` case (writeup was created
+    but not yet handed off) or use
+    ``getattr(writeup, "credit_application", None)`` equivalent
+    checks. The writeup-side idempotency guard
+    (:class:`services.deal_writeups.WriteupAlreadyHandedOffError`)
+    prevents second-hand-off, so the reverse relation is single-
+    valued by construction whenever it is populated.
 
     **Cross-tenant guard.** ``clean()`` enforces same-tenant lead +
     vehicle FKs. Belt (model) + suspenders (service).
