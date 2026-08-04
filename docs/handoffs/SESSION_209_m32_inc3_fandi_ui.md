@@ -9,8 +9,8 @@ milestone_status: shipped
 milestone_name: "Deal Writeups: Sales-Manager-to-F&I Handoff (writeup CRUD substrate + sales-manager UI + F&I intake queue + provenance-FK migration)"
 increment: 3
 increment_status: shipped
-commit: null
-commit_notes: "M32.3 F&I intake UI + F&I-side Playwright + new f_and_i_manager persona + M32 close-out fold — local commit expected at close per M28.2 / M29.2 / M30.2 / M31.2 close-out cadence; hash backfill via a subsequent commit; NOT pushed. Coordinated M32 close push at explicit user confirmation."
+commit: 9906938
+commit_notes: "M32.3 F&I intake UI + F&I-side Playwright + new f_and_i_manager persona + M32 close-out fold — local commit landed as 9906938 at close per M28.2 / M29.2 / M30.2 / M31.2 close-out cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated M32 close push at explicit user confirmation."
 ---
 
 # SESSION_209 — Milestone 32 · Increment 3 (M32.3 — F&I intake UI + F&I-side Playwright + new f_and_i_manager persona + M32 close-out fold)
