@@ -9,7 +9,7 @@ milestone_status: active
 milestone_name: "Recurring Journal Templates (on M27.1 shared GLAccount substrate)"
 increment: 1
 increment_status: shipped
-commit: TBD
+commit: 06bd80f
 ---
 
 # SESSION_195 — Milestone 28 · Increment 1 (M28.1 — backend substrate + frontend wrappers)
