@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Deal Writeups: Sales-Manager-to-F&I Handoff (writeup CRUD substrate + sales-manager UI + F&I intake queue + provenance-FK migration)"
 increment: 1
 increment_status: shipped
-commit: null
-commit_notes: "M32.1 backend substrate — local commit expected at close per M28.1 / M29.1 / M30.1 / M31.1 cadence; hash backfill via a subsequent commit; NOT pushed. Coordinated push at M32 close after explicit user confirmation."
+commit: 16c54e9
+commit_notes: "M32.1 backend substrate — local commit landed as 16c54e9 at close per M28.1 / M29.1 / M30.1 / M31.1 cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated push at M32 close after explicit user confirmation."
 ---
 
 # SESSION_207 — Milestone 32 · Increment 1 (M32.1 — backend substrate + provenance-FK migration)
