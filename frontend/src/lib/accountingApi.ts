@@ -450,10 +450,26 @@ export interface CreateJournalEntryTemplatePayload {
   lines: CreateJournalEntryTemplateLine[];
 }
 
-export function fetchJournalEntryTemplates(): Promise<JournalEntryTemplate[]> {
-  return authGetJSON<JournalEntryTemplateListResponse>(
-    "/admin/accounting/journal-entry-templates/",
-  ).then((body) => body.journal_entry_templates.templates);
+export interface FetchJournalEntryTemplatesOptions {
+  /** M31.2 — when true, request appends ``?include_inactive=true`` so
+   *  soft-hidden templates surface alongside active ones for the
+   *  Show-inactive operator toggle. Default false — the wrapper's
+   *  active-only default posture is byte-identical to the M28.2 /
+   *  M30.2 shipped behavior. The backend fail-closed parser only
+   *  accepts literal ``true`` (case-insensitive) per M31.1 D3.
+   */
+  includeInactive?: boolean;
+}
+
+export function fetchJournalEntryTemplates(
+  options: FetchJournalEntryTemplatesOptions = {},
+): Promise<JournalEntryTemplate[]> {
+  const url =
+    "/admin/accounting/journal-entry-templates/" +
+    (options.includeInactive ? "?include_inactive=true" : "");
+  return authGetJSON<JournalEntryTemplateListResponse>(url).then(
+    (body) => body.journal_entry_templates.templates,
+  );
 }
 
 export function createJournalEntryTemplate(
@@ -501,4 +517,20 @@ export async function deleteJournalEntryTemplate(pk: number): Promise<void> {
     }
     throw err;
   }
+}
+
+
+// Milestone 31 · Increment 2 (SESSION_205) — template restore wrapper
+// on top of the M31.1 POST endpoint. Body-less POST; the backend
+// service is idempotent (already-active row returns 200 without
+// state change and does NOT advance ``updated_at``). Returns the
+// projected template so the caller can update local state directly.
+
+export function restoreJournalEntryTemplate(
+  pk: number,
+): Promise<JournalEntryTemplate> {
+  return authPostJSON<JournalEntryTemplateResponse>(
+    `/admin/accounting/journal-entry-templates/${pk}/restore/`,
+    {},
+  ).then((body) => body.journal_entry_template);
 }

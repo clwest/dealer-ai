@@ -17,6 +17,7 @@ vi.mock("@/lib/accountingApi", async () => {
     fetchGLAccounts: vi.fn(),
     fetchJournalEntryTemplates: vi.fn(),
     deleteJournalEntryTemplate: vi.fn(),
+    restoreJournalEntryTemplate: vi.fn(),
   };
 });
 
@@ -25,6 +26,7 @@ import {
   fetchGLAccounts,
   fetchJournalEntries,
   fetchJournalEntryTemplates,
+  restoreJournalEntryTemplate,
   type GLAccount,
   type JournalEntryListEntry,
   type JournalEntryListPage,
@@ -142,6 +144,7 @@ describe("AccountingJournalEntriesPage", () => {
     vi.mocked(fetchGLAccounts).mockResolvedValue(makeAccounts());
     vi.mocked(fetchJournalEntryTemplates).mockReset();
     vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([]);
+    vi.mocked(restoreJournalEntryTemplate).mockReset();
   });
 
   it("renders the h1 header", async () => {
@@ -589,7 +592,7 @@ describe("AccountingJournalEntriesPage", () => {
       /Historical journal entries created from this template are not affected/,
     );
     expect(screen.getByTestId("tmpl-delete-confirm-body")).toHaveTextContent(
-      /You can restore this template later/,
+      /You can restore this template later — turn on Show inactive to find and reactivate it/,
     );
     // Buttons present.
     expect(screen.getByTestId("tmpl-delete-cancel")).toHaveTextContent(
@@ -655,5 +658,293 @@ describe("AccountingJournalEntriesPage", () => {
     expect(
       screen.getByTestId("tmpl-delete-confirm-dialog"),
     ).toBeInTheDocument();
+  });
+
+  // ================================================================
+  // Milestone 31 · Increment 2 (SESSION_205) — Show-inactive toggle +
+  // inactive-row rendering + Restore UI + D10 copy update coverage.
+  //
+  // Per MILESTONE_31_PLANNING.md §5.b D4–D10. Covers: toggle renders +
+  // default off (D5); toggle flip triggers refetch with
+  // includeInactive=true (D4); three inactive-row signals (D6 — badge,
+  // aria-label, dedicated testid); L1 guard visible-but-disabled
+  // Edit + Instantiate with explanatory aria-labels (D7); Restore row
+  // button replaces Delete on inactive rows (D7); Restore confirmation
+  // dialog with mandated Reactivate copy (D8); Restore confirm path
+  // calls restoreJournalEntryTemplate + refetches (D8); Restore
+  // failure surfaces inline error without closing (D8).
+  // ================================================================
+
+  function makeInactiveTemplate(
+    overrides: Partial<JournalEntryTemplate> = {},
+  ): JournalEntryTemplate {
+    return makeTemplate({ is_active: false, ...overrides });
+  }
+
+  it("M31.2 — Show-inactive toggle renders in templates section header (default off)", async () => {
+    await renderPage();
+    const toggle = await screen.findByTestId(
+      "templates-show-inactive-toggle",
+    );
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
+  });
+
+  it("M31.2 — flipping Show-inactive toggle refetches with includeInactive=true", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalledWith({
+        includeInactive: false,
+      });
+    });
+    await user.click(screen.getByTestId("templates-show-inactive-toggle"));
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalledWith({
+        includeInactive: true,
+      });
+    });
+  });
+
+  it("M31.2 — inactive row renders three independent signals (badge + aria-label + testid)", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeInactiveTemplate({ id: 205, name: "Hidden template" }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+
+    // Signal 1: dedicated inactive testid (not the active-row shape).
+    const row = await screen.findByTestId("template-row-inactive-205");
+    expect(row).toBeInTheDocument();
+    expect(screen.queryByTestId("template-row-205")).toBeNull();
+
+    // Signal 2: visible Inactive badge.
+    const badge = screen.getByTestId("template-inactive-badge-205");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("Inactive");
+
+    // Signal 3: row aria-label announces lifecycle state.
+    expect(row).toHaveAttribute(
+      "aria-label",
+      "Template Hidden template, inactive",
+    );
+  });
+
+  it("M31.2 — inactive row disables Instantiate with explanatory aria-label (L1 guard)", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeInactiveTemplate({ id: 206 }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    const button = await screen.findByTestId("template-instantiate-206");
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute(
+      "aria-label",
+      "Instantiate template — template is inactive; restore it first to enable",
+    );
+  });
+
+  it("M31.2 — inactive row disables Edit with explanatory aria-label (L1 guard)", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeInactiveTemplate({ id: 207 }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    const button = await screen.findByTestId("tmpl-edit-trigger-207");
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute(
+      "aria-label",
+      "Edit template — restore it first to enable",
+    );
+  });
+
+  it("M31.2 — inactive row swaps Delete slot for a Restore button", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeInactiveTemplate({ id: 208 }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    expect(
+      await screen.findByTestId("tmpl-restore-trigger-208"),
+    ).toBeInTheDocument();
+    // Delete slot must NOT appear on an inactive row.
+    expect(screen.queryByTestId("tmpl-delete-trigger-208")).toBeNull();
+  });
+
+  it("M31.2 — active row still renders Delete (not Restore) after M31.2 changes", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 209, is_active: true }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    expect(
+      screen.getByTestId("tmpl-delete-trigger-209"),
+    ).toBeInTheDocument();
+    // No Inactive badge on an active row.
+    expect(screen.queryByTestId("template-inactive-badge-209")).toBeNull();
+    // Instantiate button not disabled on an active row.
+    expect(screen.getByTestId("template-instantiate-209")).not.toBeDisabled();
+  });
+
+  it("M31.2 — Restore click opens confirmation dialog with mandated Reactivate copy (D8)", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeInactiveTemplate({ id: 210, name: "Restore-target" }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("tmpl-restore-trigger-210"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("tmpl-restore-confirm-title"),
+      ).toHaveTextContent("Reactivate template?");
+    });
+    expect(
+      screen.getByTestId("tmpl-restore-confirm-body"),
+    ).toHaveTextContent(
+      /This template will reappear in the active templates list/,
+    );
+    expect(
+      screen.getByTestId("tmpl-restore-confirm-body"),
+    ).toHaveTextContent(
+      /Existing journal entries created from this template are not affected/,
+    );
+    expect(screen.getByTestId("tmpl-restore-cancel")).toHaveTextContent(
+      "Cancel",
+    );
+    expect(screen.getByTestId("tmpl-restore-submit")).toHaveTextContent(
+      "Reactivate",
+    );
+  });
+
+  it("M31.2 — Restore confirm calls restoreJournalEntryTemplate + refetches + shows success badge", async () => {
+    const restored = makeTemplate({
+      id: 211,
+      name: "Restore flow target",
+      is_active: true,
+    });
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeInactiveTemplate({ id: 211, name: "Restore flow target" }),
+    ]);
+    vi.mocked(restoreJournalEntryTemplate).mockResolvedValue(restored);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    const fetchCallsBefore =
+      vi.mocked(fetchJournalEntryTemplates).mock.calls.length;
+    await user.click(screen.getByTestId("tmpl-restore-trigger-211"));
+    await user.click(screen.getByTestId("tmpl-restore-submit"));
+    await waitFor(() => {
+      expect(restoreJournalEntryTemplate).toHaveBeenCalledWith(211);
+    });
+    await waitFor(() => {
+      expect(
+        vi.mocked(fetchJournalEntryTemplates).mock.calls.length,
+      ).toBeGreaterThan(fetchCallsBefore);
+    });
+    // Confirmation closes on success.
+    expect(
+      screen.queryByTestId("tmpl-restore-confirm-dialog"),
+    ).not.toBeInTheDocument();
+    // Success badge surfaces.
+    expect(
+      screen.getByTestId("tmpl-restore-success-badge"),
+    ).toHaveTextContent(/Restore flow target/);
+  });
+
+  it("M31.2 — Restore failure surfaces inline error without closing", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeInactiveTemplate({ id: 212, name: "Restore-failure target" }),
+    ]);
+    vi.mocked(restoreJournalEntryTemplate).mockRejectedValue(
+      new Error("HTTP 500 Server error"),
+    );
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("tmpl-restore-trigger-212"));
+    await user.click(screen.getByTestId("tmpl-restore-submit"));
+    await waitFor(() => {
+      expect(screen.getByTestId("tmpl-restore-error")).toHaveTextContent(
+        /HTTP 500/,
+      );
+    });
+    // Dialog stays open on error.
+    expect(
+      screen.getByTestId("tmpl-restore-confirm-dialog"),
+    ).toBeInTheDocument();
+  });
+
+  it("M31.2 — Restore cancel closes dialog without calling the wrapper", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeInactiveTemplate({ id: 213 }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("tmpl-restore-trigger-213"));
+    await user.click(screen.getByTestId("tmpl-restore-cancel"));
+    expect(
+      screen.queryByTestId("tmpl-restore-confirm-dialog"),
+    ).not.toBeInTheDocument();
+    expect(restoreJournalEntryTemplate).not.toHaveBeenCalled();
+  });
+
+  it("M31.2 — D10 delete-confirm copy points at the new Show inactive toggle (fulfillment)", async () => {
+    vi.mocked(fetchJournalEntryTemplates).mockResolvedValue([
+      makeTemplate({ id: 214, name: "D10 target" }),
+    ]);
+    const user = userEvent.setup();
+    await renderPage();
+    await waitFor(() => {
+      expect(fetchJournalEntryTemplates).toHaveBeenCalled();
+    });
+    await user.click(screen.getByTestId("templates-toggle"));
+    await user.click(screen.getByTestId("tmpl-delete-trigger-214"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("tmpl-delete-confirm-body"),
+      ).toHaveTextContent(
+        /turn on Show inactive to find and reactivate it/,
+      );
+    });
+    // Guard: the M30.2 "Restore UX ships in a future milestone"
+    // promise must not appear anywhere in the shipped body.
+    expect(
+      screen.getByTestId("tmpl-delete-confirm-body").textContent,
+    ).not.toContain("Restore UX ships in a future milestone");
   });
 });

@@ -12,6 +12,7 @@
 // both backend (M14.1) and frontend (M14.3). Filters land at M15+ per
 // operator evidence.
 
+import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -43,6 +44,7 @@ import {
   fetchGLAccounts,
   fetchJournalEntries,
   fetchJournalEntryTemplates,
+  restoreJournalEntryTemplate,
   type GLAccount,
   type JournalEntry,
   type JournalEntryListEntry,
@@ -156,6 +158,20 @@ export default function AccountingJournalEntriesPage() {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Milestone 31 · Increment 2 — Restore / Show-inactive UI state per
+  // MILESTONE_31_PLANNING.md §5.b D5–D8. showInactive is an explicit
+  // operator toggle (default off, component-local, never auto-
+  // toggled) that widens the fetch to include soft-hidden rows.
+  // restoringTemplate drives the inline Reactivate confirmation
+  // dialog analogous to deletingTemplate for M30.2's Delete flow.
+  const [showInactive, setShowInactive] = useState(false);
+  const [restoringTemplate, setRestoringTemplate] =
+    useState<JournalEntryTemplate | null>(null);
+  const [restoreSubmitting, setRestoreSubmitting] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [lastRestoredTemplate, setLastRestoredTemplate] =
+    useState<JournalEntryTemplate | null>(null);
+
   const refetchList = useCallback(() => {
     setReloadTick((tick) => tick + 1);
   }, []);
@@ -216,10 +232,16 @@ export default function AccountingJournalEntriesPage() {
   useEffect(() => {
     // Milestone 28 · Increment 2 — templates fetch on mount + on
     // ``templatesReloadTick`` bump (after a new template is saved).
+    // M31.2 — refetch also fires when ``showInactive`` flips so the
+    // list widens to include soft-hidden rows without a page reload.
+    // Backend fail-closed parser (M31.1 D3) only enables inactive on
+    // literal "true" (case-insensitive).
     let cancelled = false;
     async function loadTemplates() {
       try {
-        const response = await fetchJournalEntryTemplates();
+        const response = await fetchJournalEntryTemplates({
+          includeInactive: showInactive,
+        });
         if (cancelled) return;
         setTemplates(response);
         setTemplatesError(null);
@@ -236,7 +258,7 @@ export default function AccountingJournalEntriesPage() {
     return () => {
       cancelled = true;
     };
-  }, [templatesReloadTick]);
+  }, [templatesReloadTick, showInactive]);
 
   const totalPages = result
     ? Math.max(1, Math.ceil(result.total_count / result.page_size))
@@ -317,6 +339,61 @@ export default function AccountingJournalEntriesPage() {
       setDeleteSubmitting(false);
     }
   }, [deletingTemplate]);
+
+  // Milestone 31 · Increment 2 — Restore handlers per §5.b D7 + D8.
+  // Row-button vocabulary uses "Restore" (short + familiar); the
+  // confirmation dialog reframes to "Reactivate template?" (truth —
+  // is_active transitions False → True) per durable lesson (x)
+  // vocabulary asymmetry. Component-local state mirrors the M30.2
+  // delete flow shape.
+
+  const handleRestoreClick = useCallback(
+    (template: JournalEntryTemplate) => {
+      setRestoringTemplate(template);
+      setRestoreError(null);
+      setRestoreSubmitting(false);
+    },
+    [],
+  );
+
+  const handleRestoreCancel = useCallback(() => {
+    if (restoreSubmitting) return;
+    setRestoringTemplate(null);
+    setRestoreError(null);
+  }, [restoreSubmitting]);
+
+  const handleRestoreConfirm = useCallback(async () => {
+    if (!restoringTemplate) return;
+    setRestoreSubmitting(true);
+    setRestoreError(null);
+    try {
+      const restored = await restoreJournalEntryTemplate(
+        restoringTemplate.id,
+      );
+      setLastRestoredTemplate(restored);
+      setRestoringTemplate(null);
+      setTemplatesReloadTick((tick) => tick + 1);
+    } catch (err) {
+      setRestoreError(
+        err instanceof Error
+          ? err.message
+          : "Failed to reactivate template.",
+      );
+    } finally {
+      setRestoreSubmitting(false);
+    }
+  }, [restoringTemplate]);
+
+  const handleShowInactiveChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setShowInactive(event.target.checked);
+      // Clear the restore success badge whenever the operator flips
+      // the toggle — visibility state has changed, so the "restored"
+      // snapshot is stale.
+      setLastRestoredTemplate(null);
+    },
+    [],
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -466,7 +543,22 @@ export default function AccountingJournalEntriesPage() {
               monthly without re-entering line items.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* Milestone 31 · Increment 2 — Show-inactive toggle per
+                §5.b D5. Default off — the plain endpoint returns
+                active-only per M31.1 D3 fail-closed parsing.
+                Component-local state; never auto-toggles. Inactive
+                templates never mix into the default active list. */}
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={handleShowInactiveChange}
+                aria-label="Show inactive templates"
+                data-testid="templates-show-inactive-toggle"
+              />
+              Show inactive
+            </label>
             <JournalEntryTemplateDialog
               accounts={accounts}
               onCreated={handleTemplateCreated}
@@ -508,6 +600,16 @@ export default function AccountingJournalEntriesPage() {
                 Template &ldquo;{lastEditedTemplate.name}&rdquo; updated
               </div>
             )}
+            {lastRestoredTemplate && (
+              <div
+                role="status"
+                className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+                data-testid="tmpl-restore-success-badge"
+              >
+                Template &ldquo;{lastRestoredTemplate.name}&rdquo;
+                reactivated
+              </div>
+            )}
             {templates.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No templates yet. Save your first template using the
@@ -532,6 +634,7 @@ export default function AccountingJournalEntriesPage() {
                       onInstantiate={() => handleInstantiate(template)}
                       onEdit={() => handleEditClick(template)}
                       onDelete={() => handleDeleteClick(template)}
+                      onRestore={() => handleRestoreClick(template)}
                     />
                   ))}
                 </tbody>
@@ -561,6 +664,16 @@ export default function AccountingJournalEntriesPage() {
           onCancel={handleDeleteCancel}
         />
       )}
+
+      {restoringTemplate && (
+        <TemplateRestoreConfirmDialog
+          templateName={restoringTemplate.name}
+          submitting={restoreSubmitting}
+          error={restoreError}
+          onConfirm={handleRestoreConfirm}
+          onCancel={handleRestoreCancel}
+        />
+      )}
     </div>
   );
 }
@@ -572,19 +685,51 @@ function TemplateRow({
   onInstantiate,
   onEdit,
   onDelete,
+  onRestore,
 }: {
   template: JournalEntryTemplate;
   disabled: boolean;
   onInstantiate: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onRestore: () => void;
 }) {
+  // Milestone 31 · Increment 2 — is_active-aware row rendering per
+  // §5.b D6 (three independent inactive signals: Inactive badge +
+  // row aria-label + dedicated testid) + D7 (row-action asymmetry:
+  // Restore replaces Delete on inactive rows; Edit + Instantiate
+  // are visible-but-disabled with explanatory aria-labels — this is
+  // the L1 lifecycle-integrity guard against direct-UI-path
+  // instantiation of a badge-labeled Inactive row).
+  const isInactive = !template.is_active;
   return (
     <tr
-      className="border-b border-border"
-      data-testid={`template-row-${template.id}`}
+      className={`border-b border-border${
+        isInactive ? " opacity-60" : ""
+      }`}
+      data-testid={
+        isInactive
+          ? `template-row-inactive-${template.id}`
+          : `template-row-${template.id}`
+      }
+      aria-label={
+        isInactive ? `Template ${template.name}, inactive` : undefined
+      }
     >
-      <td className="py-2 font-medium">{template.name}</td>
+      <td className="py-2 font-medium">
+        <div className="flex items-center gap-2">
+          <span>{template.name}</span>
+          {isInactive && (
+            <Badge
+              variant="outline"
+              className="text-xs font-normal text-muted-foreground"
+              data-testid={`template-inactive-badge-${template.id}`}
+            >
+              Inactive
+            </Badge>
+          )}
+        </div>
+      </td>
       <td className="py-2 text-muted-foreground">
         {template.description}
       </td>
@@ -596,29 +741,50 @@ function TemplateRow({
           <Button
             variant="outline"
             size="sm"
-            disabled={disabled}
+            disabled={disabled || isInactive}
             onClick={onInstantiate}
             data-testid={`template-instantiate-${template.id}`}
+            aria-label={
+              isInactive
+                ? "Instantiate template — template is inactive; restore it first to enable"
+                : undefined
+            }
           >
             Instantiate
           </Button>
           <Button
             variant="outline"
             size="sm"
-            disabled={disabled}
+            disabled={disabled || isInactive}
             onClick={onEdit}
             data-testid={`tmpl-edit-trigger-${template.id}`}
+            aria-label={
+              isInactive
+                ? "Edit template — restore it first to enable"
+                : undefined
+            }
           >
             Edit
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onDelete}
-            data-testid={`tmpl-delete-trigger-${template.id}`}
-          >
-            Delete
-          </Button>
+          {isInactive ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRestore}
+              data-testid={`tmpl-restore-trigger-${template.id}`}
+            >
+              Restore
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDelete}
+              data-testid={`tmpl-delete-trigger-${template.id}`}
+            >
+              Delete
+            </Button>
+          )}
         </div>
       </td>
     </tr>
@@ -627,13 +793,17 @@ function TemplateRow({
 
 
 // Milestone 30 · Increment 2 — inline delete confirmation dialog.
+// Milestone 31 · Increment 2 — D10 copy fulfillment update.
 //
-// Per MILESTONE_30_PLANNING.md §5.b D3. Mandated copy: "Deactivate"
-// (not "Delete forever") + "Historical journal entries created from
-// this template are not affected" reassurance + "You can restore
-// this template later" (Restore UX ships in a future milestone).
-// The row-level trigger uses "Delete" for operator vocabulary
-// convention; the confirmation reframes to "Deactivate" for truth.
+// Per MILESTONE_30_PLANNING.md §5.b D3 (original) + MILESTONE_31_
+// PLANNING.md §5.b D10 (M31.2 fulfillment). Mandated copy:
+// "Deactivate" (not "Delete forever") + "Historical journal entries
+// created from this template are not affected" reassurance + the
+// D10-updated Restore pointer ("turn on Show inactive to find and
+// reactivate it") that replaces the M30.2 "Restore UX ships in a
+// future milestone" promise now that M31 ships Restore. The row-
+// level trigger uses "Delete" for operator vocabulary convention;
+// the confirmation reframes to "Deactivate" for truth per lesson (x).
 
 function TemplateDeleteConfirmDialog({
   templateName,
@@ -668,8 +838,8 @@ function TemplateDeleteConfirmDialog({
             &rdquo;? Historical journal entries created from this
             template are not affected — they remain unchanged in the
             Journal Entries list and in trial balance reports. You can
-            restore this template later. (Restore UX ships in a future
-            milestone.)
+            restore this template later — turn on{" "}
+            <strong>Show inactive</strong> to find and reactivate it.
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -697,6 +867,90 @@ function TemplateDeleteConfirmDialog({
             data-testid="tmpl-delete-confirm"
           >
             {submitting ? "Deactivating…" : "Deactivate"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+// Milestone 31 · Increment 2 — inline Restore confirmation dialog.
+//
+// Per MILESTONE_31_PLANNING.md §5.b D8. Mandated copy asymmetry per
+// durable lesson (x): row-level trigger says "Restore" (short,
+// familiar operator vocabulary); confirmation reframes to
+// "Reactivate template?" (truth — is_active transitions False → True).
+// Reassurance about historical journal entries carries over from
+// the M30.2 delete-confirmation contract (D9 — JEs are untouched by
+// construction; no FK). Co-located parallel to TemplateDeleteConfirm
+// Dialog per M28.0 duplicate-small-stable-domain-logic rule — do
+// NOT extract a shared abstraction.
+
+function TemplateRestoreConfirmDialog({
+  templateName,
+  submitting,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  templateName: string;
+  submitting: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
+    >
+      <DialogContent
+        className="max-w-md"
+        data-testid="tmpl-restore-confirm-dialog"
+      >
+        <DialogHeader>
+          <DialogTitle data-testid="tmpl-restore-confirm-title">
+            Reactivate template?
+          </DialogTitle>
+          <DialogDescription
+            className="pt-2 leading-relaxed"
+            data-testid="tmpl-restore-confirm-body"
+          >
+            Are you sure you want to reactivate &ldquo;{templateName}
+            &rdquo;? This template will reappear in the active
+            templates list and can be used to create new journal
+            entries again. Existing journal entries created from this
+            template are not affected — they remain unchanged in the
+            Journal Entries list and in trial balance reports.
+          </DialogDescription>
+        </DialogHeader>
+        {error && (
+          <p
+            className="text-sm text-destructive"
+            role="alert"
+            data-testid="tmpl-restore-error"
+          >
+            {error}
+          </p>
+        )}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            disabled={submitting}
+            data-testid="tmpl-restore-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={onConfirm}
+            disabled={submitting}
+            data-testid="tmpl-restore-submit"
+          >
+            {submitting ? "Reactivating…" : "Reactivate"}
           </Button>
         </DialogFooter>
       </DialogContent>

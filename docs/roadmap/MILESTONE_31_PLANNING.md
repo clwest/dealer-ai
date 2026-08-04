@@ -1,9 +1,10 @@
 ---
 title: "Milestone 31 — Journal-Entry Template Restore / \"Show inactive\" UI (lifecycle-completion on M28.1 substrate + M30.1 include_inactive kwarg)"
-status: active
+status: shipped
 type: planning-memo
 generated: 2026-08-04
 generated_at_session: SESSION_203 (skeleton + expansion + all §5 locks)
+shipped_at_session: SESSION_205 (M31.2 frontend + Playwright + close-out fold)
 milestone: 31
 milestone_name: "Journal-Entry Template Restore / \"Show inactive\" UI (lifecycle-completion on M28.1 substrate + M30.1 include_inactive kwarg)"
 sources:

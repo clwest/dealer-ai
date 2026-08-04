@@ -3542,6 +3542,118 @@ implementation + close-out commits.
 
 ---
 
+## 7ζ. Journal-Entry Template Restore / "Show inactive" UI — completing the reversible template lifecycle on M28.1 + M30.1 substrate (Milestone 31, shipped)
+
+Milestone 31 (opened SESSION_203 M31.0 planning; M31.1 backend
+substrate SESSION_204; M31.2 UI + Playwright + close-out
+SESSION_205) delivers **template restore + Show-inactive UI** —
+the fifth link in the substrate-compound-value lineage (M27.1
+gl-accounts → M28.1 template substrate → M29 variable-amount
+extension → M30 CRUD closure → **M31 lifecycle closure**).
+Accounting staff can now discover previously-deactivated
+templates via an explicit operator toggle and reactivate them
+through the shipped UI — closing the reversible half of the
+soft-delete lifecycle that M30 opened. **Zero DB migration** —
+Restore reuses M28.1's `is_active` field verbatim; endpoint
+exposure uses M30.1's `include_inactive` service kwarg.
+
+**Selected as lifecycle-completion (not UI polish or lineage
+continuation)** per explicit user direction at M31.0 open. Four
+load-bearing evidence signals recorded: (1) **shipped-surface
+operator-safety promise unfulfilled** —
+`AccountingJournalEntriesPage.tsx:670-672` shipped M30.2 copy
+read *"You can restore this template later. (Restore UX ships
+in a future milestone.)"*; every operator who deactivated a
+template read a promise the shipped surface could not honor
+(D10 fulfilled at M31.2); (2) **Django shell was the only
+operator path** to un-hide a deactivated template — no other
+surface existed; (3) **bounded scope** — one new endpoint + one
+new service verb + one one-line view-layer extension + toggle +
+row state + Restore button + confirmation + L1 button-disable
+guard + single Playwright describe block; (4) **substrate at
+60%+ readiness** — M30.1 `include_inactive` kwarg already
+present on both `list_` and `get_` verbs. F&I chargeback
+substrate (the alternative fifth-link candidate) failed the
+bounded+evidenced test because §9 gating requires pilot
+evidence not yet surfaced.
+
+**Lifecycle-integrity precheck at M31.0 open (user-directed):**
+current instantiate flow trace confirmed instantiation is
+purely client-side hydration
+(`AccountingJournalEntriesPage.tsx:271` `handleInstantiate`
+copies template state into React state; JE POSTed via
+`createJournalEntry` never carries the template pk).
+Consequences separated: (a) stale-tab race outcomes **accepted
+per user direction** — JournalEntry and JournalEntryTemplate
+are intentionally decoupled (M28.0 §5.b + M30.0 §4.7); server-
+side coupling explicitly rejected; (b) Show-inactive view
+requires the **smallest fail-closed frontend guard (L1)** —
+disable Edit + Instantiate on inactive rows with explanatory
+aria-labels. Recorded as lifecycle integrity, not feature
+expansion.
+
+**Durable lesson (w) elevated from "surfaced at M30.2" to
+"load-bearing across two milestones"** — M31.1 adds Restore as
+the second dedicated activation verb (alongside Delete /
+Deactivate) and re-asserts PATCH-cannot-mutate-`is_active` via
+a new regression test `test_patch_still_cannot_mutate_is_active_after_m31`.
+**Durable lesson (x) also elevated** — M31.2 re-applies the
+row-action-vocabulary-reframes-to-truth-vocabulary asymmetry
+(row button "Restore" → confirmation title "Reactivate
+template?"), matching the M30.2 "Delete"/"Deactivate"
+asymmetry pattern.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M31.0 planning | Full active memo at `MILESTONE_31_PLANNING.md` — all §5 locks. §5.a locked as NEW Restore / "Show inactive" UI under the primary operational-coverage lens (lifecycle-completion framing, not lineage-continuation). §5.b: **D1** = new `admin/accounting/journal-entry-templates/<pk>/restore/` POST endpoint (Restore is a dedicated verb, never a PATCH side-effect); **D2** = idempotent, tenant-scoped, preservation contract — name/description/lines/created_at byte-identical; updated_at advances only on state-change branch; **D3** = fail-closed `?include_inactive=true` list parsing (only literal `true` case-insensitive opts in; every other value defaults to active-only so inactive rows never mix into the default list); **D4** = frontend list wrapper `includeInactive` param; **D5** = Show-inactive is an explicit operator toggle (default off, component-local, never auto-toggles, no silent mixed-status lists); **D6** = inactive rows visually AND semantically distinct via three independent signals (visible Inactive Badge + row `aria-label` + dedicated `template-row-inactive-<pk>` testid) — muted opacity is reinforcement only; **D7** = row-action asymmetry (Delete slot → Restore button on inactive rows; Edit + Instantiate visible-but-disabled with explanatory aria-label — this is the **L1 lifecycle-integrity guard**); **D8** = Restore confirmation reframes row "Restore" vocabulary to "Reactivate template?" truth vocabulary; **D9** = historical journal entries + trial-balance totals untouched by Restore/Deactivate (Playwright load-bearing assertion round-trip); **D10** = M30.2 delete-confirmation copy fulfillment update (bundled in M31.2 UI increment — no shipped UI carries stale "future milestone" reference after M31 close). §5.c 10-item risk register including R1 (stale-tab race accepted per intentional decoupling contract). §5.d eight verifications including §4.1 lifecycle-integrity precheck (L1 identified as frontend-only guard because server-side check would have nothing to check — JE create doesn't receive template pk). §5.e two-increment split (M31.1 backend + M31.2 UI). §5.f DoD exception at M31.1 (sixth invocation) + direct satisfaction at M31.2. Handoff at `docs/handoffs/SESSION_203_m31_inc0_planning.md`. | Planning-time as-recommended streak advanced **9 → 10**. First M30 CI run monitored + verified green at open (workflow `30930670900` on `f658c06` — 26 passed / 0 failed / 2m50s). Audit unchanged at M31.0: **157 / 123 / 34 / 317**. |
+| M31.1 backend substrate | Backend: `services/accounting/template.py` gains `restore_journal_entry_template(*, pk, dealership)` (atomic reactivate; idempotent — already-active input returns row without save so `updated_at` doesn't advance; tenant-scoped via `get_journal_entry_template(include_inactive=True)`; explicit `update_fields=["is_active", "updated_at"]` on state-change branch per D2 preservation contract). Module docstring updated: five verbs → **six verbs**; documents lesson (w) mutation-surface asymmetry hardening. `services/accounting/__init__.py` exports new verb. `views_accounting.py` gains `admin_journal_entry_template_restore(request, pk)` view (POST-only; reuses `_M131_PERMS`; error mapping: 200 with projected row on success + idempotent already-active, 404 on missing/cross-tenant). `admin_journal_entry_template_list_or_create` GET branch extended with `include_inactive = request.GET.get("include_inactive", "").lower() == "true"` — fail-closed by construction per D3. `urls.py` adds `admin/accounting/journal-entry-templates/<int:pk>/restore/` URL (sibling to M30.1 detail endpoint; same shape as audit endpoint #68 `admin/vehicle-photos/<uuid>/restore/`). **Zero migration** — Restore reuses M28.1 `is_active` field. Frontend + acceptance untouched at M31.1. | Backend baseline **4,904 → 4,933** (+29 tests: 13 in NEW `test_m31_journal_entry_template_restore_service.py` covering happy path, idempotency incl. updated_at no-advance on no-save, missing/cross-tenant None, preservation contract for name/description/lines byte-identical/created_at, updated_at state-change end-to-end, post-Restore visibility via default get; 7 in NEW `TemplateRestoreEndpointTests` covering POST 200 with projected row + re-appears in default list, idempotent already-active 200 twice, missing/cross-tenant 404, advisor denied 403 + underlying row untouched, unauth 401/403, PATCH still cannot mutate is_active after M31.1; 9 in NEW `TemplateListIncludeInactiveEndpointTests` covering fail-closed parsing across `true`/`TRUE`/`True`/`false`/`1`/`yes`/empty/malformed/missing). Audit **157 → 158 endpoints (+1), 123 covered unchanged (transitional), 34 → 35 backend-only (+1 transitional; re-covered at M31.2), 317 → 318 service verbs (+1)**. `manage.py check` clean. `makemigrations --check` clean. DoD exception path **sixth precedent** (M26 + M27.1 + M28.1 + M29.1 + M30.1 + M31.1). Zero-drift permission-class streak **31 → 32** (Restore endpoint reused `_M131_PERMS` verbatim). |
+| M31.2 UI + Playwright + close-out fold | Frontend: `accountingApi.ts` extends `fetchJournalEntryTemplates` with optional `{ includeInactive?: boolean }` (appends `?include_inactive=true` when true); adds `restoreJournalEntryTemplate(pk)` wrapper (POST with empty body; returns projected template). `AccountingJournalEntriesPage.tsx` adds **Show-inactive toggle** (`<input type="checkbox">` styled inline with aria-label "Show inactive templates" + testid `templates-show-inactive-toggle` in the templates section header; component-local state; default off; refetch fires whenever it flips). `TemplateRow` gains is_active-aware rendering: inactive rows render **three independent signals** per D6 (visible `Badge` labeled "Inactive" with testid `template-inactive-badge-<pk>` + row `aria-label="Template <name>, inactive"` + dedicated testid `template-row-inactive-<pk>` distinct from the active-row `template-row-<pk>` pattern) plus muted opacity styling as reinforcement (not primary signal). Row-action asymmetry per D7: on inactive rows the Delete slot is replaced by a **Restore button** (`tmpl-restore-trigger-<pk>`); Edit + Instantiate remain visible but disabled with explanatory aria-labels ("Edit template — restore it first to enable" and "Instantiate template — template is inactive; restore it first to enable") — this is the **L1 lifecycle-integrity guard** identified in M31.0 §4.1. New inline `TemplateRestoreConfirmDialog` co-located with `TemplateDeleteConfirmDialog` (per M28.0 duplicate-small-stable-domain-logic rule — no shared abstraction) with mandated D8 copy: title "Reactivate template?", body "Are you sure you want to reactivate <name>? This template will reappear in the active templates list and can be used to create new journal entries again. Existing journal entries created from this template are not affected — they remain unchanged in the Journal Entries list and in trial balance reports.", `[Cancel] [Reactivate]` footer (Reactivate as primary, not destructive). Restore success badge (`tmpl-restore-success-badge`). **D10 fulfillment:** M30.2 delete-confirmation body updated from "You can restore this template later. (Restore UX ships in a future milestone.)" to "You can restore this template later — turn on **Show inactive** to find and reactivate it." — `git grep "Restore UX ships in a future milestone" frontend/ acceptance/` shows only the guard test's assertion itself; shipped code has zero hits. Playwright: single new `test.describe("restore-inactive", ...)` block extension of `accounting_je_template.spec.ts` covering the full 7-step reversible lifecycle (seed template + instantiate historical JE → row Delete + Deactivate + reload → toggle Show inactive ON → assert three D6 signals + L1 disabled Instantiate/Edit + Restore button present → click Restore + confirm Reactivate → toggle Show inactive OFF → template back in default list + Instantiate re-enabled + post fresh JE → D9 load-bearing assertion: historical JE from step 1 byte-identical before and after the full cycle). | Backend baseline **4,933 unchanged** at M31.2 (frontend + Playwright only). Frontend Vitest **300 → 319 pass** across 36 files (+19: `AccountingJournalEntriesPage.test.tsx` +12 covering toggle rendered/default off, refetch on flip with includeInactive=true, three inactive-row signals, L1 disabled Instantiate + Edit with aria-label, Delete/Restore slot swap, active-row unchanged after M31.2, Restore confirmation D8 copy, Restore confirm + success badge, Restore failure inline error, Restore cancel closes without wrapper call, D10 copy fulfillment; `accountingApi.templates.test.ts` +7 covering fetchJournalEntryTemplates `?include_inactive=true` shape across omitted/false/true + restoreJournalEntryTemplate POST URL, envelope projection, 404 propagation, 500 propagation). Acceptance **21 → 22 journeys** (+1 M31.2 restore-inactive describe block; **28 tests / 0 failed / 32.6s on fresh DB**). Audit re-classifies M31.1 Restore endpoint: **158 endpoints, 123 → 124 covered (+1), 35 → 34 backend-only (−1)**. **DoD posture:** M31.2 satisfies M21.0 §5.f Option B directly via the D9-covering restore-inactive describe block — no exception path at the customer-facing increment. |
+| Test baseline | Backend **4,904 → 4,933** at M31.1 (+29 net across NEW M31 restore service file + endpoint extensions on `test_m28_journal_entry_template_endpoint.py`); unchanged at M31.2 (frontend + Playwright only). Frontend Vitest **300 → 319** across 36 files (+19 M31.2 tests). Acceptance **21 → 22 journeys** (+1 M31.2 restore-inactive describe block). `manage.py check` + `makemigrations --check` clean throughout. Per-increment delta: M31.0 = 0 (planning only); M31.1 = +29 backend + 0 frontend + 0 journey; M31.2 = 0 backend + +19 frontend + +1 journey. | Zero-drift permission-class streak **thirty-one → thirty-two → thirty-three** consecutive milestones (M10 → M31) — M31.1's Restore endpoint reused `_M131_PERMS` verbatim; M31.2 added no endpoints. Planning-time as-recommended streak **9 → 10** at M31.0 close, unchanged at M31.1 + M31.2 (both pure implementation). Substrate-compound-value continuation reached **5 links realized** (M27.1 → M28.1 → M29 → M30 → **M31**). DoD exception path invocations **5 → 6** (M26 + M27.1 + M28.1 + M29.1 + M30.1 + M31.1). Additive-prop pattern (durable lesson (t)) unchanged posture — M31.2 used co-located inline `TemplateRestoreConfirmDialog` per M28.0 duplicate-small-stable-domain-logic rule rather than adding a new mode to the M30.2 dialog. Lesson (w) mutation-surface asymmetry elevated from "surfaced at M30.2" to **"load-bearing across two milestones"** via M31.1 Restore as second dedicated activation verb + regression test `test_patch_still_cannot_mutate_is_active_after_m31`. Lesson (x) row-action-vocabulary-to-truth-vocabulary asymmetry also elevated from "surfaced at M30.2" to **"load-bearing across two milestones"** via M31.2 "Restore"→"Reactivate template?" pairing. |
+
+**M31 status:** M31 SHIPPED at SESSION_205 (M31.2 close +
+close-out fold — no separate M31.3). Coordinated M31 close
+push awaits explicit user confirmation. Total M31 commits at
+push projected: **6** — SESSION_203 planning (`f45a630`) +
+M31.0 hash-backfill (`5d12184`) + SESSION_204 M31.1
+(`b0e21a8`) + M31.1 hash-backfill (`7c1cced`) + this session's
+M31.2 + close-out commits + hash-backfill follow-up.
+
+**What is NOT shipped in Milestone 31** (deferred per
+`MILESTONE_31_PLANNING.md` §3):
+
+- **Hard-delete escape hatch** on templates (query param, alt
+  endpoint, admin escape hatch) — remains M30 §3 deferral.
+- **Bulk delete / bulk restore / bulk edit** on templates —
+  remains M30 §3 deferral.
+- **Template mutation audit history** (`edited_by_user`,
+  history rows, restore/deactivate log) — remains M30 §3
+  deferral; consider under M (multi-operator) if evidence
+  surfaces.
+- **Optimistic concurrency control** (ETag / `updated_at`
+  check) on Restore or Deactivate — remains M30 §3 deferral;
+  gated on M (multi-operator).
+- **Template mutation history / diff viewer** — new M31 §3
+  deferral.
+- **Auto-refresh / websocket invalidation** of stale-tab
+  template list — accepted per R1; new M31 §3 deferral as
+  intentional decoupling consequence.
+- **Persistent Show-inactive toggle state** (URL param,
+  localStorage) — new M31 §3 deferral. Toggle is component-
+  local state — fresh page mount = default off.
+- **Bulk lifecycle actions** across the templates list
+  (Restore all inactive / Deactivate all active) — new M31 §3
+  deferral.
+- **Server-side coupling between JournalEntry and
+  JournalEntryTemplate** — explicitly rejected per R1
+  accepted-race-outcome + M28.0 §5.b + M30.0 §4.7 + M31.0
+  §4.1. JE created from previously-hydrated template values
+  is a valid standalone posting; the decoupling is load-
+  bearing on Restore/Deactivate safety.
+- All prior M30 §3 + M29 §3 + M28 §3 + M27 §3 + M25 §4
+  deferrals — unchanged.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

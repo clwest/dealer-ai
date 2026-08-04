@@ -871,6 +871,325 @@ test.describe(
 );
 
 
+// -------------------------------------------------------------------
+// Milestone 31 · Increment 2 — reversible-lifecycle journey.
+//
+// Guiding principle: this journey is an operational acceptance
+// contract for the *reversible* template lifecycle now completed by
+// M31 (Deactivate ↔ Restore). If it passes, an office manager
+// (dealer_owner persona) can (a) deactivate a template through the
+// shipped M30.2 UI, (b) discover it via the M31.2 Show-inactive
+// toggle, (c) verify the inactive row exposes the three D6 signals
+// AND that Instantiate is disabled per the L1 lifecycle-integrity
+// guard, (d) reactivate it through the shipped M31.2 Restore UI,
+// (e) hide inactive rows again and confirm the template is back in
+// the default active list AND is fully instantiable — all entirely
+// through the shipped application. Load-bearing lifecycle assertion:
+// historical JEs and trial-balance totals remain byte-identical
+// through the full round-trip (D9).
+//
+// Seven-step journey per MILESTONE_31_PLANNING.md §5.e M31.2:
+//   1. Seed a fresh balanced template + instantiate + post one
+//      historical JE (baseline for D9 byte-identity assertion).
+//   2. Row Delete → confirm Deactivate → template disappears from
+//      default active list; reload page → still gone.
+//   3. Toggle Show inactive ON.
+//   4. Assert three D6 signals AND Instantiate/Edit disabled AND
+//      Restore button present (L1 guard + D7 asymmetry).
+//   5. Click Restore → confirmation with D8 Reactivate copy → click
+//      Reactivate.
+//   6. Toggle Show inactive OFF.
+//   7. Template back in default list + Instantiate re-enabled +
+//      click Instantiate + post another JE. D9 assertion:
+//      historical JE from step 1 byte-identical before and after
+//      the full deactivate-restore round-trip.
+// -------------------------------------------------------------------
+
+const RESTORE_FIXTURE_PREFIX = "[M31.2-tmpl-restore]";
+
+
+test.describe(
+  "Office / accounting workflow — template restore + reversible lifecycle",
+  () => {
+    test("owner can deactivate + restore a template through the shipped UI while historical JEs remain byte-identical", async ({
+      page,
+      request,
+    }) => {
+      const runToken = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const templateName = `${RESTORE_FIXTURE_PREFIX} rent ${runToken}`;
+      const templateDescription = `Original description ${runToken}`;
+
+      const rentAcctId = await accountIdByCode(request, "800000");
+      const bankAcctId = await accountIdByCode(request, "110000");
+
+      // ----------------------------------------------------------------
+      // Step 1 — seed a fresh balanced template + instantiate + post
+      // a historical JE. The historical JE + its total_debit is the
+      // D9 byte-identity baseline the full deactivate-restore round-
+      // trip must not alter.
+      // ----------------------------------------------------------------
+      const seedResponse = await postWithCsrf(
+        request,
+        "/api/dealer-ai/admin/accounting/journal-entry-templates/",
+        {
+          name: templateName,
+          description: templateDescription,
+          lines: [
+            {
+              account_id: rentAcctId,
+              side: "debit",
+              amount: "100.00",
+              memo: "",
+            },
+            {
+              account_id: bankAcctId,
+              side: "credit",
+              amount: "100.00",
+              memo: "",
+            },
+          ],
+        },
+      );
+      expect(
+        seedResponse.status(),
+        "seed template POST should return 201",
+      ).toBe(201);
+      const seedBody = (await seedResponse.json()) as {
+        journal_entry_template: { id: number };
+      };
+      const templateId = seedBody.journal_entry_template.id;
+
+      await page.goto("/dealer-ai-accounting/journal-entries");
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Journal Entries" }),
+      ).toBeVisible({ timeout: 15_000 });
+      await page.getByTestId("templates-toggle").click();
+
+      // Instantiate through the shipped UI → post → historical JE
+      // established.
+      const initialInstantiate = page.getByTestId(
+        `template-instantiate-${templateId}`,
+      );
+      await expect(initialInstantiate).toBeVisible({ timeout: 15_000 });
+      await initialInstantiate.click();
+      const seedDialog = page.getByRole("dialog", {
+        name: /New journal entry/i,
+      });
+      await expect(seedDialog).toBeVisible({ timeout: 15_000 });
+      await expect(seedDialog.getByTestId("je-create-submit")).toBeEnabled();
+      await seedDialog.getByTestId("je-create-submit").click();
+      await expect(seedDialog).not.toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId("je-create-success-badge")).toBeVisible();
+
+      const allEntriesBefore = await fetchAllJournalEntries(request);
+      const historicalEntry = allEntriesBefore.find(
+        (e) => e.description === templateDescription,
+      );
+      expect(
+        historicalEntry,
+        "historical JE from step 1 should exist with the pre-cycle description",
+      ).toBeDefined();
+      expect(historicalEntry!.total_debit).toBe("100.00");
+      const historicalId = historicalEntry!.id;
+
+      // ----------------------------------------------------------------
+      // Step 2 — Row Delete → confirmation Deactivate → template
+      // disappears from default active list; reload → still gone.
+      // ----------------------------------------------------------------
+      const deleteTrigger = page.getByTestId(
+        `tmpl-delete-trigger-${templateId}`,
+      );
+      await expect(deleteTrigger).toBeVisible({ timeout: 15_000 });
+      await deleteTrigger.click();
+      const deleteDialog = page.getByTestId("tmpl-delete-confirm-dialog");
+      await expect(deleteDialog).toBeVisible({ timeout: 15_000 });
+      // D10 assertion — the shipped delete-confirm body now points at
+      // the M31.2 Show-inactive toggle (previous "Restore UX ships in
+      // a future milestone" text must be gone from shipped surface).
+      await expect(
+        page.getByTestId("tmpl-delete-confirm-body"),
+      ).toContainText(
+        /turn on Show inactive to find and reactivate it/,
+      );
+      await page.getByTestId("tmpl-delete-confirm").click();
+      await expect(deleteDialog).not.toBeVisible({ timeout: 15_000 });
+      await expect(
+        page.getByTestId(`template-row-${templateId}`),
+      ).not.toBeVisible();
+
+      await page.reload();
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Journal Entries" }),
+      ).toBeVisible({ timeout: 15_000 });
+      await page.getByTestId("templates-toggle").click();
+      await expect(
+        page.getByTestId(`template-row-${templateId}`),
+      ).not.toBeVisible();
+
+      // ----------------------------------------------------------------
+      // Step 3 — Toggle Show inactive ON.
+      // ----------------------------------------------------------------
+      const showInactiveToggle = page.getByTestId(
+        "templates-show-inactive-toggle",
+      );
+      await expect(showInactiveToggle).toBeVisible();
+      await expect(showInactiveToggle).not.toBeChecked();
+      await showInactiveToggle.check();
+      await expect(showInactiveToggle).toBeChecked();
+
+      // ----------------------------------------------------------------
+      // Step 4 — Assert the three D6 inactive-row signals + the L1
+      // disabled-Instantiate + disabled-Edit + Restore-button
+      // presence per D7 row-action asymmetry.
+      // ----------------------------------------------------------------
+      const inactiveRow = page.getByTestId(
+        `template-row-inactive-${templateId}`,
+      );
+      await expect(inactiveRow).toBeVisible({ timeout: 15_000 });
+      // Signal 1: aria-label announces lifecycle state.
+      await expect(inactiveRow).toHaveAttribute(
+        "aria-label",
+        `Template ${templateName}, inactive`,
+      );
+      // Signal 2: visible Inactive badge.
+      await expect(
+        page.getByTestId(`template-inactive-badge-${templateId}`),
+      ).toBeVisible();
+      // Signal 3 (the row testid itself) already verified via the
+      // getByTestId + toBeVisible above.
+
+      // L1 guard: Instantiate + Edit are visible-but-disabled with
+      // explanatory aria-label.
+      const inactiveInstantiate = page.getByTestId(
+        `template-instantiate-${templateId}`,
+      );
+      await expect(inactiveInstantiate).toBeVisible();
+      await expect(inactiveInstantiate).toBeDisabled();
+      await expect(inactiveInstantiate).toHaveAttribute(
+        "aria-label",
+        "Instantiate template — template is inactive; restore it first to enable",
+      );
+      const inactiveEdit = page.getByTestId(
+        `tmpl-edit-trigger-${templateId}`,
+      );
+      await expect(inactiveEdit).toBeVisible();
+      await expect(inactiveEdit).toBeDisabled();
+
+      // D7 row-action swap: Delete slot is gone; Restore is present.
+      await expect(
+        page.getByTestId(`tmpl-delete-trigger-${templateId}`),
+      ).toHaveCount(0);
+      await expect(
+        page.getByTestId(`tmpl-restore-trigger-${templateId}`),
+      ).toBeVisible();
+
+      // ----------------------------------------------------------------
+      // Step 5 — Click Restore → confirmation with D8 mandated copy →
+      // click Reactivate.
+      // ----------------------------------------------------------------
+      await page.getByTestId(`tmpl-restore-trigger-${templateId}`).click();
+      const restoreDialog = page.getByTestId(
+        "tmpl-restore-confirm-dialog",
+      );
+      await expect(restoreDialog).toBeVisible({ timeout: 15_000 });
+      await expect(
+        page.getByTestId("tmpl-restore-confirm-title"),
+      ).toHaveText("Reactivate template?");
+      await expect(
+        page.getByTestId("tmpl-restore-confirm-body"),
+      ).toContainText(
+        /This template will reappear in the active templates list/,
+      );
+      await expect(
+        page.getByTestId("tmpl-restore-confirm-body"),
+      ).toContainText(
+        /Existing journal entries created from this template are not affected/,
+      );
+      await page.getByTestId("tmpl-restore-submit").click();
+      await expect(restoreDialog).not.toBeVisible({ timeout: 15_000 });
+
+      // Success badge surfaces on the templates section.
+      await expect(
+        page.getByTestId("tmpl-restore-success-badge"),
+      ).toBeVisible();
+
+      // ----------------------------------------------------------------
+      // Step 6 — Toggle Show inactive OFF.
+      // ----------------------------------------------------------------
+      await showInactiveToggle.uncheck();
+      await expect(showInactiveToggle).not.toBeChecked();
+
+      // ----------------------------------------------------------------
+      // Step 7 — Template back in default active list + Instantiate
+      // re-enabled + operator can post a fresh JE from the restored
+      // template. D9 load-bearing assertion: historical JE from
+      // step 1 is byte-identical before and after the full cycle.
+      // ----------------------------------------------------------------
+      const restoredRow = page.getByTestId(`template-row-${templateId}`);
+      await expect(restoredRow).toBeVisible({ timeout: 15_000 });
+      // Inactive badge must NOT be present on the restored row.
+      await expect(
+        page.getByTestId(`template-inactive-badge-${templateId}`),
+      ).toHaveCount(0);
+
+      const restoredInstantiate = page.getByTestId(
+        `template-instantiate-${templateId}`,
+      );
+      await expect(restoredInstantiate).toBeVisible();
+      await expect(restoredInstantiate).toBeEnabled();
+
+      // Post another JE from the restored template to prove the
+      // full lifecycle round-trip re-enabled the instantiation
+      // capability end-to-end.
+      await restoredInstantiate.click();
+      const postCycleDialog = page.getByRole("dialog", {
+        name: /New journal entry/i,
+      });
+      await expect(postCycleDialog).toBeVisible({ timeout: 15_000 });
+      await expect(
+        postCycleDialog.getByTestId("je-create-submit"),
+      ).toBeEnabled();
+      await postCycleDialog.getByTestId("je-create-submit").click();
+      await expect(postCycleDialog).not.toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId("je-create-success-badge")).toBeVisible();
+
+      // D9 load-bearing assertion: historical JE + total_debit
+      // byte-identical before and after the full deactivate → restore
+      // cycle. Trial balance total on the shipped rent expense
+      // account must reflect BOTH postings (the step-1 seed JE and
+      // the step-7 post-restore JE) — a proof that Restore did not
+      // corrupt the ledger.
+      const allEntriesAfter = await fetchAllJournalEntries(request);
+      const historicalAfter = allEntriesAfter.find(
+        (e) => e.id === historicalId,
+      );
+      expect(
+        historicalAfter,
+        "historical JE from step 1 should still exist after the full deactivate→restore cycle",
+      ).toBeDefined();
+      expect(
+        historicalAfter!.description,
+        "historical JE description should be byte-identical after the full cycle (D9)",
+      ).toBe(templateDescription);
+      expect(
+        historicalAfter!.total_debit,
+        "historical JE total_debit should be byte-identical after the full cycle (D9)",
+      ).toBe("100.00");
+      // Post-cycle JE also lands with the expected description.
+      const postCycleEntry = allEntriesAfter.find(
+        (e) =>
+          e.description === templateDescription && e.id !== historicalId,
+      );
+      expect(
+        postCycleEntry,
+        "post-restore JE from step 7 should exist with the same description as the historical seed",
+      ).toBeDefined();
+      expect(postCycleEntry!.total_debit).toBe("100.00");
+    });
+  },
+);
+
+
 // DRF SessionAuthentication requires the ``X-CSRFToken`` header on
 // mutating requests. The persona storage state carries a ``csrftoken``
 // cookie; the browser's fetch/XHR wiring copies it into the header

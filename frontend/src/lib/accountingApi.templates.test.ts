@@ -33,6 +33,7 @@ import {
   createJournalEntryTemplate,
   deleteJournalEntryTemplate,
   fetchJournalEntryTemplates,
+  restoreJournalEntryTemplate,
   updateJournalEntryTemplate,
   type CreateJournalEntryTemplatePayload,
   type JournalEntryTemplate,
@@ -98,6 +99,43 @@ describe("fetchJournalEntryTemplates", () => {
     });
     const result = await fetchJournalEntryTemplates();
     expect(result).toEqual([]);
+  });
+
+  // Milestone 31 · Increment 2 — includeInactive parameter coverage.
+  //
+  // Per MILESTONE_31_PLANNING.md §5.b D4 (frontend wrapper) + D3
+  // (backend fail-closed parsing — only literal "true" opts in).
+  // Wrapper always sends the exact string "true" so we test that
+  // shape end-to-end.
+
+  it("M31.2 — omitted includeInactive omits the query param", async () => {
+    authGetJSONMock.mockResolvedValue({
+      journal_entry_templates: { templates: [] },
+    });
+    await fetchJournalEntryTemplates();
+    expect(authGetJSONMock).toHaveBeenCalledWith(
+      "/admin/accounting/journal-entry-templates/",
+    );
+  });
+
+  it("M31.2 — includeInactive=false omits the query param", async () => {
+    authGetJSONMock.mockResolvedValue({
+      journal_entry_templates: { templates: [] },
+    });
+    await fetchJournalEntryTemplates({ includeInactive: false });
+    expect(authGetJSONMock).toHaveBeenCalledWith(
+      "/admin/accounting/journal-entry-templates/",
+    );
+  });
+
+  it("M31.2 — includeInactive=true appends ?include_inactive=true", async () => {
+    authGetJSONMock.mockResolvedValue({
+      journal_entry_templates: { templates: [] },
+    });
+    await fetchJournalEntryTemplates({ includeInactive: true });
+    expect(authGetJSONMock).toHaveBeenCalledWith(
+      "/admin/accounting/journal-entry-templates/?include_inactive=true",
+    );
   });
 
   it("supports templates with nullable line amounts (forward-compat)", async () => {
@@ -343,6 +381,63 @@ describe("deleteJournalEntryTemplate", () => {
   it("propagates non-404 errors (e.g., 500) to the caller", async () => {
     authDeleteMock.mockRejectedValue(new ApiError(500, "Server error"));
     await expect(deleteJournalEntryTemplate(42)).rejects.toBeInstanceOf(
+      ApiError,
+    );
+  });
+});
+
+
+// Milestone 31 · Increment 2 (SESSION_205) — restore wrapper on top
+// of the M31.1 POST endpoint. Body-less POST; the backend is
+// idempotent (already-active returns 200 without state change).
+// 404 should surface as an error (unlike delete's race-safe 404
+// swallow) so callers can react — the row genuinely does not exist
+// from this tenant's perspective and the operator should be told.
+
+describe("restoreJournalEntryTemplate", () => {
+  beforeEach(() => {
+    authPostJSONMock.mockReset();
+  });
+
+  it("M31.2 — POSTs the correct restore URL with an empty body", async () => {
+    const template = fixtureTemplate({ id: 42, is_active: true });
+    authPostJSONMock.mockResolvedValue({
+      journal_entry_template: template,
+    });
+    const result = await restoreJournalEntryTemplate(42);
+    expect(authPostJSONMock).toHaveBeenCalledTimes(1);
+    expect(authPostJSONMock).toHaveBeenCalledWith(
+      "/admin/accounting/journal-entry-templates/42/restore/",
+      {},
+    );
+    expect(result).toEqual(template);
+  });
+
+  it("M31.2 — projects the journal_entry_template envelope", async () => {
+    const template = fixtureTemplate({
+      id: 7,
+      name: "Restored template",
+      is_active: true,
+    });
+    authPostJSONMock.mockResolvedValue({
+      journal_entry_template: template,
+    });
+    const result = await restoreJournalEntryTemplate(7);
+    expect(result.id).toBe(7);
+    expect(result.name).toBe("Restored template");
+    expect(result.is_active).toBe(true);
+  });
+
+  it("M31.2 — propagates 404 to the caller (row does not exist for this tenant)", async () => {
+    authPostJSONMock.mockRejectedValue(new ApiError(404, "Not found"));
+    await expect(restoreJournalEntryTemplate(42)).rejects.toBeInstanceOf(
+      ApiError,
+    );
+  });
+
+  it("M31.2 — propagates 500 to the caller", async () => {
+    authPostJSONMock.mockRejectedValue(new ApiError(500, "Server error"));
+    await expect(restoreJournalEntryTemplate(42)).rejects.toBeInstanceOf(
       ApiError,
     );
   });
