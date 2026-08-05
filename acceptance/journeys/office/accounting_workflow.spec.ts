@@ -36,7 +36,7 @@ import {
 } from "../../support/assertions/accounting";
 
 test.describe(
-  "Office / accounting workflow — freeze a trial balance snapshot",
+  "Office / accounting workflow — freeze a trial balance snapshot @rerun-hygiene",
   () => {
     test("owner can freeze the current trial balance view and drill into the snapshot", async ({
       page,

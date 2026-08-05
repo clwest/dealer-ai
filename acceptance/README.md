@@ -98,3 +98,54 @@ videos on failure. Download the artifact from the job summary,
 extract, and open `playwright-report/index.html` locally. Each failed
 journey has a trace file (`.trace.zip`) you can open with
 `npx playwright show-trace <path>`.
+
+## Repeated-run hygiene proof (Milestone 34)
+
+Three journeys mutate shared DB state (`sales_manager/daily_startup`,
+`recon/workflow`, `office/accounting_workflow`). Their seed commands
+were extended at M34.1 to restore each pre-flight invariant across a
+mutate → re-seed cycle.
+
+To prove the rerun-safety locally against the same DB (defense
+against a future move toward CI DB persistence or parallelization),
+run the tagged subset **twice back-to-back** — the setup project
+re-runs on each invocation, which reseeds and restores invariants:
+
+```bash
+cd acceptance
+# First invocation seeds fresh state and runs the journeys.
+npx playwright test --grep "@rerun-hygiene"
+
+# Second invocation reuses the servers + DB (reuseExistingServer=true
+# locally) but re-runs the setup project, which fires the three
+# seed commands' _restore_rerun_invariants methods. Journeys must
+# pass again against the mutated-then-restored DB.
+npx playwright test --grep "@rerun-hygiene"
+```
+
+Both invocations should pass. If the second run fails on a pre-flight
+assertion (`assigned_to should be null`, `finding.decision should be
+None`, snapshot count mismatch, etc.), the seed's
+`_restore_rerun_invariants` method has drifted from the journey's
+expectations. Fix the seed side, not the journey side (per M34.0 §5.h
+non-goals discipline).
+
+**Note — `--repeat-each=2` is NOT the right proof mechanism.**
+`--repeat-each` repeats individual tests within a single invocation
+but does NOT re-run the setup project between repeats — so the seed
+reset never fires, the second repeat sees mutated state, and the
+tagged journeys fail on their pre-flight assertions. Use back-to-back
+invocations instead. (M34.2 §0.a discovery — the M34.0 planning memo
+D7 spec named `--repeat-each=2`; corrected here after empirical
+verification failed.)
+
+The default CI job resets the acceptance DB per run so this class
+never surfaces in production CI — but the durable lesson (M34 D8,
+lesson `ff` in `docs/CAPABILITY_MATRIX.md`) is:
+
+> Acceptance journeys must be independently rerunnable against shared
+> state; green-on-clean-DB alone is insufficient evidence of
+> operational reliability.
+
+Run the `--repeat-each=2` proof whenever you touch a seed or a
+journey that mutates state.

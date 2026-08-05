@@ -1,6 +1,6 @@
 ---
 title: "Milestone 34 — Test-Hygiene Remediation: Idempotent seeds + rerun-safe acceptance journeys"
-status: active
+status: historical
 type: planning-memo
 generated: 2026-08-05
 generated_at_session: SESSION_213 (skeleton + expansion + all §5 locks)

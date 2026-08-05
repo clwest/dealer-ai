@@ -38,7 +38,7 @@ const FIXTURE_STOCK = "M20-RECON-ACCEPT";
 const FIXTURE_FINDING_SUBSTRING = "brake pads worn below 3mm";
 
 test.describe(
-  "Recon workflow — recon manager records a decision on a condition finding",
+  "Recon workflow — recon manager records a decision on a condition finding @rerun-hygiene",
   () => {
     test("recon manager clicks a tier button and the decision persists", async ({
       page,

@@ -32,29 +32,67 @@ export interface TrialBalanceSnapshotListEnvelope {
   };
 }
 
+// M34.2 · D5 — preserve-shape refactor. `fetchSnapshotList` returns
+// the paged snapshot array unchanged (callers rely on `snapshots[0]`
+// for drill-into-newest); a sibling `fetchSnapshotEnvelope` exposes
+// the envelope's `total_count` for callers that need count semantics
+// independent of page-cap. `expectSnapshotCountAtLeast` internally
+// asserts against `total_count` so counts of >= page_size (10) are
+// correctly handled — defense-in-depth per M34.0 §5.b D5 against a
+// hypothetical future scenario where TrialBalanceSnapshots accumulate
+// past the page cap (M34.1 D4 keeps the count at 0-1 in practice).
+// Return type unchanged so the M20.3 office/accounting workflow
+// journey needs no consumer edits per M34.0 §5.h non-goals.
 async function fetchSnapshotList(
   request: APIRequestContext,
 ): Promise<TrialBalanceSnapshotSummary[]> {
+  const { snapshots } = await fetchSnapshotEnvelope(request);
+  return snapshots;
+}
+
+async function fetchSnapshotEnvelope(
+  request: APIRequestContext,
+): Promise<{ snapshots: TrialBalanceSnapshotSummary[]; totalCount: number }> {
   const url =
     "/api/dealer-ai/admin/accounting/trial-balance/snapshots/list/?page_size=10";
   const response = await request.get(url);
   expect(response.status(), `GET ${url} returned non-200`).toBe(200);
   const body = (await response.json()) as TrialBalanceSnapshotListEnvelope;
-  return body.trial_balance_snapshots?.snapshots ?? [];
+  const envelope = body.trial_balance_snapshots ?? {
+    snapshots: [],
+    total_count: 0,
+    page: 1,
+    page_size: 10,
+  };
+  return {
+    snapshots: envelope.snapshots ?? [],
+    totalCount: envelope.total_count ?? 0,
+  };
 }
 
 /**
  * Assert that the trial balance snapshot list contains at least
  * `minCount` frozen snapshots on the current tenant.
+ *
+ * **M34.2 · D5:** assertion asserts against the envelope's
+ * `total_count`, not the paged `snapshots.length`. The paged list
+ * (capped at `page_size=10`) is still returned so callers can drill
+ * into the newest snapshot via `snapshots[0]` — that consumer pattern
+ * predates M34 and is preserved verbatim. If a caller needs an
+ * accurate count they should read the return value's *contract*
+ * (this assertion has already validated `total_count >= minCount`);
+ * the return-value `.length` remains a paged view and callers should
+ * not treat it as a total.
  */
 export async function expectSnapshotCountAtLeast(
   request: APIRequestContext,
   minCount: number,
 ): Promise<TrialBalanceSnapshotSummary[]> {
-  const snapshots = await fetchSnapshotList(request);
+  const { snapshots, totalCount } = await fetchSnapshotEnvelope(request);
   expect(
-    snapshots.length,
-    `expected at least ${minCount} frozen trial-balance snapshot(s); got ${snapshots.length}`,
+    totalCount,
+    `expected at least ${minCount} frozen trial-balance snapshot(s); ` +
+      `got total_count=${totalCount} (page shows ${snapshots.length})`,
   ).toBeGreaterThanOrEqual(minCount);
   return snapshots;
 }

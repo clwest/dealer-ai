@@ -56,7 +56,7 @@ import {
 } from "../../support/assertions/dashboard";
 
 test.describe(
-  "Sales manager daily startup — triage overnight leads + assign to advisor",
+  "Sales manager daily startup — triage overnight leads + assign to advisor @rerun-hygiene",
   () => {
     test("sales manager can assign an overnight lead to an advisor through the UI", async ({
       page,
