@@ -9,8 +9,8 @@ milestone_status: shipped
 milestone_name: "Test-Hygiene Remediation: Idempotent seeds + rerun-safe acceptance journeys"
 increment: 2
 increment_status: shipped
-commit: pending
-commit_notes: "M34.2 acceptance workspace + M34 close-out fold — local commit landing at close per M28.2 / M29.2 / M30.2 / M31.2 / M32.3 / M33.2 close-out cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated M34 push awaits explicit user confirmation."
+commit: fda9d56
+commit_notes: "M34.2 acceptance workspace + M34 close-out fold — local commit landed as fda9d56 at close per M28.2 / M29.2 / M30.2 / M31.2 / M32.3 / M33.2 close-out cadence; hash backfilled via this subsequent commit; NOT pushed. Coordinated M34 push awaits explicit user confirmation."
 ---
 
 # SESSION_215 — Milestone 34 · Increment 2 (M34.2 — acceptance workspace + M34 close-out fold)
