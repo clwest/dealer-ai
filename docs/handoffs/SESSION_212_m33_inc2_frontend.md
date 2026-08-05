@@ -9,8 +9,8 @@ milestone_status: shipped
 milestone_name: "F&I Intake Activation: Incoming Application to Active Deal Structure (derived DealStructure status + DealStructure read endpoint + F&I structuring UI + Playwright loop)"
 increment: 2
 increment_status: shipped
-commit: pending
-commit_notes: "M33.2 frontend UI + Playwright loop + M33 close-out fold — local commit at close per M28.2 / M29.2 / M30.2 / M31.2 / M32.3 close-out cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated M33 push awaits explicit user confirmation."
+commit: 622c51e
+commit_notes: "M33.2 frontend UI + Playwright loop + M33 close-out fold — local commit landed as 622c51e at close per M28.2 / M29.2 / M30.2 / M31.2 / M32.3 close-out cadence; hash backfilled via this subsequent commit; NOT pushed. Coordinated M33 push awaits explicit user confirmation."
 ---
 
 # SESSION_212 — Milestone 33 · Increment 2 (M33.2 — frontend UI + Playwright loop + M33 close-out fold)
