@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Test-Hygiene Remediation: Idempotent seeds + rerun-safe acceptance journeys (three shared-DB non-idempotent journeys: sales_manager/daily_startup + recon/workflow + office/accounting_workflow)"
 increment: 0
 increment_status: shipped
-commit: pending
-commit_notes: "M34.0 planning session — local commit landing at close per M28.0 / M29.0 / M30.0 / M31.0 / M32.0 / M33.0 planning-only cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated M34 close push deferred to explicit user confirmation after M34.2 close."
+commit: f163e93
+commit_notes: "M34.0 planning session — local commit landed as f163e93 at close per M28.0 / M29.0 / M30.0 / M31.0 / M32.0 / M33.0 planning-only cadence; hash backfilled via this subsequent commit; NOT pushed. Coordinated M34 close push deferred to explicit user confirmation after M34.2 close."
 ---
 
 # SESSION_213 — Milestone 34 · Increment 0 (M34.0 — planning refinement + target selection)
