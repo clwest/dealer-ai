@@ -153,29 +153,34 @@ class LenderSubmissionStatusAnnotationTests(TestCase):
         self.d = Dealership.objects.create(slug="m351-a", name="M35.1 A")
 
     def test_case1_no_deal_structure_returns_none(self) -> None:
-        """Case 1 — CA with no DealStructure → status = None."""
+        """Case 1 — CA with no DealStructure → status = None. Also
+        asserts M35.2 §0.a id annotation is None."""
         _make_credit_app(self.d, name="Incoming")
         rows = list_credit_applications(dealership=self.d)
         self.assertEqual(len(rows), 1)
         self.assertIsNone(rows[0].latest_deal_structure_id)
         self.assertIsNone(rows[0].latest_lender_submission_status)
+        self.assertIsNone(rows[0].latest_lender_submission_id)
 
     def test_case2_deal_structure_no_submissions_returns_none(self) -> None:
         """Case 2 — DealStructure exists but no LenderSubmission on
-        it → status = None (M33 In progress state)."""
+        it → status = None (M33 In progress state). Also asserts
+        M35.2 §0.a id annotation is None."""
         ca = _make_credit_app(self.d, name="Structured")
         ds = _make_deal_structure(self.d, ca, _make_vehicle(self.d, "S-1"))
         rows = list_credit_applications(dealership=self.d)
         self.assertEqual(rows[0].latest_deal_structure_id, ds.pk)
         self.assertIsNone(rows[0].latest_lender_submission_status)
+        self.assertIsNone(rows[0].latest_lender_submission_id)
 
     def test_case3_one_pending_submission_returns_pending(self) -> None:
         """Case 3 — one LenderSubmission (pending) → status =
-        "pending"."""
+        "pending". Also asserts the M35.2 §0.a amendment: the id
+        annotation projects the same submission's pk."""
         ca = _make_credit_app(self.d, name="Pending")
         ds = _make_deal_structure(self.d, ca, _make_vehicle(self.d, "P-1"))
         lp = _make_lender_program(self.d)
-        record_lender_submission(
+        sub = record_lender_submission(
             dealership=self.d,
             deal_structure=ds,
             lender_program=lp,
@@ -186,6 +191,7 @@ class LenderSubmissionStatusAnnotationTests(TestCase):
             rows[0].latest_lender_submission_status,
             LENDER_SUBMISSION_STATUS_PENDING,
         )
+        self.assertEqual(rows[0].latest_lender_submission_id, sub.pk)
 
     def test_case4_multiple_submissions_latest_wins(self) -> None:
         """Case 4 — multiple submissions on the same DealStructure;
@@ -399,7 +405,7 @@ class CreditApplicationListProjectionM35Tests(TestCase):
             self.d, ca, _make_vehicle(self.d, "SB-1")
         )
         lp = _make_lender_program(self.d, name="Projection Bank")
-        record_lender_submission(
+        sub = record_lender_submission(
             dealership=self.d,
             deal_structure=deal,
             lender_program=lp,
@@ -412,6 +418,9 @@ class CreditApplicationListProjectionM35Tests(TestCase):
             row["latest_lender_submission_status"],
             LENDER_SUBMISSION_STATUS_PENDING,
         )
+        # M35.2 §0.a amendment — projection carries the id for
+        # PATCH URL discoverability without a preceding GET.
+        self.assertEqual(row["latest_lender_submission_id"], sub.pk)
 
     def test_projection_approved_row_has_approved_status(self) -> None:
         ca = _make_credit_app(self.d, name="Approved")

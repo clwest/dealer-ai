@@ -75,6 +75,10 @@ function fixtureHandoffCA(
     // In progress branch.
     has_deal_structure: false,
     latest_deal_structure_id: null,
+    // M35.1 + M35.2 §0.a derived-status fixture defaults. Null
+    // when no submission exists on latest DS (which is null here).
+    latest_lender_submission_status: null,
+    latest_lender_submission_id: null,
     ...overrides,
   };
 }
@@ -91,7 +95,13 @@ function fixtureDirectCA(
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  // resetAllMocks (not clearAllMocks) — clears both call records and
+  // any queued mockResolvedValueOnce implementations. Required because
+  // the M33.2 "opens the structuring form panel" test queues two
+  // responses (initial load + post-create refetch) but only clicks
+  // Cancel, leaving the second queued response to pollute the next
+  // test's fetch call.
+  vi.resetAllMocks();
 });
 
 describe("DealerFandIIncoming — load states", () => {
@@ -380,5 +390,184 @@ describe("DealerFandIIncoming — M33.2 row actions (D5 + D6 + D9)", () => {
     );
     // Only the initial load fetch has occurred.
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DealerFandIIncoming — M35.2 six-state chip (D8)", () => {
+  it.each([
+    ["submitted", "pending" as const, "Submitted — awaiting response"],
+    ["approved", "approved" as const, "Approved"],
+    ["counter", "counter" as const, "Counter-offer received"],
+    ["declined", "declined" as const, "Declined"],
+  ])(
+    "renders '%s' chip when latest_lender_submission_status=%s",
+    async (stateSuffix, status, expectedLabel) => {
+      fetchMock.mockResolvedValueOnce([
+        fixtureHandoffCA({
+          has_deal_structure: true,
+          latest_deal_structure_id: 77,
+          latest_lender_submission_status: status,
+          latest_lender_submission_id: 501,
+        }),
+      ]);
+      render(<DealerFandIIncoming />);
+      const row = await screen.findByTestId("incoming-row-1");
+      const chip = within(row).getByTestId(
+        `incoming-row-status-${stateSuffix}-1`,
+      );
+      expect(chip).toBeInTheDocument();
+      expect(chip.textContent).toBe(expectedLabel);
+      // Other chip states must be absent.
+      for (const other of [
+        "incoming",
+        "in-progress",
+        "submitted",
+        "approved",
+        "counter",
+        "declined",
+      ] as const) {
+        if (other === stateSuffix) continue;
+        expect(
+          within(row).queryByTestId(`incoming-row-status-${other}-1`),
+        ).toBeNull();
+      }
+    },
+  );
+});
+
+describe("DealerFandIIncoming — M35.2 state-conditional row actions (D8)", () => {
+  it("shows 'Record lender submission' on In progress rows (no existing submission)", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: true,
+        latest_deal_structure_id: 77,
+        latest_lender_submission_status: null,
+        latest_lender_submission_id: null,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    expect(
+      within(row).getByTestId("incoming-row-record-lender-submission-1"),
+    ).toBeInTheDocument();
+    // No response actions on In progress rows.
+    expect(
+      within(row).queryByTestId("incoming-row-record-lender-response-1"),
+    ).toBeNull();
+    expect(
+      within(row).queryByTestId("incoming-row-update-lender-response-1"),
+    ).toBeNull();
+  });
+
+  it("shows 'Record lender response' on Submitted rows only", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: true,
+        latest_deal_structure_id: 77,
+        latest_lender_submission_status: "pending",
+        latest_lender_submission_id: 501,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    expect(
+      within(row).getByTestId("incoming-row-record-lender-response-1"),
+    ).toBeInTheDocument();
+    // No submission-create or update actions on Submitted rows.
+    expect(
+      within(row).queryByTestId("incoming-row-record-lender-submission-1"),
+    ).toBeNull();
+    expect(
+      within(row).queryByTestId("incoming-row-update-lender-response-1"),
+    ).toBeNull();
+  });
+
+  it.each(["approved", "counter", "declined"] as const)(
+    "shows 'Update lender response' on %s rows only",
+    async (status) => {
+      fetchMock.mockResolvedValueOnce([
+        fixtureHandoffCA({
+          has_deal_structure: true,
+          latest_deal_structure_id: 77,
+          latest_lender_submission_status: status,
+          latest_lender_submission_id: 501,
+        }),
+      ]);
+      render(<DealerFandIIncoming />);
+      const row = await screen.findByTestId("incoming-row-1");
+      expect(
+        within(row).getByTestId("incoming-row-update-lender-response-1"),
+      ).toBeInTheDocument();
+      // No submission-create or record actions on terminal rows.
+      expect(
+        within(row).queryByTestId("incoming-row-record-lender-submission-1"),
+      ).toBeNull();
+      expect(
+        within(row).queryByTestId("incoming-row-record-lender-response-1"),
+      ).toBeNull();
+    },
+  );
+
+  it("opens the record-submission panel on click", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: true,
+        latest_deal_structure_id: 77,
+        latest_lender_submission_status: null,
+        latest_lender_submission_id: null,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    await userEvent.click(
+      within(row).getByTestId("incoming-row-record-lender-submission-1"),
+    );
+    expect(
+      await screen.findByTestId("lender-submission-record-panel"),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the record-response panel on click and pre-selects nothing (record mode)", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: true,
+        latest_deal_structure_id: 77,
+        latest_lender_submission_status: "pending",
+        latest_lender_submission_id: 501,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    await userEvent.click(
+      within(row).getByTestId("incoming-row-record-lender-response-1"),
+    );
+    expect(
+      await screen.findByTestId("lender-submission-response-panel"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("lender-submission-response-header"),
+    ).toHaveTextContent("Record lender response");
+  });
+
+  it("opens the update-response panel in update mode for terminal rows", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: true,
+        latest_deal_structure_id: 77,
+        latest_lender_submission_status: "approved",
+        latest_lender_submission_id: 501,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    await userEvent.click(
+      within(row).getByTestId("incoming-row-update-lender-response-1"),
+    );
+    expect(
+      await screen.findByTestId("lender-submission-response-panel"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("lender-submission-response-header"),
+    ).toHaveTextContent("Update lender response");
   });
 });

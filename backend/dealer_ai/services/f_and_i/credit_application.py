@@ -374,6 +374,16 @@ def list_credit_applications(
       ``("-submitted_at", "-created_at", "-pk")`` — business
       time first, DB write time second, pk as ultimate tiebreak.
       Per ``MILESTONE_35_PLANNING.md`` §5.b D2.
+    - ``latest_lender_submission_id`` — pk of the same latest-
+      submission subquery, or ``None`` under the same conditions
+      as ``latest_lender_submission_status``. Added at M35.2
+      §0.a as a scope amendment: the response form UI requires
+      the submission pk for the PATCH URL, and page refreshes
+      erase any locally cached
+      :class:`LenderSubmissionProjection`. Preserves the M35.0
+      §5.h non-goal of NOT adding a GET single-record endpoint —
+      derived id via annotation lets the frontend PATCH without
+      a preceding GET. Per M35.2 §0.a amendment.
 
     Combined with D1's ``latest_deal_structure_id``, the M35
     projection lets the frontend derive six workflow states
@@ -413,6 +423,9 @@ def list_credit_applications(
             ),
             latest_lender_submission_status=Subquery(
                 tenant_latest_submissions.values("status")[:1]
+            ),
+            latest_lender_submission_id=Subquery(
+                tenant_latest_submissions.values("pk")[:1]
             ),
         )
     )

@@ -74,6 +74,10 @@ function fixtureCA(
     // In progress branch.
     has_deal_structure: false,
     latest_deal_structure_id: null,
+    // M35.1 + M35.2 §0.a derived-status fixture defaults. Null
+    // when no submission exists on latest DS (which is null here).
+    latest_lender_submission_status: null,
+    latest_lender_submission_id: null,
     ...overrides,
   };
 }

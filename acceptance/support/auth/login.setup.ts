@@ -54,6 +54,16 @@ const SEED_COMMANDS = [
   // order irrelevant, parallelism-safe. Reuses the M32.3
   // f_and_i_manager persona; no new persona provisioning.
   "seed_journey_fandi_intake_activation",
+  // M35.2 D10 — Submission Sasha fixture (dedicated lead +
+  // vehicle + approved+handed-off writeup + paired CA + pre-
+  // created DealStructure + Yuma Community Bank LenderProgram —
+  // NO LenderSubmission) so the M35.2 journey creates the first
+  // submission via the M35.2 UI. Fully independent of Intake Iris
+  // (M32.3) + Structure Sam (M33.2) per M35 §5.c R7 + M35 D10.
+  // Rerun-safe against mutated state per M34.0 (ff) contract —
+  // deletes prior-run LenderSubmissions on the DealStructure at
+  // seed re-entry.
+  "seed_journey_fandi_submission_response",
 ] as const;
 
 function runManagementCommand(command: string): void {

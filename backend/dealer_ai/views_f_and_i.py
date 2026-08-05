@@ -337,15 +337,23 @@ def _project_credit_application_with_writeup(app: CreditApplication) -> dict:
       Combined with ``has_deal_structure``, drives the M35 six-
       state chip: Incoming / In progress / Submitted — awaiting
       response / Approved / Counter-offer received / Declined.
+    - ``latest_lender_submission_id`` (M35.2 §0.a amendment) —
+      nullable int pk of the same subquery. Enables the response
+      form to PATCH the latest submission directly without a GET
+      (§5.h explicit deferral preserved — no new GET endpoint).
+      NULL under the same conditions as
+      ``latest_lender_submission_status``.
 
     Per ``MILESTONE_33_PLANNING.md`` §5.b D1 + D3 +
-    ``MILESTONE_35_PLANNING.md`` §5.b D2 + D3.
+    ``MILESTONE_35_PLANNING.md`` §5.b D2 + D3 + §0.a M35.2
+    amendment (id field for PATCH URL discoverability).
     """
     base = _project_credit_application(app)
     base["writeup_context"] = _project_writeup_context(app)
     base["has_deal_structure"] = app.has_deal_structure
     base["latest_deal_structure_id"] = app.latest_deal_structure_id
     base["latest_lender_submission_status"] = app.latest_lender_submission_status
+    base["latest_lender_submission_id"] = app.latest_lender_submission_id
     return base
 
 

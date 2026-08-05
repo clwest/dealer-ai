@@ -3,6 +3,12 @@
 // DealStructure status (Incoming / In progress) + row actions ("Start
 // structuring" on Incoming rows only; "Open structure" on In progress
 // rows only) per MILESTONE_33_PLANNING.md §5.b D4 + D5 + D6 + D9.
+// Extended at Milestone 35 · Increment 2 (SESSION_218) with derived
+// LenderSubmission status (Submitted — awaiting response / Approved /
+// Counter-offer received / Declined) + state-conditional row actions
+// ("Record lender submission" on In progress rows; "Record lender
+// response" on Submitted rows; "Update lender response" on terminal-
+// status rows) per MILESTONE_35_PLANNING.md §5.b D8.
 //
 // Renders incoming credit applications for the F&I team per
 // MILESTONE_32_PLANNING.md §5.b D8-revised. Consumes GET
@@ -45,6 +51,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { DealStructureForm } from "@/components/f-and-i/DealStructureForm";
 import { DealStructureReadView } from "@/components/f-and-i/DealStructureReadView";
+import { LenderSubmissionRecordForm } from "@/components/f-and-i/LenderSubmissionRecordForm";
+import { LenderSubmissionResponseForm } from "@/components/f-and-i/LenderSubmissionResponseForm";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -57,6 +65,7 @@ import { ApiError } from "@/lib/authFetch";
 import {
   fetchCreditApplications,
   type CreditApplicationProjection,
+  type LenderSubmissionProjection,
 } from "@/lib/fAndIApi";
 
 const INTAKE_OPTIONS: Array<{ value: "all" | "intake"; label: string }> = [
@@ -117,13 +126,75 @@ function TermsCell({
 
 /**
  * Per-row action panel state. Only one row's panel is open at a
- * time — either a structuring form (Incoming row) or a read view
- * (In progress row). `null` means no panel open.
+ * time. M33.2 shipped kinds "form" (Incoming row → DealStructureForm)
+ * and "read" (In progress row → DealStructureReadView). M35.2 adds
+ * "record-submission" (In progress row → LenderSubmissionRecordForm)
+ * and "record-response" (Submitted+ row → LenderSubmissionResponseForm).
+ * `null` means no panel open.
  */
 type ActivePanel =
   | { kind: "form"; caId: number }
   | { kind: "read"; caId: number; dealStructureId: number }
+  | { kind: "record-submission"; caId: number; dealStructureId: number }
+  | {
+      kind: "record-response";
+      caId: number;
+      submission: LenderSubmissionProjection;
+    }
   | null;
+
+/**
+ * Derived M35 chip state per D8 table. Six values total; two
+ * preserved from M33 ("incoming" + "in-progress"), four NEW at M35
+ * ("submitted" + "approved" + "counter" + "declined"). Consumers
+ * translate the enum to visible label + color + testid suffix.
+ */
+type DerivedChipState =
+  | "incoming"
+  | "in-progress"
+  | "submitted"
+  | "approved"
+  | "counter"
+  | "declined";
+
+function deriveChipState(
+  ca: CreditApplicationProjection,
+): DerivedChipState {
+  if (!ca.has_deal_structure) return "incoming";
+  const submissionStatus = ca.latest_lender_submission_status;
+  if (submissionStatus === "pending") return "submitted";
+  if (submissionStatus === "approved") return "approved";
+  if (submissionStatus === "counter") return "counter";
+  if (submissionStatus === "declined") return "declined";
+  return "in-progress";
+}
+
+const CHIP_LABELS: Record<DerivedChipState, string> = {
+  incoming: "Incoming",
+  "in-progress": "In progress",
+  submitted: "Submitted — awaiting response",
+  approved: "Approved",
+  counter: "Counter-offer received",
+  declined: "Declined",
+};
+
+const CHIP_ARIA: Record<DerivedChipState, string> = {
+  incoming: "Incoming credit application",
+  "in-progress": "In progress credit application",
+  submitted: "Submitted — awaiting response",
+  approved: "Approved lender submission",
+  counter: "Counter-offer received from lender",
+  declined: "Declined lender submission",
+};
+
+const CHIP_CLASSES: Record<DerivedChipState, string> = {
+  incoming: "bg-amber-50 text-amber-700",
+  "in-progress": "bg-blue-50 text-blue-700",
+  submitted: "bg-slate-100 text-slate-700",
+  approved: "bg-emerald-50 text-emerald-700",
+  counter: "bg-purple-50 text-purple-700",
+  declined: "bg-red-50 text-red-700",
+};
 
 export default function DealerFandIIncoming() {
   const [rows, setRows] = useState<CreditApplicationProjection[]>([]);
@@ -160,6 +231,47 @@ export default function DealerFandIIncoming() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Cache of most-recently-recorded LenderSubmissions keyed by CA id.
+  // Populated when the operator records a submission in-session; used
+  // by `openResponsePanel` to seed the response form with the
+  // freshly-returned lender program name (available at record time but
+  // not on the CA projection). On page refresh this cache is empty and
+  // the response form runs without the display context — the D8
+  // amendment `latest_lender_submission_id` still lets the PATCH URL
+  // resolve.
+  const [recentSubmissions, setRecentSubmissions] = useState<
+    Record<number, LenderSubmissionProjection>
+  >({});
+
+  const openResponsePanel = useCallback(
+    (caId: number, _dealStructureId: number) => {
+      const row = rows.find((r) => r.id === caId);
+      if (!row) return;
+      const submissionId = row.latest_lender_submission_id;
+      const submissionStatus = row.latest_lender_submission_status;
+      if (submissionId === null || submissionStatus === null) return;
+      const recent = recentSubmissions[caId];
+      setActivePanel({
+        kind: "record-response",
+        caId,
+        submission: recent ?? {
+          id: submissionId,
+          deal_structure_id: 0,
+          lender_program_id: 0,
+          lender_program_name: "",
+          submitted_at: "",
+          status: submissionStatus,
+          counter_terms: {},
+          approval_terms: {},
+          notes: "",
+          created_at: "",
+          updated_at: "",
+        },
+      });
+    },
+    [rows, recentSubmissions],
+  );
 
   return (
     <div
@@ -275,46 +387,40 @@ export default function DealerFandIIncoming() {
                             : ""}
                         </div>
                       ) : null}
-                      {/* M33.2 D4 derived-status chip. Three-signal
-                          a11y: visible label + row aria-label extension
-                          (via aria-label on the badge) + testid double
+                      {/* M35.2 D8 derived-status chip. Six states
+                          (M33's Incoming + In progress + M35's
+                          Submitted + Approved + Counter-offer +
+                          Declined). Three-signal a11y preserved:
+                          visible label + aria-label + testid double
                           marker `incoming-row-status-<state>-<pk>`.
                           Historical `incoming-state-<pk>` testid
                           preserved for M32.3 acceptance-suite
                           compatibility. */}
-                      {ca.has_deal_structure ? (
-                        <div
-                          data-testid={`incoming-state-${ca.id}`}
-                          className="mt-2 inline-flex flex-wrap gap-1"
-                        >
-                          <span
-                            data-testid={`incoming-row-status-in-progress-${ca.id}`}
-                            aria-label="In progress credit application"
-                            className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700"
+                      {(() => {
+                        const chipState = deriveChipState(ca);
+                        return (
+                          <div
+                            data-testid={`incoming-state-${ca.id}`}
+                            className="mt-2 inline-flex flex-wrap gap-1"
                           >
-                            In progress
-                          </span>
-                        </div>
-                      ) : (
-                        <div
-                          data-testid={`incoming-state-${ca.id}`}
-                          className="mt-2 inline-flex flex-wrap gap-1"
-                        >
-                          <span
-                            data-testid={`incoming-row-status-incoming-${ca.id}`}
-                            aria-label="Incoming credit application"
-                            className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
-                          >
-                            Incoming
-                          </span>
-                        </div>
-                      )}
-                      {/* M33.2 D5 + D6 + D9 row actions. First-loop
-                          only per D9: "Start structuring" hidden on
-                          In progress rows; "Open structure" hidden on
-                          Incoming rows. Both further gated on
-                          writeup_context !== null per R1 —
-                          direct-create CAs have no vehicle discovery. */}
+                            <span
+                              data-testid={`incoming-row-status-${chipState}-${ca.id}`}
+                              aria-label={CHIP_ARIA[chipState]}
+                              className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${CHIP_CLASSES[chipState]}`}
+                            >
+                              {CHIP_LABELS[chipState]}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                      {/* M35.2 D8 state-conditional row actions.
+                          First-loop boundary explicit: same-record
+                          status updates allowed via "Update lender
+                          response"; new-submission / alternate-lender
+                          / history / multi-submission mgmt deferred.
+                          Actions gated on writeup_context !== null
+                          per R1 (M33) — direct-create CAs have no
+                          discovery path. */}
                       {ctx && !ca.has_deal_structure ? (
                         <div className="mt-2">
                           <Button
@@ -332,7 +438,7 @@ export default function DealerFandIIncoming() {
                       {ctx &&
                       ca.has_deal_structure &&
                       ca.latest_deal_structure_id !== null ? (
-                        <div className="mt-2">
+                        <div className="mt-2 flex flex-wrap gap-2">
                           <Button
                             size="sm"
                             variant="outline"
@@ -348,6 +454,67 @@ export default function DealerFandIIncoming() {
                           >
                             Open structure
                           </Button>
+                          {/* Record lender submission — only when
+                              chip = "in-progress" (no existing
+                              submission on latest DS). */}
+                          {ca.latest_lender_submission_status === null ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid={`incoming-row-record-lender-submission-${ca.id}`}
+                              onClick={() =>
+                                setActivePanel({
+                                  kind: "record-submission",
+                                  caId: ca.id,
+                                  dealStructureId:
+                                    ca.latest_deal_structure_id!,
+                                })
+                              }
+                            >
+                              Record lender submission
+                            </Button>
+                          ) : null}
+                          {/* Record lender response — chip =
+                              "submitted" (pending). Same-record
+                              status update per D7. */}
+                          {ca.latest_lender_submission_status ===
+                          "pending" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid={`incoming-row-record-lender-response-${ca.id}`}
+                              onClick={() =>
+                                openResponsePanel(
+                                  ca.id,
+                                  ca.latest_deal_structure_id!,
+                                )
+                              }
+                            >
+                              Record lender response
+                            </Button>
+                          ) : null}
+                          {/* Update lender response — chip ∈
+                              {approved, counter, declined}. Same-
+                              record status correction per D7. */}
+                          {ca.latest_lender_submission_status ===
+                            "approved" ||
+                          ca.latest_lender_submission_status === "counter" ||
+                          ca.latest_lender_submission_status ===
+                            "declined" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid={`incoming-row-update-lender-response-${ca.id}`}
+                              onClick={() =>
+                                openResponsePanel(
+                                  ca.id,
+                                  ca.latest_deal_structure_id!,
+                                )
+                              }
+                            >
+                              Update lender response
+                            </Button>
+                          ) : null}
                         </div>
                       ) : null}
                       {!ctx ? (
@@ -458,12 +625,57 @@ export default function DealerFandIIncoming() {
               </Card>
             );
           }
+          if (activePanel.kind === "read") {
+            return (
+              <Card data-testid="deal-structure-read-panel">
+                <CardContent className="pt-6">
+                  <DealStructureReadView
+                    dealStructureId={activePanel.dealStructureId}
+                    onClose={() => setActivePanel(null)}
+                  />
+                </CardContent>
+              </Card>
+            );
+          }
+          if (activePanel.kind === "record-submission") {
+            return (
+              <Card data-testid="lender-submission-record-panel">
+                <CardContent className="pt-6">
+                  <LenderSubmissionRecordForm
+                    dealStructureId={activePanel.dealStructureId}
+                    onCancel={() => setActivePanel(null)}
+                    onRecorded={(submission) => {
+                      setRecentSubmissions((prev) => ({
+                        ...prev,
+                        [activePanel.caId]: submission,
+                      }));
+                      setActivePanel(null);
+                      void load();
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            );
+          }
+          // activePanel.kind === "record-response"
           return (
-            <Card data-testid="deal-structure-read-panel">
+            <Card data-testid="lender-submission-response-panel">
               <CardContent className="pt-6">
-                <DealStructureReadView
-                  dealStructureId={activePanel.dealStructureId}
-                  onClose={() => setActivePanel(null)}
+                <LenderSubmissionResponseForm
+                  submission={{
+                    id: activePanel.submission.id,
+                    status: activePanel.submission.status,
+                    initialNotes: activePanel.submission.notes,
+                  }}
+                  onCancel={() => setActivePanel(null)}
+                  onUpdated={(submission) => {
+                    setRecentSubmissions((prev) => ({
+                      ...prev,
+                      [activePanel.caId]: submission,
+                    }));
+                    setActivePanel(null);
+                    void load();
+                  }}
                 />
               </CardContent>
             </Card>

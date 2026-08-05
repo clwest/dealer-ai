@@ -282,6 +282,30 @@ export interface CreditApplicationProjection {
   // Incoming rows.
   has_deal_structure: boolean;
   latest_deal_structure_id: number | null;
+  // M35.1 derived-status field (backend: services/f_and_i/credit_application.py
+  // D2 subquery annotation on latest DealStructure's latest LenderSubmission).
+  // Drives the M35 six-state chip:
+  //   null when latest DS has no LenderSubmission (or CA has no DS) → M33
+  //     Incoming or In progress by prior fields.
+  //   "pending"  → "Submitted — awaiting response"
+  //   "approved" → "Approved"
+  //   "counter"  → "Counter-offer received"
+  //   "declined" → "Declined"
+  // Current-iteration semantic (per M35.0 §4.8 test case 7): the value
+  // reflects the latest DealStructure's latest submission — prior
+  // approvals on abandoned structures do not project through.
+  latest_lender_submission_status:
+    | "pending"
+    | "approved"
+    | "counter"
+    | "declined"
+    | null;
+  // M35.2 §0.a amendment — pk of the latest LenderSubmission on the
+  // latest DealStructure, or null under the same conditions as
+  // `latest_lender_submission_status`. Enables the LenderSubmissionResponseForm
+  // to PATCH the submission directly without a preceding GET (§5.h
+  // explicit deferral of GET single-record endpoint preserved).
+  latest_lender_submission_id: number | null;
 }
 
 interface CreditApplicationListEnvelope {
@@ -426,4 +450,166 @@ export async function getDealStructure(
     `/admin/deal-structures/${id}/`,
   );
   return response.deal_structure;
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 35 · Increment 2 — LenderSubmission activation (create + status
+// update) + LenderProgram FK-discovery
+// ---------------------------------------------------------------------------
+//
+// Consumes three admin endpoints:
+//
+//   GET   /admin/lender-programs/list/          (M35.1 D4 FK-discovery)
+//   POST  /admin/lender-submissions/            (M10.3 shipped; activated
+//                                                operationally at M35.2)
+//   PATCH /admin/lender-submissions/<int:pk>/   (M10.3 shipped; activated
+//                                                operationally at M35.2)
+//
+// All three gated on IsFinanceManagerOrOwnerAtActiveDealership
+// (_M101_PERMS) — zero-drift streak preserved at 39 consecutive milestones
+// (M10 → M35).
+//
+// **UI language contract (M35.0 D6 + D11 + §4.7 verification #7):**
+// `record_lender_submission` is a **pure DB insert**; no HTTP call, no
+// webhook, no Celery task. UI language MUST reflect this — "Record"
+// (past-tense operator action recording an already-completed external
+// submission), NEVER "Send" / "Submit to lender" / "Transmit" /
+// "Contact lender" / "Submitting…". Verified against a hypothetical
+// future scenario where the backend adds outbound transmission —
+// language would need to be re-evaluated at that milestone.
+//
+// **First-loop boundary (M35.0 D8 + §5.h):**
+// - Allowed: same-record status update on the latest LenderSubmission
+//   via `updateLenderSubmissionStatus`. Any-to-any per M10.3 contract
+//   (verified M35.0 §4.2).
+// - Deferred: creating a second LenderSubmission on the same
+//   DealStructure; alternate-lender resubmission; submission history;
+//   multi-submission management.
+//
+// **State reconciliation:** No `getLenderSubmission` HTTP wrapper — the
+// M35.1 audit confirmed no single-record GET endpoint exists (only POST
+// + PATCH). Consumers reconcile state via (a) PATCH response body
+// carrying the full projection with denormalized `lender_program_name`
+// and (b) CA-list refetch after mutation to update derived
+// `latest_lender_submission_status`.
+
+export type LenderSubmissionStatus =
+  | "pending"
+  | "approved"
+  | "counter"
+  | "declined";
+
+/**
+ * Narrow projection returned by GET /admin/lender-programs/list/
+ * (M35.1 D4). NO `contact`, `terms_summary`, `is_active`, `created_at`,
+ * or `updated_at` — audit-trail data not needed for the FK-discovery
+ * workflow. Exposing more would falsely broaden the Lender Fit
+ * Recommendations blocker scope (rule / attribute retrieval remains an
+ * explicit deferred blocker per M33.0 §5.b D10).
+ */
+export interface LenderProgramSelectorProjection {
+  id: number;
+  name: string;
+}
+
+interface LenderProgramListEnvelope {
+  lender_programs: LenderProgramSelectorProjection[];
+}
+
+/**
+ * Fetches active LenderPrograms for the LenderSubmissionRecordForm
+ * selector. Called on mount by `LenderSubmissionRecordForm`.
+ */
+export async function listLenderPrograms(): Promise<
+  LenderProgramSelectorProjection[]
+> {
+  const response = await authGetJSON<LenderProgramListEnvelope>(
+    `/admin/lender-programs/list/`,
+  );
+  return response.lender_programs;
+}
+
+/**
+ * Full projection matching backend `_project_lender_submission`. Note
+ * `lender_program_name` is denormalized into the projection so post-
+ * mutation UI can display "Submitted to [Name]" without a second
+ * fetch. `counter_terms` / `approval_terms` are free-form JSON objects
+ * — M35 does NOT capture them; they remain on the projection for
+ * completeness but consumers do not surface them.
+ */
+export interface LenderSubmissionProjection {
+  id: number;
+  deal_structure_id: number;
+  lender_program_id: number;
+  lender_program_name: string;
+  submitted_at: string;
+  status: LenderSubmissionStatus;
+  counter_terms: Record<string, unknown>;
+  approval_terms: Record<string, unknown>;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface LenderSubmissionEnvelope {
+  lender_submission: LenderSubmissionProjection;
+}
+
+/**
+ * Payload for POST /admin/lender-submissions/ (M10.3 shipped; M35.2
+ * activation).
+ *
+ * NO `submitted_at` field — server records `timezone.now()` at insert
+ * (verified M35.0 §4.8 non-blocking correction; no operational back-
+ * entry evidence).
+ *
+ * NO `status` override — server defaults to "pending" per the
+ * LENDER_SUBMISSION_STATUS_PENDING contract. The initial submission is
+ * ALWAYS pending; response is recorded separately via
+ * `updateLenderSubmissionStatus`.
+ *
+ * NO `counter_terms` / `approval_terms` — structured entry deferred to
+ * future milestone if operator evidence surfaces.
+ */
+export interface RecordLenderSubmissionRequest {
+  deal_structure_id: number;
+  lender_program_id: number;
+  notes?: string;
+}
+
+export async function recordLenderSubmission(
+  payload: RecordLenderSubmissionRequest,
+): Promise<LenderSubmissionProjection> {
+  const response = await authPostJSON<LenderSubmissionEnvelope>(
+    `/admin/lender-submissions/`,
+    payload,
+  );
+  return response.lender_submission;
+}
+
+/**
+ * Payload for PATCH /admin/lender-submissions/<pk>/ (M10.3 shipped;
+ * M35.2 activation).
+ *
+ * `status` is required (the response form always changes status).
+ * `pending` is intentionally excluded from the type — recording
+ * pending as a response is nonsensical; the initial `pending` state
+ * comes from create, not update.
+ *
+ * NO `counter_terms` / `approval_terms` — structured entry deferred.
+ */
+export interface UpdateLenderSubmissionStatusRequest {
+  status: "approved" | "counter" | "declined";
+  notes?: string;
+}
+
+export async function updateLenderSubmissionStatus(
+  id: number,
+  payload: UpdateLenderSubmissionStatusRequest,
+): Promise<LenderSubmissionProjection> {
+  const response = await authPatchJSON<LenderSubmissionEnvelope>(
+    `/admin/lender-submissions/${id}/`,
+    payload,
+  );
+  return response.lender_submission;
 }
