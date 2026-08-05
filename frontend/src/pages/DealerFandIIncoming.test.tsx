@@ -70,6 +70,11 @@ function fixtureHandoffCA(
         apr_target: "6.99",
       },
     },
+    // M33.1 derived-status fixture defaults (Incoming — no
+    // DealStructure yet). Tests can override to exercise the
+    // In progress branch.
+    has_deal_structure: false,
+    latest_deal_structure_id: null,
     ...overrides,
   };
 }
@@ -238,5 +243,142 @@ describe("DealerFandIIncoming — non-navigational rows (D8-revised)", () => {
     // No cursor-pointer utility class — visual affordance matches
     // non-clickable behavior.
     expect(row.className).not.toContain("cursor-pointer");
+  });
+});
+
+describe("DealerFandIIncoming — M33.2 derived-status chip (D4)", () => {
+  it("renders 'Incoming' chip when has_deal_structure=false", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: false,
+        latest_deal_structure_id: null,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    expect(
+      within(row).getByTestId("incoming-row-status-incoming-1"),
+    ).toBeInTheDocument();
+    expect(
+      within(row).getByLabelText("Incoming credit application"),
+    ).toBeInTheDocument();
+    // No In-progress marker present on this row.
+    expect(
+      within(row).queryByTestId("incoming-row-status-in-progress-1"),
+    ).toBeNull();
+  });
+
+  it("renders 'In progress' chip when has_deal_structure=true", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: true,
+        latest_deal_structure_id: 77,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    expect(
+      within(row).getByTestId("incoming-row-status-in-progress-1"),
+    ).toBeInTheDocument();
+    expect(
+      within(row).getByLabelText("In progress credit application"),
+    ).toBeInTheDocument();
+    // No Incoming marker present on this row.
+    expect(
+      within(row).queryByTestId("incoming-row-status-incoming-1"),
+    ).toBeNull();
+  });
+});
+
+describe("DealerFandIIncoming — M33.2 row actions (D5 + D6 + D9)", () => {
+  it("shows 'Start structuring' on Incoming rows only (D9 first-loop-only)", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: false,
+        latest_deal_structure_id: null,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    expect(
+      within(row).getByTestId("incoming-row-start-structuring-1"),
+    ).toBeInTheDocument();
+    expect(
+      within(row).queryByTestId("incoming-row-open-structure-1"),
+    ).toBeNull();
+  });
+
+  it("shows 'Open structure' on In progress rows only (D9)", async () => {
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: true,
+        latest_deal_structure_id: 77,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    expect(
+      within(row).getByTestId("incoming-row-open-structure-1"),
+    ).toBeInTheDocument();
+    // "Start structuring" hidden on In progress rows per D9 — no
+    // iteration UX in M33.
+    expect(
+      within(row).queryByTestId("incoming-row-start-structuring-1"),
+    ).toBeNull();
+  });
+
+  it("hides both actions and shows a documented affordance for direct-create CAs (R1 mitigation)", async () => {
+    fetchMock.mockResolvedValueOnce([fixtureDirectCA()]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-2");
+    // Neither action is available — no vehicle discovery for
+    // direct-create CAs.
+    expect(
+      within(row).queryByTestId("incoming-row-start-structuring-2"),
+    ).toBeNull();
+    expect(
+      within(row).queryByTestId("incoming-row-open-structure-2"),
+    ).toBeNull();
+    // Documented affordance explains why.
+    expect(
+      within(row).getByTestId("incoming-row-no-writeup-2"),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the structuring form panel and refetches on successful create", async () => {
+    // First call: Incoming row. Second call (post-create refetch):
+    // same CA now In progress with a latest_deal_structure_id.
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: false,
+        latest_deal_structure_id: null,
+      }),
+    ]);
+    fetchMock.mockResolvedValueOnce([
+      fixtureHandoffCA({
+        has_deal_structure: true,
+        latest_deal_structure_id: 77,
+      }),
+    ]);
+    render(<DealerFandIIncoming />);
+    const row = await screen.findByTestId("incoming-row-1");
+    // Open the form panel.
+    await userEvent.click(
+      within(row).getByTestId("incoming-row-start-structuring-1"),
+    );
+    // Panel mounts with the form.
+    expect(
+      await screen.findByTestId("deal-structure-form-panel"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("deal-structure-form")).toBeInTheDocument();
+    // Cancel closes the panel without refetching.
+    await userEvent.click(
+      screen.getByTestId("deal-structure-form-cancel"),
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId("deal-structure-form-panel")).toBeNull(),
+    );
+    // Only the initial load fetch has occurred.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

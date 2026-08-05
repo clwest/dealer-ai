@@ -274,6 +274,14 @@ export interface CreditApplicationProjection {
   created_at: string;
   updated_at: string;
   writeup_context: CreditApplicationWriteupContext | null;
+  // M33.1 derived-status fields (backend: services/f_and_i/credit_application.py
+  // + views_f_and_i.py). `has_deal_structure` drives the M33 intake-row chip
+  // ("Incoming" when false; "In progress" when true). `latest_deal_structure_id`
+  // drives the "Open structure" action — fetches the full row via
+  // GET /admin/deal-structures/<int:pk>/ (canonical path). Both null on
+  // Incoming rows.
+  has_deal_structure: boolean;
+  latest_deal_structure_id: number | null;
 }
 
 interface CreditApplicationListEnvelope {
@@ -309,4 +317,113 @@ export async function fetchCreditApplications(
     `/admin/credit-applications/list/${qs ? `?${qs}` : ""}`,
   );
   return response.credit_applications;
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 33 · Increment 2 — DealStructure create + read
+// ---------------------------------------------------------------------------
+//
+// Consumes the M10.2 create endpoint (shipped SESSION_107) + the M33.1
+// read endpoint (shipped SESSION_211) per MILESTONE_33_PLANNING.md
+// §5.b D2 + D5:
+//
+//   POST /admin/deal-structures/                (M10.2 create)
+//   GET  /admin/deal-structures/<int:pk>/       (M33.1 read; canonical path)
+//
+// Both gated on IsFinanceManagerOrOwnerAtActiveDealership
+// (`_M101_PERMS`) — zero-drift streak preserved at 37 consecutive
+// milestones (M10 → M33.1).
+//
+// Server-computed ratios (`ltv_pct`, `pti_pct`, `dti_pct`) — never
+// client-submitted; surface as stringified Decimals or `null` when
+// not computable (M10.1-era CA without income captured).
+//
+// Financial-language contract per D5: form + read view label
+// prepopulated values as "sales targets" and F&I-entered values as
+// "proposed structure values". Never "lender-approved" /
+// "lender-committed" / "actual" — those categories become valid
+// only once a verified LenderSubmission or approval workflow exists.
+
+export interface DealStructureProjection {
+  id: number;
+  credit_application_id: number;
+  vehicle_stock: string;
+  sale_price: string;
+  down_payment: string;
+  trade_allowance: string;
+  trade_payoff: string;
+  taxes: string;
+  fees: string;
+  amount_financed: string;
+  apr: string;
+  term_months: number;
+  monthly_payment: string;
+  back_end_products: unknown[];
+  ltv_pct: string | null;
+  pti_pct: string | null;
+  dti_pct: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface DealStructureEnvelope {
+  deal_structure: DealStructureProjection;
+}
+
+/**
+ * Payload for POST /admin/deal-structures/. All monetary fields are
+ * strings (Decimal-as-string per the M9.5 + M10.1 convention) so the
+ * caller controls rounding/precision.
+ *
+ * Truthful-entry contract per D5: the M33.2 UI never sends
+ * `taxes` / `fees` / `trade_payoff` / `amount_financed` as silent 0
+ * defaults. Blank fields on the form disable submit — this payload
+ * always carries explicit operator-entered values (or an explicit
+ * "No trade payoff" acknowledgment that submits `0.00` for
+ * `trade_payoff`).
+ *
+ * `back_end_products` intentionally omitted from the M33 UI — defaults
+ * to `[]` server-side (truthful: no BEPAs at structuring time).
+ */
+export interface CreateDealStructureRequest {
+  credit_application_id: number;
+  vehicle_stock: string;
+  sale_price: string;
+  amount_financed: string;
+  apr: string;
+  term_months: number;
+  monthly_payment: string;
+  down_payment?: string;
+  trade_allowance?: string;
+  trade_payoff?: string;
+  taxes?: string;
+  fees?: string;
+}
+
+export async function createDealStructure(
+  payload: CreateDealStructureRequest,
+): Promise<DealStructureProjection> {
+  const response = await authPostJSON<DealStructureEnvelope>(
+    `/admin/deal-structures/`,
+    payload,
+  );
+  return response.deal_structure;
+}
+
+/**
+ * Fetches a single DealStructure by pk via the canonical M33.1 path
+ * GET /admin/deal-structures/<int:pk>/. 404 on unknown or cross-tenant
+ * (fail-closed — the M9.1 / M10.1 / M10.2 / M33.1 shape).
+ *
+ * Used by the M33.2 "Open structure" action to hydrate the read view
+ * once the operator clicks a row's action. The `latest_deal_structure_id`
+ * on the CA list projection drives which pk to fetch.
+ */
+export async function getDealStructure(
+  id: number,
+): Promise<DealStructureProjection> {
+  const response = await authGetJSON<DealStructureEnvelope>(
+    `/admin/deal-structures/${id}/`,
+  );
+  return response.deal_structure;
 }

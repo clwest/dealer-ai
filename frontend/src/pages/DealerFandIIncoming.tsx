@@ -1,4 +1,8 @@
 // Milestone 32 · Increment 3 (SESSION_209) — F&I intake queue page.
+// Extended at Milestone 33 · Increment 2 (SESSION_212) with derived
+// DealStructure status (Incoming / In progress) + row actions ("Start
+// structuring" on Incoming rows only; "Open structure" on In progress
+// rows only) per MILESTONE_33_PLANNING.md §5.b D4 + D5 + D6 + D9.
 //
 // Renders incoming credit applications for the F&I team per
 // MILESTONE_32_PLANNING.md §5.b D8-revised. Consumes GET
@@ -12,7 +16,21 @@
 // lead name + phone + email; vehicle stock + description; four-
 // square terms; CA notes verbatim (M11.3 `_format_handoff_notes`
 // prefix carries writeup pk + terms summary); written-up-by;
-// approved-by; hand-off timestamp; "Incoming" state badge.
+// approved-by; hand-off timestamp; derived-status chip.
+//
+// M33.2 derived-status chip (D4): "Incoming" when `has_deal_structure`
+// is false; "In progress" when true. Three-signal a11y per M31 D6:
+// visible label + row aria-label extension + testid double marker
+// `incoming-row-status-<state>-<pk>`.
+//
+// M33.2 row actions (D5 + D6 + D9): "Start structuring" appears only
+// on Incoming rows AND only when `writeup_context !== null` (R1
+// mitigation — direct-create CAs lack vehicle discovery; documented
+// affordance is that structuring is not available in M33 for the
+// direct-create branch). "Open structure" appears only on In progress
+// rows with a `latest_deal_structure_id`. First-loop only per D9 —
+// iteration UX (creating a second structure for an already-In
+// progress CA) explicitly deferred per §5.h.
 //
 // Direct-created CAs (M10.1 path — `deal_writeup` FK null) render
 // with a "Direct application" placeholder in the writeup-context
@@ -25,6 +43,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { DealStructureForm } from "@/components/f-and-i/DealStructureForm";
+import { DealStructureReadView } from "@/components/f-and-i/DealStructureReadView";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -94,6 +115,16 @@ function TermsCell({
   );
 }
 
+/**
+ * Per-row action panel state. Only one row's panel is open at a
+ * time — either a structuring form (Incoming row) or a read view
+ * (In progress row). `null` means no panel open.
+ */
+type ActivePanel =
+  | { kind: "form"; caId: number }
+  | { kind: "read"; caId: number; dealStructureId: number }
+  | null;
+
 export default function DealerFandIIncoming() {
   const [rows, setRows] = useState<CreditApplicationProjection[]>([]);
   const [intakeFilter, setIntakeFilter] = useState<"all" | "intake">("intake");
@@ -101,6 +132,7 @@ export default function DealerFandIIncoming() {
     "loading" | "ready" | "error" | "forbidden"
   >("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
 
   const load = useCallback(async () => {
     setLoadState("loading");
@@ -243,12 +275,90 @@ export default function DealerFandIIncoming() {
                             : ""}
                         </div>
                       ) : null}
-                      <div
-                        data-testid={`incoming-state-${ca.id}`}
-                        className="mt-2 inline-flex rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
-                      >
-                        Incoming
-                      </div>
+                      {/* M33.2 D4 derived-status chip. Three-signal
+                          a11y: visible label + row aria-label extension
+                          (via aria-label on the badge) + testid double
+                          marker `incoming-row-status-<state>-<pk>`.
+                          Historical `incoming-state-<pk>` testid
+                          preserved for M32.3 acceptance-suite
+                          compatibility. */}
+                      {ca.has_deal_structure ? (
+                        <div
+                          data-testid={`incoming-state-${ca.id}`}
+                          className="mt-2 inline-flex flex-wrap gap-1"
+                        >
+                          <span
+                            data-testid={`incoming-row-status-in-progress-${ca.id}`}
+                            aria-label="In progress credit application"
+                            className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700"
+                          >
+                            In progress
+                          </span>
+                        </div>
+                      ) : (
+                        <div
+                          data-testid={`incoming-state-${ca.id}`}
+                          className="mt-2 inline-flex flex-wrap gap-1"
+                        >
+                          <span
+                            data-testid={`incoming-row-status-incoming-${ca.id}`}
+                            aria-label="Incoming credit application"
+                            className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                          >
+                            Incoming
+                          </span>
+                        </div>
+                      )}
+                      {/* M33.2 D5 + D6 + D9 row actions. First-loop
+                          only per D9: "Start structuring" hidden on
+                          In progress rows; "Open structure" hidden on
+                          Incoming rows. Both further gated on
+                          writeup_context !== null per R1 —
+                          direct-create CAs have no vehicle discovery. */}
+                      {ctx && !ca.has_deal_structure ? (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid={`incoming-row-start-structuring-${ca.id}`}
+                            onClick={() =>
+                              setActivePanel({ kind: "form", caId: ca.id })
+                            }
+                          >
+                            Start structuring
+                          </Button>
+                        </div>
+                      ) : null}
+                      {ctx &&
+                      ca.has_deal_structure &&
+                      ca.latest_deal_structure_id !== null ? (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid={`incoming-row-open-structure-${ca.id}`}
+                            onClick={() =>
+                              setActivePanel({
+                                kind: "read",
+                                caId: ca.id,
+                                dealStructureId:
+                                  ca.latest_deal_structure_id!,
+                              })
+                            }
+                          >
+                            Open structure
+                          </Button>
+                        </div>
+                      ) : null}
+                      {!ctx ? (
+                        <div
+                          className="mt-2 text-[11px] text-muted-foreground"
+                          data-testid={`incoming-row-no-writeup-${ca.id}`}
+                        >
+                          No sales-side writeup — direct-create CA;
+                          structuring not available in M33.
+                        </div>
+                      ) : null}
                     </div>
                     <div>
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -321,6 +431,44 @@ export default function DealerFandIIncoming() {
           </CardContent>
         </Card>
       )}
+
+      {/* M33.2 active-panel render (D5 + D6). Inline panel per D5
+          implementation-choice note — modal-vs-panel is either
+          satisfying the contract; inline keeps the CA row context
+          visible while the operator works the structure. */}
+      {activePanel !== null &&
+        (() => {
+          const targetRow = rows.find((r) => r.id === activePanel.caId);
+          if (!targetRow) return null;
+          if (activePanel.kind === "form") {
+            if (targetRow.writeup_context === null) return null;
+            return (
+              <Card data-testid="deal-structure-form-panel">
+                <CardContent className="pt-6">
+                  <DealStructureForm
+                    creditApplicationId={targetRow.id}
+                    writeupContext={targetRow.writeup_context}
+                    onCancel={() => setActivePanel(null)}
+                    onCreated={() => {
+                      setActivePanel(null);
+                      void load();
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            );
+          }
+          return (
+            <Card data-testid="deal-structure-read-panel">
+              <CardContent className="pt-6">
+                <DealStructureReadView
+                  dealStructureId={activePanel.dealStructureId}
+                  onClose={() => setActivePanel(null)}
+                />
+              </CardContent>
+            </Card>
+          );
+        })()}
     </div>
   );
 }

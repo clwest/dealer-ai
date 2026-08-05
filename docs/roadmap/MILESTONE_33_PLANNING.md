@@ -1,6 +1,6 @@
 ---
 title: "Milestone 33 — F&I Intake Activation: Incoming Application to Active Deal Structure (derived DealStructure status + DealStructure read endpoint + F&I structuring UI + Playwright loop)"
-status: active
+status: historical
 type: planning-memo
 generated: 2026-08-04
 generated_at_session: SESSION_210 (skeleton + expansion + all §5 locks)

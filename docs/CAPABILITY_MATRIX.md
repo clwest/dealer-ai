@@ -3791,6 +3791,180 @@ follow-up.
 
 ---
 
+## 7θ. F&I Intake Activation: Incoming Application to Active Deal Structure — activating 19-session-old M10.2 substrate + first planning-time financial-language contract + first future capability recorded with full design contract (Milestone 33, shipped)
+
+Milestone 33 (opened SESSION_210 M33.0 planning; M33.1 backend
+annotation + read endpoint SESSION_211; M33.2 frontend UI +
+Playwright loop + close-out fold SESSION_212) closes the M32
+sales-to-F&I bridge into a complete first-loop by activating
+the M10.2 DealStructure substrate (shipped SESSION_107 —
+**19 sessions before it received an operator receiver**).
+
+**Anchor business question** (M33.0 §5.a): *Can an F&I manager
+take an incoming credit application from the M32 queue, begin
+working it through the real product, and create the first
+durable deal-structure record without leaving Dealer OS?*
+Answered *yes* end-to-end via the fandi-intake-activation
+Playwright journey.
+
+**F&I depth-arc continuation** — M32 opened the sales-to-F&I
+bridge (writeup → intake receiver); M33 continues the arc with
+the first F&I-side operator action (DealStructure creation).
+Substrate-compound-value continuation restarts at **2 links
+(M32 + M33)** after M32's breadth pivot. Resolves the M32 §9
+standing question with F&I depth-arc continuation over breadth
+reset.
+
+**First planning-time financial-language contract.** At the
+DealStructure stage no lender submission or approval exists
+yet. The M33 UI vocabulary is locked to two categories only:
+**sales targets** (prepopulated from writeup) and **proposed
+structure values** (F&I-entered or F&I-revised). Never
+*lender-approved*, *lender-committed*, or *actual (rate/
+payment/apr/term/amount)* — those categories become valid
+only once a verified LenderSubmission or approval workflow
+exists. Enforced with three-layer defense: D5 spec locks the
+language; Vitest asserts absence in form + read view;
+Playwright regex asserts absence across the full operator
+flow.
+
+**Latest-only posture with preserved M-to-1 domain.** Status
+derived from `deal_structures.count() >= 1` — Incoming vs
+In progress; no new stored `status` column. "Start structuring"
+hidden on In progress rows in M33 (first-loop only); "Open
+structure" shows only latest DealStructure by deterministic
+`("-created_at", "-pk")` ordering. M10.2 iteration semantic
+(multiple structures per CA) preserved unchanged in the
+domain; iteration UX deferred per §5.h until operator evidence
+surfaces need.
+
+**Truthful-entry form contract** (D5 — one blocking finding
+resolved architecturally at planning-open). Six of thirteen
+DealStructure inputs prepopulate from writeup context; four
+require F&I truthful entry with no writeup source
+(`amount_financed`, `taxes`, `fees`, `trade_payoff`). Applying
+the M10.2 backend serializer's `0.00` defaults from the M33
+form would silently invent false financial values. D5 form
+contract: blank ≠ 0; submit disabled until explicit values for
+`amount_financed` + `taxes` + `fees`; `trade_payoff` requires
+explicit numeric value OR dedicated "No trade payoff" checkbox
+affordance; basic consistency-warning surface (not full desking
+math) for obvious contradictions (`trade_payoff > 0` with
+`trade_allowance == 0`).
+
+**First future capability recorded with full design contract
+at planning time.** M33.0 §3 + §5.b D10 record Lender Fit
+Recommendations — structured, auditable eligibility + ranked
+compatibility + missing-information analysis; operator
+explanation always visible; preserved human decision
+authority. NOT implemented in M33; blocked on named
+prerequisites (DealStructure creation operationally complete
+[M33 delivers this]; LenderProgram rule verification; attribute
+retrieval; real dealer evidence). Design discipline
+demonstration — captured, deferred, blocked on named
+prerequisites; not implemented.
+
+**Deterministic latest-structure selection with tenant-scope
+belt** — `Subquery(DealStructure.objects.filter(dealership=
+dealership, credit_application=OuterRef("pk")).order_by
+("-created_at", "-pk").values("pk")[:1])`. `-pk` tie-break
+disambiguates the rare microsecond-shared-timestamp case;
+explicit `dealership=dealership` in the filter is belt over
+the model `clean()` + service `CrossTenantDealStructureError`
+suspenders. Zero cross-tenant leakage even when the annotation
+runs against a hypothetical bug-created cross-tenant row (test
+asserts via direct-ORM bypass).
+
+**§0.a M33.1 truthfulness correction on coverage projection.**
+M33.0 §5.e projected 129 → 130 covered / 32 → 31 backend-only
+/ 321 → 322 service verbs; all three were overstated. Actual
+M33.1 close audit: 162/129/33/321. Audit script classifies
+"covered" by frontend-consumer presence, not backend test
+presence — new endpoints correctly stay backend-only until UI
+lands, matching M32.1 precedent verbatim. Service verbs
+unchanged because the M33.1 read endpoint reuses the shipped
+`get_deal_structure` service verb. Correction category
+documented in `SESSION_211_m33_inc1_backend.md` §5 so future
+planning sessions distinguish frontend-consumer coverage from
+backend-test coverage explicitly. Candidate durable lesson
+`(cc) coverage-projection truthfulness` awaiting first
+re-application to elevate.
+
+| Domain | Surface | Notes |
+| --- | --- | --- |
+| M33.0 planning | Full active memo at `MILESTONE_33_PLANNING.md` — all §5 locks. §5.a locked as F&I Intake Activation — Incoming Application to Active Deal Structure under the primary operational-coverage lens with F&I depth-arc continuation framing per M32 §9 standing question resolution. §5.b D1–D10 covering `has_deal_structure` `Exists` annotation with tenant-scope filter (D1), `GET /admin/deal-structures/<int:pk>/` canonical read endpoint (D2), `latest_deal_structure_id` deterministic `Subquery` with `("-created_at", "-pk")` ordering (D3), derived-status chip with three-signal a11y (D4), truthful-entry form contract with blank ≠ 0 + explicit "No trade payoff" checkbox + basic consistency-warning surface + financial-language contract (D5), read view with NULL-safe ratios and "proposed structure value" labeling (D6), no client-side monthly-payment auto-derivation (D7), Playwright journey with fixture-independence guarantee + financial-language regex assertion (D8), latest-only posture preserving M10.2 M-to-1 iteration domain (D9), future Lender Fit Recommendations candidate recorded with full design contract (D10). §5.c 10-item risk register. §5.d 9 verifications resolving 1 blocking finding (§4.7 field-level prepopulation truthful-entry) architecturally before scope-lock via D5. §5.e two-increment scope-driven split matching surface size. §5.f DoD exception at M33.1 (8th invocation) + direct satisfaction at M33.2 via D8 journey. §5.h non-goals lock the discovery-rule perimeter. Four planning-time corrections applied before §5.b lock (financial-language contract; deterministic ordering + tenant-scope filter; canonical endpoint path; strengthened truthful-entry with explicit affordance + basic consistency warning). Handoff at `docs/handoffs/SESSION_210_m33_inc0_planning.md`. | Planning-time as-recommended streak advanced **11 → 12**. First M32 CI run monitored + verified green at open (workflow `30956621258` on `2a1e359` — success 3m10s at 2026-08-04T22:30:04Z). Audit unchanged at M33.0: **161 / 129 / 32 / 321**. |
+| M33.1 backend annotation + DealStructure read endpoint | Backend: extends `services/f_and_i/credit_application.py:list_credit_applications` with two tenant-scoped subquery annotations — `has_deal_structure=Exists(DealStructure.objects.filter(dealership=dealership, credit_application=OuterRef("pk")))` (D1) + `latest_deal_structure_id=Subquery(...order_by("-created_at", "-pk").values("pk")[:1])` (D3). Module + verb docstrings updated for the M33.1 extension. `views_f_and_i.py` extends `_project_credit_application_with_writeup(app)` with both new fields on the M32.1 CA list rows; new view function `admin_deal_structure_read(request, pk)` — thin wrapper on shipped `get_deal_structure(pk, dealership=dealership)` service verb; reuses shipped `_project_deal_structure(deal)` projection verbatim; `_M101_PERMS`; 404 fail-closed on unknown or cross-tenant. `urls.py` adds canonical path `admin/deal-structures/<int:pk>/` named `admin-deal-structure-read` adjacent to shipped M10.2 create entry. `models.py` extends `DealStructure` docstring with M33.1 read-surface paragraph documenting the new endpoint + the deferred iteration UX per §5.h. **No migration; no schema change; no service verb signature changes; historical migration NOT modified.** | Backend baseline **4,995 → 5,015** (+20 tests in new file `test_m331_deal_structure_read.py` across 4 test classes: 6 annotation tests including deterministic tie-break under shared `created_at` + tenant-scope belt via direct-ORM bypass + composition with `intake` filter; 2 CA list projection extension tests; 7 read endpoint permission matrix tests covering all 5 negative role cases (unauthenticated, no membership, advisor, sales_manager, porter) + both positive (f_and_i_manager, dealer_owner); 5 read endpoint behavior + projection-shape parity tests including cross-tenant fail-closed + NULL-safe ratio surfacing). Audit **§0.a M33.1 truthfulness correction on M33.0 projection**: actual **161/129/32/321 → 162/129/33/321** (+1 endpoint / +1 backend-only; covered unchanged; service verbs unchanged — new endpoint reuses shipped `get_deal_structure` service verb). Correct semantic: new endpoints stay backend-only until UI lands, matching M32.1 precedent verbatim. Migration count 0051 unchanged. DRF admin surface 121 → 122 (+1). `manage.py check` clean. `makemigrations --check` clean. DoD exception path **eighth invocation** (M26 + M27.1 + M28.1 + M29.1 + M30.1 + M31.1 + M32.1 + M33.1). Zero-drift permission-class streak **36 → 37** (new endpoint reused `_M101_PERMS` unchanged). |
+| M33.2 frontend UI + Playwright loop + close-out fold | Frontend: `fAndIApi.ts` extended with `has_deal_structure` + `latest_deal_structure_id` fields on `CreditApplicationProjection` (matching M33.1 backend projection) + full `DealStructureProjection` type + `CreateDealStructureRequest` type + 2 new typed wrappers (`createDealStructure` — POST `/admin/deal-structures/` on the shipped M10.2 endpoint; `getDealStructure(id)` — GET on the canonical M33.1 read path). NEW co-located components in `frontend/src/components/f-and-i/` (new package): **`DealStructureForm.tsx`** — three-section layout (Vehicle read-only / Sales-side targets prepopulated + editable with affordance flip on revise / F&I proposed structure values blank on load) implementing the full D5 truthful-entry contract (blank ≠ 0 on every financial field; submit disabled with reason list until explicit values for amount_financed + taxes + fees; dedicated "No trade payoff" checkbox affordance for trade_payoff — untouched blank blocks submit; basic non-blocking consistency-warning surface for trade_payoff > 0 with trade_allowance == 0; financial-language contract enforced — never lender-approved / lender-committed / actual anywhere; back_end_products omitted from form per §5.b D5); **`DealStructureReadView.tsx`** — three-section read-only layout with NULL-safe ratio display ("Not computable — requires income" for NULL PTI/DTI on M10.1-era CAs); every value labeled "proposed structure value" (never "sales target" at read time). `DealerFandIIncoming.tsx` extended per D4 + D5 + D6 + D9: derived-status chip (Incoming amber / In progress blue) with three-signal a11y (double-marker testid `incoming-row-status-<state>-<pk>` + aria-label + visible label); "Start structuring" button on Incoming rows only (further gated on `writeup_context !== null` per R1 — direct-create CAs render documented affordance instead of action); "Open structure" button on In progress rows only; inline panel state (form-vs-read); refetch after successful create; first-loop-only posture per D9 (no iteration UX). Playwright: NEW spec `acceptance/journeys/f_and_i_manager/fandi_intake_activation.spec.ts` — 14-step journey covering full first-loop (navigate → find Structure Sam row → assert Incoming chip → Start structuring → assert prepopulation of 6 sales-target fields + blank 4 F&I fields + disabled submit → fill required F&I values → check "No trade payoff" → assert enabled submit → **financial-language regex assertion on form** → submit → refetch → assert transition to In progress chip → Open structure → assert read view with all submitted values → **financial-language regex assertion on read view**). NEW idempotent seed command `seed_journey_fandi_intake_activation.py` provisioning dedicated **Structure Sam** fixture (distinct lead / vehicle FANDI-STRUCT-1 / writeup / paired CA — distinct four-square terms from M32.3 Intake Iris fixture so accidental cross-fixture matches fail loudly). Fully independent of any M32.2 Sales Sam or M32.3 Intake Iris fixture per M33 §5.c R7 independence guarantee. Reuses shipped M32.3 `f_and_i_manager` persona; no new persona work. `login.setup.ts` SEED_COMMANDS extended with new seed. | Backend baseline **5,015 unchanged** at M33.2 (frontend + Playwright + seed command only). Frontend Vitest **377 → 402 pass** across 45 test files (+25 M33.2 tests across 4 new files: `fAndIApi.dealStructures.test.ts` +4 covering wrappers + URL shape + envelope unwrapping; `DealStructureReadView.test.tsx` +4 covering happy path + NULL-safe ratios + 404 error + financial-language contract; `DealStructureForm.test.tsx` +12 covering prepopulation + blank-load + submit-gate reason list + no-trade-payoff checkbox behavior + explicit-numeric trade_payoff + explicit 0 as valid + consistency-warning surface (both directions) + submit path payload + financial-language contract; extended `DealerFandIIncoming.test.tsx` +5 covering derived chip both states + row action visibility (D9 first-loop-only) + direct-create R1 affordance + form panel open/cancel/refetch flow). Acceptance **24 → 25 spec files / 31 → 32 tests / 34.7s fresh-DB** (new M33.2 journey passes in 513ms end-to-end; M32.3 fandi_intake_receipt still green at 331ms — no fixture cross-contamination). Audit **162 → 162 unchanged; 129 → 131 covered (+2 — both M10.2 create + M33.1 read now consumed by frontend wrappers + Playwright journey); 33 → 31 backend-only (−2); 321 service verbs unchanged**. Zero-drift permission-class streak **37 unchanged** (no new backend endpoints in M33.2). **DoD posture:** M33.2 satisfies DoD directly via fandi-intake-activation describe block. |
+| Test baseline | Backend **4,995 → 5,015** at M33.1 (+20 net in NEW `test_m331_deal_structure_read.py`); unchanged at M33.2 (frontend + Playwright + seed only). Frontend Vitest **377 → 402** across 42 → 45 files (+25 M33.2). Acceptance **24 → 25 journeys** (+1 M33.2 fandi_intake_activation.spec.ts); **31 → 32 tests / 0 failed** on fresh DB (+1). `manage.py check` + `makemigrations --check` clean throughout. Per-increment delta: M33.0 = 0 (planning only); M33.1 = +20 backend + 0 frontend + 0 journey + 0 migration; M33.2 = 0 backend + +25 frontend + +1 journey + 1 new seed command + 0 new persona (reused M32.3 f_and_i_manager). | Zero-drift permission-class streak **thirty-six → thirty-seven** consecutive milestones (M10 → M33) — M33.1's 1 new endpoint reused `_M101_PERMS` verbatim; M33.2 shipped no new backend endpoints. Planning-time as-recommended streak **11 → 12** at M33.0 close, unchanged at M33.1 + M33.2 (both pure implementation; §0.a M33.1 truthfulness correction on coverage projection does not affect target-selection streak per convention). Substrate-compound-value continuation restarts at **2 links** (M32 + M33) after the M32 breadth pivot. DoD exception path invocations **7 → 8** (M26 + M27.1 + M28.1 + M29.1 + M30.1 + M31.1 + M32.1 + M33.1); M33.2 satisfies DoD directly. **First milestone to activate M10.2 substrate operationally** — 19 sessions after M10.2 shipped at SESSION_107; longest substrate-to-UI gap closed at M33. **Second consecutive customer-facing milestone in the F&I domain** (M32 shipped intake receiver; M33 ships first F&I action). **First planning-time financial-language contract locked** — sales targets vs proposed structure values, with explicit rejection of lender-approved / lender-committed / actual; three-layer defense (D5 spec + Vitest anti-drift + Playwright regex assertion). **First future capability recorded with full design contract at planning time** — Lender Fit Recommendations. Historical migration 0026 preserved untouched per §5.h. |
+
+**M33 status:** M33 SHIPPED at SESSION_212 (M33.2 close +
+close-out fold — no separate M33.3). Coordinated M33 close
+push awaits explicit user confirmation. Total M33 commits at
+push projected: **6** — SESSION_210 planning (`7b8f6b6`) +
+M33.0 hash-backfill (`e03d31c`) + SESSION_211 M33.1
+(`eb50f94`) + M33.1 hash-backfill (`1e0008f`) + this session's
+M33.2 + close-out fold commit + hash-backfill follow-up.
+
+**What is NOT shipped in Milestone 33** (deferred per
+`MILESTONE_33_PLANNING.md` §3 + §5.h):
+
+- **Any new stored `status` / `workflow_state` column on
+  `CreditApplication` or `DealStructure`** — status derived
+  from FK-graph presence.
+- **Submitted / Approved / Contracted / Funded / Chargedback
+  status derivation or UI** — their underlying workflows are
+  not yet verified; designing them from endpoint names alone
+  would be speculation.
+- **LenderSubmission / Stipulation / Contract / BEPA /
+  Funding / Chargeback UI extensions** — backend substrate
+  stays as-shipped.
+- **Lender Fit Recommendations** — recorded as future
+  capability with full design contract at planning time per
+  operator directive (§5.b D10). NOT implemented in M33.
+  Blocked on DealStructure creation operationally complete
+  (M33 delivers this) + LenderProgram rule verification +
+  attribute retrieval + real dealer evidence.
+- **PATCH or DELETE on DealStructure** — creation-and-read
+  only in M33 (activation-vocabulary-asymmetry per M31 lesson w).
+- **Multi-structure UX** (list-per-CA, activate-structure,
+  delete-structure, iterate-structure) — first-loop only per
+  D9. M10.2 M-to-1 iteration semantic preserved in the
+  domain unchanged.
+- **Iteration flow** — creating a second DealStructure for a
+  CA already In progress. Deferred; "Start structuring"
+  hidden on In progress rows in M33.
+- **Vehicle-picker substrate for direct-create CAs** — M33
+  covers writeup-originated CAs only. Direct-create branch
+  renders documented affordance ("No sales-side writeup —
+  direct-create CA; structuring not available in M33").
+- **F&I role extension to `admin_lead_detail`** — M32.3
+  non-navigational inline triage stands.
+- **Client-side monthly-payment auto-derivation** via
+  `services.payment_engine` — F&I types the proposed monthly
+  payment explicitly. Cadence variability (standard-APR vs
+  BHPH weekly/biweekly) puts the calculator UX out of M33
+  scope.
+- **Full desking arithmetic** (`amount_financed = sale_price
+  + taxes + fees + trade_payoff - down_payment -
+  trade_allowance`) — cross-state tax treatment variability
+  puts that math out of M33 scope. The D5 consistency-
+  warning surface flags obviously contradictory entries
+  (e.g. `trade_payoff > 0` with `trade_allowance == 0`)
+  without inventing arithmetic.
+- **Pagination on `admin/credit-applications/list/`** —
+  unchanged from M10/M11/M32 precedent.
+- **Cross-lead sales-manager pending-approval queue page**
+  (unchanged M32 §3 deferral).
+- **F&I-scoped lead-context view** (unchanged M32 §3
+  deferral).
+- **Retroactive modification of historical migration 0026**
+  — historical migrations are immutable per M32 (aa)
+  historical-migration-immutability discipline.
+- All prior M32 §3 + M31 §3 + M30 §3 + M29 §3 + M28 §3 +
+  M27 §3 + M25 §4 deferrals — unchanged.
+
+---
+
 ## 8. Dealer branding + onboarding
 
 Runtime dealer identity is templated (SESSION_029) and the full

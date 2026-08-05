@@ -19,8 +19,8 @@ sources:
 ## Coverage summary
 
 - **Backend endpoints enumerated:** 162
-- **Consumed by frontend components (`covered`):** 129
-- **Backend-only (audit findings):** 33
+- **Consumed by frontend components (`covered`):** 131
+- **Backend-only (audit findings):** 31
   - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **4**
 - **Service verbs enumerated:** 321
 - **Distinct view modules importing service verbs:** 22
@@ -137,9 +137,9 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 87 | `admin/vehicles/<str:stock_number>/delivery/` | `views_delivery.admin_delivery_create` | `admin-delivery-create` | saleApi.ts:138 `createDelivery`, saleApi.ts:152 `readDelivery` | `covered` |
 | 88 | `admin/deliveries/<int:delivery_id>/` | `views_delivery.admin_delivery_update` | `admin-delivery-update` | saleApi.ts:175 `updateDelivery` | `covered` |
 | 89 | `admin/credit-applications/` | `views_f_and_i.admin_credit_application_create` | `admin-credit-application-create` | — | `defer-candidate-O2` |
-| 90 | `admin/credit-applications/list/` | `views_f_and_i.admin_credit_application_list` | `admin-credit-application-list` | fAndIApi.ts:308 `fetchCreditApplications` | `covered` |
-| 91 | `admin/deal-structures/` | `views_f_and_i.admin_deal_structure_create` | `admin-deal-structure-create` | — | `defer-candidate-O2` |
-| 92 | `admin/deal-structures/<int:pk>/` | `views_f_and_i.admin_deal_structure_read` | `admin-deal-structure-read` | — | `defer-candidate-O2` |
+| 90 | `admin/credit-applications/list/` | `views_f_and_i.admin_credit_application_list` | `admin-credit-application-list` | fAndIApi.ts:316 `fetchCreditApplications` | `covered` |
+| 91 | `admin/deal-structures/` | `views_f_and_i.admin_deal_structure_create` | `admin-deal-structure-create` | fAndIApi.ts:406 `createDealStructure` | `covered` |
+| 92 | `admin/deal-structures/<int:pk>/` | `views_f_and_i.admin_deal_structure_read` | `admin-deal-structure-read` | fAndIApi.ts:425 `getDealStructure` | `covered` |
 | 93 | `admin/lender-programs/` | `views_f_and_i.admin_lender_program_create` | `admin-lender-program-create` | — | `defer-candidate-O2` |
 | 94 | `admin/lender-submissions/` | `views_f_and_i.admin_lender_submission_create` | `admin-lender-submission-create` | — | `defer-candidate-O2` |
 | 95 | `admin/lender-submissions/<int:pk>/` | `views_f_and_i.admin_lender_submission_update` | `admin-lender-submission-update` | — | `defer-candidate-O2` |
@@ -213,7 +213,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 
 ## Backend-only findings
 
-**33 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**31 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -223,7 +223,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (28)
+### defer-candidate-O2 (26)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -237,8 +237,6 @@ _None._
 - `admin/vehicles/<str:stock_number>/photos/reorder/` → `views_photos.admin_photo_reorder` (`admin-photo-reorder`). Imported service verbs: `get_current_dealership`, `photo_gallery`, `photo_storage`
 - `showroom/vehicles/<str:stock_number>/` → `views_showroom.showroom_vehicle_detail` (`showroom-vehicle-detail`). Imported service verbs: —
 - `admin/credit-applications/` → `views_f_and_i.admin_credit_application_create` (`admin-credit-application-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
-- `admin/deal-structures/` → `views_f_and_i.admin_deal_structure_create` (`admin-deal-structure-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
-- `admin/deal-structures/<int:pk>/` → `views_f_and_i.admin_deal_structure_read` (`admin-deal-structure-read`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/lender-programs/` → `views_f_and_i.admin_lender_program_create` (`admin-lender-program-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/lender-submissions/` → `views_f_and_i.admin_lender_submission_create` (`admin-lender-submission-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/lender-submissions/<int:pk>/` → `views_f_and_i.admin_lender_submission_update` (`admin-lender-submission-update`). Imported service verbs: `f_and_i`, `get_current_dealership`
@@ -334,7 +332,7 @@ _None._
 ### views_f_and_i
 
 - **Endpoints:** 19
-- **Backend-only:** 14
+- **Backend-only:** 12
 - **Backend-only dispositions in this module:** `defer-candidate-O2`
 
 ### views_follow_ups

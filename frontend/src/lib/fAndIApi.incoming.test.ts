@@ -69,6 +69,11 @@ function fixtureCA(
         apr_target: "6.99",
       },
     },
+    // M33.1 derived-status fixture defaults (Incoming — no
+    // DealStructure yet). Tests can override to exercise the
+    // In progress branch.
+    has_deal_structure: false,
+    latest_deal_structure_id: null,
     ...overrides,
   };
 }

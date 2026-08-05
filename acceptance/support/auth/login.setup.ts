@@ -45,6 +45,15 @@ const SEED_COMMANDS = [
   // CA) fully independent of any M32.2 sales-side fixture per M32
   // §5.c R11 independence guarantee.
   "seed_journey_fandi_intake_receipt",
+  // Milestone 33 · Increment 2 (SESSION_212) — F&I intake activation
+  // journey. Provisions the Structure Sam fixture (lead + vehicle +
+  // approved+handed-off writeup + paired CA — NO DealStructure) so
+  // the M33.2 journey creates the first structure via the M33.2 UI.
+  // Fully independent of the M32.3 Intake Iris fixture per M33 §5.c
+  // R7 independence guarantee — distinct rows, no shared state, test
+  // order irrelevant, parallelism-safe. Reuses the M32.3
+  // f_and_i_manager persona; no new persona provisioning.
+  "seed_journey_fandi_intake_activation",
 ] as const;
 
 function runManagementCommand(command: string): void {
