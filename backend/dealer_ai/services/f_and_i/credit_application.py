@@ -74,6 +74,7 @@ from ...models import (
     Dealership,
     DealStructure,
     DealWriteup,
+    LenderSubmission,
     Sale,
 )
 
@@ -356,6 +357,37 @@ def list_credit_applications(
     :class:`CrossTenantDealStructureError` suspenders that already
     prevent legitimate cross-tenant rows.
 
+    **M35.1 extension.** A third subquery annotation extends the
+    projection to the lender-submission workflow state:
+
+    - ``latest_lender_submission_status`` — status string of the
+      most-recent :class:`LenderSubmission` on the
+      ``latest_deal_structure_id`` structure, or ``None`` when
+      either the latest DealStructure has no submissions OR the
+      CA has no DealStructure at all. One of ``"pending"`` /
+      ``"approved"`` / ``"counter"`` / ``"declined"``. Correlates
+      on the ``latest_deal_structure_id`` annotation itself (D1
+      output feeds D2 input); Django emits ANSI-standard
+      correlated subqueries that compile + execute on both
+      SQLite and Postgres (verified live at M35.0 §4.8 + M35.1
+      §0.a). Deterministic ordering
+      ``("-submitted_at", "-created_at", "-pk")`` — business
+      time first, DB write time second, pk as ultimate tiebreak.
+      Per ``MILESTONE_35_PLANNING.md`` §5.b D2.
+
+    Combined with D1's ``latest_deal_structure_id``, the M35
+    projection lets the frontend derive six workflow states
+    ("Incoming" / "In progress" / "Submitted — awaiting response"
+    / "Approved" / "Counter-offer received" / "Declined") purely
+    from FK events on the latest DealStructure's latest
+    LenderSubmission. **No stored ``workflow_state`` column; no
+    state machine; no schema change.**
+
+    The M35.1 subquery is tenant-scoped identically to the M33.1
+    subquery — belt (filter) over model :meth:`LenderSubmission.clean`
+    and service-layer :class:`CrossTenantLenderSubmissionError`
+    suspenders.
+
     Pure read — never raises except on cross-tenant lead.
     """
     if lead is not None:
@@ -365,6 +397,10 @@ def list_credit_applications(
         dealership=dealership,
         credit_application=OuterRef("pk"),
     )
+    tenant_latest_submissions = LenderSubmission.objects.filter(
+        dealership=dealership,
+        deal_structure_id=OuterRef("latest_deal_structure_id"),
+    ).order_by("-submitted_at", "-created_at", "-pk")
     qs = (
         CreditApplication.objects.filter(dealership=dealership)
         .select_related("lead", "sale", "deal_writeup")
@@ -374,6 +410,9 @@ def list_credit_applications(
                 tenant_deal_structures
                 .order_by("-created_at", "-pk")
                 .values("pk")[:1]
+            ),
+            latest_lender_submission_status=Subquery(
+                tenant_latest_submissions.values("status")[:1]
             ),
         )
     )

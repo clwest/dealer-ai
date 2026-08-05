@@ -572,6 +572,15 @@ urlpatterns = [
         views_f_and_i.admin_lender_program_create,
         name="admin-lender-program-create",
     ),
+    # M35.1 D4 — FK-discovery substrate for the LenderSubmission
+    # create workflow. Narrow {id, name} projection. Reuses the
+    # shipped ``list_active_lender_programs`` service verb; no
+    # new service verb; no schema change.
+    path(
+        "admin/lender-programs/list/",
+        views_f_and_i.admin_lender_program_list,
+        name="admin-lender-program-list",
+    ),
     path(
         "admin/lender-submissions/",
         views_f_and_i.admin_lender_submission_create,

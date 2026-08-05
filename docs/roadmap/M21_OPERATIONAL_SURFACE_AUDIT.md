@@ -18,9 +18,9 @@ sources:
 
 ## Coverage summary
 
-- **Backend endpoints enumerated:** 162
+- **Backend endpoints enumerated:** 163
 - **Consumed by frontend components (`covered`):** 131
-- **Backend-only (audit findings):** 31
+- **Backend-only (audit findings):** 32
   - Of which **`wrapper-only`** (typed helper exists in an `*Api.ts` module but no component imports it — the endpoint is reachable in principle but not through the operator UI): **4**
 - **Service verbs enumerated:** 321
 - **Distinct view modules importing service verbs:** 22
@@ -89,7 +89,7 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 39 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/` | `views.admin_condition_photo_attach` | `admin-condition-photo-attach` | api.ts:1313 `attachPhoto` | `covered` |
 | 40 | `admin/vehicles/<str:stock_number>/photos/<uuid:public_id>/` | `views.admin_condition_photo_delete` | `admin-condition-photo-delete` | api.ts:1320 `deletePhoto` | `covered` |
 | 41 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/photos/local-upload/` | `views.admin_condition_photo_local_upload_receiver` | `admin-condition-photo-local-upload` | api.ts:1291 `uploadPhotoBytes` | `covered` |
-| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only, api.ts:1703 `fetchVendor` ⚠ wrapper-only | `covered` |
+| 42 | `admin/vendors/` | `views_recon.admin_vendor_list` | `admin-vendor-list` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1695 `fetchVendors`, api.ts:1699 `createVendor` ⚠ wrapper-only | `covered` |
 | 43 | `admin/vendors/<slug:slug>/` | `views_recon.admin_vendor_detail` | `admin-vendor-detail` | api.ts:1703 `fetchVendor` ⚠ wrapper-only, api.ts:1709 `updateVendor` ⚠ wrapper-only | `defer-candidate-O2` |
 | 44 | `admin/vehicles/<str:stock_number>/recon/` | `views_recon.admin_recon_dashboard` | `admin-recon-dashboard` | api.ts:1717 `fetchReconDashboard` | `covered` |
 | 45 | `admin/vehicles/<str:stock_number>/findings/<int:finding_id>/recon-decision/` | `views_recon.admin_recon_decision_create` | `admin-recon-decision-create` | api.ts:1728 `recordReconDecision` | `covered` |
@@ -141,79 +141,80 @@ One row per DRF endpoint. `Frontend consumers` counts calls in `frontend/src/lib
 | 91 | `admin/deal-structures/` | `views_f_and_i.admin_deal_structure_create` | `admin-deal-structure-create` | fAndIApi.ts:406 `createDealStructure` | `covered` |
 | 92 | `admin/deal-structures/<int:pk>/` | `views_f_and_i.admin_deal_structure_read` | `admin-deal-structure-read` | fAndIApi.ts:425 `getDealStructure` | `covered` |
 | 93 | `admin/lender-programs/` | `views_f_and_i.admin_lender_program_create` | `admin-lender-program-create` | — | `defer-candidate-O2` |
-| 94 | `admin/lender-submissions/` | `views_f_and_i.admin_lender_submission_create` | `admin-lender-submission-create` | — | `defer-candidate-O2` |
-| 95 | `admin/lender-submissions/<int:pk>/` | `views_f_and_i.admin_lender_submission_update` | `admin-lender-submission-update` | — | `defer-candidate-O2` |
-| 96 | `admin/stipulations/` | `views_f_and_i.admin_stipulation_create` | `admin-stipulation-create` | — | `defer-candidate-O2` |
-| 97 | `admin/stipulations/<int:pk>/` | `views_f_and_i.admin_stipulation_update` | `admin-stipulation-update` | — | `defer-candidate-O2` |
-| 98 | `admin/contracts/` | `views_f_and_i.admin_contract_create` | `admin-contract-create` | — | `defer-candidate-O2` |
-| 99 | `admin/contracts/<int:pk>/` | `views_f_and_i.admin_contract_update` | `admin-contract-update` | — | `defer-candidate-O2` |
-| 100 | `admin/back-end-products/` | `views_f_and_i.admin_back_end_product_create` | `admin-back-end-product-create` | — | `defer-candidate-O2` |
-| 101 | `admin/funding/` | `views_f_and_i.admin_funding_create` | `admin-funding-create` | — | `defer-candidate-O2` |
-| 102 | `admin/funding/<int:pk>/` | `views_f_and_i.admin_funding_update` | `admin-funding-update` | — | `defer-candidate-O2` |
-| 103 | `admin/chargebacks/` | `views_f_and_i.admin_chargeback_create` | `admin-chargeback-create` | — | `defer-candidate-O2` |
-| 104 | `admin/compliance-records/` | `views_f_and_i.admin_compliance_create` | `admin-compliance-create` | fAndIApi.ts:177 `createCompliance` | `covered` |
-| 105 | `admin/compliance-records/<int:pk>/` | `views_f_and_i.admin_compliance_update` | `admin-compliance-update` | fAndIApi.ts:205 `updateCompliance` | `covered` |
-| 106 | `admin/deal-jackets/<int:contract_pk>/` | `views_f_and_i.admin_deal_jacket_read` | `admin-deal-jacket-read` | fAndIApi.ts:154 `fetchDealJacket` | `covered` |
-| 107 | `admin/f-and-i/deals/` | `views_f_and_i.admin_f_and_i_deals_list` | `admin-f-and-i-deals-list` | fAndIApi.ts:65 `fetchDeals` | `covered` |
-| 108 | `admin/leads/walk-in/` | `views_leads.admin_lead_walk_in_create` | `admin-lead-walk-in-create` | salesApi.ts:109 `createWalkInLead` | `covered` |
-| 109 | `admin/leads/phone/` | `views_leads.admin_lead_phone_create` | `admin-lead-phone-create` | salesApi.ts:119 `createPhoneLead` | `covered` |
-| 110 | `admin/leads/referral/` | `views_leads.admin_lead_referral_create` | `admin-lead-referral-create` | salesApi.ts:126 `createReferralLead` | `covered` |
-| 111 | `admin/leads/webhook/` | `views_leads.admin_lead_webhook_create` | `admin-lead-webhook-create` | salesApi.ts:136 `createWebhookLead` ⚠ wrapper-only | `defer-candidate-O2` |
-| 112 | `admin/test-drives/` | `views_test_drives.admin_test_drive_create` | `admin-test-drive-create` | salesApi.ts:181 `createTestDrive` | `covered` |
-| 113 | `admin/test-drives/list/` | `views_test_drives.admin_test_drive_list` | `admin-test-drive-list` | salesApi.ts:207 `listTestDrives` | `covered` |
-| 114 | `admin/deal-writeups/` | `views_deal_writeups.admin_deal_writeup_create` | `admin-deal-writeup-create` | salesApi.ts:570 `createDealWriteup` | `covered` |
-| 115 | `admin/deal-writeups/<int:pk>/approve/` | `views_deal_writeups.admin_deal_writeup_approve` | `admin-deal-writeup-approve` | salesApi.ts:580 `approveDealWriteup` | `covered` |
-| 116 | `admin/deal-writeups/<int:pk>/hand-off/` | `views_deal_writeups.admin_deal_writeup_hand_off` | `admin-deal-writeup-hand-off` | salesApi.ts:590 `handOffDealWriteup` | `covered` |
-| 117 | `admin/deal-writeups/list/` | `views_deal_writeups.admin_deal_writeup_list` | `admin-deal-writeup-list` | salesApi.ts:552 `listDealWriteups` | `covered` |
-| 118 | `admin/deal-writeups/<int:pk>/` | `views_deal_writeups.admin_deal_writeup_detail` | `admin-deal-writeup-detail` | salesApi.ts:561 `getDealWriteup` ⚠ wrapper-only | `defer-candidate-O2` |
-| 119 | `admin/follow-up-cadences/` | `views_follow_ups.admin_follow_up_cadence_create` | `admin-follow-up-cadence-create` | salesApi.ts:322 `createCadence` | `covered` |
-| 120 | `admin/follow-up-cadences/<int:pk>/pause/` | `views_follow_ups.admin_follow_up_cadence_pause` | `admin-follow-up-cadence-pause` | salesApi.ts:332 `pauseCadence` | `covered` |
-| 121 | `admin/follow-up-tasks/` | `views_follow_ups.admin_follow_up_task_list` | `admin-follow-up-task-list` | salesApi.ts:348 `listFollowUpTasks` | `covered` |
-| 122 | `admin/follow-up-tasks/<int:pk>/complete/` | `views_follow_ups.admin_follow_up_task_complete` | `admin-follow-up-task-complete` | salesApi.ts:357 `completeTask` | `covered` |
-| 123 | `admin/follow-up-tasks/<int:pk>/skip/` | `views_follow_ups.admin_follow_up_task_skip` | `admin-follow-up-task-skip` | salesApi.ts:368 `skipTask` | `covered` |
-| 124 | `admin/be-backs/` | `views_be_backs.admin_be_back_create` | `admin-be-back-create` | salesApi.ts:406 `createBeBack` | `covered` |
-| 125 | `admin/be-backs/list/` | `views_be_backs.admin_be_back_list` | `admin-be-back-list` | salesApi.ts:428 `listBeBacks` | `covered` |
-| 126 | `admin/be-backs/<int:pk>/mark-returned/` | `views_be_backs.admin_be_back_mark_returned` | `admin-be-back-mark-returned` | salesApi.ts:440 `markBeBackReturned` | `covered` |
-| 127 | `admin/be-backs/<int:pk>/mark-no-show/` | `views_be_backs.admin_be_back_mark_no_show` | `admin-be-back-mark-no-show` | salesApi.ts:451 `markBeBackNoShow` | `covered` |
-| 128 | `admin/bhph-notes/` | `views_bhph_notes.admin_bhph_note_create` | `admin-bhph-note-create` | bhphApi.ts:165 `createBhphNote` | `covered` |
-| 129 | `admin/bhph-notes/list/` | `views_bhph_notes.admin_bhph_note_list` | `admin-bhph-note-list` | bhphApi.ts:117 `listBhphNotes` | `covered` |
-| 130 | `admin/bhph-notes/<int:pk>/` | `views_bhph_notes.admin_bhph_note_retrieve` | `admin-bhph-note-retrieve` | bhphApi.ts:131 `getBhphNote` | `covered` |
-| 131 | `admin/bhph-notes/<int:pk>/payments/` | `views_bhph_payments.admin_bhph_payment_create` | `admin-bhph-payment-create` | bhphApi.ts:220 `createBhphPayment` | `covered` |
-| 132 | `admin/bhph-notes/<int:pk>/payments/list/` | `views_bhph_payments.admin_bhph_payment_list` | `admin-bhph-payment-list` | bhphApi.ts:197 `listBhphPayments` | `covered` |
-| 133 | `admin/bhph-notes/<int:pk>/promises/` | `views_bhph_promises.admin_bhph_promise_create` | `admin-bhph-promise-create` | bhphApi.ts:341 `recordPromiseToPay` | `covered` |
-| 134 | `admin/bhph-notes/<int:pk>/promises/list/` | `views_bhph_promises.admin_bhph_promise_list` | `admin-bhph-promise-list` | bhphApi.ts:248 `listBhphPromises` | `covered` |
-| 135 | `admin/bhph-promises/<int:pk>/mark-kept/` | `views_bhph_promises.admin_bhph_promise_mark_kept` | `admin-bhph-promise-mark-kept` | bhphApi.ts:360 `markPromiseKept` | `covered` |
-| 136 | `admin/bhph-promises/<int:pk>/mark-broken/` | `views_bhph_promises.admin_bhph_promise_mark_broken` | `admin-bhph-promise-mark-broken` | bhphApi.ts:378 `markPromiseBroken` | `covered` |
-| 137 | `admin/bhph-notes/<int:pk>/contacts/` | `views_collection_contacts.admin_collection_contact_create` | `admin-collection-contact-create` | bhphApi.ts:415 `logCollectionContact` | `covered` |
-| 138 | `admin/bhph-notes/<int:pk>/contacts/list/` | `views_collection_contacts.admin_collection_contact_list` | `admin-collection-contact-list` | bhphApi.ts:278 `listCollectionContacts` | `covered` |
-| 139 | `admin/bhph-notes/<int:pk>/repossessions/` | `views_repossessions.admin_repossession_create` | `admin-repossession-create` | bhphApi.ts:437 `initiateRepossession` | `covered` |
-| 140 | `admin/bhph-notes/<int:pk>/repossessions/list/` | `views_repossessions.admin_repossession_list` | `admin-repossession-list` | bhphApi.ts:307 `listRepossessions` | `covered` |
-| 141 | `admin/bhph-repossessions/<int:pk>/mark-recovered/` | `views_repossessions.admin_repossession_mark_recovered` | `admin-repossession-mark-recovered` | bhphApi.ts:456 `markRepossessionRecovered` | `covered` |
-| 142 | `admin/bhph-repossessions/<int:pk>/mark-re-intaked/` | `views_repossessions.admin_repossession_mark_re_intaked` | `admin-repossession-mark-re-intaked` | bhphApi.ts:475 `markRepossessionReIntaked` | `covered` |
-| 143 | `admin/bhph/analytics/summary/` | `views_bhph_analytics.admin_bhph_analytics_summary` | `admin-bhph-analytics-summary` | bhphApi.ts:83 `fetchBhphAnalyticsSummary` | `covered` |
-| 144 | `admin/accounting/journal-entries/` | `views_accounting.admin_journal_entry_create` | `admin-journal-entry-create` | accountingApi.ts:383 `createJournalEntry` | `covered` |
-| 145 | `admin/accounting/journal-entries/<int:pk>/reverse/` | `views_accounting.admin_journal_entry_reverse` | `admin-journal-entry-reverse` | accountingApi.ts:266 `reverseJournalEntry` | `covered` |
-| 146 | `admin/accounting/journal-entries/<int:pk>/` | `views_accounting.admin_journal_entry_retrieve` | `admin-journal-entry-retrieve` | accountingApi.ts:242 `fetchJournalEntry` | `covered` |
-| 147 | `admin/accounting/trial-balance/` | `views_accounting.admin_trial_balance` | `admin-trial-balance` | accountingApi.ts:71 `fetchTrialBalance` | `covered` |
-| 148 | `admin/accounting/journal-entries/list/` | `views_accounting.admin_journal_entry_list` | `admin-journal-entry-list` | accountingApi.ts:207 `fetchJournalEntries` | `covered` |
-| 149 | `admin/accounting/cost-posting-failures/` | `views_accounting.admin_cost_posting_failures` | `admin-cost-posting-failures` | accountingApi.ts:316 `fetchCostPostingFailures` | `covered` |
-| 150 | `admin/accounting/trial-balance/snapshots/` | `views_accounting.admin_trial_balance_snapshot_create` | `admin-trial-balance-snapshot-create` | accountingApi.ts:130 `freezeTrialBalance` | `covered` |
-| 151 | `admin/accounting/trial-balance/snapshots/list/` | `views_accounting.admin_trial_balance_snapshot_list` | `admin-trial-balance-snapshot-list` | accountingApi.ts:148 `listTrialBalanceSnapshots` | `covered` |
-| 152 | `admin/accounting/trial-balance/snapshots/<int:pk>/` | `views_accounting.admin_trial_balance_snapshot_retrieve` | `admin-trial-balance-snapshot-retrieve` | accountingApi.ts:156 `fetchTrialBalanceSnapshot` | `covered` |
-| 153 | `admin/accounting/gl-accounts/` | `views_accounting.admin_gl_account_list` | `admin-gl-account-list` | accountingApi.ts:349 `fetchGLAccounts` | `covered` |
-| 154 | `admin/accounting/journal-entry-templates/` | `views_accounting.admin_journal_entry_template_list_or_create` | `admin-journal-entry-template-list-or-create` | accountingApi.ts:470 `fetchJournalEntryTemplates`, accountingApi.ts:478 `createJournalEntryTemplate` | `covered` |
-| 155 | `admin/accounting/journal-entry-templates/<int:pk>/` | `views_accounting.admin_journal_entry_template_detail` | `admin-journal-entry-template-detail` | accountingApi.ts:494 `updateJournalEntryTemplate`, accountingApi.ts:513 `deleteJournalEntryTemplate` | `covered` |
-| 156 | `admin/accounting/journal-entry-templates/<int:pk>/restore/` | `views_accounting.admin_journal_entry_template_restore` | `admin-journal-entry-template-restore` | accountingApi.ts:532 `restoreJournalEntryTemplate` | `covered` |
-| 157 | `admin/demo-store/feedback/` | `views_demo_store.admin_demo_store_feedback_create` | `admin-demo-store-feedback-create` | — | `defer-candidate-O2` |
-| 158 | `admin/pilots/create/` | `views_pilot_onboarding.admin_pilot_create` | `admin-pilot-create` | api.ts:2254 `createPilotDealership` | `covered` |
-| 159 | `admin/pilots/` | `views_pilot_onboarding.admin_pilot_list` | `admin-pilot-list` | api.ts:2248 `fetchPilotDealerships` | `covered` |
-| 160 | `admin/pilots/<slug:slug>/checklist/advance/` | `views_pilot_onboarding.admin_pilot_checklist_advance` | `admin-pilot-checklist-advance` | api.ts:2264 `advancePilotChecklistStep` | `covered` |
-| 161 | `admin/pilots/<slug:slug>/inventory/import/` | `views_pilot_onboarding.admin_pilot_inventory_import` | `admin-pilot-inventory-import` | api.ts:2273 `importPilotInventory` | `covered` |
-| 162 | `admin/pilots/<slug:slug>/terminate/` | `views_pilot_onboarding.admin_pilot_terminate` | `admin-pilot-terminate` | api.ts:2283 `terminatePilotDealership` | `covered` |
+| 94 | `admin/lender-programs/list/` | `views_f_and_i.admin_lender_program_list` | `admin-lender-program-list` | — | `defer-candidate-O2` |
+| 95 | `admin/lender-submissions/` | `views_f_and_i.admin_lender_submission_create` | `admin-lender-submission-create` | — | `defer-candidate-O2` |
+| 96 | `admin/lender-submissions/<int:pk>/` | `views_f_and_i.admin_lender_submission_update` | `admin-lender-submission-update` | — | `defer-candidate-O2` |
+| 97 | `admin/stipulations/` | `views_f_and_i.admin_stipulation_create` | `admin-stipulation-create` | — | `defer-candidate-O2` |
+| 98 | `admin/stipulations/<int:pk>/` | `views_f_and_i.admin_stipulation_update` | `admin-stipulation-update` | — | `defer-candidate-O2` |
+| 99 | `admin/contracts/` | `views_f_and_i.admin_contract_create` | `admin-contract-create` | — | `defer-candidate-O2` |
+| 100 | `admin/contracts/<int:pk>/` | `views_f_and_i.admin_contract_update` | `admin-contract-update` | — | `defer-candidate-O2` |
+| 101 | `admin/back-end-products/` | `views_f_and_i.admin_back_end_product_create` | `admin-back-end-product-create` | — | `defer-candidate-O2` |
+| 102 | `admin/funding/` | `views_f_and_i.admin_funding_create` | `admin-funding-create` | — | `defer-candidate-O2` |
+| 103 | `admin/funding/<int:pk>/` | `views_f_and_i.admin_funding_update` | `admin-funding-update` | — | `defer-candidate-O2` |
+| 104 | `admin/chargebacks/` | `views_f_and_i.admin_chargeback_create` | `admin-chargeback-create` | — | `defer-candidate-O2` |
+| 105 | `admin/compliance-records/` | `views_f_and_i.admin_compliance_create` | `admin-compliance-create` | fAndIApi.ts:177 `createCompliance` | `covered` |
+| 106 | `admin/compliance-records/<int:pk>/` | `views_f_and_i.admin_compliance_update` | `admin-compliance-update` | fAndIApi.ts:205 `updateCompliance` | `covered` |
+| 107 | `admin/deal-jackets/<int:contract_pk>/` | `views_f_and_i.admin_deal_jacket_read` | `admin-deal-jacket-read` | fAndIApi.ts:154 `fetchDealJacket` | `covered` |
+| 108 | `admin/f-and-i/deals/` | `views_f_and_i.admin_f_and_i_deals_list` | `admin-f-and-i-deals-list` | fAndIApi.ts:65 `fetchDeals` | `covered` |
+| 109 | `admin/leads/walk-in/` | `views_leads.admin_lead_walk_in_create` | `admin-lead-walk-in-create` | salesApi.ts:109 `createWalkInLead` | `covered` |
+| 110 | `admin/leads/phone/` | `views_leads.admin_lead_phone_create` | `admin-lead-phone-create` | salesApi.ts:119 `createPhoneLead` | `covered` |
+| 111 | `admin/leads/referral/` | `views_leads.admin_lead_referral_create` | `admin-lead-referral-create` | salesApi.ts:126 `createReferralLead` | `covered` |
+| 112 | `admin/leads/webhook/` | `views_leads.admin_lead_webhook_create` | `admin-lead-webhook-create` | salesApi.ts:136 `createWebhookLead` ⚠ wrapper-only | `defer-candidate-O2` |
+| 113 | `admin/test-drives/` | `views_test_drives.admin_test_drive_create` | `admin-test-drive-create` | salesApi.ts:181 `createTestDrive` | `covered` |
+| 114 | `admin/test-drives/list/` | `views_test_drives.admin_test_drive_list` | `admin-test-drive-list` | salesApi.ts:207 `listTestDrives` | `covered` |
+| 115 | `admin/deal-writeups/` | `views_deal_writeups.admin_deal_writeup_create` | `admin-deal-writeup-create` | salesApi.ts:570 `createDealWriteup` | `covered` |
+| 116 | `admin/deal-writeups/<int:pk>/approve/` | `views_deal_writeups.admin_deal_writeup_approve` | `admin-deal-writeup-approve` | salesApi.ts:580 `approveDealWriteup` | `covered` |
+| 117 | `admin/deal-writeups/<int:pk>/hand-off/` | `views_deal_writeups.admin_deal_writeup_hand_off` | `admin-deal-writeup-hand-off` | salesApi.ts:590 `handOffDealWriteup` | `covered` |
+| 118 | `admin/deal-writeups/list/` | `views_deal_writeups.admin_deal_writeup_list` | `admin-deal-writeup-list` | salesApi.ts:552 `listDealWriteups` | `covered` |
+| 119 | `admin/deal-writeups/<int:pk>/` | `views_deal_writeups.admin_deal_writeup_detail` | `admin-deal-writeup-detail` | salesApi.ts:561 `getDealWriteup` ⚠ wrapper-only | `defer-candidate-O2` |
+| 120 | `admin/follow-up-cadences/` | `views_follow_ups.admin_follow_up_cadence_create` | `admin-follow-up-cadence-create` | salesApi.ts:322 `createCadence` | `covered` |
+| 121 | `admin/follow-up-cadences/<int:pk>/pause/` | `views_follow_ups.admin_follow_up_cadence_pause` | `admin-follow-up-cadence-pause` | salesApi.ts:332 `pauseCadence` | `covered` |
+| 122 | `admin/follow-up-tasks/` | `views_follow_ups.admin_follow_up_task_list` | `admin-follow-up-task-list` | salesApi.ts:348 `listFollowUpTasks` | `covered` |
+| 123 | `admin/follow-up-tasks/<int:pk>/complete/` | `views_follow_ups.admin_follow_up_task_complete` | `admin-follow-up-task-complete` | salesApi.ts:357 `completeTask` | `covered` |
+| 124 | `admin/follow-up-tasks/<int:pk>/skip/` | `views_follow_ups.admin_follow_up_task_skip` | `admin-follow-up-task-skip` | salesApi.ts:368 `skipTask` | `covered` |
+| 125 | `admin/be-backs/` | `views_be_backs.admin_be_back_create` | `admin-be-back-create` | salesApi.ts:406 `createBeBack` | `covered` |
+| 126 | `admin/be-backs/list/` | `views_be_backs.admin_be_back_list` | `admin-be-back-list` | salesApi.ts:428 `listBeBacks` | `covered` |
+| 127 | `admin/be-backs/<int:pk>/mark-returned/` | `views_be_backs.admin_be_back_mark_returned` | `admin-be-back-mark-returned` | salesApi.ts:440 `markBeBackReturned` | `covered` |
+| 128 | `admin/be-backs/<int:pk>/mark-no-show/` | `views_be_backs.admin_be_back_mark_no_show` | `admin-be-back-mark-no-show` | salesApi.ts:451 `markBeBackNoShow` | `covered` |
+| 129 | `admin/bhph-notes/` | `views_bhph_notes.admin_bhph_note_create` | `admin-bhph-note-create` | bhphApi.ts:165 `createBhphNote` | `covered` |
+| 130 | `admin/bhph-notes/list/` | `views_bhph_notes.admin_bhph_note_list` | `admin-bhph-note-list` | bhphApi.ts:117 `listBhphNotes` | `covered` |
+| 131 | `admin/bhph-notes/<int:pk>/` | `views_bhph_notes.admin_bhph_note_retrieve` | `admin-bhph-note-retrieve` | bhphApi.ts:131 `getBhphNote` | `covered` |
+| 132 | `admin/bhph-notes/<int:pk>/payments/` | `views_bhph_payments.admin_bhph_payment_create` | `admin-bhph-payment-create` | bhphApi.ts:220 `createBhphPayment` | `covered` |
+| 133 | `admin/bhph-notes/<int:pk>/payments/list/` | `views_bhph_payments.admin_bhph_payment_list` | `admin-bhph-payment-list` | bhphApi.ts:197 `listBhphPayments` | `covered` |
+| 134 | `admin/bhph-notes/<int:pk>/promises/` | `views_bhph_promises.admin_bhph_promise_create` | `admin-bhph-promise-create` | bhphApi.ts:341 `recordPromiseToPay` | `covered` |
+| 135 | `admin/bhph-notes/<int:pk>/promises/list/` | `views_bhph_promises.admin_bhph_promise_list` | `admin-bhph-promise-list` | bhphApi.ts:248 `listBhphPromises` | `covered` |
+| 136 | `admin/bhph-promises/<int:pk>/mark-kept/` | `views_bhph_promises.admin_bhph_promise_mark_kept` | `admin-bhph-promise-mark-kept` | bhphApi.ts:360 `markPromiseKept` | `covered` |
+| 137 | `admin/bhph-promises/<int:pk>/mark-broken/` | `views_bhph_promises.admin_bhph_promise_mark_broken` | `admin-bhph-promise-mark-broken` | bhphApi.ts:378 `markPromiseBroken` | `covered` |
+| 138 | `admin/bhph-notes/<int:pk>/contacts/` | `views_collection_contacts.admin_collection_contact_create` | `admin-collection-contact-create` | bhphApi.ts:415 `logCollectionContact` | `covered` |
+| 139 | `admin/bhph-notes/<int:pk>/contacts/list/` | `views_collection_contacts.admin_collection_contact_list` | `admin-collection-contact-list` | bhphApi.ts:278 `listCollectionContacts` | `covered` |
+| 140 | `admin/bhph-notes/<int:pk>/repossessions/` | `views_repossessions.admin_repossession_create` | `admin-repossession-create` | bhphApi.ts:437 `initiateRepossession` | `covered` |
+| 141 | `admin/bhph-notes/<int:pk>/repossessions/list/` | `views_repossessions.admin_repossession_list` | `admin-repossession-list` | bhphApi.ts:307 `listRepossessions` | `covered` |
+| 142 | `admin/bhph-repossessions/<int:pk>/mark-recovered/` | `views_repossessions.admin_repossession_mark_recovered` | `admin-repossession-mark-recovered` | bhphApi.ts:456 `markRepossessionRecovered` | `covered` |
+| 143 | `admin/bhph-repossessions/<int:pk>/mark-re-intaked/` | `views_repossessions.admin_repossession_mark_re_intaked` | `admin-repossession-mark-re-intaked` | bhphApi.ts:475 `markRepossessionReIntaked` | `covered` |
+| 144 | `admin/bhph/analytics/summary/` | `views_bhph_analytics.admin_bhph_analytics_summary` | `admin-bhph-analytics-summary` | bhphApi.ts:83 `fetchBhphAnalyticsSummary` | `covered` |
+| 145 | `admin/accounting/journal-entries/` | `views_accounting.admin_journal_entry_create` | `admin-journal-entry-create` | accountingApi.ts:383 `createJournalEntry` | `covered` |
+| 146 | `admin/accounting/journal-entries/<int:pk>/reverse/` | `views_accounting.admin_journal_entry_reverse` | `admin-journal-entry-reverse` | accountingApi.ts:266 `reverseJournalEntry` | `covered` |
+| 147 | `admin/accounting/journal-entries/<int:pk>/` | `views_accounting.admin_journal_entry_retrieve` | `admin-journal-entry-retrieve` | accountingApi.ts:242 `fetchJournalEntry` | `covered` |
+| 148 | `admin/accounting/trial-balance/` | `views_accounting.admin_trial_balance` | `admin-trial-balance` | accountingApi.ts:71 `fetchTrialBalance` | `covered` |
+| 149 | `admin/accounting/journal-entries/list/` | `views_accounting.admin_journal_entry_list` | `admin-journal-entry-list` | accountingApi.ts:207 `fetchJournalEntries` | `covered` |
+| 150 | `admin/accounting/cost-posting-failures/` | `views_accounting.admin_cost_posting_failures` | `admin-cost-posting-failures` | accountingApi.ts:316 `fetchCostPostingFailures` | `covered` |
+| 151 | `admin/accounting/trial-balance/snapshots/` | `views_accounting.admin_trial_balance_snapshot_create` | `admin-trial-balance-snapshot-create` | accountingApi.ts:130 `freezeTrialBalance` | `covered` |
+| 152 | `admin/accounting/trial-balance/snapshots/list/` | `views_accounting.admin_trial_balance_snapshot_list` | `admin-trial-balance-snapshot-list` | accountingApi.ts:148 `listTrialBalanceSnapshots` | `covered` |
+| 153 | `admin/accounting/trial-balance/snapshots/<int:pk>/` | `views_accounting.admin_trial_balance_snapshot_retrieve` | `admin-trial-balance-snapshot-retrieve` | accountingApi.ts:156 `fetchTrialBalanceSnapshot` | `covered` |
+| 154 | `admin/accounting/gl-accounts/` | `views_accounting.admin_gl_account_list` | `admin-gl-account-list` | accountingApi.ts:349 `fetchGLAccounts` | `covered` |
+| 155 | `admin/accounting/journal-entry-templates/` | `views_accounting.admin_journal_entry_template_list_or_create` | `admin-journal-entry-template-list-or-create` | accountingApi.ts:470 `fetchJournalEntryTemplates`, accountingApi.ts:478 `createJournalEntryTemplate` | `covered` |
+| 156 | `admin/accounting/journal-entry-templates/<int:pk>/` | `views_accounting.admin_journal_entry_template_detail` | `admin-journal-entry-template-detail` | accountingApi.ts:494 `updateJournalEntryTemplate`, accountingApi.ts:513 `deleteJournalEntryTemplate` | `covered` |
+| 157 | `admin/accounting/journal-entry-templates/<int:pk>/restore/` | `views_accounting.admin_journal_entry_template_restore` | `admin-journal-entry-template-restore` | accountingApi.ts:532 `restoreJournalEntryTemplate` | `covered` |
+| 158 | `admin/demo-store/feedback/` | `views_demo_store.admin_demo_store_feedback_create` | `admin-demo-store-feedback-create` | — | `defer-candidate-O2` |
+| 159 | `admin/pilots/create/` | `views_pilot_onboarding.admin_pilot_create` | `admin-pilot-create` | api.ts:2254 `createPilotDealership` | `covered` |
+| 160 | `admin/pilots/` | `views_pilot_onboarding.admin_pilot_list` | `admin-pilot-list` | api.ts:2248 `fetchPilotDealerships` | `covered` |
+| 161 | `admin/pilots/<slug:slug>/checklist/advance/` | `views_pilot_onboarding.admin_pilot_checklist_advance` | `admin-pilot-checklist-advance` | api.ts:2264 `advancePilotChecklistStep` | `covered` |
+| 162 | `admin/pilots/<slug:slug>/inventory/import/` | `views_pilot_onboarding.admin_pilot_inventory_import` | `admin-pilot-inventory-import` | api.ts:2273 `importPilotInventory` | `covered` |
+| 163 | `admin/pilots/<slug:slug>/terminate/` | `views_pilot_onboarding.admin_pilot_terminate` | `admin-pilot-terminate` | api.ts:2283 `terminatePilotDealership` | `covered` |
 
 ## Backend-only findings
 
-**31 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
+**32 endpoints ship without frontend consumption.** Each row is a capability that dealership staff cannot reach through the product today. Group by recommended disposition:
 
 ### M21-anchor (0)
 
@@ -223,7 +224,7 @@ _None._
 
 _None._
 
-### defer-candidate-O2 (26)
+### defer-candidate-O2 (27)
 
 - `chat/start/` → `views.start_chat` (`chat-start`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
 - `chat/message/` → `views.send_message` (`chat-message`). Imported service verbs: `ChatEngine`, `add_cost`, `analyze_vehicle`, `answer_vehicle_question`, `audit_events_snapshot`, `build_handoff_packet`, `condition_report`, `create_lead_from_session`, `enforce_coaching_shape`, `generate_ad_copy`, `get_current_dealership`, `get_default_dealership`, `packet_to_text`, `photo_storage`, `pipeline_snapshot`, `record_acquisition`, `trends_snapshot`
@@ -238,6 +239,7 @@ _None._
 - `showroom/vehicles/<str:stock_number>/` → `views_showroom.showroom_vehicle_detail` (`showroom-vehicle-detail`). Imported service verbs: —
 - `admin/credit-applications/` → `views_f_and_i.admin_credit_application_create` (`admin-credit-application-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/lender-programs/` → `views_f_and_i.admin_lender_program_create` (`admin-lender-program-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
+- `admin/lender-programs/list/` → `views_f_and_i.admin_lender_program_list` (`admin-lender-program-list`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/lender-submissions/` → `views_f_and_i.admin_lender_submission_create` (`admin-lender-submission-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/lender-submissions/<int:pk>/` → `views_f_and_i.admin_lender_submission_update` (`admin-lender-submission-update`). Imported service verbs: `f_and_i`, `get_current_dealership`
 - `admin/stipulations/` → `views_f_and_i.admin_stipulation_create` (`admin-stipulation-create`). Imported service verbs: `f_and_i`, `get_current_dealership`
@@ -331,8 +333,8 @@ _None._
 
 ### views_f_and_i
 
-- **Endpoints:** 19
-- **Backend-only:** 12
+- **Endpoints:** 20
+- **Backend-only:** 13
 - **Backend-only dispositions in this module:** `defer-candidate-O2`
 
 ### views_follow_ups

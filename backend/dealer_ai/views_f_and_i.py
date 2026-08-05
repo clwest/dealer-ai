@@ -307,8 +307,9 @@ def _project_writeup_context(app: CreditApplication) -> dict:
 
 
 def _project_credit_application_with_writeup(app: CreditApplication) -> dict:
-    """M32.1 + M33.1 projection: base CA projection + writeup context
-    + derived DealStructure status fields.
+    """M32.1 + M33.1 + M35.1 projection: base CA projection + writeup
+    context + derived DealStructure status + derived LenderSubmission
+    status fields.
 
     Extends :func:`_project_credit_application` (M10.1) with:
 
@@ -327,13 +328,24 @@ def _project_credit_application_with_writeup(app: CreditApplication) -> dict:
       ``has_deal_structure`` is ``True``; ``None`` when
       ``False``. Drives the M33 "Open structure" action which
       fetches the full row via ``GET /admin/deal-structures/<pk>/``.
+    - ``latest_lender_submission_status`` (M35.1) — nullable
+      string derived from the tenant-scoped subquery on
+      LenderSubmission correlating on ``latest_deal_structure_id``.
+      One of ``"pending"`` / ``"approved"`` / ``"counter"`` /
+      ``"declined"``, or ``None`` when the latest DealStructure
+      has no submissions OR the CA has no DealStructure.
+      Combined with ``has_deal_structure``, drives the M35 six-
+      state chip: Incoming / In progress / Submitted — awaiting
+      response / Approved / Counter-offer received / Declined.
 
-    Per ``MILESTONE_33_PLANNING.md`` §5.b D1 + D3.
+    Per ``MILESTONE_33_PLANNING.md`` §5.b D1 + D3 +
+    ``MILESTONE_35_PLANNING.md`` §5.b D2 + D3.
     """
     base = _project_credit_application(app)
     base["writeup_context"] = _project_writeup_context(app)
     base["has_deal_structure"] = app.has_deal_structure
     base["latest_deal_structure_id"] = app.latest_deal_structure_id
+    base["latest_lender_submission_status"] = app.latest_lender_submission_status
     return base
 
 
@@ -686,6 +698,27 @@ def _project_lender_program(program: LenderProgram) -> dict:
     }
 
 
+def _project_lender_program_selector(program: LenderProgram) -> dict:
+    """M35.1 narrow projection for the LenderProgram FK-discovery
+    endpoint.
+
+    Two fields only — the identifier the frontend POSTs back as
+    ``lender_program_id`` on ``POST /admin/lender-submissions/``,
+    plus the operator-facing label. NO exposure of ``contact`` /
+    ``terms_summary`` / ``is_active`` — audit-trail data not needed
+    for FK discovery, and extra exposure would falsely broaden the
+    Lender Fit Recommendations blocker scope (rule / attribute
+    retrieval remains an explicit deferred blocker per
+    ``MILESTONE_33_PLANNING.md`` §5.b D10).
+
+    Per ``MILESTONE_35_PLANNING.md`` §5.b D4.
+    """
+    return {
+        "id": program.pk,
+        "name": program.name,
+    }
+
+
 def _project_lender_submission(submission: LenderSubmission) -> dict:
     return {
         "id": submission.pk,
@@ -779,6 +812,47 @@ def admin_lender_program_create(request):
     return Response(
         {"lender_program": _project_lender_program(program)},
         status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET"])
+@permission_classes(_M101_PERMS)
+def admin_lender_program_list(request):
+    """GET: FK-discovery list of active LenderPrograms for the
+    LenderSubmission create workflow (M35.1 substrate).
+
+    Thin wrapper on the shipped
+    :func:`services.f_and_i.list_active_lender_programs` service
+    verb. Returns only active programs (``is_active=True`` filter
+    applied by the service verb). Narrow projection
+    ``{id, name}`` — the two fields the frontend selector needs
+    to POST back a valid ``lender_program_id`` on
+    ``POST /admin/lender-submissions/``. Contact / terms_summary /
+    is_active NOT exposed (see :func:`_project_lender_program_selector`
+    docstring for rationale).
+
+    Zero-drift permission class — reuses ``_M101_PERMS`` unchanged
+    (37 → 38 consecutive milestones at M34 close; M35.1 preserves
+    the streak).
+
+    Per ``MILESTONE_35_PLANNING.md`` §5.b D4. Resolves the M35.0
+    §4.8 blocking finding (LenderProgram FK-discovery gap) that
+    would otherwise block the M35.2 create workflow per
+    ``feedback_verify_fk_discoverability_before_lock.md`` (M27.0
+    origin).
+    """
+    dealership = get_current_dealership(request)
+    programs = f_and_i_service.list_active_lender_programs(
+        dealership=dealership
+    )
+    return Response(
+        {
+            "lender_programs": [
+                _project_lender_program_selector(program)
+                for program in programs
+            ]
+        },
+        status=status.HTTP_200_OK,
     )
 
 
