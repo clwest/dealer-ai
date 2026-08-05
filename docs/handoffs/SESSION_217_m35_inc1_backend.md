@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Lender Submission Activation: record the latest structure's lender submission, capture the response on that same submission, and derive the current F&I state from verified FK events"
 increment: 1
 increment_status: shipped
-commit: TBD
-commit_notes: "M35.1 backend session — local commit landed at close; hash backfilled via a subsequent commit; NOT pushed. Coordinated M35 close push deferred to explicit user confirmation after M35.2 close."
+commit: 17fa3b8
+commit_notes: "M35.1 backend session — local commit landed as 17fa3b8; hash backfilled via this subsequent commit; NOT pushed. Coordinated M35 close push deferred to explicit user confirmation after M35.2 close."
 ---
 
 # SESSION_217 — Milestone 35 · Increment 1 (M35.1 — backend FK-discovery endpoint + subquery annotations + projection extension + Django regression tests)
