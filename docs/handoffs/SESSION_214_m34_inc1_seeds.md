@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Test-Hygiene Remediation: Idempotent seeds + rerun-safe acceptance journeys"
 increment: 1
 increment_status: shipped
-commit: pending
-commit_notes: "M34.1 backend seed extensions + Django regression tests — local commit landing at close per M28.1 / M29.1 / M30.1 / M31.1 / M32.1 / M33.1 planning-only cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated M34 close push deferred to explicit user confirmation after M34.2 close."
+commit: 9abd0ad
+commit_notes: "M34.1 backend seed extensions + Django regression tests — local commit landed as 9abd0ad at close per M28.1 / M29.1 / M30.1 / M31.1 / M32.1 / M33.1 cadence; hash backfilled via this subsequent commit; NOT pushed. Coordinated M34 close push deferred to explicit user confirmation after M34.2 close."
 ---
 
 # SESSION_214 — Milestone 34 · Increment 1 (M34.1 — backend seed extensions + Django regression tests)
