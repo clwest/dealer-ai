@@ -33,6 +33,34 @@ The ``--reset`` flag deletes the seeded leads + cascades cadences
 (is_active=False) then re-seeds. Users are preserved; the advisor
 row is preserved so historical assignments still resolve per
 :class:`Salesperson` doc.
+
+## Rerun invariants (M34.1 · D2)
+
+On every invocation (without ``--reset``), the seed restores
+the following pre-flight invariants that the M20.2 + M21.3
+sales_manager/daily_startup journey depends on:
+
+- **All three seeded leads have ``assigned_to IS NULL``.** The
+  journey's step 4 assigns "Overnight SM Lead 1" to Acceptance
+  Advisor; this reset unassigns before the next run so the
+  line-76 pre-flight assertion holds.
+- **No BeBack rows exist on seeded leads.** The M21.3 journey
+  extension creates a be-back on "Overnight SM Lead 2" via the
+  UI form; this reset drops them so counts start at 0.
+- **No non-24hr FollowUpCadence rows exist on seeded leads.**
+  The M21.3 journey extension creates a 1wk cadence on Lead 1
+  via the UI form and pauses it; leaving a paused 1wk cadence
+  would trip DuplicateActiveCadenceError on the next journey
+  run because the unique-active (lead, template) constraint
+  counts paused rows.
+- **The seed 24hr FollowUpCadence on Lead 1 is
+  ``is_active=True``.** FollowUpCadence pause semantics are
+  ``is_active=False`` (per M11.4 model docstring — no
+  ``paused_at`` column exists). The journey's pause action
+  targets the 1wk cadence, but future journey extensions could
+  touch the 24hr; belt-and-suspenders restoration.
+
+Rerun-safety per M34.0 §5.b D1 + D2. No product-code changes.
 """
 
 from __future__ import annotations
@@ -44,6 +72,7 @@ from django.db import transaction
 from dealer_ai.models import (
     ROLE_ADVISOR,
     ROLE_SALES_MANAGER,
+    BeBack,
     CustomerLead,
     Dealership,
     FollowUpCadence,
@@ -128,6 +157,7 @@ class Command(BaseCommand):
 
             sm_user = self._provision_sales_manager(dealership)
             advisor_user, advisor = self._provision_advisor(dealership)
+            self._restore_rerun_invariants(dealership)
             leads = self._provision_leads(dealership)
             cadence = self._provision_seed_cadence(dealership, leads)
 
@@ -141,6 +171,25 @@ class Command(BaseCommand):
                 f"cadence_pk={cadence.pk if cadence else None}."
             )
         )
+
+    def _restore_rerun_invariants(self, dealership: Dealership) -> None:
+        """[M34.1 · D2] Restore pre-flight invariants the M20.2 + M21.3
+        journey depends on, so the seed is rerun-safe against mutated
+        state (not just idempotent against a fresh migrated DB).
+
+        See ``## Rerun invariants`` in the module docstring for the
+        contract. Scoped by the fixture-tag ``_existing_leads`` queryset
+        the command already owns; never touches non-fixture data.
+        """
+        seeded = _existing_leads(dealership)
+        seeded.update(assigned_to=None)
+        BeBack.objects.filter(lead__in=seeded).delete()
+        FollowUpCadence.objects.filter(
+            lead__in=seeded
+        ).exclude(template="24hr").delete()
+        FollowUpCadence.objects.filter(
+            lead__in=seeded, template="24hr"
+        ).update(is_active=True)
 
     def _reset(self, dealership: Dealership) -> None:
         # FollowUpCadence + FollowUpTask rows cascade via the leads.

@@ -26,6 +26,25 @@ Idempotent via stable stock number + fixture tag in the finding
 description. The ``--reset`` flag deletes the seeded finding +
 report + vehicle + clears the recon-manager's membership then
 re-seeds. The user is preserved.
+
+## Rerun invariants (M34.1 · D3)
+
+On every invocation (without ``--reset``), the seed restores the
+following pre-flight invariant that the M20.3 recon/workflow
+journey depends on:
+
+- **The seeded ConditionFinding has no ``recon_decision``.** The
+  journey's step 4 clicks "Must do" which creates a ReconDecision
+  via the M4.2 service verb; this reset deletes the child row
+  before the next run so the line-58 pre-flight assertion holds.
+
+Scoped by the fixture-tag AND dealership filter for defense-in-
+depth against tag collisions across tenants. Direct
+``ReconDecision.objects.filter(...).delete()`` does not cascade
+upward to ConditionFinding (OneToOne with CASCADE on the child
+side, not the parent), verified at M34.0 §4.5.
+
+Rerun-safety per M34.0 §5.b D1 + D3. No product-code changes.
 """
 
 from __future__ import annotations
@@ -45,6 +64,7 @@ from dealer_ai.models import (
     ConditionFinding,
     ConditionReport,
     Dealership,
+    ReconDecision,
     UserDealershipRole,
     Vehicle,
 )
@@ -102,6 +122,7 @@ class Command(BaseCommand):
 
             recon_mgr = self._provision_recon_manager(dealership)
             vehicle = self._provision_vehicle(dealership)
+            self._restore_rerun_invariants(dealership)
             report, finding = self._provision_report_and_finding(
                 vehicle, dealership
             )
@@ -122,6 +143,22 @@ class Command(BaseCommand):
                 f"({decision_label})."
             )
         )
+
+    def _restore_rerun_invariants(self, dealership: Dealership) -> None:
+        """[M34.1 · D3] Restore pre-flight invariants the M20.3
+        recon/workflow journey depends on, so the seed is rerun-safe
+        against mutated state.
+
+        See ``## Rerun invariants`` in the module docstring for the
+        contract. Tag-scoped AND dealership-scoped for defense-in-depth
+        against tag collisions across tenants. OneToOne relation
+        `ReconDecision.finding` cascades child → nothing on parent, so
+        this is safe.
+        """
+        ReconDecision.objects.filter(
+            finding__description__startswith=FIXTURE_FINDING_TAG,
+            dealership=dealership,
+        ).delete()
 
     def _reset(self, dealership: Dealership) -> None:
         # Delete the finding first (child), then the report, then the

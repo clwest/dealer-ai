@@ -33,6 +33,33 @@ Idempotent via stable ``description`` values on each fixture entry
 (used as fixture tags). The ``--reset`` flag deletes both seeded
 entries (and their lines + any reversals via CASCADE) then re-posts
 fresh rows.
+
+## Rerun invariants (M34.1 · D4)
+
+On every invocation (without ``--reset``), the seed restores the
+following pre-flight invariant that the M20.3 office/accounting
+workflow journey depends on:
+
+- **``TrialBalanceSnapshot`` count on the fixture dealership is 0.**
+  The journey's step 3 clicks "Freeze this view" which creates a
+  TrialBalanceSnapshot; this reset deletes all such rows on the
+  fixture dealership before the next run so the journey's count-
+  delta assertion doesn't collide with the assertion helper's
+  ``page_size=10`` cap. (Once snapshots exceed 10, the helper's
+  ``.length`` stays 10 while ``priorCount`` also stays 10, and the
+  post-freeze ``.toBeGreaterThan(priorCount)`` fails deterministically.)
+
+## M20_ACCEPTANCE_DB invariant (M34.1 · D4)
+
+The D4 scoped wipe is safe **only because** this command runs
+exclusively under the ``M20_ACCEPTANCE_DB=1`` environment guard set
+by ``acceptance/support/auth/login.setup.ts::runManagementCommand``.
+The command is not part of any dev/prod seed sequence — verified at
+M34.0 §4.4 via absence of external references. No shipped snapshot
+on any production or dev DB is at risk. The dealership-scoped filter
+is defense-in-depth against multi-tenant snapshot pollution.
+
+Rerun-safety per M34.0 §5.b D1 + D4. No product-code changes.
 """
 
 from __future__ import annotations
@@ -42,7 +69,12 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from dealer_ai.models import Dealership, GLAccount, JournalEntry
+from dealer_ai.models import (
+    Dealership,
+    GLAccount,
+    JournalEntry,
+    TrialBalanceSnapshot,
+)
 from dealer_ai.services.accounting import (
     JournalLineInput,
     post_journal_entry,
@@ -113,6 +145,8 @@ class Command(BaseCommand):
             if options["reset"]:
                 self._reset(dealership)
 
+            self._restore_rerun_invariants(dealership)
+
             entry = self._provision_journal_entry(
                 dealership,
                 description=FIXTURE_DESCRIPTION,
@@ -146,6 +180,18 @@ class Command(BaseCommand):
                 f"Cr {FIXTURE_CREDIT_ACCOUNT_CODE}."
             )
         )
+
+    def _restore_rerun_invariants(self, dealership: Dealership) -> None:
+        """[M34.1 · D4] Restore pre-flight invariants the M20.3
+        office/accounting workflow journey depends on, so the seed is
+        rerun-safe against mutated state.
+
+        See ``## Rerun invariants`` in the module docstring for the
+        contract. Dealership-scoped wipe under the ``M20_ACCEPTANCE_DB``
+        env-guard invariant (see module docstring). No shipped snapshot
+        on any production or dev DB is at risk.
+        """
+        TrialBalanceSnapshot.objects.filter(dealership=dealership).delete()
 
     def _reset(self, dealership: Dealership) -> None:
         deleted_entries, _ = JournalEntry.objects.filter(

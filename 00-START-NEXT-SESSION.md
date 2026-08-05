@@ -1,7 +1,7 @@
 ---
 state: active
 date: 2026-08-05
-last_session_shipped: SESSION_213
+last_session_shipped: SESSION_214
 milestone_1_status: shipped
 milestone_2_status: shipped
 milestone_3_status: shipped
@@ -36,88 +36,70 @@ milestone_31_status: shipped
 milestone_32_status: shipped
 milestone_33_status: shipped
 milestone_34_status: active
-next_session: SESSION_214
+next_session: SESSION_215
 next_milestone: 34
 next_milestone_name: "Test-Hygiene Remediation: Idempotent seeds + rerun-safe acceptance journeys"
-next_increment: 1
-next_increment_name: "M34.1 — Backend: seed extensions + Django regression tests"
+next_increment: 2
+next_increment_name: "M34.2 — Acceptance workspace: helper defense + @rerun-hygiene tag + repeated-run proof + M34 close-out fold"
 ---
 
-# Next session — SESSION_214 · Milestone 34 · Increment 1 (M34.1 — backend seed extensions + Django regression tests)
+# Next session — SESSION_215 · Milestone 34 · Increment 2 (M34.2 — acceptance workspace + M34 close-out fold)
 
-> **Milestone 34 planning complete at SESSION_213.** M34.0
-> locked all §5 decisions (D1–D8; risks R1–R9; verifications
-> §4.1–§4.6 all CLEAN; two-increment phasing; DoD compliance;
-> rollback; non-goals). Governing contract:
-> `docs/roadmap/MILESTONE_34_PLANNING.md`.
+> **Milestone 34 · Increment 1 shipped at SESSION_214.** All
+> three seed commands now restore the pre-flight invariants
+> the M20.2 / M20.3 journeys depend on. Six focused regression
+> tests prove the mutate → re-seed cycle restores state.
+> Backend baseline advanced 5,015 → **5,021** pass (+6 vs
+> planned +3 per M34.0 §5.e; §0.a coverage-projection
+> truthfulness correction documented in SESSION_214 handoff
+> §0.a; (cc) durable lesson elevated to load-bearing-across-
+> two-milestones on second invocation).
 >
-> **M34 target:** Test-Hygiene Remediation. Idempotent seeds
-> + rerun-safe acceptance journeys for the three shared-DB
-> non-idempotent journeys: `sales_manager/daily_startup`,
-> `recon/workflow`, `office/accounting_workflow`. Six-
-> milestone deferral (M27.2 → M33.2) closed.
+> **No product-code changes** — seeds + tests only. Audit
+> unchanged at 162 / 131 / 31 / 321. Migrations unchanged.
+> Zero-drift permission-class streak unchanged at 37 (M10 →
+> M33); M34 close projection: 38.
 >
-> **Zero blocking findings at §4 verification. Zero
-> corrections required before §5.b lock** — first M34
-> planning-open cycle with zero revisions. Planning-time
-> as-recommended streak at 13 (projected close if no §0.a
-> amendments).
+> **DoD exception path invocation #9 at M34.1.** M34.2
+> continues the exception path — no new customer-facing
+> journey; the existing three journeys are tagged for
+> developer-side rerun-proof invocation per D7 Option A.
 >
-> **Fully non-customer-facing milestone** — first since M20.
-> DoD exception path invocation #9 (M34.1) + continuation
-> (M34.2). Justification per §5.f: H protects the durability
-> of the 131-endpoint coverage set that every future depth-
-> arc addition builds on.
+> **SESSION_215 ships M34.2** — the acceptance-workspace half
+> of H (assertion helper defense + `@rerun-hygiene` tag +
+> `acceptance/README.md` invocation documentation + local
+> repeated-run evidence) AND the M34 close-out fold (M34
+> retrospective document + CAPABILITY_MATRIX §7ι + planning-
+> memo frontmatter flip to historical + SESSION_216 M35.0
+> planning marker).
 >
-> **Two-increment phasing:**
-> - **M34.1** (this session): backend seed extensions (three
->   files) + Django regression tests (~3 tests).
-> - **M34.2** (SESSION_215): acceptance-workspace helper
->   defense + `@rerun-hygiene` tag + repeated-run proof
->   evidence in handoff.
+> **Substrate-compound-value continuation** remains
+> intentionally paused per M33 §9 "close a deferral"
+> resolution. F&I depth arc remains primary M35 candidate;
+> M35.0 planning at SESSION_216 will re-evaluate against the
+> M33 §9 elevated candidate list under the primary
+> operational-coverage lens.
 >
-> **Substrate-compound-value continuation breaks intentionally
-> at M34** — M32 + M33 2-link F&I depth arc pauses per M33 §9
-> "close a deferral" resolution. Arc remains primary
-> continuation candidate for M35 if pilot evidence surfaces
-> on NEW C chargeback, NEW F&I workflow-state extensions, or
-> Lender Fit Recommendations.
->
-> **Zero-drift permission-class streak advances 37 → 38
-> consecutive milestones** projected at M34 close (M34 adds
-> no permission classes, no endpoints).
->
-> **Durable lesson locked at M34.0 (D8):** *Acceptance
-> journeys must be independently rerunnable against shared
-> state; green-on-clean-DB alone is insufficient evidence of
-> operational reliability.* Recorded as candidate (ff) at
-> M34 retrospective §5; awaits first re-application to
-> elevate.
->
-> **SESSION_214 opens M34.1 — backend seed extensions +
-> Django regression tests.** Read the M34.0 planning memo
-> §5.b D1 + D2 + D3 + D4 + D6 + §5.e M34.1 before touching
-> any seed file. No product-code changes anywhere.
+> **Coordinated M34 push pending user confirmation** at M34.2
+> close. Expected M34 commits at push: **4–6** (M34.0
+> planning `f163e93`; M34.0 hash-backfill `a03c5eb`; M34.1
+> backend + tests; M34.1 hash-backfill; M34.2 acceptance +
+> close-out fold; M34.2 hash-backfill).
 
-## First thing SESSION_214 must do
+## First thing SESSION_215 must do
 
 ### 1. Verify starting state
 
-- `git status` — clean; local `HEAD` matches
-  `origin/main` post-M33 push OR ahead by 3 commits
-  (SESSION_213 planning memo + handoff + start-next flip +
-  hash-backfill follow-up) if M34.0 planning commit not yet
-  pushed. **No coordinated push at M34.0 close** per §9 of
-  SESSION_213 handoff.
-- `git log --oneline -10` — top should be the M34.0 hash-
-  backfill commit; check for expected M34.0 commit followed
-  by the M33 commit sequence (`3a83584` M33.2 hash-backfill,
-  `622c51e` M33 close-out fold, `1e0008f` M33.1 hash-
-  backfill, `eb50f94` M33.1 backend, `e03d31c` M33.0 hash-
-  backfill, `7b8f6b6` M33.0 planning).
-- `python3 manage.py test dealer_ai` → **5,015 pass, 1
-  skipped, 0 fail**.
-- `cd frontend && npm test` → **402 pass** across 45 files.
+- `git status` — clean; local `HEAD` ahead of `origin/main`
+  by 4 commits (M34.0 planning + M34.0 hash-backfill +
+  M34.1 backend + M34.1 hash-backfill).
+- `git log --oneline -10` — top should be the M34.1 hash-
+  backfill; expected sequence follows the standard M28+
+  cadence.
+- `python3 manage.py test dealer_ai` → **5,021 pass, 1
+  skipped, 0 fail** (matches M34.1 close baseline).
+- `cd frontend && npm test` → **402 pass** across 45 files
+  (unchanged).
 - `python3 manage.py check` clean.
 - `python3 manage.py makemigrations --check --dry-run` →
   "No changes detected."
@@ -127,149 +109,169 @@ next_increment_name: "M34.1 — Backend: seed extensions + Django regression tes
 - `rm -f backend/db.acceptance.sqlite3` — proactive reset
   per SESSION_200 §0.a durable lesson (v).
 
-### 2. Read the M34.0 planning memo before touching code
+### 2. Read the M34.0 planning memo sections for M34.2
 
-Read the following sections of
-`docs/roadmap/MILESTONE_34_PLANNING.md` before opening any
-seed file:
+Read the following before touching acceptance code:
 
-- **§5.b D1** — seed-idempotency contract (project-wide
-  statement + docstring `## Rerun invariants` section
-  requirement).
-- **§5.b D2** — sales-manager 3-source reset (exact code
-  block; placement; tag-scoped queryset invariant).
-- **§5.b D3** — recon 1-line reset (tag + dealership
-  scoping; placement).
-- **§5.b D4** — accounting scoped wipe (dealership-scoped;
-  M20_ACCEPTANCE_DB invariant re-documented in module
-  docstring).
-- **§5.b D6** — Django regression tests (three tests;
-  mutate → re-seed → invariant-check shape).
-- **§5.e M34.1** — file paths + backend baseline projection
-  (~5,018 pass) + audit-unchanged expectation.
-- **§5.f** — DoD exception path invocation #9 rationale.
-- **§5.h** — non-goals (12 explicit + no product-code
-  changes; no assertion weakening; no shared helper; etc.).
+- **§5.b D5** — assertion helper defense: `total_count` over
+  `.length`; scoped to `fetchSnapshotList` +
+  `expectSnapshotCountAtLeast`; `fetchAllJournalEntries`
+  untouched.
+- **§5.b D7** — `@rerun-hygiene` tag on three
+  `test.describe(...)` strings; `acceptance/README.md`
+  invocation documentation for
+  `npx playwright test --repeat-each=2 --grep "@rerun-hygiene"`;
+  Option A locked at M34.0 open.
+- **§5.b D8** — durable lesson (ff) verbatim text and
+  placement (`docs/CAPABILITY_MATRIX.md` §7 durable-lessons
+  + M34 retrospective §5).
+- **§5.e M34.2** — file paths + acceptance suite target
+  (25 spec files / 32 tests / ≤37s with +2s budget for seed
+  reset overhead).
+- **§5.f** — DoD exception path continuation rationale.
+- **§5.h** — non-goals (no product-code; no spec step
+  changes; no assertion weakening; no shared helper).
 
-### 3. Ship M34.1 backend substrate
+### 3. Ship M34.2 acceptance substrate
 
-Per M34.0 §5.e M34.1:
+Per M34.0 §5.e M34.2:
 
-- **Extend `seed_journey_sales_manager_daily_startup.py`:**
-  - Add `from dealer_ai.models import BeBack` (or extend
-    existing import block).
-  - Add D2 reset code block **before** the `_provision_leads`
-    call in `handle()`. Exact order per §5.b D2:
-    1. `_existing_leads(dealership).update(assigned_to=None)`
-    2. `BeBack.objects.filter(lead__in=seeded).delete()`
-    3. `FollowUpCadence.objects.filter(lead__in=seeded).exclude(template="24hr").delete()`
-    4. `FollowUpCadence.objects.filter(lead__in=seeded, template="24hr").update(is_active=True, paused_at=None)`
-  - Add `## Rerun invariants` section to module docstring
-    naming each restored invariant explicitly.
-  - `--reset` flag semantics preserved unchanged.
-- **Extend `seed_journey_recon_workflow.py`:**
-  - Add D3 reset line **before** `_provision_report_and_finding`:
-    `ReconDecision.objects.filter(finding__description__startswith=FIXTURE_FINDING_TAG, dealership=dealership).delete()`.
-  - Add `## Rerun invariants` docstring section.
-- **Extend `seed_journey_office_accounting_workflow.py`:**
-  - Add `from dealer_ai.models import TrialBalanceSnapshot`.
-  - Add D4 wipe line **before** `_provision_journal_entry`:
-    `TrialBalanceSnapshot.objects.filter(dealership=dealership).delete()`.
-  - Add `## Rerun invariants` docstring section + explicit
-    `M20_ACCEPTANCE_DB` invariant note per §5.b D4.
-- **Create
-  `backend/dealer_ai/tests/test_seed_journey_idempotency.py`
-  (~120 lines):**
-  - Three tests per D6:
-    - `test_sales_manager_daily_startup_idempotent`
-    - `test_recon_workflow_idempotent`
-    - `test_office_accounting_workflow_idempotent`
-  - Each uses `django.core.management.call_command()` +
-    direct model queries + fixture selectors matching the
-    seed's tag / stock / description constants.
-  - Wrap in Django's default per-test transaction rollback.
-- **Historical migration NOT modified.**
-- **No product-code change** (no view, service, model,
-  permission, URL, migration edits).
+- **Refactor
+  `acceptance/support/assertions/accounting.ts` per D5:**
+  - Change `fetchSnapshotList` return shape to
+    `{ snapshots, totalCount }`.
+  - `expectSnapshotCountAtLeast` asserts against
+    `totalCount` (not `snapshots.length`).
+  - Journey `accounting_workflow.spec.ts` needs a small
+    update to consume the new return shape at the
+    `snapshotsBefore` and `snapshotsAfter` sites (this is
+    the ONLY allowed journey-code touch — see §5.h).
+  - Actually per §5.h "Do NOT modify the three journey
+    `.spec.ts` files' step logic, timeouts, waits, or
+    assertions" — the shape update is a mechanical consumer
+    change, not a step-logic change. Document explicitly in
+    §2 of the M34.2 handoff which lines changed and why they
+    are within-scope. Consider an alternative: preserve the
+    old return shape as `snapshots: TrialBalanceSnapshotSummary[]`
+    (a plain array) and add a separate
+    `expectSnapshotTotalCountAtLeast` helper that fetches
+    `total_count`. This preserves journey code verbatim.
+    Evaluate at M34.2 open; recommend the preserve-shape
+    approach to minimize scope.
+  - `fetchAllJournalEntries` untouched (M22.2 JE-reversal
+    journey unaffected).
+- **Add `@rerun-hygiene` tag to three spec files per D7:**
+  - `acceptance/journeys/sales_manager/daily_startup.spec.ts`
+  - `acceptance/journeys/recon/workflow.spec.ts`
+  - `acceptance/journeys/office/accounting_workflow.spec.ts`
+- **Update `acceptance/README.md`:** add developer-side
+  invocation per D7 Option A. If README doesn't exist,
+  create it minimally (title + this invocation section).
+- **Run repeated-run proof locally:**
+  `cd acceptance && npx playwright test --repeat-each=2 --grep "@rerun-hygiene"`.
+  Record pass output verbatim in the M34.2 handoff §7.
 
-### 4. Verify M34.1 close baselines
+### 4. Ship M34 close-out fold
 
-- `python3 manage.py test dealer_ai` → **~5,018 pass, 1
-  skipped, 0 fail** (target: 5,015 + 3 new regression tests).
-- `python3 manage.py check` clean.
-- `python3 manage.py makemigrations --check --dry-run` →
-  "No changes detected."
-- `python3 -m dealer_ai.scripts.audit_operational_surface`
-  → **162 / 131 / 31 / 321 unchanged** (M34.1 adds no
-  endpoints).
+- **Create `docs/roadmap/MILESTONE_34_RETROSPECTIVE.md`** with
+  §1–§9 following the M33 retrospective shape. Key content:
+  - §5 candidate durable lessons: (ff) verbatim per M34.0
+    D8; (cc) elevation-to-load-bearing note.
+  - §9 evidence-based candidates for M35 (same list as M34
+    §9 minus H which now ships at M34).
+- **Update `docs/CAPABILITY_MATRIX.md`:** add §7ι M34
+  shipped surface entry; add (ff) to durable-lessons
+  narrative; note (cc) elevation.
+- **Flip `docs/roadmap/MILESTONE_34_PLANNING.md` frontmatter
+  `status: active` → `status: historical`.**
+- **Overwrite `00-START-NEXT-SESSION.md`** for SESSION_216
+  M35.0 planning per the standard cadence.
 
-### 5. DoD exception path — invocation #9
+### 5. Verify M34.2 close baselines
 
-Document in §3 of M34.1 handoff:
+- `python3 manage.py test dealer_ai` → **5,021 pass** unchanged
+  (M34.2 does not touch backend).
+- Frontend Vitest: unchanged at 402 pass.
+- Acceptance suite: 25 spec files / 32 tests / ≤37s
+  (measure at close; note timing budget).
+- Audit artifact: **162 / 131 / 31 / 321 unchanged**.
 
-> M34.1 is backend-only (seed idempotency + Django
-> regression tests). Zero operator-visible behavior. Ninth
-> invocation of DoD exception path (M26 + M27.1 + M28.1 +
-> M29.1 + M30.1 + M31.1 + M32.1 + M33.1 + M34.1). M34.2
-> continues exception path (no new customer-facing journey;
-> existing three journeys tagged for rerun-proof).
+### 6. DoD exception path — tenth invocation
 
-### 6. Ship the M34.1 handoff
+Document in §3 of M34.2 handoff:
 
-- `docs/handoffs/SESSION_214_m34_inc1_seeds.md`.
-- **Do NOT push** — coordinated push at M34 close per §9
-  of SESSION_213 handoff.
+> M34.2 is acceptance-workspace-only (helper refactor + tag
+> + README + close-out documentation). Zero operator-visible
+> behavior. Tenth invocation of DoD exception path (M26 +
+> M27.1 + M28.1 + M29.1 + M30.1 + M31.1 + M32.1 + M33.1 +
+> M34.1 + M34.2). Existing three journeys preserve their
+> operational contract; M34.2 makes the contract rerun-safe
+> without adding a new customer-facing journey.
 
-## Non-goals for SESSION_214
+### 7. Ship the M34.2 handoff + coordinate M34 push
 
-- ❌ Do NOT modify any product-code file (views, services,
-  models, permissions, URLs, migrations, schemas). Seed +
-  test files only.
-- ❌ Do NOT modify the three journey `.spec.ts` files or
-  the assertion helper — those land at M34.2.
+- `docs/handoffs/SESSION_215_m34_inc2_acceptance.md`.
+- **Coordinated M34 push at close** after explicit user
+  confirmation. Expected commits at push: **4–6**.
+
+## Non-goals for SESSION_215
+
+- ❌ Do NOT modify any backend / product-code file (views,
+  services, models, permissions, URLs, migrations,
+  schemas). M34.2 is acceptance-workspace only.
+- ❌ Do NOT modify the three journey `.spec.ts` files' step
+  logic, timeouts, waits, or assertions. The only allowed
+  touch is adding `@rerun-hygiene` to `test.describe(...)`;
+  if the D5 helper refactor requires shape changes to
+  journey call sites, prefer the preserve-shape alternative
+  (see §3).
 - ❌ Do NOT introduce a shared reset helper across seed
-  commands (per §5.b D1 no-abstraction discipline).
-- ❌ Do NOT modify `--reset` flag semantics on the three
-  seed commands — reset remains a manual escape hatch.
-- ❌ Do NOT touch the M32.3 Intake Iris or M33.2 Structure
-  Sam fixtures — already independently rerunnable per M32
-  D11 + M33 R7.
-- ❌ Do NOT add sleeps, retries, or weaken assertions
-  anywhere.
-- ❌ Do NOT expand scope to any other seed commands.
+  commands (per M34.0 §5.b D1 no-abstraction discipline).
+- ❌ Do NOT modify the shipped M32.3 Intake Iris or M33.2
+  Structure Sam fixtures — already independently rerunnable
+  per M32 D11 + M33 R7.
+- ❌ Do NOT add sleeps, retries, or weaken assertions.
+- ❌ Do NOT change the CI workflow to add DB persistence,
+  parallelization, or repeated-run gating (Option B is
+  deferred; Option A locked at M34.0).
 - ❌ Do NOT force-push or amend earlier commits.
 - ❌ Do NOT skip the DoD exception path documentation in §3
   of the handoff.
-- ❌ Do NOT push at M34.1 close — coordinated push at M34
-  close.
+- ❌ Do NOT skip the local `--repeat-each=2` proof — its
+  output is the M34.2 handoff §7 evidence.
+- ❌ Do NOT push without explicit user confirmation.
+- ❌ Do NOT modify M35 candidate list unless M34 evidence
+  materially alters urgency.
 
 ## Baseline expected at close
 
-- Backend suite: 5,015 → **~5,018** pass (3 new regression
-  tests).
-- Frontend: unchanged (Vitest 402 pass; no frontend code
-  changes at M34.1).
-- Acceptance: unchanged (M34.1 does not touch the acceptance
-  workspace).
+- Backend suite: 5,021 pass unchanged (M34.2 no backend
+  touch).
+- Frontend: Vitest 402 pass unchanged.
+- Acceptance: 25 spec files / 32 tests unchanged in count;
+  timing ≤37s with +2s seed-reset budget.
 - Audit: **162 / 131 / 31 / 321 unchanged**.
 - Permission classes: 7 (zero-drift streak advances 37 →
   **38** at M34 close).
-- Migrations: unchanged (M34.1 adds none).
+- Migrations: unchanged (M34 adds none).
+- **M34 shipped** at SESSION_215 close.
 
 ## NEXT TASK
 
-Start SESSION_214 with (a) starting-state verification;
-(b) read M34.0 planning memo §5.b D1 + D2 + D3 + D4 + D6 +
-§5.e M34.1 + §5.f + §5.h before touching code; (c) ship the
-three seed extensions per D2 + D3 + D4 including
-`## Rerun invariants` docstring sections; (d) create
-`test_seed_journey_idempotency.py` with the three regression
-tests per D6; (e) verify baselines (5,018 pass; audit
-unchanged; migrations unchanged); (f) DoD exception path
-documentation in §3 of the handoff (invocation #9);
-(g) ship the M34.1 handoff at
-`docs/handoffs/SESSION_214_m34_inc1_seeds.md`. **Do NOT
-push.**
+Start SESSION_215 with (a) starting-state verification;
+(b) read M34.0 planning memo §5.b D5 + D7 + D8 + §5.e M34.2
++ §5.f + §5.h; (c) refactor `accounting.ts` helper per D5
+(evaluate preserve-shape alternative to minimize journey
+touch); (d) add `@rerun-hygiene` tag to the three specs;
+(e) update `acceptance/README.md` with developer invocation;
+(f) run repeated-run proof locally and record output verbatim;
+(g) ship M34 close-out fold (retrospective + CAPABILITY_MATRIX
+§7ι + planning-memo flip + start-next flip); (h) verify
+baselines; (i) DoD exception path documentation in §3;
+(j) ship the M34.2 handoff at
+`docs/handoffs/SESSION_215_m34_inc2_acceptance.md`;
+(k) **coordinated M34 push at close after explicit user
+confirmation**.
 
 ---
 
@@ -279,106 +281,119 @@ push.**
 2. `docs/DOC_GOVERNANCE.md`
 3. `docs/roadmap/IMPLEMENTATION_ROADMAP.md`
 4. `docs/roadmap/AUTHENTICATION_MODEL.md`
-5. `docs/roadmap/MILESTONE_33_RETROSPECTIVE.md` §9 (M34
-   candidate list origin + F&I depth-arc standing question)
+5. `docs/roadmap/MILESTONE_33_RETROSPECTIVE.md` §9
 6. **`docs/roadmap/MILESTONE_34_PLANNING.md`** (governing
-   contract for M34 — read §5.b + §5.e + §5.h before code)
-7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` (post-M33
-   baseline — 162 / 131 / 31 / 321)
+   contract for M34 — read §5.b D5 + D7 + D8 + §5.e M34.2 +
+   §5.h before code)
+7. `docs/roadmap/M21_OPERATIONAL_SURFACE_AUDIT.md` (unchanged
+   at M34.1 close — 162 / 131 / 31 / 321)
 8. `docs/CAPABILITY_MATRIX.md` §7θ (M33 shipped surface);
    §7ι added at M34 close
 9. `docs/handoffs/SESSION_213_m34_inc0_planning.md` (M34.0
    planning close)
-10. `docs/handoffs/SESSION_212_m33_inc2_frontend.md` (M33.2
-    shipped + M33 close-out fold)
-11. `docs/roadmap/MILESTONE_20_PLANNING.md` §5.d (M20 compose-
-    service-verbs rule for seeds; superseded at M34 for
-    reset-scoped ORM queries per D2 + D3 + D4)
-12. Memory record
-    `feedback_duplicate_small_stable_logic.md` (governs D1
-    no-shared-helper decision at M34)
+10. `docs/handoffs/SESSION_214_m34_inc1_seeds.md` (M34.1
+    backend close)
+11. `docs/handoffs/SESSION_212_m33_inc2_frontend.md` (M33.2
+    shipped + M33 close-out fold — pattern reference for
+    M34 close-out fold shape)
+12. Memory record `feedback_duplicate_small_stable_logic.md`
+    (M28.0 origin — governs D1 no-shared-helper discipline;
+    honored at M34.1 and continues at M34.2)
 13. Memory record
-    `feedback_playwright_as_operational_contract.md` (M34
-    preserves operational contract via rerun-safety, not
-    via new journey coverage)
-14. Memory record
-    `feedback_verify_fk_discoverability_before_lock.md`
-    (M27.0 origin — applied at §4.5 for cascade behavior)
+    `feedback_playwright_as_operational_contract.md` (M34.2
+    adds the acceptance-side rerun-safety proof to the
+    operational contract)
+14. Memory record `feedback_terminal_output_discipline.md`
+    (governs implementation-session output shape)
 
 Narrative docs are claims. Rules + research + code +
 regenerated artifact are facts.
 
 ---
 
-## Operational state (post-SESSION_213 — Milestone 34 PLANNING SHIPPED)
+## Operational state (post-SESSION_214 — Milestone 34 · Increment 1 SHIPPED)
 
 - **Backend (local):** Django on `:8001`. Migrations
   `0001`–`0051` (unchanged since M32.1). Test baseline:
-  **5,015 pass**, 1 skipped, 0 fail.
+  **5,021 pass**, 1 skipped, 0 fail (+6 vs M33.2 close
+  baseline of 5,015).
 - **Backend (prod):** NOT active.
 - **Frontend (local):** Vite on `:5173`. `tsc --noEmit` +
   `vite build` clean. **Vitest baseline: 402 pass** across
-  45 test files.
+  45 test files (unchanged).
 - **Frontend (prod):** NONE.
 - **Acceptance workspace (local):** Playwright 1.49 + TS
-  5.6 operational; **25 journeys** total (unchanged M34.0).
+  5.6 operational; **25 journeys** total (unchanged M34.1).
 - **Acceptance (CI):** live on
   `.github/workflows/acceptance.yml`. Latest run on
-  `origin/main` at `3a83584` (M33.2 hash-backfill commit):
+  `origin/main` at `3a83584` (M33.2 hash-backfill):
   **success in 3m8s** at 2026-08-05T04:20:13Z.
 - **Async runtime:** unchanged (Celery 5.5.3 + Redis 6.4.0
   + `django-celery-beat` 2.8.1 DatabaseScheduler).
 - **Milestones shipped:** M1 → **M33**. M34.0 planning
-  shipped at SESSION_213. M34.1 backend + M34.2 acceptance
+  shipped at SESSION_213; M34.1 backend seeds + tests
+  shipped at SESSION_214; M34.2 acceptance + close-out
   pending.
-- **DRF admin surface:** **122** endpoints (unchanged M34.0).
-- **Frontend operator routes:** **21** (unchanged M34.0).
+- **DRF admin surface:** **122** endpoints (unchanged M34.1).
+- **Frontend operator routes:** **21** (unchanged M34.1).
 - **Public endpoints:** +1 M6.5 showroom (unchanged).
-- **Service surface:** **321** verbs (unchanged M34.0).
-- **Frontend surfaces:** unchanged M34.0.
+- **Service surface:** **321** verbs (unchanged M34.1).
+- **Frontend surfaces:** unchanged M34.1.
 - **Tenancy carriers:** 52 (unchanged).
 - **Permission classes:** **7 actual** — zero-drift streak
   **thirty-seven consecutive milestones** (M10 → M33).
-  M34 projected: 38 at close (no new classes anywhere in
-  M34).
+  M34 projected: 38 at close.
 - **`Vehicle.is_available`:** unchanged.
 - **AI safety stack:** 17 scrub stages (unchanged).
 - **Deterministic rules:** unchanged.
-- **Milestone 34 status:** M34.0 SHIPPED (planning-only).
-  M34.1 (backend seed extensions + regression tests) is
-  the next increment.
+- **Milestone 34 status:** M34.0 SHIPPED (planning); M34.1
+  SHIPPED (backend seeds + tests); M34.2 pending.
 - **Audit tooling status:** unchanged from M26.1. Coverage
-  **131 / 162** (M33.2 close; unchanged at M34.0). M34
-  projection: unchanged (M34 adds no endpoints).
-- **Playwright personas:** **6 actual** (unchanged M34.0).
-- **Playwright fixtures:** unchanged M34.0 — Intake Iris
+  **131 / 162** (unchanged at M34.1 close). M34 projection:
+  unchanged (M34 adds no endpoints).
+- **Playwright personas:** **6 actual** (unchanged M34.1).
+- **Playwright fixtures:** unchanged M34.1 — Intake Iris
   (M32.3) + Structure Sam (M33.2) remain independently
   rerunnable per M32 D11 + M33 R7.
-- **§9 evidence for M35:** unchanged from M33 §9 (F&I
-  depth-arc candidates: NEW C chargeback substrate, Lender
-  Fit Recommendations, NEW F&I workflow-state extensions,
-  NEW F&I-scoped lead-context view, NEW cross-lead pending-
-  approval queue; deferrals: direct-create structuring,
-  iteration UX, PATCH on DealStructure; NEW O2 + NEW O3
-  unchanged; H closes at M34; plus gated T/U/L/M, deferred
+- **Seed rerun-safety** (M34.1): three
+  `seed_journey_*` commands now restore pre-flight
+  invariants across mutate → re-seed cycles:
+  `seed_journey_sales_manager_daily_startup` (4 invariants
+  — unassign + BeBack delete + non-24hr cadence delete +
+  24hr cadence re-activate); `seed_journey_recon_workflow`
+  (1 invariant — ReconDecision delete on seeded finding);
+  `seed_journey_office_accounting_workflow` (1 invariant
+  — TrialBalanceSnapshot wipe on fixture dealership under
+  M20_ACCEPTANCE_DB env-guard).
+- **§9 evidence for M35:** unchanged from M33 §9 minus H
+  (F&I depth-arc candidates: NEW C chargeback substrate,
+  Lender Fit Recommendations, NEW F&I workflow-state
+  extensions, NEW F&I-scoped lead-context view, NEW
+  cross-lead pending-approval queue; deferrals: direct-
+  create structuring, iteration UX, PATCH on DealStructure;
+  NEW O2 + NEW O3 unchanged; plus gated T/U/L/M, deferred
   D, deferred stable G, plus M33 §3 + M32 §3 + prior
-  deferrals).
-- **Planning-time streak: 12 → 13** projected at M34 close
-  (at M34.0 with zero corrections; historical run of 89
-  across M10 → M23 preserved).
+  deferrals). H closes at M34.
+- **Planning-time streak: 12 → 13** projected at M34.2 close
+  (unchanged at M34.1; §0.a coverage-projection
+  truthfulness correction is per-M34.1 §0.a convention not
+  streak-affecting).
+- **(cc) durable lesson elevated to load-bearing-across-
+  two-milestones** at M34.1 on second re-application (M33.1
+  origin: coverage-projection truthfulness on M33.0 §5.e
+  projection; M34.1 second: test-count overshoot vs M34.0
+  §5.e projection). Elevation triggered per SESSION_212
+  M33 §5 candidate-elevation convention.
 - **DoD amendment (M21.0 §5.f Option B):** ninth invocation
-  of exception path at M34.1 (backend-only). M34.2
-  continues exception path (no new customer-facing journey).
-  First fully non-customer-facing milestone since M20.
+  of exception path at M34.1. M34.2 tenth invocation
+  projected. First fully non-customer-facing milestone
+  since M20.
 - **M33 audit coverage at close:** 162 endpoints, **131
-  covered / 31 backend-only** (unchanged at M34.0 open).
+  covered / 31 backend-only** (unchanged at M34.1 close).
 - **Durable lessons carried into M35+:** all (a)–(ee) plus
-  M34-origin candidate lesson (ff): *Acceptance journeys
-  must be independently rerunnable against shared state;
-  green-on-clean-DB alone is insufficient evidence of
-  operational reliability.* Recorded verbatim per §5.b D8;
-  awaits first re-application to elevate to load-bearing-
-  across-two-milestones. M33-origin candidates (cc)/(dd)/
-  (ee) unchanged at M34.0 — no re-application opportunity
-  (M34 is not a coverage-projection / financial-language /
-  future-capability-recording milestone).
+  M34.0-origin candidate (ff) *Acceptance journeys must be
+  independently rerunnable against shared state; green-on-
+  clean-DB alone is insufficient evidence of operational
+  reliability.* (recorded verbatim per §5.b D8; awaits
+  first re-application to elevate). (cc) elevated at M34.1
+  to load-bearing-across-two-milestones.
