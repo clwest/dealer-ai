@@ -4793,6 +4793,16 @@ class DealStructure(models.Model):
     is deferred until the M10.5 Contract entity lands and operator
     evidence surfaces the shape. Default empty list, matching
     ``Delivery.checklist`` empty-default pattern.
+
+    **M33.1 read surface.** Single-row tenant-scoped read is
+    exposed at ``GET /admin/deal-structures/<int:pk>/`` (route
+    name ``admin-deal-structure-read``) — thin wrapper on
+    :func:`services.f_and_i.get_deal_structure`. Read-only; no
+    PATCH; no DELETE. Iteration UX (creating a second structure
+    for a CA already in "In progress") explicitly deferred per
+    ``MILESTONE_33_PLANNING.md`` §5.h — the M10.2 M-to-1
+    cardinality is preserved unchanged; only the operator flow
+    surfaces the latest row.
     """
 
     dealership = models.ForeignKey(

@@ -21,13 +21,20 @@ deterministic. Cross-tenant writes refuse at entry.
   invariant is testable in isolation and the value can be
   re-derived on any row that predates the field ever being
   written.
-- :func:`list_credit_applications` (**M32.1**) — tenant-scoped
-  list read for the F&I intake queue. Optional filters:
-  ``intake=True`` filters to CAs without a Contract (pre-contract
-  incoming queue); ``lead=`` filters by CustomerLead; ``since=``
-  filters by ``captured_at >= since``. Fail-explicit filter
-  validation per D3 — callers pass typed args, endpoint layer
-  handles query-string parsing + 400 mapping.
+- :func:`list_credit_applications` (**M32.1** + **M33.1
+  annotations**) — tenant-scoped list read for the F&I intake
+  queue. Optional filters: ``intake=True`` filters to CAs
+  without a Contract (pre-contract incoming queue); ``lead=``
+  filters by CustomerLead; ``since=`` filters by
+  ``captured_at >= since``. Fail-explicit filter validation per
+  M32.1 D3 — callers pass typed args, endpoint layer handles
+  query-string parsing + 400 mapping. **M33.1 adds two
+  tenant-scoped subquery annotations on every returned row**:
+  ``has_deal_structure`` (Boolean; drives the M33 intake-row
+  chip) + ``latest_deal_structure_id`` (nullable int;
+  deterministic ordering ``("-created_at", "-pk")`` for the
+  "Open structure" action). Both per
+  ``MILESTONE_33_PLANNING.md`` §5.b D1 + D3.
 
 Retention discipline (locked at the model layer per
 ``MILESTONE_10_PLANNING.md`` §5.e). The service *computes*
@@ -54,6 +61,7 @@ from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from django.db import transaction
+from django.db.models import Exists, OuterRef, Subquery
 from django.utils import timezone
 
 from ...models import (
@@ -64,6 +72,7 @@ from ...models import (
     CreditApplication,
     CustomerLead,
     Dealership,
+    DealStructure,
     DealWriteup,
     Sale,
 )
@@ -324,14 +333,49 @@ def list_credit_applications(
     No pagination (M10.7 / M11 precedent — 100-row soft cap
     deferred per §5.h). Callers cap via slicing if needed.
 
+    **M33.1 extension.** Every returned row carries two subquery
+    annotations that let the endpoint projection derive the
+    F&I structuring status without an N+1 fetch:
+
+    - ``has_deal_structure`` — ``True`` when any
+      :class:`DealStructure` exists for this CA in the caller's
+      tenant; ``False`` otherwise. Drives the M33 intake-row chip
+      ("Incoming" when False; "In progress" when True) per
+      ``MILESTONE_33_PLANNING.md`` §5.b D1.
+    - ``latest_deal_structure_id`` — pk of the most-recent
+      :class:`DealStructure` for this CA, or ``None`` when
+      Incoming. Deterministic ordering
+      ``("-created_at", "-pk")`` disambiguates the rare case
+      where two structures share ``created_at`` at microsecond
+      granularity (seed / migration / bulk-import scenarios).
+      Per ``MILESTONE_33_PLANNING.md`` §5.b D3.
+
+    Both subqueries are explicitly tenant-scoped
+    (``dealership=dealership`` in the filter) — belt over the
+    :meth:`DealStructure.clean` and service-layer
+    :class:`CrossTenantDealStructureError` suspenders that already
+    prevent legitimate cross-tenant rows.
+
     Pure read — never raises except on cross-tenant lead.
     """
     if lead is not None:
         _assert_same_tenant_lead(lead, dealership)
 
+    tenant_deal_structures = DealStructure.objects.filter(
+        dealership=dealership,
+        credit_application=OuterRef("pk"),
+    )
     qs = (
         CreditApplication.objects.filter(dealership=dealership)
         .select_related("lead", "sale", "deal_writeup")
+        .annotate(
+            has_deal_structure=Exists(tenant_deal_structures),
+            latest_deal_structure_id=Subquery(
+                tenant_deal_structures
+                .order_by("-created_at", "-pk")
+                .values("pk")[:1]
+            ),
+        )
     )
     if intake:
         # Exclude any CA whose deal_structures include at least one

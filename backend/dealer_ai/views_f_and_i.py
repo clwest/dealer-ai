@@ -307,15 +307,33 @@ def _project_writeup_context(app: CreditApplication) -> dict:
 
 
 def _project_credit_application_with_writeup(app: CreditApplication) -> dict:
-    """M32.1 projection: base CA projection + writeup context.
+    """M32.1 + M33.1 projection: base CA projection + writeup context
+    + derived DealStructure status fields.
 
-    Extends :func:`_project_credit_application` (M10.1) with the
-    ``writeup_context`` nested object (or ``None`` when the CA has
-    no ``deal_writeup`` backpointer — direct-create or historical
-    row).
+    Extends :func:`_project_credit_application` (M10.1) with:
+
+    - ``writeup_context`` (M32.1) — nested object or ``None`` when
+      the CA has no ``deal_writeup`` backpointer (direct-create or
+      historical row).
+    - ``has_deal_structure`` (M33.1) — Boolean derived from the
+      tenant-scoped ``Exists`` annotation set by
+      :func:`services.f_and_i.list_credit_applications`. Drives
+      the M33 intake-row chip ("Incoming" when ``False``;
+      "In progress" when ``True``).
+    - ``latest_deal_structure_id`` (M33.1) — nullable int derived
+      from the deterministic ``("-created_at", "-pk")`` subquery
+      set by :func:`services.f_and_i.list_credit_applications`.
+      Populated with the latest DealStructure pk when
+      ``has_deal_structure`` is ``True``; ``None`` when
+      ``False``. Drives the M33 "Open structure" action which
+      fetches the full row via ``GET /admin/deal-structures/<pk>/``.
+
+    Per ``MILESTONE_33_PLANNING.md`` §5.b D1 + D3.
     """
     base = _project_credit_application(app)
     base["writeup_context"] = _project_writeup_context(app)
+    base["has_deal_structure"] = app.has_deal_structure
+    base["latest_deal_structure_id"] = app.latest_deal_structure_id
     return base
 
 
@@ -569,6 +587,52 @@ def admin_deal_structure_create(request):
     return Response(
         {"deal_structure": _project_deal_structure(deal)},
         status=status.HTTP_201_CREATED,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Milestone 33 · Increment 1 (SESSION_211) — DealStructure read endpoint.
+#
+# GET /admin/deal-structures/<int:pk>/ — single-row tenant-scoped read.
+# Per MILESTONE_33_PLANNING.md §5.b D2. Thin wrapper on the shipped
+# M10.2 service verb ``get_deal_structure``; reuses the shipped
+# ``_project_deal_structure`` projection verbatim. Read-only —
+# activation-vocabulary-asymmetry per M31 lesson w; no PATCH, no
+# DELETE. Same permission composition as M10.2 (``_M101_PERMS``).
+# Cross-tenant surfaces as 404 (never leak existence).
+# ---------------------------------------------------------------------------
+
+
+@api_view(["GET"])
+@permission_classes(_M101_PERMS)
+def admin_deal_structure_read(request, pk):
+    """GET: single DealStructure (M33.1 read).
+
+    Tenant-scoped via shipped
+    :func:`services.f_and_i.get_deal_structure`. Returns 404 on
+    unknown or cross-tenant pk (never leaks — matches
+    M9.1 / M10.1 / M10.2 fail-closed shape).
+
+    Read-only. No PATCH, no DELETE — activation-vocabulary-
+    asymmetry per M31 lesson w. Iteration UX (creating a second
+    structure for a CA already In progress) explicitly deferred
+    per ``MILESTONE_33_PLANNING.md`` §5.h.
+
+    Response shape matches :func:`_project_deal_structure` verbatim
+    — 13 stored fields + three nullable ratios + timestamps. Ratios
+    surface as stringified Decimals when populated, ``null`` when
+    NULL (M10.1-era CA without income captured).
+    """
+    dealership = get_current_dealership(request)
+    deal = f_and_i_service.get_deal_structure(pk, dealership=dealership)
+    if deal is None:
+        return Response(
+            {"detail": "Deal structure not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(
+        {"deal_structure": _project_deal_structure(deal)},
+        status=status.HTTP_200_OK,
     )
 
 

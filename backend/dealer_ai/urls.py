@@ -549,6 +549,17 @@ urlpatterns = [
         views_f_and_i.admin_deal_structure_create,
         name="admin-deal-structure-create",
     ),
+    # ---- Milestone 33 · Increment 1 — DealStructure read endpoint -----
+    # Per MILESTONE_33_PLANNING.md §5.b D2. Same permission composition
+    # as M10.2 create (``_M101_PERMS`` in views_f_and_i). Read-only —
+    # no PATCH, no DELETE (activation-vocabulary-asymmetry per M31
+    # lesson w). Cross-tenant surfaces as 404 (never leak) — matches
+    # the M9.1 / M10.1 / M10.2 fail-closed shape.
+    path(
+        "admin/deal-structures/<int:pk>/",
+        views_f_and_i.admin_deal_structure_read,
+        name="admin-deal-structure-read",
+    ),
     # ---- Milestone 10 · Increment 3 — Lender catalog + submission API --
     # Role-gated on the same permission class as M10.1/M10.2 (composed
     # via ``_M101_PERMS`` in views_f_and_i). Flat URL shape per §1.9.a.
