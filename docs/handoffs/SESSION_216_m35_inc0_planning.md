@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "Lender Submission Activation: record the latest structure's lender submission, capture the response on that same submission, and derive the current F&I state from verified FK events"
 increment: 0
 increment_status: shipped
-commit: TBD
-commit_notes: "M35.0 planning session — local commit landed at close per M28.0 / M29.0 / M30.0 / M31.0 / M32.0 / M33.0 / M34.0 planning-only cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated M35 close push deferred to explicit user confirmation after M35.2 close."
+commit: f17e1eb
+commit_notes: "M35.0 planning session — local commit landed as f17e1eb per M28.0 / M29.0 / M30.0 / M31.0 / M32.0 / M33.0 / M34.0 planning-only cadence; hash backfilled via this subsequent commit; NOT pushed. Coordinated M35 close push deferred to explicit user confirmation after M35.2 close."
 ---
 
 # SESSION_216 — Milestone 35 · Increment 0 (M35.0 — planning refinement + target selection)
