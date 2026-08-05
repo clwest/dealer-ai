@@ -9,8 +9,8 @@ milestone_status: shipped
 milestone_name: "Lender Submission Activation: record the latest structure's lender submission, capture the response on that same submission, and derive the current F&I state from verified FK events"
 increment: 2
 increment_status: shipped
-commit: TBD
-commit_notes: "M35.2 frontend + Playwright + seed session — local commit landed at close; hash backfilled via a subsequent commit; NOT pushed. Coordinated M35 close push awaits explicit user confirmation."
+commit: 323628c
+commit_notes: "M35.2 frontend + Playwright + seed session — local commit landed as 323628c; hash backfilled via this subsequent commit; NOT pushed. Coordinated M35 close push awaits explicit user confirmation."
 ---
 
 # SESSION_218 — Milestone 35 · Increment 2 (M35.2 — frontend API-client + LenderSubmission components + chip extension + Playwright journey + Submission Sasha seed)
