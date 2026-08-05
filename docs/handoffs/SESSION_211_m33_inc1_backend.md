@@ -9,8 +9,8 @@ milestone_status: active
 milestone_name: "F&I Intake Activation: Incoming Application to Active Deal Structure (derived DealStructure status + DealStructure read endpoint + F&I structuring UI + Playwright loop)"
 increment: 1
 increment_status: shipped
-commit: pending
-commit_notes: "M33.1 backend substrate — local commit at close per M28.1 / M29.1 / M30.1 / M31.1 / M32.1 cadence; hash backfilled via a subsequent commit; NOT pushed. Coordinated push at M33 close after explicit user confirmation."
+commit: eb50f94
+commit_notes: "M33.1 backend substrate — local commit landed as eb50f94 at close per M28.1 / M29.1 / M30.1 / M31.1 / M32.1 cadence; hash backfilled via this subsequent commit; NOT pushed. Coordinated push at M33 close after explicit user confirmation."
 ---
 
 # SESSION_211 — Milestone 33 · Increment 1 (M33.1 — backend annotation + read endpoint + tests)
