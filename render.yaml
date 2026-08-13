@@ -1,6 +1,12 @@
-# Render blueprint — VehicleMatch backend (Django) on the free tier.
+# Render blueprint — Dealer AI backend (Django) on the free tier.
 # Free Web Service: 512MB RAM, sleeps after 15 min, cold start ~30-50s.
 # SQLite lives in the baked image; user-generated demo data resets at restart.
+#
+# Note: the Render service slug below (`vehicle-match-api`) is the historical
+# name of the live deployment. Renaming it here would change the public URL
+# (`vehicle-match-api.onrender.com` → new slug) and requires a coordinated
+# frontend `.env.production` update. Left as-is to avoid breaking the current
+# deployment; rename together if/when migrating hosts.
 
 services:
   - type: web
@@ -41,9 +47,9 @@ services:
       # Add the frontend Vercel URL to CORS once the SPA is deployed.
       # Update this list whenever a new frontend host needs API access.
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://vehicle-match.vercel.app,https://24-7-ai-global.vercel.app"
+        value: "https://vehicle-match.vercel.app"
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://vehicle-match.vercel.app,https://24-7-ai-global.vercel.app"
+        value: "https://vehicle-match.vercel.app"
       # Default LLM provider stays Ollama (unavailable on Render free) — chat
       # gracefully falls back to a clear "trouble reaching AI" message. Other
       # features (inventory, payment calc, dashboard) keep working.
