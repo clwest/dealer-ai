@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 from decimal import Decimal
+from unittest import mock
 
 from django.test import TestCase
 from django.utils import timezone
@@ -14,9 +15,12 @@ from dealer_ai.models import (
     GL_ACCOUNT_TYPE_REVENUE,
     Dealership,
     GLAccount,
+    JournalEntry,
+    JournalEntryLine,
 )
 from dealer_ai.services.accounting import (
     DEFAULT_COA,
+    AlreadyReversedError,
     CrossTenantGLAccountError,
     CrossTenantJournalEntryError,
     EmptyJournalEntryError,
@@ -273,6 +277,149 @@ class ReverseJournalEntryTests(TestCase):
         # Line signs match the original after the double reversal.
         cash_line = second_reversal.lines.get(account=self.cash)
         self.assertEqual(cash_line.debit, Decimal("250.00"))
+
+    # --- Duplicate-direct-reversal defect regression ---
+    #
+    # Auditor demonstrated that ``reverse_journal_entry`` accepted a
+    # second direct reversal of the same original entry, double-applying
+    # the correction while the system-wide debit=credit invariant still
+    # held. Guard now enforced at both the service layer and the DB
+    # (partial unique index on ``JournalEntry.reverses``).
+
+    def test_first_direct_reversal_succeeds(self) -> None:
+        # Baseline: the happy path must still work. If this fails the
+        # guard is over-broad.
+        reversal = reverse_journal_entry(
+            dealership=self.dealership,
+            entry=self.original,
+            reason="First reversal",
+        )
+        self.assertEqual(reversal.reverses_id, self.original.pk)
+        self.assertEqual(
+            JournalEntry.objects.filter(reverses=self.original).count(), 1
+        )
+
+    def test_second_direct_reversal_of_same_original_rejected(self) -> None:
+        reverse_journal_entry(
+            dealership=self.dealership,
+            entry=self.original,
+            reason="First reversal",
+        )
+        with self.assertRaises(AlreadyReversedError):
+            reverse_journal_entry(
+                dealership=self.dealership,
+                entry=self.original,
+                reason="Second direct reversal — should be rejected",
+            )
+        # Exactly one direct reversal persisted.
+        self.assertEqual(
+            JournalEntry.objects.filter(reverses=self.original).count(), 1
+        )
+        # And the ledger reflects only the single reversal — cash net
+        # debit is zero (original 250 debit + one 250 credit); revenue
+        # net credit is zero. Verifies no partial write from the
+        # rejected attempt.
+        cash_debits = sum(
+            (line.debit for line in JournalEntryLine.objects.filter(
+                account=self.cash
+            )),
+            Decimal("0.00"),
+        )
+        cash_credits = sum(
+            (line.credit for line in JournalEntryLine.objects.filter(
+                account=self.cash
+            )),
+            Decimal("0.00"),
+        )
+        self.assertEqual(cash_debits, Decimal("250.00"))
+        self.assertEqual(cash_credits, Decimal("250.00"))
+
+    def test_reversal_of_reversal_still_allowed_after_guard(self) -> None:
+        # Chain (original ← A ← B) does not violate "at most one
+        # direct reversal per entry" — each ``reverses`` value in the
+        # chain is distinct.
+        first = reverse_journal_entry(
+            dealership=self.dealership,
+            entry=self.original,
+            reason="Undo A",
+        )
+        second = reverse_journal_entry(
+            dealership=self.dealership,
+            entry=first,
+            reason="Undo B — re-restore original",
+        )
+        self.assertEqual(second.reverses_id, first.pk)
+        self.assertEqual(
+            JournalEntry.objects.filter(reverses=self.original).count(), 1
+        )
+        self.assertEqual(
+            JournalEntry.objects.filter(reverses=first).count(), 1
+        )
+
+    def test_original_immutable_after_rejected_second_reversal(self) -> None:
+        # Rejected second reversal must not mutate the original row
+        # or its lines — §5.c Option A immutability preserved on the
+        # error path.
+        reverse_journal_entry(
+            dealership=self.dealership,
+            entry=self.original,
+            reason="First reversal",
+        )
+        original_desc = self.original.description
+        original_posted_at = self.original.posted_at
+        original_line_count = self.original.lines.count()
+        try:
+            reverse_journal_entry(
+                dealership=self.dealership,
+                entry=self.original,
+                reason="Second reversal — will be rejected",
+            )
+        except AlreadyReversedError:
+            pass
+        self.original.refresh_from_db()
+        self.assertEqual(self.original.description, original_desc)
+        self.assertEqual(self.original.posted_at, original_posted_at)
+        self.assertEqual(self.original.lines.count(), original_line_count)
+        cash_line = self.original.lines.get(account=self.cash)
+        self.assertEqual(cash_line.debit, Decimal("250.00"))
+        self.assertEqual(cash_line.credit, Decimal("0.00"))
+
+    def test_concurrent_duplicate_reversal_race_translated_to_domain_error(
+        self,
+    ) -> None:
+        # Simulates the race: two request handlers both pass the
+        # service-layer ``exists()`` pre-check, then both attempt the
+        # insert. The DB partial unique index rejects the second one
+        # with IntegrityError, which the service translates back to
+        # :class:`AlreadyReversedError` so callers see the same
+        # domain-level contract as the sequential rejection path.
+        reverse_journal_entry(
+            dealership=self.dealership,
+            entry=self.original,
+            reason="First (winning) reversal",
+        )
+        # Force the pre-check to report "not yet reversed" so the code
+        # path reaches the insert and trips the DB constraint — this
+        # is exactly what a lost race between check and insert looks
+        # like from the losing transaction's point of view.
+        with mock.patch(
+            "dealer_ai.services.accounting.journal."
+            "JournalEntry.objects.filter"
+        ) as filter_mock:
+            fake_qs = mock.MagicMock()
+            fake_qs.exists.return_value = False
+            filter_mock.return_value = fake_qs
+            with self.assertRaises(AlreadyReversedError):
+                reverse_journal_entry(
+                    dealership=self.dealership,
+                    entry=self.original,
+                    reason="Losing racer — DB constraint fires",
+                )
+        # Still exactly one direct reversal — the race did not create
+        # a second row.
+        self.assertEqual(
+            JournalEntry.objects.filter(reverses=self.original).count(), 1
+        )
 
 
 class GetJournalEntryTests(TestCase):

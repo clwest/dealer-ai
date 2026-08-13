@@ -31,6 +31,8 @@ Domain-error → HTTP mapping (consumed by ``views_accounting.py``):
 - :class:`CrossTenantJournalEntryError` — 404 (fail-closed).
 - :class:`ImmutableJournalEntryError` — 409 (empty reason on
   reversal is the only mutation attempt currently guarded).
+- :class:`AlreadyReversedError` — 409 (target already has a direct
+  reversal; an entry may be directly reversed at most once).
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ from .bhph_payment import (
 )
 from .default_coa import DEFAULT_COA, seed_default_coa
 from .journal import (
+    AlreadyReversedError,
     CrossTenantGLAccountError,
     CrossTenantJournalEntryError,
     EmptyJournalEntryError,
@@ -103,6 +106,7 @@ from .vehicle_cost import (
 
 __all__ = [
     "AP_TRADE_ACCOUNT_CODE",
+    "AlreadyReversedError",
     "BHPH_INTEREST_INCOME_ACCOUNT_CODE",
     "BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE",
     "CASH_ACCOUNT_CODE",

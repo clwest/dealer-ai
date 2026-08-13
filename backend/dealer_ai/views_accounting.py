@@ -21,6 +21,8 @@ Domain-error → HTTP mapping (asserted in
 - :class:`CrossTenantGLAccountError` → 404 (fail-closed).
 - :class:`CrossTenantJournalEntryError` → 404 (fail-closed).
 - :class:`ImmutableJournalEntryError` → 409 (empty-reason reversal).
+- :class:`AlreadyReversedError` → 409 (target already has a direct
+  reversal; an entry may be directly reversed at most once).
 - Missing lookups in-tenant → 404.
 - Serializer error → 400.
 """
@@ -44,6 +46,7 @@ from .models import (
 )
 from .permissions import IsSalesManagerOrOwnerAtActiveDealership
 from .services.accounting import (
+    AlreadyReversedError,
     CrossTenantGLAccountError,
     CrossTenantJournalEntryError,
     DuplicateJournalEntryTemplateNameError,
@@ -244,7 +247,7 @@ def admin_journal_entry_reverse(request, pk: int):
             {"detail": "JournalEntry not found."},
             status=status.HTTP_404_NOT_FOUND,
         )
-    except ImmutableJournalEntryError as exc:
+    except (ImmutableJournalEntryError, AlreadyReversedError) as exc:
         return Response(
             {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
         )

@@ -7463,6 +7463,20 @@ class JournalEntry(models.Model):
 
     class Meta:
         ordering = ["-posted_at", "-created_at"]
+        constraints = [
+            # An original JournalEntry may be directly reversed at most
+            # once. Reversing a reversal is legal — that produces a
+            # chain (original ← A ← B) where each `reverses` value is
+            # distinct — but pointing two reversals at the same target
+            # (original ← A, original ← B) double-applies the
+            # correction. Partial unique index (WHERE reverses IS NOT
+            # NULL) so original postings remain unconstrained.
+            models.UniqueConstraint(
+                fields=["reverses"],
+                condition=models.Q(reverses__isnull=False),
+                name="uniq_direct_reversal_per_entry",
+            ),
+        ]
 
     def __str__(self) -> str:
         return (

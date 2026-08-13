@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import DecimalField, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -86,6 +86,26 @@ class ImmutableJournalEntryError(ValueError):
     ``reason`` argument is empty (every reversal must state its
     reason per audit-trail requirement). Mapped to HTTP 409 at
     the endpoint layer.
+    """
+
+
+class AlreadyReversedError(ValueError):
+    """Raised when :func:`reverse_journal_entry` is called against an
+    entry that already has a direct reversal pointing at it.
+
+    An adversarial audit demonstrated that the absence of this guard
+    let the same original entry be reversed twice, double-applying
+    the correction while system-wide debits still balanced credits.
+    The invariant now enforced at both the DB layer (partial unique
+    index on ``JournalEntry.reverses``) and the service layer: **an
+    entry may be directly reversed at most once**.
+
+    Reversing a reversal remains legal — that produces a chain
+    (``original ← A ← B``) where each ``reverses`` value is distinct
+    and the invariant is not violated.
+
+    Mapped to HTTP 409 at the endpoint layer (state conflict, not
+    input error).
     """
 
 
@@ -230,9 +250,14 @@ def reverse_journal_entry(
     - Empty ``reason``
       (:class:`ImmutableJournalEntryError` — 409). Every reversal
       must state its reason per audit-trail requirement.
+    - Target already has a direct reversal
+      (:class:`AlreadyReversedError` — 409). An entry may be
+      directly reversed at most once — see class docstring for the
+      audit-driven rationale.
 
-    Reversing a reversal is legal — the double reversal restores the
-    original economic effect. Both reversals remain in the audit trail.
+    Reversing a reversal remains legal — that produces a chain
+    (``original ← A ← B``) where each ``reverses`` value is distinct
+    and the "at most one direct reversal" invariant is not violated.
     """
     if entry.dealership_id != dealership.id:
         raise CrossTenantJournalEntryError(
@@ -244,29 +269,61 @@ def reverse_journal_entry(
             "a non-empty ``reason``."
         )
 
-    reversal = JournalEntry.objects.create(
-        dealership=dealership,
-        description=f"Reversal of #{entry.pk}: {entry.description}",
-        posted_at=posted_at or timezone.now(),
-        posted_by_user=posted_by_user,
-        reverses=entry,
-        reason=reason.strip(),
-    )
-    original_lines = list(entry.lines.all())
-    JournalEntryLine.objects.bulk_create(
-        [
-            JournalEntryLine(
+    # Fast-path guard for the sequential case. The DB partial unique
+    # index (migration 0052) is the load-bearing enforcement — this
+    # pre-check just gives a clean domain error on the common path so
+    # callers don't have to interpret an IntegrityError. The race
+    # between check and insert is covered by the IntegrityError catch
+    # below.
+    if JournalEntry.objects.filter(reverses=entry).exists():
+        raise AlreadyReversedError(
+            f"JournalEntry {entry.pk} has already been reversed; an "
+            "entry may be directly reversed at most once."
+        )
+
+    try:
+        # Savepoint so an IntegrityError from a concurrent duplicate
+        # reversal is contained — the outer @transaction.atomic block
+        # would otherwise become tainted and unable to commit / catch.
+        with transaction.atomic():
+            reversal = JournalEntry.objects.create(
                 dealership=dealership,
-                entry=reversal,
-                account=line.account,
-                # Swap debit <-> credit for the reversal.
-                debit=line.credit,
-                credit=line.debit,
-                memo=f"Reversal: {line.memo}" if line.memo else "Reversal",
+                description=f"Reversal of #{entry.pk}: {entry.description}",
+                posted_at=posted_at or timezone.now(),
+                posted_by_user=posted_by_user,
+                reverses=entry,
+                reason=reason.strip(),
             )
-            for line in original_lines
-        ]
-    )
+            original_lines = list(entry.lines.all())
+            JournalEntryLine.objects.bulk_create(
+                [
+                    JournalEntryLine(
+                        dealership=dealership,
+                        entry=reversal,
+                        account=line.account,
+                        # Swap debit <-> credit for the reversal.
+                        debit=line.credit,
+                        credit=line.debit,
+                        memo=(
+                            f"Reversal: {line.memo}"
+                            if line.memo
+                            else "Reversal"
+                        ),
+                    )
+                    for line in original_lines
+                ]
+            )
+    except IntegrityError as exc:
+        # Race: another transaction inserted a reversal for the same
+        # target between our pre-check and our insert. The partial
+        # unique index on ``JournalEntry.reverses`` fired. Translate
+        # to the same domain-level "already reversed" error the
+        # sequential path would surface.
+        raise AlreadyReversedError(
+            f"JournalEntry {entry.pk} has already been reversed by a "
+            "concurrent request; an entry may be directly reversed at "
+            "most once."
+        ) from exc
     return reversal
 
 

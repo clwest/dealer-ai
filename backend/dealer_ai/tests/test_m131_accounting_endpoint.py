@@ -231,6 +231,27 @@ class JournalEntryReverseEndpointTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_reverse_duplicate_direct_reversal_409(self) -> None:
+        # Regression: the same original may be directly reversed at
+        # most once. Service-layer :class:`AlreadyReversedError` maps
+        # to 409 CONFLICT (state error, not input error).
+        first = _post(
+            self.client_,
+            reverse(REVERSE, args=[self.entry.pk]),
+            {"reason": "First reversal"},
+        )
+        self.assertEqual(first.status_code, 201, first.content)
+
+        second = _post(
+            self.client_,
+            reverse(REVERSE, args=[self.entry.pk]),
+            {"reason": "Second direct reversal — should be rejected"},
+        )
+        self.assertEqual(second.status_code, 409, second.content)
+        self.assertIn(
+            "already been reversed", second.json()["detail"]
+        )
+
 
 class JournalEntryRetrieveEndpointTests(TestCase):
     def setUp(self) -> None:
