@@ -38,3 +38,9 @@ Dealer OS/
 
 # Claude Code session-local artifacts (scheduled_tasks.lock, etc.)
 .claude/
+
+# Internal build-archaeology archive. Preserved privately outside
+# the repository (e.g. ../dealer-ai-internal-docs/); never tracked
+# in the public tree. Defensive rule in case a local copy is ever
+# dropped back into this path.
+/docs/_internal/
