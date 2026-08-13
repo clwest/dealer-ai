@@ -1418,7 +1418,7 @@ class HandoffResponseShapeTests(TestCase):
     contact-info pieces, and contain NO transfer-mechanic language or
     invented advisor names."""
 
-    def test_response_offers_freedom_ford_advisor_connection(self):
+    def test_response_offers_dealer_advisor_connection(self):
         # Phase 8o: identity disclosure moved to the dedicated
         # IDENTITY_RESPONSE. The handoff response is now the simpler
         # advisor-connection text.
@@ -2259,7 +2259,7 @@ class DetectIdentityRequestTests(TestCase):
 
 @override_settings(DEALER_AI_DEALER_NAME="Dealer OS")
 class IdentityResponseShapeTests(TestCase):
-    def test_response_identifies_as_freedom_ford_ai(self):
+    def test_response_identifies_as_dealer_ai(self):
         body = _render(IDENTITY_RESPONSE).lower()
         self.assertIn("dealer os", body)
         self.assertIn("ai", body)
