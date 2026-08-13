@@ -1,1 +1,0 @@
-“Hey, I’m Dealer OS’s AI buying assistant. I can help you find vehicles that fit your budget, compare options, estimate payments, or connect you with a salesperson. What are you looking for?”
