@@ -1,251 +1,320 @@
 ---
-title: Copper Canyon Auto — 5-minute demo script
+title: Copper Canyon Auto — 2-minute owner demo
 status: active
 persona: Copper Canyon Auto (Yuma, AZ — invented independent-dealer persona)
-generated: 2026-07-31
-baseline_commit: 4041b91
-test_baseline: 1272 backend tests passing (dealer_ai suite)
-supersedes: Dealer OS demo script (docs/demo/FREEDOM_FORD_DEMO_SCRIPT.md)
-              is retained as the franchise-config reference.
+generated: 2026-09-01
+baseline_commit: TBD
+test_baseline: 5,073 backend tests passing (dealer_ai suite)
+supersedes: Dealer OS demo script (docs/DEMO_SCRIPT.md, kept as a
+              franchise-config reference — DO NOT run for a Copper
+              Canyon demo)
 ---
 
-# Copper Canyon Auto — 5-minute demo script
+# Copper Canyon Auto — 2-minute owner demo
 
-Run this script when showing the AI Sales Assistant to independent-dealer
-prospects (owner-operators, sales managers at BHPH / used-car lots).
-Goal: prove the system handles indie customer shapes — cash-and-carry,
-credit-challenged buyers, mixed-make used inventory, BHPH conversations
-— and stays compliant, without hand-waving.
+Show this to an owner-operator or sales manager at a subprime-friendly
+independent lot. Goal: prove the product does two things no competitor
+does, then sweep the supporting screens. Chat is the hook, not the
+spine.
 
-Copper Canyon Auto is a *2nd-generation, 40–60-vehicle, mixed-make
-used lot in Yuma, AZ*, owned by Elena Vargas (dad Manuel started it
-in 1987). Financing runs through a subprime lender panel + in-house
-BHPH; no OEM captive. See `docs/research/INDEPENDENT_DEALER_PIVOT.md` for the
-full persona.
+Copper Canyon Auto is a 2nd-generation, ~50-vehicle mixed-make used lot
+in Yuma, AZ. Owner: Elena Vargas (dad Manuel founded it in 1987).
+Financing runs through a subprime lender panel plus in-house BHPH. No
+OEM captive. Persona lives in
+`docs/research/INDEPENDENT_DEALER_PIVOT.md`.
+
+**Do not read this script cold. Do the setup first, click through it
+once yourself, and check that the numbers on the page match what's
+written here.** The state was clicked and screenshotted on 2026-09-01.
+
+---
 
 ## Setup (60 seconds before the demo)
 
-1. Backend on `:8001`. LLM provider = OpenAI `gpt-5-mini`
-   (`OPENAI_API_KEY` in `.env`). Confirm with a
-   `POST /api/dealer-ai/chat/…` smoke test if in doubt.
-2. Frontend on `:5173`.
-3. **Seed the Copper Canyon inventory:**
-   `cd backend && python3 manage.py seed_copper_canyon_demo`.
-   Confirms 45 units created / updated.
-4. Optional but recommended: set the dealer name in the environment
-   or the onboarding form so `useBrand()` / `get_dealer_name()`
-   render "Copper Canyon Auto" everywhere:
-   - Env: add `DEALER_AI_DEALER_NAME=Copper Canyon Auto` to `.env`
-     and restart Django.
-   - UI: `/dealer-ai-onboarding` → set *Dealership name* + save.
-5. Open `http://localhost:5173/` in a clean browser tab.
+```bash
+# One terminal — backend on :8001
+cd backend
+rm -f db.sqlite3
+python3 manage.py migrate --run-syncdb --noinput
+python3 manage.py seed_copper_canyon_auto_demo
+python3 manage.py runserver 127.0.0.1:8001 --noreload
 
-If the backend is down: fall back to explaining the deterministic
-math + scrub stack from `docs/CAPABILITY_MATRIX.md`.
+# Second terminal — frontend on :5173
+cd frontend
+VITE_API_PROXY_TARGET=http://127.0.0.1:8001 \
+  npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
 
----
+Seed runs in about **2 seconds** from an empty SQLite and lands a
+coherent working store:
 
-## Presenter talking points
+- **130 vehicles**, one trailing month of sales at ~50/month.
+- **45 sales** — 43 delivered to `off_market`, 2 held at
+  `hold_reserved` (signed-contract-awaiting-wire and open-stipulation-
+  awaiting-docs).
+- **All 12 lifecycle stages populated.**
+- **Trial balance balances** at $985,711 both sides.
 
-Drop one at a natural pause:
+Open `http://127.0.0.1:5173/login` and sign in as
+**`demo-owner` / `demo-owner-password`**. You land on
+`/dealer-ai-overview`, the owner dashboard.
 
-- *"Independent-dealer mode is on by default — the assistant never
-  says 'brand new', 'certified pre-owned', or 'Ford Credit'. If the
-  LLM tries, the post-LLM scrub catches it."*
-  (Best after Prompt 3 or 4, when BHPH / credit conversation lands.)
-- *"This isn't a franchise assistant with the OEM branding filed off —
-  it's a real indie-shaped voice: credit-inclusive, payment-first, no
-  manufacturer captive to lean on."*
-  (Best at the close, after Prompt 5.)
-
----
-
-## The 5-prompt flow
-
-| # | Prompt | ~ time | What it proves |
-|---|---|---|---|
-| 1 | *"I need a work truck, got about $8k cash to spend"* | 30s | Cash-mode detection, price-first ranking, mixed-make surfacing (Tacoma, Ranger, older Silverado), no financing pitch |
-| 2 | *"Looking for a reliable SUV, I can do about $250 a week"* | 45s | BHPH-shaped ask, weekly-payment framing, credit conversation opener, no specific-APR quote |
-| 3 | *"My credit's not great, will I still qualify?"* | 30s | Credit-tier acknowledgement without judgment, path forward (advisor / in-house), no manufacturer-captive hallucination |
-| 4 | *"What about the Toyota Tundra? I've got a trade-in"* | 30s | Model anchor across makes, trade-in dynamics, no fabricated appraisal, honest "advisor confirms number" language |
-| 5 | *"Which one would you show first?"* | 30s | Decisive lead-with-pick recommendation, salesperson voice, indie-friendly framing (no CPO / manufacturer warranty) |
-
-Total: ~3 minutes of prompts + ~2 minutes of explanation.
+**LLM provider.** The default in this repo's `.env` is
+`DEALER_AI_LLM_PROVIDER=openai` with `OPENAI_MODEL=gpt-5-mini`. That
+model uses the reasoning-completions parameter shape (`max_completion_
+tokens`, no `temperature`), which the pinned `openai==1.30.5` SDK
+doesn't accept — so every chat completion currently falls back to the
+"I'm having trouble reaching the AI service" fixed message. The chat
+opens and reads clean, but the reply won't be model-generated. If a
+live-model demo matters, either bump the SDK (see the pinning tradeoff
+in `TASK_c2c3-lot-shape-and-demo-script.md`) or set
+`OPENAI_MODEL=gpt-4o-mini` before booting.
 
 ---
 
-## Prompt 1 — *"I need a work truck, got about $8k cash to spend"*
+## The 2-minute flow
 
-### What it proves
+Two minutes total. Two spine screens. Everything else is the
+supporting sweep.
 
-- Cash-mode detection: no monthly-payment math, no W.A.C. language.
-- Price-first ranking under the indie default (no OEM primary-make
-  bias).
-- Mixed-make surfacing: the response should mention units from
-  different brands, not lean into any single make.
+| # | Screen                                                 | ~ time | What it proves                                                       |
+|---|--------------------------------------------------------|--------|----------------------------------------------------------------------|
+| 1 | Chat opener (Live Assistant)                            | 20s    | Persona voice + budget-aware. Every competitor has this — cover fast |
+| 2 | **Recon authorization gate** (Inventory → RS-07 recon)  | 30s    | Nobody else gates recon spend. This is the strongest screen          |
+| 3 | **Aging board decomposed by stage** (Analytics → Aging) | 30s    | Every competitor reports aging as one number. Ours splits it 12 ways |
+| 4 | F&I chain (F&I Deals + Incoming)                        | 15s    | Signed contract in `pending_funding` + a stipulation waiting on docs |
+| 5 | BHPH portfolio (BHPH)                                   | 15s    | 16-note book, aging histogram, $229k principal outstanding           |
+| 6 | Trial balance (Accounting)                              | 10s    | Balanced $985,711 both sides — real books, not a mock                |
 
-### Expected behavior
-
-- Cards on the right show units at or under $8k — Toyota Tacoma
-  (2012 PreRunner), Ford Ranger (older XLT), Kia Forte, or the
-  under-$5k Focus.
-- Reply picks one and frames the trade-off honestly: e.g., *"The
-  older Tacoma PreRunner at $12,495 stretches the budget but the
-  4.0L V6 lasts forever; the older Ranger comes in at $8,995 and
-  is closer to your cash number, but has 176k miles. Want to see
-  the Ranger up close, or should we look at what a couple hundred
-  more opens up?"*
-
-### If it goes off-script
-
-If the reply pitches financing on a cash-declared budget → the
-scrub stack should catch it. If it doesn't, that's a bug worth
-capturing.
+Nothing here needs a typed URL except the recon page for a specific
+stock. Every other step is a sidebar click.
 
 ---
 
-## Prompt 2 — *"Looking for a reliable SUV, I can do about $250 a week"*
+## 1. Chat opener — Live Assistant (20s)
 
-### What it proves
+**Click:** `Live Assistant` in the sidebar.
 
-- Weekly-payment ask is native indie territory. The assistant
-  should engage with the weekly cadence, not silently convert to
-  monthly.
-- The `INDIE_MODE_HINT` scaffolding tells the LLM this indicates
-  a BHPH conversation is on the table. The assistant should
-  acknowledge in-house / weekly financing exists without quoting
-  a specific APR.
+**What lands:** A "Find Your Next Vehicle" panel with the persona
+greeting *"Hi — I'm Copper Canyon Auto's sales assistant."* and four
+starter prompt chips (truck under $30k, $400/mo sedan, family SUV, not
+sure yet).
 
-### Expected behavior
+**What to say:** *"Every competitor in this space ships a chatbot. So
+we're not going to spend the demo on the chat — I want to show you the
+two things that only exist here."*
 
-- Cards on the right show mid-priced SUVs: CR-V, RAV4, Rogue,
-  Equinox, Escape, or older Highlander.
-- Reply should either (a) ask a clarifying credit-range question
-  or (b) surface 1–2 SUVs and note that weekly payments are
-  something the advisor can walk through in detail. Never quotes
-  a specific weekly payment number without a BUDGET ANALYSIS
-  block backing it.
-
-### If it goes off-script
-
-If the reply fabricates a specific weekly payment (e.g., *"about
-$225 a week over 30 months"*) → that's a payment-inference leak
-the LLM shouldn't make. Real weekly math needs the BHPH engine
-call, not vibes.
+**Optional tap:** Click the "I need a family SUV with good gas
+mileage" chip so the presenter's screen shows the assistant thinking
+before you move on. See the LLM note in Setup — the reply is currently
+the fallback message; the point of this step is voice and framing, not
+the model's answer.
 
 ---
 
-## Prompt 3 — *"My credit's not great, will I still qualify?"*
+## 2. Recon authorization gate — the pitch screen (30s)
 
-### What it proves
+**Click:** `Inventory` in the sidebar → paste the URL bar with
+`http://127.0.0.1:5173/dealer-ai-inventory/RS-07/recon` or scroll the
+inventory grid until you find RS-07 (2016 Nissan Rogue) and click its
+**Recon** tile link.
 
-- Credit-tier conversation is normal at Copper Canyon and the
-  assistant handles it without judgment (per `INDIE_MODE_HINT`).
-- No OEM captive lender is invented (post-LLM `indie_prohibited_copy`
-  scrub catches "Ford Credit" / "Toyota Financial" if the LLM leaks).
-- Path forward is offered: in-house / advisor walk-through.
+*(Every route the sidebar covers is reachable by a click. The
+per-vehicle Recon page is reached via the vehicle row's Recon tile;
+there is no sidebar door for "all draft WOs across the lot." That is a
+finding worth writing down, not a step to fake.)*
 
-### Expected behavior
+**What lands:** "Recon · Stock #RS-07 · 2016 Rogue." Two condition
+findings at the top ("Rear tires below 4/32", "Front brake pads at
+3mm"). Below, a **Work orders** section with two rows:
 
-- Warm acknowledgement of the customer's credit reality.
-- Explanation that the dealership works with multiple lenders,
-  including in-house options for credit-challenged buyers.
-- Handoff opener: "Let's have an advisor walk through the specifics
-  — we'll get you into something reliable" — with no specific APR /
-  rate quote.
+1. WO #2 — outsourced to Desert Auto Repair, status **Completed**,
+   $600 estimate / $660 actual.
+2. WO #4 — outsourced to Yuma Transmission Specialists, status
+   **Draft**, $1,450 estimate, **Authorized: —**.
 
-### If it goes off-script
+The draft row is the point. Scroll to it.
 
-If the reply says "Ford Credit approved" / "0% APR available" /
-"certified pre-owned warranty" — the indie scrub should strip
-those. Grep the logged reply for `indie_prohibited_copy` in the
-scrub-fired flags.
+**What to say:** *"This is the recon manager saying he wants to send
+this Rogue out for $1,450 of transmission work. The estimate came in
+above the budget line, so nothing happens until the owner clicks
+Approve. Every other product in this category records recon spend
+after the vendor does the work. Here the money doesn't move until
+the person paying the bill says yes. Two of these are sitting on the
+lot right now — pull up RS-17 to see the other one."*
 
----
-
-## Prompt 4 — *"What about the Toyota Tundra? I've got a trade-in"*
-
-### What it proves
-
-- Model anchor across makes (`_MODEL_TO_MAKE` covers Ford models;
-  the LLM handles broader mixed-make anchoring).
-- Trade-in dynamics: acknowledged, but no fabricated dollar amount
-  (SYSTEM_PROMPT rule + pre-LLM external-value guard).
-- Honest "an advisor from Copper Canyon Auto can run a real
-  appraisal" language when appraisal-adjacent questions come up.
-
-### Expected behavior
-
-- Card for the 2016 Toyota Tundra SR5 surfaces.
-- Reply describes the specific unit (year, mileage, engine),
-  acknowledges the trade-in interest, and offers to have an
-  advisor confirm the trade-in valuation. Never invents a
-  Kelley Blue Book number or a specific trade-in credit.
-
-### If it goes off-script
-
-Fabricated trade value ("your trade is probably worth around $8k")
-→ scrub or refuse. External-value guard should short-circuit before
-the LLM sees a trade-value question that names an outside source.
+**Optional:** Click **Approve** on WO #4 to show the flow. If you do,
+the row moves from Draft to Approved and posts an authorized-cost
+number. Skip if you want the queue to still read as a queue at the
+end of the demo.
 
 ---
 
-## Prompt 5 — *"Which one would you show first?"*
+## 3. Aging board, decomposed by stage (30s)
 
-### What it proves
+**Click:** `Analytics` in the sidebar → **Lifecycle Aging** tab.
 
-- Decisive lead-with-pick recommendation, not a neutral spec-sheet
-  comparison.
-- Voice stays warm and practical — the Elena Vargas persona
-  ("straight talk on payments and credit").
-- No franchise-shaped franchise language (no "brand new", no CPO,
-  no manufacturer warranty).
+**What lands:** "Operational Intelligence" with the Lifecycle Aging
+tab active. Two panels:
 
-### Expected behavior
+- **Days at frontline (proxy)** — 15 snapshots, mean p50 ~15 days,
+  mean p90 ~71 days, latest 53 vehicles on the front line as of
+  today.
+- **Stage aging trend** — a p50/p90 line chart with a **Stage:**
+  dropdown next to it. Default is Recon.
 
-- Reply picks ONE unit from the current session's cards and gives
-  one clear reason it leads. Backup pick mentioned qualitatively.
-- Soft close: "Want me to line one up?" / "Want a closer look?"
-  — but never a fabricated appointment time.
+**What to say:** *"Every dealer software reports 'days in inventory'
+as one number. That's useless — the story is completely different
+depending on which stage a car is stuck in."*
 
-### If it goes off-script
+**Do the click:** Open the **Stage:** dropdown, cycle it through
+three stages the audience will recognise — start on **Recon**, then
+**Frontline**, then **Off market**. Each one redraws.
 
-Neutral side-by-side prose (spec sheet dump) → the SYSTEM_PROMPT's
-cash-mode / cards-shown directive should prevent this. If a
-research-brief shape lands, that's the reply's structural
-regression.
+*"A car sitting in recon 14 days is a vendor problem. A car sitting
+at frontline 60 days is a pricing problem. A car sitting in
+photography is a photographer problem. The chart splits into twelve
+because the problems are twelve different problems, and behind each
+one there's an append-only event log — every transition, every
+trigger, every operator who moved it."*
 
 ---
 
-## Fallback talking points — backend unavailable
+## 4. F&I chain — signed contract + open stipulation (15s)
 
-If the backend is down mid-demo:
+**Click:** `F&I` in the sidebar.
 
-- Talk to `docs/CAPABILITY_MATRIX.md` — walk the auditor through the
-  8-stage pre-LLM guard and 8-stage post-LLM scrub stack (plus the
-  new `indie_prohibited_copy` scrub).
-- Deterministic backend math + BHPH periodic amortization runs
-  regardless of LLM state — see
+**What lands:** "F&I Deals in Progress" — one row.
+
+- **RS-15** · type `risc` · contract state `signed` · funding state
+  `pending_funding`.
+
+**What to say:** *"Signed, funding packet's out to the lender,
+waiting on the wire."*
+
+**Click:** `Incoming` in the sidebar (right below F&I).
+
+**What lands:** "Incoming Applications" — two rows. One
+"Umbria Rehearsalton" (submitted — awaiting response) and one
+"Nathan Wei" (incoming — no writeup yet).
+
+*(**Finding, not a demo step:** the first applicant name is the
+archetype's synthetic-tester name — "Rehearsalton" gives it away.
+The persona-rename step in the seed touches CustomerLead but not
+CreditApplication.applicant_full_name. Note it, don't fix it here —
+it'll need a small extension to the persona-rename map in a follow-
+up.)*
+
+**What to say:** *"On the other side of the desk, this application is
+submitted to the lender waiting on a proof-of-income stipulation.
+Both of these deals are 'sold' but neither vehicle has left the lot —
+that's what the two hold-reserved units on the sales board are."*
+
+---
+
+## 5. BHPH portfolio (15s)
+
+**Click:** `BHPH` in the sidebar.
+
+**What lands:** "BHPH Portfolio" with four headline cards:
+
+- **16 notes in portfolio** — $229,317 principal.
+- **Weighted average APR** — 19.01 %.
+- **Weighted average DPD** — 0.0 days.
+- **Cure rate** — 100 %.
+
+Below that, an aging histogram (buckets: Current / 1-15 / 16-30 /
+31-60 / 61-90 / Over 90 / Charge-off candidate).
+
+**What to say:** *"This is the in-house book. Sixteen active notes,
+weekly-pay cadence, weighted APR around 19 %. The aging histogram
+splits the book by days-past-due bucket — the collection team works
+this every morning."*
+
+*(**Finding, not a demo step:** the aging histogram currently reads
+all 16 notes in the Current bucket, cure rate 100 %. The
+`_extend_bhph_portfolio` step intended one delinquent note (RS-13,
+~20 days past first payment) and one in repossession (RS-10), but
+whatever the portfolio endpoint bins on isn't picking them up in the
+seed as written. Skip the "look at the delinquent one" line until
+that's diagnosed — the 16-note total + APR read is strong on its
+own.)*
+
+---
+
+## 6. Trial balance (10s)
+
+**Click:** `Accounting` in the sidebar.
+
+**What lands:** "Trial Balance" — a "Balanced" badge in the top
+right, real per-account totals, everything sums.
+
+Highlights on the top rows:
+
+- Cash on Hand — $127,742 debit, $19,490 credit ($108,252 natural).
+- Contracts in Transit — $223,463 asset.
+- BHPH Notes Receivable — $205,827 asset.
+- Recon Work in Process — $379,854 negative natural balance (the
+  archetype's acquisition-double-count workaround; see task file for
+  the underlying defect).
+
+**What to say:** *"This is the real trial balance for this store's
+month. Every sale posts here automatically, every BHPH payment
+posts here, every manual journal entry the bookkeeper writes lands
+here. It balances at $985,711 both sides. This is not a mockup — it
+is the output of a real double-entry system that ran for the last
+thirty days of the demo data."*
+
+---
+
+## Fallback talking points — backend down mid-demo
+
+- Talk to `docs/_internal/CAPABILITY_MATRIX.md` — walk the 8-stage
+  pre-LLM guard, the 12-stage post-LLM scrub, and the
+  `indie_prohibited_copy` scrub.
+- Deterministic math still runs — see
   `backend/dealer_ai/services/payment_engine.py` and
   `test_bhph_payment_engine.py`.
-- Explain that dealer identity is templated at runtime — Copper
-  Canyon is the *shipped default*, but a franchise config
-  (`DEALER_AI_DEALER_TYPE=franchise`, `DEALER_AI_PRIMARY_MAKE=Ford`,
-  etc.) re-enables the Dealer OS voice without any code changes.
+- Voice-of-brand is templated: a franchise install
+  (`DEALER_AI_DEALER_TYPE=franchise` + `DEALER_AI_PRIMARY_MAKE=Ford`)
+  re-enables the franchise voice without a code change.
 
-## What this script does NOT cover (yet)
+---
 
-- **Onboarding form for indie fields** — Phase 3 work. The
-  dealership can override name and voice today; BHPH-enabled,
-  lender panel, warranty offering, credit range served, and
-  make mix are on the `DealerProfile` in code but not yet in the
-  UI form.
-- **Live BHPH card UI** — the payment engine has the math, but
-  the frontend cards render standard-loan monthly figures.
-  Phase 3 will surface weekly / biweekly for BHPH-eligible units.
-- **Copper Canyon logo + palette** — Phase 3 rebrand ships
-  `brand.*` Tailwind tokens replacing `ford.*` and a placeholder
-  Copper Canyon logo asset.
+## What this script does NOT cover
 
-Until Phase 3 lands, the demo shines on backend behavior and voice.
-The chrome is still franchise-legacy in places.
+- **Sales-side workflows** (walk-in intake, referral picker,
+  test-drive scheduling). Those live under Leads and
+  `dealer-ai-sales/*` and are worth their own five-minute demo.
+- **The AI conversation on live models.** The LLM SDK pin has
+  drifted in this environment (see setup note) — every chat reply
+  currently reads the fallback. Fix the SDK/model pairing before
+  demoing the AI in front of a dealer who will ask it a hard
+  question.
+- **Delinquent BHPH note detail** — surface-level total is real, the
+  per-bucket split needs diagnosis (see the BHPH finding above).
+
+---
+
+## Findings written down (per the session rule)
+
+Recorded here so a future session picks them up, not as
+demo-step avoidance.
+
+- **F&I Incoming applicant name is still the archetype's tester
+  name** ("Umbria Rehearsalton"). Fix: extend the persona-rename map
+  in `_persona_rename_archetype_rows` to touch
+  `CreditApplication.applicant_full_name` when the archetype seeded
+  it from `SYNTHETIC_NAMES`.
+- **BHPH portfolio delinquency is not reading through** even though
+  the seed originates RS-13 with `first_payment_days_ago=25` and no
+  payments. Endpoint or note-status computation is bucketing
+  differently than the seed expects. Diagnose against
+  `_extend_bhph_portfolio` and the portfolio endpoint's aging query.
+- **No sidebar door for "all draft WOs across the lot"** — the
+  authorization queue is per-vehicle only. A cross-lot queue would
+  make the recon-gate pitch stronger (one screen shows every pending
+  authorization). Follow-up UI.
+- **Recon page shows completed WO first, draft WO second** — sort
+  order buries the demo-relevant row under history. Consider putting
+  drafts and in-progress ahead of completed for the recon dashboard.

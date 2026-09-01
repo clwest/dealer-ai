@@ -260,4 +260,16 @@ def record_sale(
             notes=f"Sale #{sale.pk} booked.",
         )
 
+    # Sold units come off the ``is_available`` roster. The admin
+    # inventory endpoint and ``services/pipeline.py`` supply metric
+    # both filter on this flag; without the flip they treat sold cars
+    # as available stock (see
+    # ``TASK_vehicle_list_caps_and_miscounts.md`` for the endpoint
+    # miscounts this used to hide). Idempotent — no-op when the
+    # vehicle is already marked unavailable, which keeps re-runs
+    # cheap and covers callers that pre-set the flag.
+    if vehicle.is_available:
+        vehicle.is_available = False
+        vehicle.save(update_fields=["is_available"])
+
     return sale

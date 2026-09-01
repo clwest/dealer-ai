@@ -71,15 +71,23 @@ from dealer_ai.models import (
     LENDER_SUBMISSION_STATUS_PENDING,
     ROLE_DEALER_OWNER,
     SALE_FINANCE_TYPE_BHPH,
+    SALE_FINANCE_TYPE_CASH,
+    SALE_FINANCE_TYPE_RETAIL,
+    SOURCE_AUCTION,
+    SOURCE_PRIVATE,
+    SOURCE_TRADE,
     STIP_TYPE_PROOF_OF_INCOME,
     VEHICLE_STAGE_COMPANY_USE,
+    VEHICLE_STAGE_DETAIL,
     VEHICLE_STAGE_FRONTLINE,
     VEHICLE_STAGE_HOLD_RESERVED,
     VEHICLE_STAGE_INCOMING,
     VEHICLE_STAGE_INSPECTION,
     VEHICLE_STAGE_LISTING,
     VEHICLE_STAGE_OFF_MARKET,
+    VEHICLE_STAGE_PHOTOGRAPHY,
     VEHICLE_STAGE_QC,
+    VEHICLE_STAGE_RECON,
     VEHICLE_STAGE_TRIGGER_MANUAL,
     VEHICLE_STAGE_TRIGGER_RULE,
     VEHICLE_STAGE_WHOLESALE_OUT,
@@ -91,6 +99,7 @@ from dealer_ai.models import (
     CustomerLead,
     Dealership,
     DealerOnboardingProfile,
+    Delivery,
     DealWriteup,
     GLAccount,
     Sale,
@@ -115,6 +124,7 @@ from dealer_ai.services.demo_store.registry import (
     reset_demo_store,
 )
 from dealer_ai.services.demo_store.synthetic_data import synthetic_email
+from dealer_ai.services.inventory_import import import_rows
 from dealer_ai.services.f_and_i.contract import record_contract, sign_contract
 from dealer_ai.services.f_and_i.credit_application import (
     record_credit_application,
@@ -131,6 +141,8 @@ from dealer_ai.services.deal_writeups.deal_writeup import (
     approve_deal_writeup,
     record_deal_writeup,
 )
+from dealer_ai.services.delivery.workflow import record_delivery
+from dealer_ai.services.sale import record_sale
 from dealer_ai.services.lifecycle_aging.snapshots import snapshot_stage_ages
 from dealer_ai.services.vendor_sla.detection import detect_sla_breaches
 from dealer_ai.services.sale.computation import gross_realized
@@ -175,21 +187,36 @@ _STAGE_PLAN: tuple[tuple[str, tuple[str, ...], int], ...] = (
     # sales (RS-10, RS-13). No entry below picks a sold vehicle —
     # the seed test asserts nothing sold sits on the front line.
     #
-    # RS-06 and RS-08 stay at their post-archetype frontline stage
-    # so the frontline aging board reads a plausible unsold spread;
-    # DETAIL and PHOTOGRAPHY lose their single-slot demo signal as a
-    # trade-off, given the archetype only ships 20 vehicles.
-    # WHOLESALE_OUT loses its single-slot signal for the same reason
-    # (RS-15 was sold retail and cannot semantically sit there).
-    (VEHICLE_STAGE_INCOMING, ("RS-01", "RS-02"), 2),
+    # Every one of the twelve VehicleStage values needs a signal so
+    # the aging board reads as a twelve-column story rather than one
+    # with silent columns. The lot has 13 unsold vehicles once the
+    # 7 sales fire; the plan spreads them across the ten non-sale
+    # stages so each carries a plausible resident. RS-06, RS-08 and
+    # RS-19 stay at frontline post-plan (unsold aging demo units);
+    # RS-07 and RS-17 stay at recon (they back the two awaiting-
+    # authorization draft WOs seeded downstream).
+    (VEHICLE_STAGE_INCOMING, ("RS-01",), 2),
+    (VEHICLE_STAGE_PHOTOGRAPHY, ("RS-02",), 8),
     (VEHICLE_STAGE_INSPECTION, ("RS-03",), 4),
-    # RS-04, RS-07, RS-17 stay at recon (archetype).
+    # RS-04 moves out of the archetype's recon assignment into detail
+    # so the aging board's DETAIL column is non-empty. Its recon-era
+    # WO history remains valid — WOs are tied to the vehicle, not the
+    # current stage.
+    (VEHICLE_STAGE_DETAIL, ("RS-04",), 6),
     (VEHICLE_STAGE_QC, ("RS-05",), 7),
+    # RS-07, RS-17 stay at recon (archetype) — awaiting-auth draft WOs.
     (VEHICLE_STAGE_LISTING, ("RS-09",), 13),
-    # RS-06 (detail) + RS-08 (photography) intentionally omitted so
-    # they stay at frontline post-archetype as unsold aging demo units.
+    # RS-06, RS-08, RS-19 stay at frontline (three unsold aging demo
+    # units — a fresh one, one at normal in-market age, one aged past
+    # 90 days where an owner starts getting uncomfortable, per
+    # ``_FRONTLINE_AGING_DAYS_UNSOLD`` below).
     (VEHICLE_STAGE_COMPANY_USE, ("RS-18",), 100),
-    (VEHICLE_STAGE_OFF_MARKET, ("RS-19", "RS-20"), 35),
+    # RS-20 into wholesale_out so the wholesale-out column has a
+    # resident. Semantically: a trade-in the lot decided not to
+    # retail. RS-19 is no longer forced to off_market — the five
+    # delivered sales cover that column via ``_deliver_five_sales``
+    # (see below).
+    (VEHICLE_STAGE_WHOLESALE_OUT, ("RS-20",), 40),
 )
 
 
@@ -218,6 +245,10 @@ class Command(BaseCommand):
             owner = _provision_owner(dealership, self.stdout)
             _provision_onboarding_profile(dealership, self.stdout)
             _distribute_lifecycle_stages(dealership, self.stdout)
+            imported_count = _extend_lot_to_target_size(
+                dealership, self.stdout
+            )
+            _expand_stage_distribution(dealership, self.stdout)
             _backdate_frontline_events_for_sales(dealership, self.stdout)
             _normalize_sale_gross(dealership, self.stdout)
             _persona_rename_archetype_rows(dealership, self.stdout)
@@ -231,6 +262,10 @@ class Command(BaseCommand):
                 dealership, owner, self.stdout
             )
             fni_summary = _extend_fni_chain(dealership, owner, self.stdout)
+            delivered_pks = _deliver_five_sales(dealership, self.stdout)
+            extended_sales = _extend_sales_history(
+                dealership, owner, self.stdout
+            )
             test_drives = _seed_test_drives(dealership, self.stdout)
             be_back = _seed_be_back(dealership, self.stdout)
             journals = _seed_journal_month(dealership, owner, self.stdout)
@@ -250,6 +285,7 @@ class Command(BaseCommand):
             _backdate_frontline_events_for_sales(dealership, self.stdout)
             _backdate_frontline_stage_aging(dealership, self.stdout)
             _backdate_hold_reserved_for_sales(dealership, self.stdout)
+            _backdate_off_market_for_deliveries(dealership, self.stdout)
             snapshots = _seed_stage_aging_snapshots(
                 dealership, self.stdout
             )
@@ -272,8 +308,11 @@ class Command(BaseCommand):
                 f"(password={DEMO_OWNER_PASSWORD!r}), "
                 f"completed_vendor_perf_wos={completed_vendor_perf}, "
                 f"awaiting_authorization_wos={awaiting_auth}, "
+                f"imported_extension_vehicles={imported_count}, "
                 f"bhph_notes={bhph_summary}, "
                 f"fni={fni_summary}, "
+                f"delivered_archetype_sale_pks={delivered_pks}, "
+                f"extended_sales={extended_sales}, "
                 f"test_drives={test_drives}, "
                 f"be_back_pk={be_back.pk}, "
                 f"manual_journal_entries={journals}, "
@@ -600,7 +639,9 @@ def _backdate_frontline_events_for_sales(
 # wholesale or drop the price). The 2026-08-31 competitive teardown
 # named the aging board as one of two capabilities absent from every
 # competitor; a flat-at-zero read renders it useless.
-_FRONTLINE_AGING_DAYS_UNSOLD: tuple[int, ...] = (4, 15, 33, 62, 95)
+_FRONTLINE_AGING_DAYS_UNSOLD: tuple[int, ...] = (
+    3, 6, 10, 15, 22, 32, 45, 60, 78, 100,
+)
 
 
 def _backdate_frontline_stage_aging(
@@ -698,6 +739,140 @@ def _backdate_hold_reserved_for_sales(
     stdout.write(
         f"backdated {updated} sold hold_reserved VehicleStage row(s) "
         f"to their sale date."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Delivery — deliver five of the seven sold vehicles so the lot reads
+# like a working store, leaving two at ``hold_reserved`` as *sold,
+# awaiting funding*.
+# ---------------------------------------------------------------------------
+
+# Stock numbers of the two sales that stay at ``hold_reserved`` after
+# the delivery pass — matched by the F&I chain the seed builds:
+#
+# - RS-15 has a signed RISC contract with ``record_funding`` recording
+#   the packet submitted to the lender; the wire has not landed. Every
+#   independent dealer has one of these on the desk right now.
+# - RS-16 has an open :class:`Stipulation` waiting on the customer's
+#   proof of income; the lender has not approved yet. The other
+#   half of the "sold-but-not-off-the-lot" pair.
+#
+# Everything else — RS-10, RS-11, RS-12, RS-13, RS-14 — is delivered.
+_SALES_STAYING_AT_HOLD_RESERVED: tuple[str, ...] = ("RS-15", "RS-16")
+
+# Days-after-sale-date to record delivery, spread so the off_market
+# aging column reads a real distribution rather than a flat line at
+# zero. Applied by stock-number ordering across the five delivered
+# vehicles.
+_DELIVERY_DAYS_AFTER_SALE: tuple[int, ...] = (2, 3, 5, 8, 12)
+
+
+def _deliver_five_sales(
+    dealership: Dealership, stdout
+) -> list[int]:
+    """Record :class:`Delivery` for five of the seven sales via the real
+    :func:`services.delivery.workflow.record_delivery` path.
+
+    Composes the shipped delivery verb; the SESSION_223 hook then
+    advances ``hold_reserved → off_market`` on each delivered vehicle.
+    Leaves ``_SALES_STAYING_AT_HOLD_RESERVED`` at ``hold_reserved`` so
+    the aging board still reads a resident in that stage — the demo's
+    "sold, awaiting funding" story.
+
+    Idempotent — ``record_delivery`` refuses a second Delivery on a
+    Sale that already has one. The retry path here skips those sales.
+    """
+    sales = list(
+        Sale.objects.filter(dealership=dealership).select_related("vehicle")
+    )
+    to_deliver = [
+        sale
+        for sale in sales
+        if sale.vehicle.stock_number not in _SALES_STAYING_AT_HOLD_RESERVED
+    ]
+    # Deterministic order — sort by sale_date descending so the newest
+    # sale gets the shortest delivery lag. That mirrors real operation
+    # (a lot delivers a fresh sale in a couple of days) and keeps every
+    # delivery date in the past even against a very recent sale.
+    to_deliver.sort(key=lambda s: (s.sale_date, s.vehicle.stock_number), reverse=True)
+
+    today = timezone.now().date()
+    yesterday = today - dt.timedelta(days=1)
+    delivered_sale_pks: list[int] = []
+    for offset, sale in enumerate(to_deliver):
+        if Delivery.objects.filter(sale=sale).exists():
+            delivered_sale_pks.append(sale.pk)
+            continue
+        days_after = _DELIVERY_DAYS_AFTER_SALE[
+            offset % len(_DELIVERY_DAYS_AFTER_SALE)
+        ]
+        delivery_date = sale.sale_date + dt.timedelta(days=days_after)
+        # Cap at yesterday — a demo shouldn't show a future delivery
+        # for a sale that already booked. Cheap belt-and-suspenders for
+        # the newest sales, whose sale_date + delta can land past today.
+        if delivery_date > yesterday:
+            delivery_date = yesterday
+        record_delivery(
+            sale.vehicle,
+            dealership=dealership,
+            delivery_date=delivery_date,
+            temp_tag_number=f"TT-{sale.vehicle.stock_number}",
+            notes=(
+                "Copper Canyon demo seed — delivered via record_delivery; "
+                "hook advances hold_reserved → off_market."
+            ),
+        )
+        delivered_sale_pks.append(sale.pk)
+    stdout.write(
+        f"delivered {len(delivered_sale_pks)} of {len(sales)} sale(s); "
+        f"remainder sit at hold_reserved as sold-awaiting-funding "
+        f"(kept: {list(_SALES_STAYING_AT_HOLD_RESERVED)!r})."
+    )
+    return delivered_sale_pks
+
+
+def _backdate_off_market_for_deliveries(
+    dealership: Dealership, stdout
+) -> None:
+    """Set ``VehicleStage.entered_at`` on each delivered sold vehicle to
+    its :attr:`Delivery.delivery_date`, so the aging board reads real
+    days-since-delivery instead of hook-time (~now).
+
+    Analogue of :func:`_backdate_hold_reserved_for_sales` for the
+    off_market column. Only touches sold vehicles with a matching
+    :class:`Delivery` — leaves the two unsold off_market residents
+    (if any survive in ``_STAGE_PLAN``) untouched.
+
+    Runs BEFORE :func:`_seed_stage_aging_snapshots`. Only the stage
+    row's ``entered_at`` moves — the paired hook event's ``entered_at``
+    stays at hook time so the log-not-backwards invariant holds
+    (latest event's ``to_stage`` still equals ``current_stage``).
+    """
+    updated = 0
+    for delivery in Delivery.objects.filter(
+        dealership=dealership
+    ).select_related("sale__vehicle"):
+        vehicle = delivery.sale.vehicle
+        if delivery.delivery_date is None:
+            continue
+        stage_row = VehicleStage.objects.filter(
+            dealership=dealership,
+            vehicle=vehicle,
+            current_stage=VEHICLE_STAGE_OFF_MARKET,
+        ).first()
+        if stage_row is None:
+            continue
+        stage_row.entered_at = dt.datetime.combine(
+            delivery.delivery_date,
+            dt.time(9, 0),
+            tzinfo=dt.timezone.utc,
+        )
+        stage_row.save(update_fields=["entered_at"])
+        updated += 1
+    stdout.write(
+        f"backdated {updated} delivered off_market VehicleStage row(s) "
+        f"to their delivery date."
     )
 
 
@@ -1211,10 +1386,11 @@ def _originate_bhph_sale_and_note(
         gross_realized=Decimal("0.00"),
     )
 
-    # Mirror the ``record_sale`` lifecycle hook by hand — this helper
+    # Mirror the ``record_sale`` side effects by hand — this helper
     # writes the Sale directly (see class docstring) so the sale-hook
-    # side effect must be re-composed here. Otherwise the extension's
-    # sold BHPH units would sit on frontline forever.
+    # transitions must be re-composed here. Otherwise the extension's
+    # sold BHPH units would sit on frontline and read as available
+    # stock forever.
     stage = get_current_stage(vehicle, dealership=dealership)
     if stage is not None and stage.current_stage == VEHICLE_STAGE_FRONTLINE:
         advance_stage(
@@ -1225,6 +1401,9 @@ def _originate_bhph_sale_and_note(
             rule_name="sale_booked",
             notes=f"Sale #{sale.pk} booked (extension seed).",
         )
+    if vehicle.is_available:
+        vehicle.is_available = False
+        vehicle.save(update_fields=["is_available"])
 
     first_payment_due = (
         now - dt.timedelta(days=first_payment_days_ago)
@@ -1788,6 +1967,548 @@ def _seed_stage_aging_snapshots(
         f"backfilled {written} stage-aging snapshot row(s) across 14 days."
     )
     return written
+
+
+# ---------------------------------------------------------------------------
+# Lot expansion — bring the store up to Chris's operating-scale rule:
+# ~50 for-sale + ~25-30 in prep + ~40 sold in the trailing month.
+#
+# The archetype hardcodes 20 vehicles at ``retail_subprime.py:363`` and
+# `services/demo_store/` is out of bounds. The expansion synthesises
+# 72 additional used-vehicle rows and lands them through the shipped
+# :func:`services.inventory_import.import_rows` verb — the same path a
+# real dealer's CSV feed uses. That keeps the seed composing existing
+# verbs instead of hand-writing Vehicle rows, and it exercises the
+# import contract as a side effect.
+#
+# See docs/_internal/TASK_c2c3-lot-shape-and-demo-script.md — "Row
+# projection for the resize" for the derivation.
+# ---------------------------------------------------------------------------
+
+
+# Mixed-make used inventory templates the extension picks from. Prices
+# span the archetype's $8-18k band; makes/models match the Yuma indie
+# persona (Ford / Chevy / Toyota / Honda / Nissan / Hyundai / Kia).
+# Body-style mix reflects a lot serving working families + snowbirds:
+# trucks, SUVs, sedans and one van.
+_EXPANSION_VEHICLE_TEMPLATES: tuple[dict, ...] = (
+    {"make": "Ford", "model": "F-150", "trim": "XLT SuperCab", "body_style": "truck", "price_base": 15495, "mileage_base": 118000},
+    {"make": "Ford", "model": "F-150", "trim": "STX Regular Cab", "body_style": "truck", "price_base": 12995, "mileage_base": 135000},
+    {"make": "Ford", "model": "Escape", "trim": "SE", "body_style": "suv", "price_base": 12295, "mileage_base": 112000},
+    {"make": "Ford", "model": "Focus", "trim": "SE Hatch", "body_style": "car", "price_base": 8495, "mileage_base": 128000},
+    {"make": "Ford", "model": "Fusion", "trim": "SE", "body_style": "car", "price_base": 9995, "mileage_base": 122000},
+    {"make": "Ford", "model": "Explorer", "trim": "XLT 4WD", "body_style": "suv", "price_base": 14795, "mileage_base": 129000},
+    {"make": "Ford", "model": "Ranger", "trim": "XLT Extended Cab", "body_style": "truck", "price_base": 10995, "mileage_base": 145000},
+    {"make": "Chevrolet", "model": "Silverado 1500", "trim": "LT", "body_style": "truck", "price_base": 16995, "mileage_base": 115000},
+    {"make": "Chevrolet", "model": "Silverado 1500", "trim": "WT Regular Cab", "body_style": "truck", "price_base": 12995, "mileage_base": 138000},
+    {"make": "Chevrolet", "model": "Equinox", "trim": "LT AWD", "body_style": "suv", "price_base": 13295, "mileage_base": 108000},
+    {"make": "Chevrolet", "model": "Traverse", "trim": "LT", "body_style": "suv", "price_base": 15795, "mileage_base": 121000},
+    {"make": "Chevrolet", "model": "Malibu", "trim": "LT", "body_style": "car", "price_base": 10495, "mileage_base": 118000},
+    {"make": "Chevrolet", "model": "Colorado", "trim": "Z71 Crew Cab", "body_style": "truck", "price_base": 17495, "mileage_base": 102000},
+    {"make": "Toyota", "model": "Tacoma", "trim": "SR5 Access Cab", "body_style": "truck", "price_base": 17995, "mileage_base": 116000},
+    {"make": "Toyota", "model": "Tacoma", "trim": "TRD Off-Road Double Cab", "body_style": "truck", "price_base": 21495, "mileage_base": 108000},
+    {"make": "Toyota", "model": "Tundra", "trim": "SR5 Double Cab", "body_style": "truck", "price_base": 19995, "mileage_base": 122000},
+    {"make": "Toyota", "model": "RAV4", "trim": "LE AWD", "body_style": "suv", "price_base": 13795, "mileage_base": 115000},
+    {"make": "Toyota", "model": "Highlander", "trim": "LE V6", "body_style": "suv", "price_base": 16295, "mileage_base": 125000},
+    {"make": "Toyota", "model": "Camry", "trim": "LE", "body_style": "car", "price_base": 11495, "mileage_base": 128000},
+    {"make": "Toyota", "model": "Corolla", "trim": "LE", "body_style": "car", "price_base": 10795, "mileage_base": 118000},
+    {"make": "Toyota", "model": "Sienna", "trim": "LE 8-Passenger", "body_style": "van", "price_base": 14995, "mileage_base": 132000},
+    {"make": "Honda", "model": "CR-V", "trim": "EX-L", "body_style": "suv", "price_base": 15295, "mileage_base": 112000},
+    {"make": "Honda", "model": "Pilot", "trim": "EX-L", "body_style": "suv", "price_base": 16795, "mileage_base": 128000},
+    {"make": "Honda", "model": "Civic", "trim": "EX", "body_style": "car", "price_base": 11995, "mileage_base": 118000},
+    {"make": "Honda", "model": "Accord", "trim": "Sport", "body_style": "car", "price_base": 12495, "mileage_base": 121000},
+    {"make": "Honda", "model": "Ridgeline", "trim": "RTL", "body_style": "truck", "price_base": 18995, "mileage_base": 116000},
+    {"make": "Nissan", "model": "Rogue", "trim": "SV", "body_style": "suv", "price_base": 11795, "mileage_base": 123000},
+    {"make": "Nissan", "model": "Altima", "trim": "2.5 SV", "body_style": "car", "price_base": 10495, "mileage_base": 130000},
+    {"make": "Nissan", "model": "Frontier", "trim": "SV Crew Cab", "body_style": "truck", "price_base": 13795, "mileage_base": 128000},
+    {"make": "Nissan", "model": "Sentra", "trim": "SV", "body_style": "car", "price_base": 8995, "mileage_base": 132000},
+    {"make": "Hyundai", "model": "Elantra", "trim": "SE", "body_style": "car", "price_base": 8495, "mileage_base": 126000},
+    {"make": "Hyundai", "model": "Sonata", "trim": "SE", "body_style": "car", "price_base": 9795, "mileage_base": 118000},
+    {"make": "Hyundai", "model": "Santa Fe", "trim": "Sport", "body_style": "suv", "price_base": 12495, "mileage_base": 122000},
+    {"make": "Kia", "model": "Sorento", "trim": "LX V6", "body_style": "suv", "price_base": 11995, "mileage_base": 124000},
+    {"make": "Kia", "model": "Optima", "trim": "LX", "body_style": "car", "price_base": 9295, "mileage_base": 128000},
+    {"make": "Kia", "model": "Forte", "trim": "S", "body_style": "car", "price_base": 8195, "mileage_base": 121000},
+)
+
+
+# Stage targets AFTER expansion — the shape a 50-car indie lot should
+# read as. Delta rows above the archetype baseline (which the existing
+# ``_STAGE_PLAN`` establishes for the 20 archetype vehicles) are
+# distributed here from the freshly-imported CC-#### stock. Frontline
+# is the residual — every imported vehicle not moved to another stage
+# stays there.
+_STAGE_EXPANSION_TARGETS: tuple[tuple[str, int], ...] = (
+    (VEHICLE_STAGE_INCOMING, 3),
+    (VEHICLE_STAGE_INSPECTION, 5),
+    (VEHICLE_STAGE_RECON, 9),
+    (VEHICLE_STAGE_DETAIL, 3),
+    (VEHICLE_STAGE_PHOTOGRAPHY, 2),
+    (VEHICLE_STAGE_QC, 4),
+    (VEHICLE_STAGE_LISTING, 2),
+    (VEHICLE_STAGE_COMPANY_USE, 2),
+    (VEHICLE_STAGE_WHOLESALE_OUT, 2),
+)
+
+# Days-ago patterns for entered_at on the redistributed CC-#### stock.
+# Vehicles that just landed should read fresh (small days-ago); ones
+# further into recon or listing should read like they have been there
+# a bit. Applied via modulus so 10 vehicles in a stage cycle through
+# the days list.
+_STAGE_EXPANSION_DAYS_AGO: dict[str, tuple[int, ...]] = {
+    VEHICLE_STAGE_INCOMING: (1, 2, 3),
+    VEHICLE_STAGE_INSPECTION: (2, 4, 5),
+    VEHICLE_STAGE_RECON: (3, 6, 9, 12, 15),
+    VEHICLE_STAGE_DETAIL: (4, 6, 8),
+    VEHICLE_STAGE_PHOTOGRAPHY: (5, 8),
+    VEHICLE_STAGE_QC: (5, 7, 9, 11),
+    VEHICLE_STAGE_LISTING: (10, 14),
+    VEHICLE_STAGE_COMPANY_USE: (60, 120),
+    VEHICLE_STAGE_WHOLESALE_OUT: (30, 55),
+}
+
+
+# Total unsold vehicles the expansion should land immediately after
+# import — the number that later shrinks as extensions sell some off.
+# The math: we want ~85 unsold at end-of-seed. Extension pipeline
+# sells 40 more vehicles after import (2 in ``_extend_bhph_portfolio``
+# + 38 in ``_extend_sales_history``). So import time needs 85 + 40 =
+# 125 unsold on the lot, minus whatever the archetype already left
+# unsold (15). Net new imports: ~110. Adjust the final target if the
+# extension sales count changes.
+_EXPANSION_TARGET_UNSOLD_COUNT: int = 125
+
+
+def _synthesise_expansion_rows(
+    count: int, start_stock_index: int = 1
+) -> list[tuple[int, dict]]:
+    """Build ``count`` vehicle rows drawn from
+    :data:`_EXPANSION_VEHICLE_TEMPLATES`.
+
+    Deterministic — the same ``count`` produces the same rows every
+    run (indexes into the template list mod its length). Year, price
+    and mileage are stepped off the template's base so no two
+    generated vehicles are identical, but the base ratios (Toyota
+    truck holds its money, Kia sedan does not) stay realistic.
+
+    Returns a list shaped for :func:`import_rows`:
+    ``[(line_no, row_dict), ...]``. ``line_no`` is a synthetic 1-based
+    row index — the import service uses it only for error reporting.
+    """
+    templates = _EXPANSION_VEHICLE_TEMPLATES
+    now_year = timezone.now().year
+    rows: list[tuple[int, dict]] = []
+    for i in range(count):
+        tpl = templates[i % len(templates)]
+        # Year rotates 2010-2020 so the lot reads mixed-age.
+        year = 2010 + ((i * 3 + 1) % 11)
+        # Price varies ±10 % around the base so no two vehicles at
+        # the same template land at the same sticker.
+        price_delta = -800 + (i * 173 % 1600)
+        price = tpl["price_base"] + price_delta
+        # Mileage varies ±15 % around the base.
+        mileage_delta = -12000 + (i * 2711 % 24000)
+        mileage = max(45_000, tpl["mileage_base"] + mileage_delta)
+        stock = f"CC-{start_stock_index + i:03d}"
+        vin = f"CCA{i:03d}{tpl['make'][0]}{tpl['model'][0]}{year}XXXXX"[:17].ljust(
+            17, "0"
+        )
+        rows.append(
+            (
+                i + 1,
+                {
+                    "stock_number": stock,
+                    "vin": vin,
+                    "year": year,
+                    "make": tpl["make"],
+                    "model": tpl["model"],
+                    "trim": tpl["trim"],
+                    "condition": "used",
+                    "price": str(price),
+                    "mileage": str(mileage),
+                    "body_style": tpl["body_style"],
+                    "fuel_type": "Gasoline",
+                    "url": "",
+                    "image_url": "",
+                    "features": "",
+                },
+            )
+        )
+    return rows
+
+
+def _extend_lot_to_target_size(
+    dealership: Dealership, stdout
+) -> int:
+    """Bring the store's unsold pool up to
+    :data:`_EXPANSION_TARGET_UNSOLD_COUNT` by synthesising rows and
+    feeding them through the shipped inventory-import verb.
+
+    ``mark_missing_unavailable=False`` — the default flips every row
+    *not* present in the batch to ``is_available=False``, which
+    would silently mark the archetype's 20 originals unavailable
+    the first time this ran. Cowork's review flagged the trap; we
+    pass ``False`` and let the archetype rows stand.
+
+    Every imported vehicle also gets a :class:`VehicleAcquisition`
+    row so :func:`services.sale.record_sale` can compute a truthful
+    ``gross_realized`` at sale time. Purchase price runs ~60 % of
+    retail — the ratio the archetype uses for its ``cost_basis``.
+
+    Returns the number of vehicles created.
+    """
+    now = timezone.now()
+    unsold_current = (
+        Vehicle.objects.filter(dealership=dealership, sale__isnull=True).count()
+    )
+    to_add = max(0, _EXPANSION_TARGET_UNSOLD_COUNT - unsold_current)
+    if to_add == 0:
+        stdout.write(
+            "lot already at or over the expansion target — nothing to add."
+        )
+        return 0
+
+    rows = _synthesise_expansion_rows(to_add)
+    summary = import_rows(
+        rows,
+        source="copper_canyon_seed",
+        dry_run=False,
+        mark_missing_unavailable=False,
+        dealership=dealership,
+    )
+
+    # Provision VehicleAcquisition for each newly-imported vehicle so
+    # ``record_sale`` can compute a truthful ``gross_realized`` at
+    # sale time. Purchase price = 60 % of retail (matches the
+    # archetype's ``cost_basis`` ratio). Skip vehicles that somehow
+    # already have an acquisition (idempotent re-runs of this
+    # function against a partial state).
+    provisioned = 0
+    for offset, stock in enumerate(summary.seen_stock_numbers):
+        try:
+            vehicle = Vehicle.objects.get(
+                dealership=dealership, stock_number=stock
+            )
+        except Vehicle.DoesNotExist:  # pragma: no cover — defensive
+            continue
+        if VehicleAcquisition.objects.filter(vehicle=vehicle).exists():
+            continue
+        # Deterministic source mix mirroring the archetype (auction /
+        # trade / private in a 1:1:1 rotation).
+        source = (
+            SOURCE_AUCTION if offset % 3 == 0
+            else SOURCE_TRADE if offset % 3 == 1
+            else SOURCE_PRIVATE
+        )
+        purchase_price = (vehicle.price * Decimal("0.6")).quantize(
+            Decimal("1.00")
+        )
+        # Purchase date runs 30-90 days ago so acquisitions predate
+        # every sale the seed lands afterward.
+        days_ago = 30 + (offset * 7) % 61
+        VehicleAcquisition.objects.create(
+            dealership=dealership,
+            vehicle=vehicle,
+            source=source,
+            purchase_price=purchase_price,
+            purchase_date=(now - dt.timedelta(days=days_ago)).date(),
+            source_detail=f"{source[:3].upper()}-CC{offset:03d}",
+        )
+        provisioned += 1
+
+    stdout.write(
+        f"extended lot: imported {summary.created} vehicle(s) "
+        f"(updated={summary.updated}, invalid={len(summary.invalid_rows)}), "
+        f"provisioned {provisioned} acquisition row(s). "
+        f"Unsold pool: {unsold_current} → "
+        f"{unsold_current + summary.created}."
+    )
+    return summary.created
+
+
+def _expand_stage_distribution(
+    dealership: Dealership, stdout
+) -> None:
+    """Redistribute freshly-imported ``CC-####`` frontline vehicles
+    into the prep and holdover stages until each hits its
+    :data:`_STAGE_EXPANSION_TARGETS` count.
+
+    Only touches ``CC-####`` stock — archetype rows (``RS-##``)
+    keep whatever :func:`_distribute_lifecycle_stages` already
+    assigned them. Frontline is the residual: everything not moved
+    stays there, which lands ~50 vehicles for sale.
+
+    Each stage move rewrites :class:`VehicleStage` +
+    :class:`VehicleStageEvent` directly (matching the pattern in
+    :func:`_distribute_lifecycle_stages`) — bypassing
+    :func:`advance_stage`'s transition table so ``frontline →
+    photography`` and other short-hop moves don't need a table
+    edit for a seed-only side path.
+    """
+    now = timezone.now()
+    reassigned = 0
+    for stage_key, target_count in _STAGE_EXPANSION_TARGETS:
+        current = VehicleStage.objects.filter(
+            dealership=dealership, current_stage=stage_key
+        ).count()
+        need = max(0, target_count - current)
+        if need == 0:
+            continue
+        days_pattern = _STAGE_EXPANSION_DAYS_AGO.get(stage_key, (5,))
+        # Pull CC-#### frontline vehicles in stock-number order so
+        # the assignment is deterministic across re-runs.
+        candidates = list(
+            VehicleStage.objects.filter(
+                dealership=dealership,
+                current_stage=VEHICLE_STAGE_FRONTLINE,
+                vehicle__stock_number__startswith="CC-",
+            )
+            .select_related("vehicle")
+            .order_by("vehicle__stock_number")[:need]
+        )
+        for offset, stage_row in enumerate(candidates):
+            days_ago = days_pattern[offset % len(days_pattern)]
+            entered_at = now - dt.timedelta(days=days_ago)
+            previous_stage = stage_row.current_stage
+            stage_row.current_stage = stage_key
+            stage_row.entered_at = entered_at
+            stage_row.trigger = VEHICLE_STAGE_TRIGGER_MANUAL
+            stage_row.save(
+                update_fields=[
+                    "current_stage", "entered_at", "trigger",
+                ]
+            )
+            # Backdate whichever earlier event still sits after the
+            # new manual transition — the log-not-backwards invariant
+            # :func:`_distribute_lifecycle_stages` also protects.
+            # Prod imports create a ``trigger='import'`` event; the
+            # test-only auto-bootstrap post_save signal
+            # (dealer_ai/tests/__init__.py) writes ``trigger='bootstrap'``.
+            # Filter both so the log stays chronological in either env.
+            VehicleStageEvent.objects.filter(
+                vehicle=stage_row.vehicle,
+                trigger__in=("import", "bootstrap"),
+                entered_at__gt=entered_at,
+            ).update(
+                entered_at=entered_at - dt.timedelta(hours=1),
+            )
+            VehicleStageEvent.objects.create(
+                dealership=dealership,
+                vehicle=stage_row.vehicle,
+                from_stage=previous_stage,
+                to_stage=stage_key,
+                entered_at=entered_at,
+                trigger=VEHICLE_STAGE_TRIGGER_MANUAL,
+                notes="Copper Canyon demo seed — stage expansion.",
+            )
+            reassigned += 1
+    stdout.write(
+        f"expanded stage distribution: reassigned {reassigned} "
+        f"CC-#### vehicle(s) across "
+        f"{len(_STAGE_EXPANSION_TARGETS)} target stages."
+    )
+
+
+# Sales-history expansion — 38 more sales in the trailing month so the
+# store reads as a working lot at Chris's pace. Mix per the pivot doc:
+# subprime-first (20 % cash · 45 % retail · 35 % BHPH).
+_EXTENDED_SALES_TOTAL = 38
+_EXTENDED_SALES_CASH = 8   # 20 %
+_EXTENDED_SALES_RETAIL = 17  # 45 %
+_EXTENDED_SALES_BHPH = 13   # 35 %
+
+# Buyer names for the 38 extended-sales cohort. Yuma-shaped —
+# consistent with the persona rename map. Rotated by index; longer
+# than 38 in case future increments bump the sale count.
+_EXTENDED_BUYER_NAMES: tuple[str, ...] = (
+    "Adriana Peña", "Bryan Cortez", "Carla Ramirez", "Diego Salazar",
+    "Elena Beltran", "Fernando Ochoa", "Gina Marquez", "Hector Delgado",
+    "Iris Espinoza", "Javier Alcaraz", "Karina Vega", "Luis Contreras",
+    "Marisol Nava", "Nestor Valenzuela", "Olivia Sanchez", "Pablo Rivas",
+    "Quetzali Fuentes", "Ramon Bustos", "Sofia Escobedo", "Tomas Chavarria",
+    "Ursula Padilla", "Vicente Cortés", "Wendy Guzman", "Xavier Munoz",
+    "Yolanda Zamora", "Zeke Robles", "Amelia Diaz", "Bruno Herrera",
+    "Camila Rojas", "Daniel Nguyen", "Estella Pham", "Felipe Torres",
+    "Grace Wu", "Hugo Serrano", "Ines Villanueva", "Jorge Aguilar",
+    "Kayla Reyes", "Leo Mendez",
+)
+
+
+def _extend_sales_history(
+    dealership: Dealership, owner, stdout
+) -> dict:
+    """Book :data:`_EXTENDED_SALES_TOTAL` additional sales across the
+    trailing 30 days, each through the real
+    :func:`services.sale.record_sale` verb.
+
+    Each sale then goes through :func:`record_delivery` so it lands
+    at ``off_market`` — matching the pace-rule shape. BHPH sales get
+    a :class:`BhphNote` originated via
+    :func:`record_bhph_note` and a handful of weekly payments
+    recorded via :func:`services.bhph_payments.record_payment`.
+
+    Delivery date is capped at yesterday so no demo dates land in
+    the future (same guard :func:`_deliver_five_sales` applies).
+
+    Returns a summary dict with per-finance-type counts.
+    """
+    now = timezone.now()
+    today = now.date()
+    yesterday = today - dt.timedelta(days=1)
+
+    # Pick 38 currently-unsold vehicles from the imported pool. Sort
+    # by stock number so the assignment is deterministic across
+    # re-runs. Exclude vehicles already in prep-adjacent stages —
+    # a sold unit had to be at frontline first.
+    candidates = list(
+        Vehicle.objects.filter(
+            dealership=dealership,
+            sale__isnull=True,
+            stage__current_stage=VEHICLE_STAGE_FRONTLINE,
+            stock_number__startswith="CC-",
+        )
+        .select_related("stage")
+        .order_by("stock_number")[: _EXTENDED_SALES_TOTAL]
+    )
+    if len(candidates) < _EXTENDED_SALES_TOTAL:
+        stdout.write(
+            f"WARN: only {len(candidates)} frontline CC-#### vehicles "
+            f"available for {_EXTENDED_SALES_TOTAL} extension sales; "
+            "skipping the rest — expand the import batch or reduce the "
+            "sales target."
+        )
+
+    counts = {"cash": 0, "retail": 0, "bhph": 0}
+    bhph_notes_created = 0
+    bhph_payments_recorded = 0
+    deliveries_recorded = 0
+
+    for offset, vehicle in enumerate(candidates):
+        # Finance-type deal — first 8 cash, next 17 retail, last 13
+        # BHPH. Deterministic assignment across re-runs.
+        if offset < _EXTENDED_SALES_CASH:
+            finance_type = SALE_FINANCE_TYPE_CASH
+            lender_name = ""
+        elif offset < _EXTENDED_SALES_CASH + _EXTENDED_SALES_RETAIL:
+            finance_type = SALE_FINANCE_TYPE_RETAIL
+            lender_name = "Sonoran Auto Finance"
+        else:
+            finance_type = SALE_FINANCE_TYPE_BHPH
+            lender_name = ""
+
+        # Spread sale_date across the last 30 days so the trailing-
+        # month analytics windows read a real distribution. Day 0 =
+        # yesterday, day 29 = 30 days ago.
+        days_since_sale = 1 + (offset * 30 // _EXTENDED_SALES_TOTAL)
+        sale_date = today - dt.timedelta(days=days_since_sale)
+
+        # Sold price = full sticker (a realistic dealer negotiates,
+        # but for the demo the sticker read reads as the sale price;
+        # the archetype does the same). Sale-book JE + stage
+        # transition + is_available flip all fire from record_sale.
+        # Buyer as a walk-in lead so the deal has customer trail.
+        buyer_name = _EXTENDED_BUYER_NAMES[offset % len(_EXTENDED_BUYER_NAMES)]
+        buyer = CustomerLead.objects.create(
+            dealership=dealership,
+            name=buyer_name,
+            email=synthetic_email(buyer_name),
+            phone=f"928-555-{1000 + offset:04d}",
+            urgency="immediate",
+            channel="walk_in",
+            created_at=now - dt.timedelta(days=days_since_sale + 1),
+        )
+        sale = record_sale(
+            vehicle,
+            dealership=dealership,
+            sale_date=sale_date,
+            sold_price=vehicle.price,
+            finance_type=finance_type,
+            buyer=buyer,
+            lender_name=lender_name,
+            posted_by_user=owner,
+        )
+        counts[finance_type] += 1
+
+        # BHPH note origination — the note books at sale time and
+        # runs weekly for two years, mirroring the archetype
+        # _extend_bhph_portfolio shape but at scale.
+        if finance_type == SALE_FINANCE_TYPE_BHPH:
+            first_payment_due = sale_date + dt.timedelta(days=7)
+            note = record_bhph_note(
+                dealership=dealership,
+                sale=sale,
+                principal_financed=vehicle.price,
+                apr=Decimal("18.9"),
+                term_weeks=104,
+                payment_frequency="weekly",
+                first_payment_due=first_payment_due,
+            )
+            bhph_notes_created += 1
+            # Record 1 payment per full week between first_payment_due
+            # and today. New notes carry no payments yet; older ones
+            # accumulate a couple.
+            weeks_paid = max(
+                0, (today - first_payment_due).days // 7
+            )
+            for week_offset in range(min(weeks_paid, 4)):
+                paid_at = now - dt.timedelta(
+                    days=(weeks_paid - week_offset - 1) * 7
+                )
+                # Weekly payment approximated as principal / term_weeks
+                # + APR component (rough; the deterministic BHPH
+                # engine is the source of truth for real callers).
+                weekly_payment = (
+                    vehicle.price / Decimal("104")
+                ).quantize(Decimal("1.00")) + Decimal("35.00")
+                record_payment(
+                    dealership=dealership,
+                    note=note,
+                    paid_at=paid_at,
+                    amount=weekly_payment,
+                    method=BHPH_PAYMENT_METHOD_CASH,
+                )
+                bhph_payments_recorded += 1
+
+        # Delivery — every extension sale is delivered. Delivery
+        # date is 1-4 days after sale, capped at yesterday.
+        delivery_lag_days = 1 + (offset % 4)
+        delivery_date = sale_date + dt.timedelta(days=delivery_lag_days)
+        if delivery_date > yesterday:
+            delivery_date = yesterday
+        # Only record the delivery if the vehicle is currently at
+        # ``hold_reserved`` (the state ``record_sale`` puts it in).
+        # If a prior partial run already delivered it, skip.
+        current_stage = get_current_stage(vehicle, dealership=dealership)
+        if (
+            current_stage is not None
+            and current_stage.current_stage == VEHICLE_STAGE_HOLD_RESERVED
+            and not Delivery.objects.filter(sale=sale).exists()
+        ):
+            record_delivery(
+                vehicle,
+                dealership=dealership,
+                delivery_date=delivery_date,
+                temp_tag_number=f"TT-{vehicle.stock_number}",
+                notes=(
+                    "Copper Canyon demo seed — extended sales history "
+                    "delivery."
+                ),
+            )
+            deliveries_recorded += 1
+
+    stdout.write(
+        f"extended sales history: booked "
+        f"cash={counts['cash']}, retail={counts['retail']}, "
+        f"bhph={counts['bhph']} sale(s); "
+        f"created {bhph_notes_created} BHPH note(s) with "
+        f"{bhph_payments_recorded} payment(s); "
+        f"recorded {deliveries_recorded} deliveries."
+    )
+    return {
+        "sales_by_type": counts,
+        "bhph_notes": bhph_notes_created,
+        "bhph_payments": bhph_payments_recorded,
+        "deliveries": deliveries_recorded,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -57,9 +57,13 @@ from dealer_ai.management.commands.seed_copper_canyon_auto_demo import (
     STORE_SLUG,
 )
 from dealer_ai.models import (
+    VEHICLE_STAGE_CHOICES,
     VEHICLE_STAGE_FRONTLINE,
+    VEHICLE_STAGE_HOLD_RESERVED,
+    VEHICLE_STAGE_OFF_MARKET,
     WORK_ORDER_STATUS_DRAFT,
     Dealership,
+    Delivery,
     Sale,
     SlaBreachRecord,
     StageAgingSnapshot,
@@ -320,6 +324,118 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
             f"{sold_on_frontline}. record_sale + "
             "_originate_bhph_sale_and_note must advance the vehicle "
             "off frontline.",
+        )
+
+    # -------------------------------------------------------------------
+    # Part 2 shape assertions (TASK_c2c3-lot-shape-and-demo-script.md,
+    # 2026-09-01). The prior four assertions guarded truthfulness of
+    # what the aging board *reads*; these four guard the *shape of the
+    # lot itself* — every time the mechanics have changed, the shape
+    # has regressed, and the demo script depends on the shape holding.
+    # -------------------------------------------------------------------
+
+    def test_every_lifecycle_stage_has_at_least_one_vehicle(self) -> None:
+        """Assertion 5 — the aging board is a twelve-column story.
+
+        Before this shape lock, sold vehicles moving to
+        ``hold_reserved`` en masse silently emptied ``detail``,
+        ``photography`` and ``wholesale_out``. Every stage in
+        :data:`VEHICLE_STAGE_CHOICES` must carry at least one resident
+        so the aging board reads with no blank columns.
+        """
+        dealership = _demo_dealership()
+        expected_stages = {key for key, _label in VEHICLE_STAGE_CHOICES}
+        populated = set(
+            VehicleStage.objects.filter(dealership=dealership)
+            .values_list("current_stage", flat=True)
+            .distinct()
+        )
+        missing = sorted(expected_stages - populated)
+        self.assertEqual(
+            missing,
+            [],
+            f"lifecycle stages with zero vehicles: {missing!r}. "
+            f"The seed must land at least one vehicle in every one of "
+            f"the {len(expected_stages)} canonical stages so the aging "
+            f"board reads as a full twelve-column story.",
+        )
+
+    def test_frontline_holds_more_than_a_token_count(self) -> None:
+        """Assertion 6 — the front line reads like a real lot at the
+        persona's sales pace, not a display case.
+
+        Chris's rule (TASK_c2c3, 2026-09-01 answers): *"If you want
+        to sell 50 cars in a month you need 50ish on the lot for
+        sale and another 25-30 in recon waiting to hit the lot."*
+        The Copper Canyon persona sits in that band. A frontline
+        under 40 cars stops looking like a working store; the aging
+        board thins out and the demo starts describing a lot that
+        would be going under, not one at pace.
+
+        The floor here is 40 — Chris's number minus a few for
+        wiggle room across seed re-runs. The expansion imports
+        enough CC-#### stock (see
+        :data:`_EXPANSION_TARGET_UNSOLD_COUNT` in the seed) that
+        the residual after prep-stage moves and extension sales
+        lands ~50 at frontline.
+        """
+        dealership = _demo_dealership()
+        frontline_count = VehicleStage.objects.filter(
+            dealership=dealership,
+            current_stage=VEHICLE_STAGE_FRONTLINE,
+        ).count()
+        self.assertGreaterEqual(
+            frontline_count,
+            40,
+            f"frontline has {frontline_count} vehicle(s); a lot "
+            f"selling at Chris's target pace needs ~50 for-sale "
+            f"units on hand — floor is 40 with wiggle room.",
+        )
+
+    def test_some_sales_delivered_some_still_held(self) -> None:
+        """Assertion 7 — the sold pool splits cleanly across delivered
+        (``off_market``) and awaiting-funding (``hold_reserved``).
+
+        The lot has to demo both states side by side: the delivered
+        column proves the sale-to-delivery hook fires end to end, and
+        the hold_reserved column is the "sold, awaiting funding" screen
+        that every independent dealer has staffed live right now. A
+        seed that lands all sales in one bucket loses one of the two
+        stories.
+        """
+        dealership = _demo_dealership()
+        delivered_count = (
+            Sale.objects.filter(dealership=dealership)
+            .filter(vehicle__stage__current_stage=VEHICLE_STAGE_OFF_MARKET)
+            .count()
+        )
+        held_count = (
+            Sale.objects.filter(dealership=dealership)
+            .filter(vehicle__stage__current_stage=VEHICLE_STAGE_HOLD_RESERVED)
+            .count()
+        )
+        self.assertGreaterEqual(
+            delivered_count,
+            1,
+            "no delivered sales landed at off_market — "
+            "_deliver_five_sales did not run, or the delivery hook did "
+            "not advance the stage.",
+        )
+        self.assertGreaterEqual(
+            held_count,
+            1,
+            "no sales remain at hold_reserved — the seed delivered "
+            "everything and the sold-awaiting-funding screen has no "
+            "resident to demo.",
+        )
+        # Deliveries themselves must exist for the delivered ones; the
+        # stage counting alone would pass if some other seed advanced
+        # a vehicle to off_market without recording a Delivery.
+        self.assertEqual(
+            Delivery.objects.filter(dealership=dealership).count(),
+            delivered_count,
+            "delivered off_market count does not match Delivery rows; "
+            "one of the stage transitions ran without record_delivery.",
         )
 
 

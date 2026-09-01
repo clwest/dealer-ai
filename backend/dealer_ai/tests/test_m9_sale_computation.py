@@ -452,3 +452,58 @@ class RecordSaleLifecycleHookTests(TestCase):
         )
         stage.refresh_from_db()
         self.assertEqual(stage.current_stage, VEHICLE_STAGE_FRONTLINE)
+
+
+class RecordSaleAvailabilityHookTests(TestCase):
+    """A sold unit comes off the ``is_available`` roster.
+
+    Added 2026-09-01 for TASK_c2c3-lot-shape-and-demo-script Part
+    2. The admin vehicle-list endpoint and the pipeline
+    supply-vs-demand metric both filter on this flag; without the
+    flip they treat sold cars as available stock. Companion task
+    :file:`TASK_vehicle_list_caps_and_miscounts.md` covers the
+    endpoint miscount this used to hide.
+    """
+
+    def setUp(self) -> None:
+        self.dealership = Dealership.objects.create(
+            slug="m91-avail", name="M9.1 Availability Hook"
+        )
+        seed_default_coa(self.dealership)
+
+    def test_sale_marks_vehicle_unavailable(self) -> None:
+        vehicle = _seed_vehicle_with_ledger(
+            self.dealership, stock="AVAIL-1"
+        )
+        self.assertTrue(vehicle.is_available)
+
+        record_sale(
+            vehicle,
+            dealership=self.dealership,
+            sale_date=dt.date(2026, 8, 1),
+            sold_price=Decimal("25000.00"),
+            finance_type=SALE_FINANCE_TYPE_CASH,
+        )
+        vehicle.refresh_from_db()
+        self.assertFalse(vehicle.is_available)
+
+    def test_sale_no_op_when_already_unavailable(self) -> None:
+        """A vehicle pre-flagged unavailable (e.g. a data-migration
+        backfill, or a seed that flipped it before booking) still
+        books cleanly. The hook is idempotent.
+        """
+        vehicle = _seed_vehicle_with_ledger(
+            self.dealership, stock="AVAIL-2"
+        )
+        vehicle.is_available = False
+        vehicle.save(update_fields=["is_available"])
+
+        record_sale(
+            vehicle,
+            dealership=self.dealership,
+            sale_date=dt.date(2026, 8, 1),
+            sold_price=Decimal("25000.00"),
+            finance_type=SALE_FINANCE_TYPE_CASH,
+        )
+        vehicle.refresh_from_db()
+        self.assertFalse(vehicle.is_available)

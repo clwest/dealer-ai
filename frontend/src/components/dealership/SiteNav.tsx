@@ -22,7 +22,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useBrand, type Brand } from "@/lib/brand";
+import { useBrand, useDealerProfile, type Brand } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS: { href: string; label: string }[] = [
@@ -33,12 +33,16 @@ const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/#about", label: "About" },
 ];
 
-// Demo-only contact info. In a real install these flow from
-// the onboarding profile (dealership sales phone / hours). The
-// SESSION_030 Copper Canyon persona uses a Yuma, AZ area code
-// placeholder; SESSION_029's franchise config used a McAlester,
-// OK number. Both are demo placeholders.
-const DEMO_SALES_PHONE = "(928) 555-0100";
+// Hours are hardcoded here for now — the OnboardingProfile
+// doesn't carry a hours field yet, and adding one is a schema
+// migration (see docs/_internal/TASK_c2c3-lot-shape-and-demo-
+// script.md, header-fix section, for the deferral note). Values
+// keyed on dealer type; a real dealer's actual hours come in
+// once the schema field lands. Address and phone read live from
+// the profile via useBrand().
+const SALES_HOURS_INDIE = "Mon–Sat 9–6 · Sun by appt";
+const SALES_HOURS_FRANCHISE = "Mon–Sat 8:30–7";
+const SERVICE_HOURS_FRANCHISE = "Mon–Fri 7:30–5:30";
 
 export default function SiteNav() {
   const brand = useBrand();
@@ -77,11 +81,11 @@ export default function SiteNav() {
 
         <div className="flex items-center gap-2">
           <a
-            href={`tel:${DEMO_SALES_PHONE.replace(/\D/g, "")}`}
+            href={`tel:${brand.salesPhone.replace(/\D/g, "")}`}
             className="hidden items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted md:inline-flex"
           >
             <Phone className="h-3.5 w-3.5" />
-            {DEMO_SALES_PHONE}
+            {brand.salesPhone}
           </a>
           <Button
             asChild
@@ -143,11 +147,11 @@ export default function SiteNav() {
               </Link>
             </Button>
             <a
-              href={`tel:${DEMO_SALES_PHONE.replace(/\D/g, "")}`}
+              href={`tel:${brand.salesPhone.replace(/\D/g, "")}`}
               className="mt-2 flex items-center gap-2 rounded-md border border-border px-3 py-3 text-sm font-medium hover:bg-muted"
             >
               <Phone className="h-4 w-4" />
-              Sales · {DEMO_SALES_PHONE}
+              Sales · {brand.salesPhone}
             </a>
           </div>
         </SheetContent>
@@ -158,15 +162,30 @@ export default function SiteNav() {
 
 function InfoStrip() {
   const brand = useBrand();
+  const profile = useDealerProfile();
+  const isFranchise = profile.dealerType === "franchise";
+  const salesHours = isFranchise ? SALES_HOURS_FRANCHISE : SALES_HOURS_INDIE;
   return (
     <div className="hidden bg-brand-ink text-[11px] text-white/80 md:block">
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-4">
-          <span>Sales · Mon–Sat 8:30–7</span>
-          <span className="hidden lg:inline">Service · Mon–Fri 7:30–5:30</span>
-          <span className="hidden xl:inline">
-            720 S George Nigh Expy · McAlester, OK
-          </span>
+        {/* Each info item is a flex child of its own row wrapper so
+            gap-4 always separates them — the previous ``hidden
+            lg:inline`` pattern collapsed spacing between items at
+            some viewport widths (spans ran into each other, e.g.
+            "8:30–7Service"). Responsive hides now sit on
+            ``flex-none`` blocks. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
+          <span className="flex-none">Sales · {salesHours}</span>
+          {isFranchise && (
+            <span className="hidden flex-none lg:block">
+              Service · {SERVICE_HOURS_FRANCHISE}
+            </span>
+          )}
+          {brand.storeLocation && (
+            <span className="hidden flex-none xl:block">
+              {brand.storeLocation}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden sm:inline">{brand.tagline}</span>

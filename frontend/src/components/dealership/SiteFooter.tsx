@@ -11,11 +11,7 @@ import { Link } from "react-router-dom";
 import { Bot, MapPin, Phone } from "lucide-react";
 
 import { PRODUCT } from "@/config/defaultDealer";
-import { useBrand } from "@/lib/brand";
-
-const DEMO_SALES_PHONE = "(918) 426-2031";
-const DEMO_SERVICE_PHONE = "(918) 426-2031";
-const DEMO_ADDRESS = "720 S George Nigh Expy, McAlester, OK 74501";
+import { useBrand, useDealerProfile } from "@/lib/brand";
 
 const COLUMNS: {
   heading: string;
@@ -50,6 +46,8 @@ const COLUMNS: {
 
 export default function SiteFooter() {
   const brand = useBrand();
+  const profile = useDealerProfile();
+  const isFranchise = profile.dealerType === "franchise";
   const year = new Date().getFullYear();
 
   return (
@@ -63,25 +61,39 @@ export default function SiteFooter() {
             <div className="text-sm text-white/70">
               {brand.tagline}
             </div>
-            <div className="flex items-center gap-2 text-sm text-white/80">
-              <MapPin className="h-4 w-4 text-brand-accent" />
-              <span>{DEMO_ADDRESS}</span>
-            </div>
+            {brand.storeLocation && (
+              <div className="flex items-center gap-2 text-sm text-white/80">
+                <MapPin className="h-4 w-4 text-brand-accent" />
+                <span>{brand.storeLocation}</span>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5 text-sm">
-              <a
-                href={`tel:${DEMO_SALES_PHONE.replace(/\D/g, "")}`}
-                className="flex items-center gap-2 text-white/80 hover:text-white"
-              >
-                <Phone className="h-4 w-4 text-brand-accent" />
-                Sales · {DEMO_SALES_PHONE}
-              </a>
-              <a
-                href={`tel:${DEMO_SERVICE_PHONE.replace(/\D/g, "")}`}
-                className="flex items-center gap-2 text-white/80 hover:text-white"
-              >
-                <Phone className="h-4 w-4 text-brand-accent" />
-                Service · {DEMO_SERVICE_PHONE}
-              </a>
+              {brand.salesPhone && (
+                <a
+                  href={`tel:${brand.salesPhone.replace(/\D/g, "")}`}
+                  className="flex items-center gap-2 text-white/80 hover:text-white"
+                >
+                  <Phone className="h-4 w-4 text-brand-accent" />
+                  Sales · {brand.salesPhone}
+                </a>
+              )}
+              {/* Service line is franchise-only — the Copper Canyon
+                  indie persona (and any DEALER_AI_DEALER_TYPE=
+                  independent config) has no service department.
+                  Franchise dealers should ship a real service phone
+                  from the profile once the schema has one; falls back
+                  to the sales phone in the meantime rather than
+                  hardcoding a McAlester number nobody at this
+                  dealership answers. */}
+              {isFranchise && brand.salesPhone && (
+                <a
+                  href={`tel:${brand.salesPhone.replace(/\D/g, "")}`}
+                  className="flex items-center gap-2 text-white/80 hover:text-white"
+                >
+                  <Phone className="h-4 w-4 text-brand-accent" />
+                  Service · {brand.salesPhone}
+                </a>
+              )}
             </div>
           </div>
 

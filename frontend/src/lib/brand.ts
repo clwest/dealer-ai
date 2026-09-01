@@ -30,6 +30,7 @@ const FALLBACK = {
   dealershipName: DEFAULT_DEALER.dealershipName,
   storeLocation: DEFAULT_DEALER.storeLocation,
   tagline: DEFAULT_DEALER.tagline,
+  salesPhone: DEFAULT_DEALER.salesPhone,
 } as const;
 
 export interface Brand {
@@ -47,6 +48,11 @@ export interface Brand {
   possessiveName: string;
   /** Marketing tagline. Constant for now (no profile field for it yet). */
   tagline: string;
+  /** Public sales phone number from the profile, or the kit fallback.
+   *  Rendered on the site header + footer. Empty string means neither
+   *  the profile nor the default supplies one — consumers should
+   *  hide the call-CTA rather than render a broken tel: link. */
+  salesPhone: string;
   /** SESSION_021 — resolved logo URL. Profile-supplied hosted URL when
    *  set; otherwise the kit's static fallback (`DEFAULT_DEALER.logoPath`).
    *  Always a non-empty string — consumers can pass it straight to
@@ -85,6 +91,9 @@ export function brandFromProfile(
   const trimmedLogo = profile?.logo_url?.trim() ?? "";
   const logoFromProfile = trimmedLogo.length > 0;
   const logoUrl = logoFromProfile ? trimmedLogo : DEFAULT_DEALER.logoPath;
+  const salesPhone =
+    (profile?.sales_phone && profile.sales_phone.trim()) ||
+    FALLBACK.salesPhone;
   return {
     dealershipName,
     storeLocation,
@@ -93,6 +102,7 @@ export function brandFromProfile(
     embedAssistantName: `${dealershipName} Assistant`,
     possessiveName: toPossessive(dealershipName),
     tagline: FALLBACK.tagline,
+    salesPhone,
     logoUrl,
     logoFromProfile,
   };

@@ -1,4 +1,23 @@
-# Dealer AI — Demo Script
+# Dealer AI — Demo Script (franchise-config reference — HISTORICAL)
+
+> **THIS IS NOT THE CURRENT DEMO SCRIPT.** For the Copper Canyon
+> Auto (independent-dealer) demo — the shipped default — see
+> **[`COPPER_CANYON_DEMO_SCRIPT.md`](./COPPER_CANYON_DEMO_SCRIPT.md)**.
+>
+> This document describes an earlier franchise-config demo flow
+> (backend on `:8000`, LLM via local Ollama, franchise/OEM-branded
+> dealer voice, `seed_demo_vehicles` + `seed_demo_scenarios` as the
+> seed pair). It is retained as a franchise-config reference so a
+> future franchise install (via `DEALER_AI_DEALER_TYPE=franchise` +
+> `DEALER_AI_PRIMARY_MAKE=Ford`) has a working demo flow to
+> adapt from.
+>
+> **Do not read from both scripts in the same session.** They
+> disagree on port, LLM provider, seed commands, and dealer voice
+> by design — one is the shipped default, one is the alternate
+> config. Pick one before you start.
+
+---
 
 This is the script to run when showing the system to dealership management. It
 assumes the app is running locally:

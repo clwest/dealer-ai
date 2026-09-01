@@ -73,6 +73,9 @@ export interface DealerConfig {
   storeLocation: string;
   /** Marketing tagline shown in the sidebar footer. */
   tagline: string;
+  /** Public sales phone. Fallback for the site header + footer
+   *  when the OnboardingProfile's ``sales_phone`` is empty. */
+  salesPhone: string;
   /** Vehicle brand carried by this dealership ("Ford", "Chevy"). */
   brand: string;
   /** Path to a static logo asset under /public. Static for now —
@@ -122,6 +125,7 @@ export const DEFAULT_DEALER: DealerConfig = {
   dealershipName: "Copper Canyon Auto",
   storeLocation: "Yuma, AZ",
   tagline: "Yuma's trusted lot since 1987.",
+  salesPhone: "(928) 555-0100",
   // Mixed-make used lot — no single primary brand. Franchise
   // configs set this to their OEM ("Ford", "Toyota", etc.).
   brand: "",
