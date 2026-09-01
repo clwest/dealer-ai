@@ -96,6 +96,7 @@ from ..models import (
     ConditionReport,
     Dealership,
     Vehicle,
+    WorkOrder,
 )
 from . import photo_storage
 from .photo_storage import (
@@ -416,32 +417,52 @@ def add_finding(
     description: str,
     estimated_cost=None,
     notes: str = "",
+    discovered_during_work: bool = False,
+    discovered_on_work_order: Optional[WorkOrder] = None,
 ) -> ConditionFinding:
     """Append a new finding to a draft report.
 
-    Refuses when ``report.status == "complete"`` — completed reports
-    are immutable, and their finding set is part of that
-    immutability (retrospective §6 lesson 5 applied to inspection
-    history).
+    Refuses when ``report.status == "complete"`` UNLESS the caller
+    passes ``discovered_during_work=True``. That flag opens a
+    narrow, first-class path for the "tech lifted the car and
+    found a seal leaking" case (SESSION_227): the new finding
+    lands on the SAME report (no supplementary object) and, when
+    ``discovered_on_work_order`` is supplied, points back at the
+    in-progress WO it was discovered on. The finding then follows
+    the normal path — decision → its own WO → authorize → ledger.
 
     Validates ``category`` and ``severity`` against the canonical
     vocabularies before touching the DB — raises :class:`ValueError`
-    with a message pointing at the constant list. This is earlier
-    than the model's ``choices=`` validation and uses a
-    service-appropriate exception type.
+    with a message pointing at the constant list.
 
-    ``estimated_cost`` is documentation only. It MUST NOT create or
-    modify a ``VehicleCost`` row, MUST NOT enter
-    ``services/vehicle_ledger.compute_totals``, and MUST NOT
-    influence ``projected_total_investment``. The M4 recon-
-    automation milestone owns the findings → work-order → cost
-    flow. Enforced at both the model layer (see
-    ``test_condition_finding.EstimatedCostDoesNotPostToVehicleCost``)
-    and the service layer (see the corresponding assertion in
-    ``test_condition_report_service``).
+    ``estimated_cost`` is documentation only for the ordinary
+    (draft-report) case. It never posts to VehicleCost from here;
+    the M4 recon-automation milestone owns that flow. See
+    :class:`WorkOrder` + ``services.recon`` for the seam.
     """
     _assert_report_tenant(report, dealership)
-    _refresh_and_assert_draft(report, operation="add finding")
+    if discovered_during_work:
+        # First refresh so the status check sees committed data. Then
+        # allow either draft or complete — the whole point of this
+        # flag is that the parent report has already been signed off
+        # but a new finding still needs to attach.
+        report.refresh_from_db()
+        if discovered_on_work_order is not None:
+            # Cross-tenant + parent-vehicle guards so the FK cannot
+            # point at a WO on someone else's vehicle.
+            if discovered_on_work_order.dealership_id != dealership.pk:
+                raise CrossTenantConditionReportError(
+                    f"WorkOrder #{discovered_on_work_order.pk} belongs "
+                    f"to dealership {discovered_on_work_order.dealership_id}, "
+                    f"not {dealership.pk} (AUTHENTICATION_MODEL.md §1)."
+                )
+            if discovered_on_work_order.vehicle_id != report.vehicle_id:
+                raise ValueError(
+                    "add_finding: discovered_on_work_order must belong "
+                    "to the same vehicle as the parent report."
+                )
+    else:
+        _refresh_and_assert_draft(report, operation="add finding")
 
     if category not in _VALID_CATEGORY_KEYS:
         raise ValueError(
@@ -464,6 +485,8 @@ def add_finding(
         description=description,
         estimated_cost=estimated_cost,
         notes=notes,
+        discovered_during_work=discovered_during_work,
+        discovered_on_work_order=discovered_on_work_order,
     )
     finding.full_clean()
     finding.save()

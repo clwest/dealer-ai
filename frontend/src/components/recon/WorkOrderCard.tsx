@@ -1,25 +1,27 @@
-// Milestone 4 · Increment 7 — one WorkOrder card.
+// SESSION_227 — recon-one-card. WorkOrderCard shows the WO's state
+// and every action the operator can take on it, on the same card.
 //
-// Composes WorkOrderStatusBadge, PartRow, and a compact action bar
-// that varies per current WO status:
+// Buttons name what they do (product word — "Authorize $N", not
+// "Approve"). Disabled reasons live in the card as visible text, not
+// hover tooltips. Revise-estimate requires a reason. "Add a job
+// found during work" is available while the WO is in progress —
+// techs find things on the lift and that new job is a first-class
+// finding, not an edit to the existing estimate. Legacy drafts with
+// no linked finding get a "Link finding" picker inline, so the WO
+// stops being a dead end.
 //
-//   draft       → Approve / Cancel
-//   approved    → Start / Revise estimate / Cancel
-//   in_progress → Complete / Cancel
-//   completed   → (read-only)
-//   cancelled   → (read-only)
-//
-// Also exposes the "Add part" affordance while the WO is in a
-// nonterminal state and the operator has write role.
-//
-// The card intentionally displays every provenance field
-// (approved_by / approved_at / started_* / completed_* / cancelled_*
-// with cancellation_reason) so the operator can see the full
-// timeline at a glance — matches the M2.7 / M3.7 provenance
-// discipline.
+// Completed WOs show the estimate → actual story in one line, with
+// the raw ledger rows behind a disclosure.
 
-import { useState } from "react";
-import { Ban, ListPlus, Loader2, PackagePlus, Send } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  Ban,
+  ChevronRight,
+  Link2,
+  Loader2,
+  PackagePlus,
+  Send,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,17 +38,22 @@ import { PartRow } from "@/components/recon/PartRow";
 import { WorkOrderStatusBadge } from "@/components/recon/WorkOrderStatusBadge";
 import { ApiError } from "@/lib/authFetch";
 import {
+  addFindingDuringWork,
   addWorkOrderPart,
   approveWorkOrder,
+  attachFindings,
   cancelWorkOrder,
   completeWorkOrder,
   detachFinding,
   draftVendorComm,
   reviseEstimate,
   startWorkOrder,
+  CONDITION_CATEGORY_CHOICES,
+  CONDITION_SEVERITY_CHOICES,
   VENDOR_COMMUNICATION_CHANNEL_CHOICES,
   VENDOR_COMMUNICATION_KIND_CHOICES,
   WORK_ORDER_PART_SOURCE_TYPE_CHOICES,
+  type ReconDashboardFinding,
   type VendorCommunication,
   type WorkOrder,
   type WorkOrderPart,
@@ -79,22 +86,42 @@ function _humanizeError(err: unknown): string {
 
 export interface WorkOrderCardProps {
   wo: WorkOrder;
+  stock: string;
   canEdit: boolean;
+  // Undecided-decision role message — surfaced as the reason a role
+  // cannot authorize (never as a tooltip). Empty means the role can
+  // authorize.
+  authorizeBlockedReason?: string | null;
+  // Findings on the latest completed report — the picker for a
+  // legacy draft WO that has no linked finding uses this list.
+  reportFindings?: ReconDashboardFinding[];
+  // Which report id "add finding found during work" writes into. When
+  // omitted, the "found on the lift" affordance stays hidden.
+  activeReportId?: number | null;
   onWorkOrderUpdated: (wo: WorkOrder) => void;
   onCommDrafted: (comm: VendorCommunication) => void;
+  onFindingDiscovered?: () => void;
 }
 
 export function WorkOrderCard({
   wo,
+  stock,
   canEdit,
+  authorizeBlockedReason,
+  reportFindings = [],
+  activeReportId,
   onWorkOrderUpdated,
   onCommDrafted,
+  onFindingDiscovered,
 }: WorkOrderCardProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddPart, setShowAddPart] = useState(false);
   const [showDraftComm, setShowDraftComm] = useState(false);
   const [showRevise, setShowRevise] = useState(false);
+  const [showAddFoundJob, setShowAddFoundJob] = useState(false);
+  const [showLinkFinding, setShowLinkFinding] = useState(false);
+  const [showLedger, setShowLedger] = useState(false);
 
   // Add-part form state.
   const [partName, setPartName] = useState("");
@@ -104,6 +131,15 @@ export function WorkOrderCard({
 
   // Revise-estimate form state.
   const [newEstimate, setNewEstimate] = useState(wo.estimated_cost ?? "");
+  const [reviseReason, setReviseReason] = useState("");
+
+  // Add-a-found-job form state.
+  const [foundCategory, setFoundCategory] = useState(
+    CONDITION_CATEGORY_CHOICES[0].value,
+  );
+  const [foundSeverity, setFoundSeverity] = useState("required");
+  const [foundDescription, setFoundDescription] = useState("");
+  const [foundEstimate, setFoundEstimate] = useState("");
 
   // Complete form state.
   const [actualCost, setActualCost] = useState("");
@@ -115,6 +151,22 @@ export function WorkOrderCard({
   // Comm draft form state.
   const [commKind, setCommKind] = useState("vendor_comm");
   const [commChannel, setCommChannel] = useState("email");
+
+  // Link-finding picker state.
+  const [linkFindingIds, setLinkFindingIds] = useState<number[]>([]);
+
+  const hasFinding = wo.findings.length > 0;
+  const isDraft = wo.status === "draft";
+  const isApproved = wo.status === "approved";
+  const isInProgress = wo.status === "in_progress";
+  const isTerminal = wo.status === "completed" || wo.status === "cancelled";
+  const authorizeAmount = wo.estimated_cost ?? "0.00";
+
+  const authorizeBlocked = useMemo<string | null>(() => {
+    if (!hasFinding) return "Attach a finding to authorize.";
+    if (authorizeBlockedReason) return authorizeBlockedReason;
+    return null;
+  }, [hasFinding, authorizeBlockedReason]);
 
   async function _guard<T>(fn: () => Promise<T>): Promise<T | null> {
     setSaving(true);
@@ -129,7 +181,7 @@ export function WorkOrderCard({
     }
   }
 
-  async function _approve() {
+  async function _authorize() {
     const res = await _guard(() => approveWorkOrder(wo.id));
     if (res) onWorkOrderUpdated(res.work_order);
   }
@@ -170,15 +222,50 @@ export function WorkOrderCard({
 
   async function _revise() {
     if (!newEstimate.trim()) {
-      setError("New estimated cost is required.");
+      setError("A new estimated cost is required.");
+      return;
+    }
+    if (!reviseReason.trim()) {
+      setError("A reason is required — this shows on the Ledger.");
       return;
     }
     const res = await _guard(() =>
-      reviseEstimate(wo.id, { new_estimated_cost: newEstimate }),
+      reviseEstimate(wo.id, {
+        new_estimated_cost: newEstimate,
+        reason: reviseReason,
+      }),
     );
     if (res) {
       onWorkOrderUpdated(res.work_order);
       setShowRevise(false);
+      setReviseReason("");
+    }
+  }
+
+  async function _addFoundJob() {
+    if (activeReportId == null) {
+      setError("No completed report on this vehicle to attach to.");
+      return;
+    }
+    if (!foundDescription.trim()) {
+      setError("A description is required for the found job.");
+      return;
+    }
+    const ok = await _guard(async () => {
+      await addFindingDuringWork(stock, activeReportId, {
+        category: foundCategory,
+        severity: foundSeverity,
+        description: foundDescription,
+        estimated_cost: foundEstimate.trim() || null,
+        discovered_on_work_order_id: wo.id,
+      });
+      return true;
+    });
+    if (ok) {
+      setShowAddFoundJob(false);
+      setFoundDescription("");
+      setFoundEstimate("");
+      onFindingDiscovered?.();
     }
   }
 
@@ -230,6 +317,19 @@ export function WorkOrderCard({
     }
   }
 
+  async function _linkFinding() {
+    if (linkFindingIds.length === 0) {
+      setError("Pick at least one finding to link.");
+      return;
+    }
+    const res = await _guard(() => attachFindings(wo.id, linkFindingIds));
+    if (res) {
+      onWorkOrderUpdated(res.work_order);
+      setShowLinkFinding(false);
+      setLinkFindingIds([]);
+    }
+  }
+
   function _updatePart(updated: WorkOrderPart) {
     onWorkOrderUpdated({
       ...wo,
@@ -243,8 +343,6 @@ export function WorkOrderCard({
       parts: wo.parts.filter((p) => p.id !== partId),
     });
   }
-
-  const isTerminal = wo.status === "completed" || wo.status === "cancelled";
 
   return (
     <Card className="w-full">
@@ -266,27 +364,34 @@ export function WorkOrderCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Cost provenance */}
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          <div>
-            <div className="text-muted-foreground">Estimated</div>
-            <div className="font-medium">
-              {wo.estimated_cost != null ? `$${wo.estimated_cost}` : "—"}
+        {/* Estimate → actual story on completed. */}
+        {wo.status === "completed" ? (
+          <div className="rounded border bg-emerald-50 p-2 text-sm text-emerald-900">
+            Estimated {wo.estimated_cost != null ? `$${wo.estimated_cost}` : "—"} ·
+            actual {wo.actual_cost != null ? `$${wo.actual_cost}` : "—"}
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div>
+              <div className="text-muted-foreground">Estimated</div>
+              <div className="font-medium">
+                {wo.estimated_cost != null ? `$${wo.estimated_cost}` : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Authorized</div>
+              <div className="font-medium">
+                {wo.authorized_cost != null ? `$${wo.authorized_cost}` : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Actual</div>
+              <div className="font-medium">
+                {wo.actual_cost != null ? `$${wo.actual_cost}` : "—"}
+              </div>
             </div>
           </div>
-          <div>
-            <div className="text-muted-foreground">Authorized</div>
-            <div className="font-medium">
-              {wo.authorized_cost != null ? `$${wo.authorized_cost}` : "—"}
-            </div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Actual</div>
-            <div className="font-medium">
-              {wo.actual_cost != null ? `$${wo.actual_cost}` : "—"}
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Finding links */}
         {wo.findings.length > 0 && (
@@ -304,7 +409,7 @@ export function WorkOrderCard({
                       Finding #{f.finding_id} · {f.category} · {f.severity}
                     </div>
                   </div>
-                  {canEdit && wo.status === "draft" && (
+                  {canEdit && isDraft && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -318,6 +423,78 @@ export function WorkOrderCard({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Link-finding control for a draft WO with no findings —
+            SESSION_227 fixes the dead-end case. */}
+        {canEdit && isDraft && !hasFinding && (
+          <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 space-y-2">
+            <div>
+              This draft is not linked to any finding on the latest
+              inspection. Attach one to authorize.
+            </div>
+            {reportFindings.length === 0 ? (
+              <div className="text-muted-foreground">
+                No findings available on the latest completed report.
+              </div>
+            ) : !showLinkFinding ? (
+              <Button
+                size="sm"
+                className="gap-1"
+                onClick={() => setShowLinkFinding(true)}
+              >
+                <Link2 className="h-3 w-3" />
+                Link finding
+              </Button>
+            ) : (
+              <div className="space-y-1">
+                {reportFindings.map((f) => (
+                  <label
+                    key={f.id}
+                    className="flex cursor-pointer items-start gap-2 rounded border bg-white p-2 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={linkFindingIds.includes(f.id)}
+                      onChange={() =>
+                        setLinkFindingIds((prev) =>
+                          prev.includes(f.id)
+                            ? prev.filter((x) => x !== f.id)
+                            : [...prev, f.id],
+                        )
+                      }
+                    />
+                    <div className="flex-1">
+                      <div>{f.description}</div>
+                      <div className="text-muted-foreground">
+                        {f.category} · {f.severity}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setShowLinkFinding(false);
+                      setLinkFindingIds([]);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={_linkFinding}
+                    disabled={saving || linkFindingIds.length === 0}
+                  >
+                    Link {linkFindingIds.length || ""}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -335,6 +512,30 @@ export function WorkOrderCard({
                   onPartUpdated={_updatePart}
                   onPartDeleted={_deletePart}
                 />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Revisions history — surfaces WHY the estimate moved. */}
+        {wo.estimate_revisions.length > 0 && (
+          <div>
+            <div className="mb-1 text-xs font-medium">Revisions</div>
+            <div className="space-y-1">
+              {wo.estimate_revisions.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded border bg-slate-50 p-2 text-xs"
+                >
+                  <div>
+                    {r.from_amount != null ? `$${r.from_amount}` : "—"} → $
+                    {r.to_amount}
+                  </div>
+                  <div className="text-slate-700">{r.reason}</div>
+                  <div className="text-muted-foreground">
+                    {r.revised_by ?? "—"} · {_formatDateTime(r.revised_at)}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -464,11 +665,132 @@ export function WorkOrderCard({
           </div>
         )}
 
+        {/* Add a job found during work — SESSION_227. */}
+        {canEdit && (isApproved || isInProgress) && activeReportId != null && (
+          <div className="space-y-1">
+            {!showAddFoundJob ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1 text-xs"
+                onClick={() => setShowAddFoundJob(true)}
+              >
+                <PackagePlus className="h-3 w-3" />
+                Add a job found during work
+              </Button>
+            ) : (
+              <div className="rounded border bg-muted/40 p-2 text-xs space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={foundCategory}
+                    onChange={(e) => setFoundCategory(e.target.value)}
+                    className="rounded border bg-background px-2 py-1 text-xs"
+                  >
+                    {CONDITION_CATEGORY_CHOICES.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={foundSeverity}
+                    onChange={(e) => setFoundSeverity(e.target.value)}
+                    className="rounded border bg-background px-2 py-1 text-xs"
+                  >
+                    {CONDITION_SEVERITY_CHOICES.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  placeholder="What did the tech find?"
+                  value={foundDescription}
+                  onChange={(e) => setFoundDescription(e.target.value)}
+                />
+                <Input
+                  placeholder="Estimated cost (optional)"
+                  value={foundEstimate}
+                  onChange={(e) => setFoundEstimate(e.target.value)}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowAddFoundJob(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={_addFoundJob}
+                    disabled={saving || !foundDescription.trim()}
+                  >
+                    Save finding
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Cancellation-reason narrative on cancelled rows */}
         {wo.status === "cancelled" && wo.cancellation_reason && (
           <div className="rounded bg-slate-100 p-2 text-xs">
             <div className="font-medium">Cancellation reason</div>
             <div className="text-slate-700">{wo.cancellation_reason}</div>
+          </div>
+        )}
+
+        {/* Ledger rows disclosure — SESSION_227 replaces bare journal
+            lines with a collapsed disclosure so completed rows don't
+            drown the page. */}
+        {wo.ledger_rows.length > 0 && (
+          <div className="space-y-1">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setShowLedger((v) => !v)}
+            >
+              <ChevronRight
+                className={`h-3 w-3 transition-transform ${
+                  showLedger ? "rotate-90" : ""
+                }`}
+              />
+              Ledger rows ({wo.ledger_rows.length})
+            </button>
+            {showLedger && (
+              <div className="space-y-1">
+                {wo.ledger_rows.map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded border bg-slate-50 p-2 text-xs"
+                  >
+                    <div className="flex justify-between">
+                      <div className="font-mono text-[10px] text-muted-foreground">
+                        {r.reference}
+                      </div>
+                      <div
+                        className={
+                          Number(r.amount) < 0
+                            ? "text-destructive font-medium"
+                            : "font-medium"
+                        }
+                      >
+                        ${r.amount}
+                      </div>
+                    </div>
+                    {r.notes && (
+                      <div className="text-slate-700">{r.notes}</div>
+                    )}
+                    <div className="text-muted-foreground">
+                      {_formatDateTime(r.incurred_at)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -478,7 +800,7 @@ export function WorkOrderCard({
         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
           {wo.approved_at && (
             <div>
-              <div className="font-medium text-foreground">Approved</div>
+              <div className="font-medium text-foreground">Authorized</div>
               <div>{wo.approved_by ?? "—"}</div>
               <div>{_formatDateTime(wo.approved_at)}</div>
             </div>
@@ -510,7 +832,7 @@ export function WorkOrderCard({
       </CardContent>
 
       <CardFooter className="flex flex-wrap justify-end gap-2 pt-0">
-        {canEdit && wo.status === "draft" && (
+        {canEdit && isDraft && (
           <>
             <Button
               size="sm"
@@ -521,21 +843,18 @@ export function WorkOrderCard({
               <Ban className="h-3 w-3" />
               Cancel WO
             </Button>
-            <Button
-              size="sm"
-              onClick={_approve}
-              disabled={saving || wo.findings.length === 0}
-              title={
-                wo.findings.length === 0
-                  ? "Attach at least one finding first"
-                  : undefined
-              }
-            >
-              Approve
-            </Button>
+            {authorizeBlocked ? (
+              <div className="text-xs text-amber-800 self-center">
+                {authorizeBlocked}
+              </div>
+            ) : (
+              <Button size="sm" onClick={_authorize} disabled={saving}>
+                Authorize ${authorizeAmount}
+              </Button>
+            )}
           </>
         )}
-        {canEdit && wo.status === "approved" && (
+        {canEdit && isApproved && (
           <>
             <Button
               size="sm"
@@ -552,7 +871,6 @@ export function WorkOrderCard({
               className="gap-1 text-xs"
               onClick={() => setShowRevise(true)}
             >
-              <ListPlus className="h-3 w-3" />
               Revise estimate
             </Button>
             <Button size="sm" onClick={_start} disabled={saving}>
@@ -560,8 +878,16 @@ export function WorkOrderCard({
             </Button>
           </>
         )}
-        {canEdit && wo.status === "in_progress" && (
+        {canEdit && isInProgress && (
           <>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1 text-xs"
+              onClick={() => setShowRevise(true)}
+            >
+              Revise estimate
+            </Button>
             <Input
               placeholder="Actual cost"
               value={actualCost}
@@ -578,13 +904,13 @@ export function WorkOrderCard({
               Cancel WO
             </Button>
             <Button size="sm" onClick={_complete} disabled={saving}>
-              Complete
+              Complete — actual ${actualCost || "…"}
             </Button>
           </>
         )}
       </CardFooter>
 
-      {/* Revise-estimate form */}
+      {/* Revise-estimate form — SESSION_227 requires a reason. */}
       {showRevise && (
         <div className="border-t bg-muted/40 p-3 text-xs space-y-2">
           <Input
@@ -593,11 +919,22 @@ export function WorkOrderCard({
             onChange={(e) => setNewEstimate(e.target.value)}
             className="h-8 text-xs"
           />
+          <Textarea
+            placeholder="Why is the number changing? Shows on the Ledger and stays on the WO's history."
+            value={reviseReason}
+            onChange={(e) => setReviseReason(e.target.value)}
+            rows={2}
+            className="text-xs"
+          />
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setShowRevise(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={_revise} disabled={saving}>
+            <Button
+              size="sm"
+              onClick={_revise}
+              disabled={saving || !reviseReason.trim()}
+            >
               Save revision
             </Button>
           </div>

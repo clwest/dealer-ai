@@ -671,7 +671,10 @@ class WorkOrderLifecycleFlow(TestCase):
             self.client,
             "admin-work-order-patch",
             args=(wo_id,),
-            payload={"new_estimated_cost": "650.00"},
+            payload={
+                "new_estimated_cost": "650.00",
+                "reason": "Vendor quote came back higher.",
+            },
         )
         self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(

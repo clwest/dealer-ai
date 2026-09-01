@@ -46,6 +46,7 @@ from .models import (
     CONDITION_CATEGORY_CHOICES,
     ConditionFinding,
     Vehicle,
+    VehicleCost,
     VENDOR_COMMUNICATION_CHANNEL_CHOICES,
     VENDOR_COMMUNICATION_DIRECTION_CHOICES,
     VENDOR_COMMUNICATION_KIND_CHOICES,
@@ -54,6 +55,8 @@ from .models import (
     WORK_ORDER_PART_SOURCE_TYPE_CHOICES,
     WORK_ORDER_PART_STATUS_CHOICES,
     WORK_ORDER_STATUS_APPROVED,
+    WORK_ORDER_STATUS_CANCELLED,
+    WORK_ORDER_STATUS_COMPLETED,
     WORK_ORDER_STATUS_DRAFT,
     WORK_ORDER_STATUS_IN_PROGRESS,
     WORK_ORDER_VENUE_CHOICES,
@@ -221,7 +224,54 @@ def _project_part(part: WorkOrderPart) -> dict:
     }
 
 
+def _project_ledger_row(cost: VehicleCost) -> dict:
+    return {
+        "id": cost.pk,
+        "category": cost.category,
+        "amount": str(cost.amount),
+        "reference": cost.reference,
+        "notes": cost.notes,
+        "is_estimate": cost.is_estimate,
+        "vendor": cost.vendor,
+        "incurred_at": cost.incurred_at,
+        "created_at": cost.created_at,
+    }
+
+
+def _project_estimate_revision(revision) -> dict:
+    return {
+        "id": revision.pk,
+        "from_amount": (
+            str(revision.from_amount)
+            if revision.from_amount is not None
+            else None
+        ),
+        "to_amount": str(revision.to_amount),
+        "reason": revision.reason,
+        "revised_by": (
+            revision.revised_by.username
+            if revision.revised_by_id is not None
+            else None
+        ),
+        "revised_at": revision.revised_at,
+    }
+
+
 def _project_work_order(wo: WorkOrder) -> dict:
+    # Ledger rows this WO has posted (all five families:
+    # estimate:<seq>, estimate_reversal:<seq>,
+    # completion_estimate_reversal, estimate_reversal:cancel, actual).
+    # SESSION_227 — the recon page reads this directly to render the
+    # estimate → actual story on completed cards.
+    ledger_rows = (
+        VehicleCost.objects.filter(
+            vehicle=wo.vehicle,
+            dealership=wo.dealership,
+            reference__startswith=f"WORKORDER:{wo.pk}:",
+        )
+        .order_by("created_at")
+    )
+    revisions = wo.estimate_revisions.select_related("revised_by").all()
     return {
         "id": wo.pk,
         "vehicle_stock_number": wo.vehicle.stock_number,
@@ -272,6 +322,10 @@ def _project_work_order(wo: WorkOrder) -> dict:
             for link in wo.finding_links.select_related("finding").all()
         ],
         "parts": [_project_part(p) for p in wo.parts.all()],
+        "ledger_rows": [_project_ledger_row(c) for c in ledger_rows],
+        "estimate_revisions": [
+            _project_estimate_revision(r) for r in revisions
+        ],
     }
 
 
@@ -476,6 +530,9 @@ class WorkOrderPatchRequestSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+    reason = serializers.CharField(
+        required=False, allow_blank=False, trim_whitespace=True
+    )
 
 
 class WorkOrderFindingsAttachRequestSerializer(serializers.Serializer):
@@ -679,10 +736,16 @@ def admin_recon_dashboard(request, stock_number):
     )
     report_projection: Optional[dict] = None
     decisions_by_finding: dict[int, dict] = {}
+    # SESSION_227 — the recon page is finding-centric. For each
+    # finding we need the ID of its LIVE work order (draft /
+    # approved / in_progress) so the UI can render one job card
+    # per finding without a second round trip.
+    live_wo_by_finding: dict[int, int] = {}
     if latest_report is not None:
         findings = list(
             latest_report.findings.select_related(
-                "recon_decision__decided_by"
+                "recon_decision__decided_by",
+                "discovered_on_work_order",
             ).all()
         )
         for finding in findings:
@@ -693,6 +756,26 @@ def admin_recon_dashboard(request, stock_number):
                 )
             except ReconDecision.DoesNotExist:
                 pass
+        finding_ids = [f.pk for f in findings]
+        if finding_ids:
+            live_links = (
+                WorkOrder.objects.filter(
+                    dealership=dealership,
+                    finding_links__finding_id__in=finding_ids,
+                    status__in=(
+                        WORK_ORDER_STATUS_DRAFT,
+                        WORK_ORDER_STATUS_APPROVED,
+                        WORK_ORDER_STATUS_IN_PROGRESS,
+                    ),
+                )
+                .values_list(
+                    "finding_links__finding_id", "pk"
+                )
+            )
+            for finding_id, wo_id in live_links:
+                # Idempotent — take the first live WO per finding
+                # (dashboard ordering already puts newest open first).
+                live_wo_by_finding.setdefault(finding_id, wo_id)
         report_projection = {
             "id": latest_report.pk,
             "inspected_at": latest_report.inspected_at,
@@ -711,6 +794,11 @@ def admin_recon_dashboard(request, stock_number):
                         else None
                     ),
                     "decision": decisions_by_finding.get(f.pk),
+                    "work_order_id": live_wo_by_finding.get(f.pk),
+                    "discovered_during_work": f.discovered_during_work,
+                    "discovered_on_work_order_id": (
+                        f.discovered_on_work_order_id
+                    ),
                 }
                 for f in findings
             ],
@@ -996,17 +1084,89 @@ def admin_work_order_patch(request, wo_id):
             {"detail": "PATCH requires new_estimated_cost."},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    if "reason" not in data or not (data.get("reason") or "").strip():
+        return Response(
+            {"detail": "PATCH requires a nonblank reason."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     try:
         wo = recon_service.revise_estimate(
             wo,
             dealership=dealership,
             new_estimated_cost=data["new_estimated_cost"],
+            reason=data["reason"],
             revised_by=request.user,
         )
     except Exception as exc:
         return _map_service_error(exc)
     wo = _lookup_work_order_or_404(dealership, wo.pk)
     return Response({"work_order": _project_work_order(wo)})
+
+
+@api_view(["POST"])
+@permission_classes(_M46_PERMS)
+def admin_work_order_from_finding(request, stock_number, finding_id):
+    """Create (or return the existing live) draft WorkOrder for one
+    finding, in one call. Pre-fills category / estimated_cost /
+    description from the finding, links the finding to the WO, all
+    in one transaction. SESSION_227 — recon-one-card."""
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    finding = _lookup_finding_or_404(dealership, vehicle, finding_id)
+    if finding is None:
+        return Response(
+            {"detail": "Finding not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    try:
+        wo = recon_service.create_work_order_from_finding(
+            finding,
+            dealership=dealership,
+            created_by=request.user,
+        )
+    except Exception as exc:
+        return _map_service_error(exc)
+    wo = _lookup_work_order_or_404(dealership, wo.pk)
+    return Response(
+        {"work_order": _project_work_order(wo)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes(_M46_PERMS)
+def admin_recon_create_must_do_work_orders(request, stock_number):
+    """For each must-do finding on the vehicle's latest completed
+    report that has no live WO, create a draft WO from it. Returns
+    the list of resulting WOs (freshly created or already live).
+    SESSION_227 — one click, no re-typing."""
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    try:
+        wos = recon_service.create_work_orders_for_all_must_dos(
+            vehicle,
+            dealership=dealership,
+            created_by=request.user,
+        )
+    except Exception as exc:
+        return _map_service_error(exc)
+    refreshed = [
+        _lookup_work_order_or_404(dealership, wo.pk) for wo in wos
+    ]
+    return Response(
+        {"work_orders": [_project_work_order(w) for w in refreshed]},
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @api_view(["POST"])

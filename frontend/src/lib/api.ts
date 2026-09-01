@@ -1478,6 +1478,27 @@ export interface WorkOrderPart {
   updated_at: string;
 }
 
+export interface WorkOrderLedgerRow {
+  id: number;
+  category: string;
+  amount: string;
+  reference: string;
+  notes: string;
+  is_estimate: boolean;
+  vendor: string;
+  incurred_at: string;
+  created_at: string;
+}
+
+export interface WorkOrderEstimateRevision {
+  id: number;
+  from_amount: string | null;
+  to_amount: string;
+  reason: string;
+  revised_by: string | null;
+  revised_at: string;
+}
+
 export interface WorkOrder {
   id: number;
   vehicle_stock_number: string;
@@ -1505,6 +1526,8 @@ export interface WorkOrder {
   updated_at: string;
   findings: WorkOrderFindingLink[];
   parts: WorkOrderPart[];
+  ledger_rows: WorkOrderLedgerRow[];
+  estimate_revisions: WorkOrderEstimateRevision[];
 }
 
 export interface ReconDecision {
@@ -1567,6 +1590,9 @@ export interface ReconDashboardFinding {
   description: string;
   estimated_cost: string | null;
   decision: ReconDecision | null;
+  work_order_id?: number | null;
+  discovered_during_work?: boolean;
+  discovered_on_work_order_id?: number | null;
 }
 
 export interface ReconDashboardReport {
@@ -1635,6 +1661,7 @@ export interface WorkOrderCancelPayload {
 
 export interface WorkOrderPatchPayload {
   new_estimated_cost?: string | null;
+  reason?: string;
 }
 
 export interface WorkOrderPartCreatePayload {
@@ -1787,6 +1814,48 @@ export function attachFindings(woId: number, findingIds: number[]) {
   return authPostJSON<{ work_order: WorkOrder }>(
     `${_adminBase()}/work-orders/${woId}/findings/`,
     { finding_ids: findingIds },
+  );
+}
+
+// SESSION_227 — one-click WO from a finding, and bulk for all
+// must-dos on the vehicle's latest completed report.
+export function createWorkOrderFromFinding(stock: string, findingId: number) {
+  return authPostJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(
+      stock,
+    )}/findings/${findingId}/work-order/`,
+    {},
+  );
+}
+
+export function createMustDoWorkOrders(stock: string) {
+  return authPostJSON<{ work_orders: WorkOrder[] }>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(
+      stock,
+    )}/recon/create-must-do-work-orders/`,
+    {},
+  );
+}
+
+// SESSION_227 — "tech lifted the car and found a seal" path.
+export interface AddFindingDuringWorkPayload {
+  category: string;
+  severity: string;
+  description: string;
+  estimated_cost?: string | null;
+  discovered_on_work_order_id: number;
+}
+
+export function addFindingDuringWork(
+  stock: string,
+  reportId: number,
+  body: AddFindingDuringWorkPayload,
+) {
+  return authPostJSON<{ finding: unknown }>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(
+      stock,
+    )}/condition-reports/${reportId}/findings/`,
+    { ...body, discovered_during_work: true },
   );
 }
 

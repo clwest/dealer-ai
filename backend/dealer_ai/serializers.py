@@ -722,6 +722,15 @@ class ConditionFindingCreateRequestSerializer(serializers.Serializer):
     notes = serializers.CharField(
         required=False, allow_blank=True, default=""
     )
+    # SESSION_227 — the "tech lifted the car and found a seal" path.
+    # When True, ``add_finding`` allows the append even though the
+    # parent report is already ``complete``.
+    discovered_during_work = serializers.BooleanField(
+        required=False, default=False
+    )
+    discovered_on_work_order_id = serializers.IntegerField(
+        required=False, allow_null=True, default=None
+    )
 
 
 class ConditionFindingUpdateRequestSerializer(serializers.Serializer):

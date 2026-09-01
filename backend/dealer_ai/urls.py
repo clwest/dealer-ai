@@ -238,6 +238,22 @@ urlpatterns = [
         views_recon.admin_work_order_create,
         name="admin-work-order-create",
     ),
+    # SESSION_227 — one-click WO from a finding, and bulk for all
+    # must-dos on the latest completed report. Both compose existing
+    # create_work_order + attach_findings service verbs in one
+    # transaction.
+    path(
+        "admin/vehicles/<str:stock_number>/findings/"
+        "<int:finding_id>/work-order/",
+        views_recon.admin_work_order_from_finding,
+        name="admin-work-order-from-finding",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/recon/"
+        "create-must-do-work-orders/",
+        views_recon.admin_recon_create_must_do_work_orders,
+        name="admin-recon-create-must-do-work-orders",
+    ),
     path(
         "admin/work-orders/<int:wo_id>/approve/",
         views_recon.admin_work_order_approve,

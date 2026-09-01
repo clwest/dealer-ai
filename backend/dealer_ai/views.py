@@ -2041,15 +2041,35 @@ def admin_condition_finding_create(request, stock_number, report_id):
     serializer = ConditionFindingCreateRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
+    call_kwargs = dict(serializer.validated_data)
+    # SESSION_227 — resolve the WO id (if any) into an instance the
+    # service can pass through to the model FK.
+    from .models import WorkOrder as _WorkOrder  # local: cycle-free
+    wo_id = call_kwargs.pop("discovered_on_work_order_id", None)
+    if wo_id is not None:
+        try:
+            call_kwargs["discovered_on_work_order"] = (
+                _WorkOrder.objects.filter(dealership=dealership).get(pk=wo_id)
+            )
+        except _WorkOrder.DoesNotExist:
+            return Response(
+                {"detail": "discovered_on_work_order not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
     try:
         finding = condition_report_service.add_finding(
             report,
             dealership=dealership,
-            **serializer.validated_data,
+            **call_kwargs,
         )
     except ConditionReportImmutableError as exc:
         return Response(
             {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except CrossTenantConditionReportError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND
         )
     except ValueError as exc:
         # Defensive: the serializer's ChoiceField rejects invalid

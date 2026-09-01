@@ -1806,6 +1806,21 @@ class ConditionFinding(models.Model):
     estimated_cost = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )
+    # SESSION_227 (recon-one-card). Techs find things when the car is
+    # on the lift; that new job is a first-class finding, not an
+    # edit to the LOF. When True, ``services.recon.add_finding``
+    # allows the append even though the parent report has already
+    # been marked ``complete`` — the finding lands on the SAME
+    # report (no supplementary object) and points back at the WO
+    # that was in progress when it was discovered.
+    discovered_during_work = models.BooleanField(default=False)
+    discovered_on_work_order = models.ForeignKey(
+        "WorkOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="findings_discovered_during",
+    )
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2670,6 +2685,76 @@ class WorkOrderFinding(models.Model):
                             "same Vehicle. Cross-vehicle links are "
                             "not permitted (see "
                             "MILESTONE_4_PLANNING.md §1.4)."
+                        )
+                    }
+                )
+
+
+class WorkOrderEstimateRevision(models.Model):
+    """One row per estimate revision on a WorkOrder.
+
+    Written by ``services.recon.revise_estimate``. Each row records
+    the ``from`` / ``to`` amounts, the reason the operator gave, and
+    who revised it when. The ledger side already keys reversal +
+    replacement rows off ``estimate:<seq>``; this table adds a
+    natural join for the human answer to "why did the LOF go from
+    $495 to $600" (SESSION_227 / recon-one-card).
+
+    ``from_amount`` is nullable to accommodate the case where the
+    first estimate was posted by ``approve_work_order`` without
+    ever going through ``revise_estimate``; revisions after that
+    always carry both.
+    """
+
+    work_order = models.ForeignKey(
+        "WorkOrder",
+        on_delete=models.CASCADE,
+        related_name="estimate_revisions",
+    )
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="work_order_estimate_revisions",
+    )
+    from_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    to_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.TextField()
+    revised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    revised_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-revised_at",)
+        verbose_name = "Work order estimate revision"
+        verbose_name_plural = "Work order estimate revisions"
+
+    def __str__(self) -> str:
+        return (
+            f"WO #{self.work_order_id} estimate revised "
+            f"{self.from_amount} → {self.to_amount}"
+        )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.work_order_id is not None and self.dealership_id is not None:
+            wo_dealership_id = getattr(self.work_order, "dealership_id", None)
+            if (
+                wo_dealership_id is not None
+                and wo_dealership_id != self.dealership_id
+            ):
+                raise ValidationError(
+                    {
+                        "dealership": (
+                            "WorkOrderEstimateRevision.dealership must "
+                            "match the parent WorkOrder's dealership. "
+                            "Cross-tenant contamination guard."
                         )
                     }
                 )

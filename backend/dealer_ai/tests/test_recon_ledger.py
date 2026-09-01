@@ -622,6 +622,7 @@ class ReviseEstimate(TestCase):
             wo,
             dealership=self.default,
             new_estimated_cost=Decimal("650.00"),
+            reason="Vendor quote came back higher.",
         )
         # estimate:1 = 500, estimate_reversal:1 = -500,
         # estimate:2 = 650.
@@ -649,6 +650,7 @@ class ReviseEstimate(TestCase):
             wo,
             dealership=self.default,
             new_estimated_cost=Decimal("650.00"),
+            reason="Vendor quote came back higher.",
         )
         wo.refresh_from_db()
         self.assertEqual(wo.estimated_cost, Decimal("650.00"))
@@ -662,6 +664,7 @@ class ReviseEstimate(TestCase):
             wo,
             dealership=self.default,
             new_estimated_cost=Decimal("500.00"),
+            reason="No change but call is idempotent.",
         )
         post_count = VehicleCost.objects.filter(
             reference__startswith=f"WORKORDER:{wo.pk}:"
@@ -674,11 +677,13 @@ class ReviseEstimate(TestCase):
             wo,
             dealership=self.default,
             new_estimated_cost=Decimal("650.00"),
+            reason="First revision: quote came back higher.",
         )
         revise_estimate(
             wo,
             dealership=self.default,
             new_estimated_cost=Decimal("800.00"),
+            reason="Second revision: parts back-ordered at premium.",
         )
         estimate_refs = sorted(
             VehicleCost.objects.filter(
@@ -724,6 +729,7 @@ class ReviseEstimate(TestCase):
                 wo,
                 dealership=self.default,
                 new_estimated_cost=Decimal("-100.00"),
+                reason="Bogus negative — should raise before checking reason.",
             )
 
     def test_revise_from_draft_rejected(self):
@@ -739,6 +745,7 @@ class ReviseEstimate(TestCase):
                 wo,
                 dealership=self.default,
                 new_estimated_cost=Decimal("650.00"),
+                reason="Draft revision should be rejected.",
             )
 
     def test_revise_from_completed_rejected(self):
@@ -759,6 +766,7 @@ class ReviseEstimate(TestCase):
                 wo,
                 dealership=self.default,
                 new_estimated_cost=Decimal("650.00"),
+                reason="Completed revision should be rejected.",
             )
 
     def test_revision_then_completion_still_nets_zero_estimate(self):
@@ -767,6 +775,7 @@ class ReviseEstimate(TestCase):
             wo,
             dealership=self.default,
             new_estimated_cost=Decimal("650.00"),
+            reason="Quote came back higher.",
         )
         start_work_order(
             wo,
@@ -866,6 +875,7 @@ class CancelPostsEstimateReversal(TestCase):
             wo,
             dealership=self.default,
             new_estimated_cost=Decimal("800.00"),
+            reason="Discovered additional work required.",
         )
         cancel_work_order(
             wo,

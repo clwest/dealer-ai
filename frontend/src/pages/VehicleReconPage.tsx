@@ -1,35 +1,30 @@
-// Milestone 4 · Increment 7 — operator recon page.
+// SESSION_227 — recon-one-card. The recon page is finding-centric.
 //
-// Consumes the 18 M4.6 admin endpoints. State-owning container for
-// the recon workflow — presentation lives in the
-// components/recon/ subdirectory.
+// One card per finding on the latest completed inspection report.
+// The card carries the finding, the decision, and — once it exists
+// — the work order and every action the operator can take. The
+// standalone "Create work order" form is gone.
 //
-// Workflow this page exposes (M4.7 spec):
+// Orphan WOs (WOs with no linked finding on the latest report — the
+// legacy WO #8 case) still render below the job list with a
+// "Link finding" affordance inside the card, so the operator has a
+// way out that isn't Cancel.
 //
-//   Vehicle recon dashboard
-//     ├── Latest completed condition report + per-finding decisions
-//     ├── WorkOrder cards (create → attach findings → approve →
-//     │   start → complete; or cancel; or revise estimate)
-//     │     ├── Part rows with transition dropdowns
-//     │     └── Draft-vendor-comm affordance
-//     └── Vendor communication panels (draft → approve → mark-sent;
-//         or log off-system)
-//
-// Role gating: write affordances (approve / start / complete /
-// cancel / add-part / transition-part / delete-part / draft-comm /
-// approve-comm / mark-sent / log-comm / record-decision) are gated
-// to recon_manager / sales_manager / dealer_owner (WRITE_ROLES).
-// Server authorization remains authoritative — the M4.6 endpoints
-// enforce it via IsReconManagerSalesManagerOrOwnerAtActiveDealership.
-//
-// Distinct 401 / 403 / 404 / 409 / 422 / 502 UX per planning §5.g +
-// SESSION_071 handoff.
+// Role gating: write affordances are gated to recon_manager /
+// sales_manager / dealer_owner (WRITE_ROLES). Server authorization
+// remains authoritative — the M4.6 endpoints enforce it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ClipboardList, Loader2, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  ClipboardList,
+  Loader2,
+  Plus,
+  Wand2,
+} from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
-import { DecisionRow } from "@/components/recon/DecisionRow";
+import { JobCard } from "@/components/recon/JobCard";
 import { VendorCommDraftPanel } from "@/components/recon/VendorCommDraftPanel";
 import { VendorPickerModal } from "@/components/recon/VendorPickerModal";
 import { WorkOrderCard } from "@/components/recon/WorkOrderCard";
@@ -40,7 +35,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/AuthContext";
 import {
@@ -49,19 +43,15 @@ import {
   UnauthenticatedError,
 } from "@/lib/authFetch";
 import {
-  attachFindings,
-  createWorkOrder,
+  createMustDoWorkOrders,
   fetchReconDashboard,
   logVendorComm,
-  CONDITION_CATEGORY_CHOICES,
   VENDOR_COMMUNICATION_CHANNEL_CHOICES,
   VENDOR_COMMUNICATION_DIRECTION_CHOICES,
   VENDOR_COMMUNICATION_KIND_CHOICES,
-  WORK_ORDER_VENUE_CHOICES,
   type ReconDashboardFinding,
   type ReconDashboardResponse,
   type ReconDecision,
-  type Vendor,
   type VendorCommunication,
   type WorkOrder,
 } from "@/lib/api";
@@ -115,7 +105,8 @@ export default function VehicleReconPage() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [creatingMustDos, setCreatingMustDos] = useState(false);
+  const [mustDosError, setMustDosError] = useState<string | null>(null);
   const [vendorPickerOpen, setVendorPickerOpen] = useState(false);
   const [logCommOpen, setLogCommOpen] = useState(false);
 
@@ -165,6 +156,30 @@ export default function VehicleReconPage() {
     });
   }
 
+  function _onWorkOrderCreated(wo: WorkOrder) {
+    if (!dashboard) return;
+    // The dashboard's per-finding work_order_id is what JobCard uses to
+    // find the WO. Update both places so the card can re-render with
+    // the newly minted WO without needing a full refetch.
+    const linkedFindingIds = wo.findings.map((f) => f.finding_id);
+    setDashboard({
+      ...dashboard,
+      work_orders: dashboard.work_orders.some((w) => w.id === wo.id)
+        ? dashboard.work_orders.map((w) => (w.id === wo.id ? wo : w))
+        : [wo, ...dashboard.work_orders],
+      latest_condition_report: dashboard.latest_condition_report
+        ? {
+            ...dashboard.latest_condition_report,
+            findings: dashboard.latest_condition_report.findings.map((f) =>
+              linkedFindingIds.includes(f.id)
+                ? { ...f, work_order_id: wo.id }
+                : f,
+            ),
+          }
+        : null,
+    });
+  }
+
   function _onCommUpdated(comm: VendorCommunication) {
     if (!dashboard) return;
     setDashboard({
@@ -173,6 +188,20 @@ export default function VehicleReconPage() {
         ? dashboard.communications.map((c) => (c.id === comm.id ? comm : c))
         : [comm, ...dashboard.communications],
     });
+  }
+
+  async function _createAllMustDos() {
+    if (!stock) return;
+    setCreatingMustDos(true);
+    setMustDosError(null);
+    try {
+      await createMustDoWorkOrders(stock);
+      await _refetch();
+    } catch (err) {
+      setMustDosError(_humanizeMutationError(err));
+    } finally {
+      setCreatingMustDos(false);
+    }
   }
 
   if (loading && !dashboard) {
@@ -205,6 +234,25 @@ export default function VehicleReconPage() {
 
   if (!dashboard) return null;
 
+  const report = dashboard.latest_condition_report;
+  const woById = new Map<number, WorkOrder>(
+    dashboard.work_orders.map((w) => [w.id, w]),
+  );
+  const reportFindingIds = new Set<number>(
+    report ? report.findings.map((f) => f.id) : [],
+  );
+  const orphanWorkOrders = dashboard.work_orders.filter((w) => {
+    if (w.status === "completed" || w.status === "cancelled") return false;
+    if (w.findings.length === 0) return true;
+    return !w.findings.some((f) => reportFindingIds.has(f.finding_id));
+  });
+  const terminalWorkOrders = dashboard.work_orders.filter(
+    (w) => w.status === "completed" || w.status === "cancelled",
+  );
+  const hasMustDoWithoutWo = !!report && report.findings.some(
+    (f) => f.decision?.tier === "must_do" && !f.work_order_id,
+  );
+
   return (
     <div className="max-w-5xl space-y-6 p-6">
       <div className="flex items-center justify-between gap-2">
@@ -229,16 +277,33 @@ export default function VehicleReconPage() {
         </div>
       </div>
 
-      {/* Latest condition report + decisions */}
+      {/* Inspection summary + per-finding job cards. */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <ClipboardList className="h-4 w-4" />
-            Recon decisions
+          <CardTitle className="flex items-center justify-between gap-2 text-lg">
+            <span className="flex items-center gap-2">
+              <ClipboardList className="h-4 w-4" />
+              Recon decisions
+            </span>
+            {canEdit && report && hasMustDoWithoutWo && (
+              <Button
+                size="sm"
+                onClick={_createAllMustDos}
+                disabled={creatingMustDos}
+                className="gap-1"
+              >
+                {creatingMustDos ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3 w-3" />
+                )}
+                Create work orders for all must-dos
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {dashboard.latest_condition_report == null ? (
+          {report == null ? (
             <div className="text-sm text-muted-foreground">
               No completed condition report yet. Complete one before
               recording recon decisions.
@@ -246,26 +311,38 @@ export default function VehicleReconPage() {
           ) : (
             <>
               <div className="text-xs text-muted-foreground">
-                From inspection by{" "}
-                {dashboard.latest_condition_report.inspector_name} at{" "}
-                {_formatDateTime(dashboard.latest_condition_report.inspected_at)}
+                From inspection by {report.inspector_name} at{" "}
+                {_formatDateTime(report.inspected_at)}
                 {" · "}
-                {dashboard.latest_condition_report.mileage_at_inspection.toLocaleString()}{" "}
-                miles
+                {report.mileage_at_inspection.toLocaleString()} miles
               </div>
-              {dashboard.latest_condition_report.findings.length === 0 ? (
+              {mustDosError && (
+                <div className="text-xs text-destructive">{mustDosError}</div>
+              )}
+              {report.findings.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
                   No findings on the latest completed report.
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {dashboard.latest_condition_report.findings.map((f) => (
-                    <DecisionRow
+                <div className="space-y-3">
+                  {report.findings.map((f) => (
+                    <JobCard
                       key={f.id}
                       stock={stock!}
                       finding={f}
+                      workOrder={
+                        f.work_order_id != null
+                          ? (woById.get(f.work_order_id) ?? null)
+                          : null
+                      }
+                      reportFindings={report.findings}
+                      activeReportId={report.id}
                       canEdit={canEdit}
                       onDecisionRecorded={_onDecisionRecorded}
+                      onWorkOrderUpdated={_onWorkOrderUpdated}
+                      onWorkOrderCreated={_onWorkOrderCreated}
+                      onCommDrafted={_onCommUpdated}
+                      onFindingDiscovered={_refetch}
                     />
                   ))}
                 </div>
@@ -275,52 +352,50 @@ export default function VehicleReconPage() {
         </CardContent>
       </Card>
 
-      {/* Work orders */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Work orders</h2>
-          {canEdit && (
-            <Button
-              size="sm"
-              className="gap-1"
-              onClick={() => setCreateOpen((v) => !v)}
-            >
-              <Plus className="h-3 w-3" />
-              {createOpen ? "Cancel" : "Create work order"}
-            </Button>
-          )}
-        </div>
-
-        {createOpen && (
-          <CreateWorkOrderForm
-            stock={stock!}
-            findings={dashboard.latest_condition_report?.findings ?? []}
-            onOpenVendorPicker={() => setVendorPickerOpen(true)}
-            onCreated={(wo) => {
-              _onWorkOrderUpdated(wo);
-              setCreateOpen(false);
-            }}
-          />
-        )}
-
-        {dashboard.work_orders.length === 0 && !createOpen && (
-          <div className="rounded border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-            No work orders on this vehicle yet.
-          </div>
-        )}
-
+      {/* Legacy / orphan work orders — WOs with no finding on the
+          latest completed report. They get a "Link finding" control
+          inside the card so the operator can hook them up instead of
+          cancelling and starting over. */}
+      {orphanWorkOrders.length > 0 && (
         <div className="space-y-3">
-          {dashboard.work_orders.map((wo) => (
+          <h2 className="text-lg font-semibold">Unlinked work orders</h2>
+          {orphanWorkOrders.map((wo) => (
             <WorkOrderCard
               key={wo.id}
               wo={wo}
+              stock={stock!}
               canEdit={canEdit}
+              reportFindings={report?.findings ?? []}
+              activeReportId={report?.id ?? null}
               onWorkOrderUpdated={_onWorkOrderUpdated}
               onCommDrafted={_onCommUpdated}
+              onFindingDiscovered={_refetch}
             />
           ))}
         </div>
-      </div>
+      )}
+
+      {/* Completed / cancelled — history at the bottom, read-only. */}
+      {terminalWorkOrders.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-muted-foreground">
+            Completed & cancelled
+          </h2>
+          {terminalWorkOrders.map((wo) => (
+            <WorkOrderCard
+              key={wo.id}
+              wo={wo}
+              stock={stock!}
+              canEdit={canEdit}
+              reportFindings={report?.findings ?? []}
+              activeReportId={report?.id ?? null}
+              onWorkOrderUpdated={_onWorkOrderUpdated}
+              onCommDrafted={_onCommUpdated}
+              onFindingDiscovered={_refetch}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Communications */}
       <div className="space-y-3">
@@ -378,170 +453,6 @@ export default function VehicleReconPage() {
 
 
 // ---- Inline sub-components (page-local) -----------------------------------
-
-
-interface CreateWorkOrderFormProps {
-  stock: string;
-  findings: ReconDashboardFinding[];
-  onOpenVendorPicker: () => void;
-  onCreated: (wo: WorkOrder) => void;
-}
-
-function CreateWorkOrderForm({
-  stock,
-  findings,
-  onCreated,
-}: CreateWorkOrderFormProps) {
-  const [category, setCategory] = useState(CONDITION_CATEGORY_CHOICES[0].value);
-  const [venue, setVenue] = useState("in_house");
-  const [vendorSlug, setVendorSlug] = useState("");
-  const [estimatedCost, setEstimatedCost] = useState("");
-  const [selectedFindingIds, setSelectedFindingIds] = useState<number[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  async function _create() {
-    if (venue === "outsourced" && !vendorSlug.trim()) {
-      setError("Outsourced work orders require a vendor. Pick one below.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await createWorkOrder(stock, {
-        category,
-        venue,
-        vendor_slug: vendorSlug.trim() || null,
-        estimated_cost: estimatedCost.trim() || null,
-      });
-      // Attach selected findings if any.
-      let wo = res.work_order;
-      if (selectedFindingIds.length > 0) {
-        const attached = await attachFindings(wo.id, selectedFindingIds);
-        wo = attached.work_order;
-      }
-      onCreated(wo);
-    } catch (err) {
-      setError(_humanizeMutationError(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function _toggleFinding(id: number) {
-    setSelectedFindingIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  }
-
-  return (
-    <div className="space-y-3 rounded border bg-muted/40 p-4 text-sm">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Category</label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded border bg-background px-2 py-1"
-          >
-            {CONDITION_CATEGORY_CHOICES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Venue</label>
-          <select
-            value={venue}
-            onChange={(e) => setVenue(e.target.value)}
-            className="w-full rounded border bg-background px-2 py-1"
-          >
-            {WORK_ORDER_VENUE_CHOICES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      {venue === "outsourced" && (
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Vendor</label>
-          <div className="flex gap-2">
-            <Input
-              value={vendorSlug}
-              onChange={(e) => setVendorSlug(e.target.value)}
-              placeholder="vendor slug (e.g. yuma-body)"
-              className="text-xs"
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPickerOpen(true)}
-            >
-              Pick…
-            </Button>
-          </div>
-          <VendorPickerModal
-            open={pickerOpen}
-            onClose={() => setPickerOpen(false)}
-            onPick={(v: Vendor) => {
-              setVendorSlug(v.slug);
-              setPickerOpen(false);
-            }}
-          />
-        </div>
-      )}
-      <div className="space-y-1">
-        <label className="text-xs font-medium">Estimated cost (optional)</label>
-        <Input
-          value={estimatedCost}
-          onChange={(e) => setEstimatedCost(e.target.value)}
-          placeholder="0.00"
-          className="text-xs"
-        />
-      </div>
-      {findings.length > 0 && (
-        <div className="space-y-1">
-          <label className="text-xs font-medium">
-            Link findings (at least one required to approve)
-          </label>
-          <div className="space-y-1">
-            {findings.map((f) => (
-              <label
-                key={f.id}
-                className="flex cursor-pointer items-start gap-2 rounded border bg-background p-2 text-xs"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFindingIds.includes(f.id)}
-                  onChange={() => _toggleFinding(f.id)}
-                  className="mt-0.5"
-                />
-                <div className="flex-1">
-                  <div>{f.description}</div>
-                  <div className="text-muted-foreground">
-                    {f.category} · {f.severity}
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-      {error && <div className="text-xs text-destructive">{error}</div>}
-      <div className="flex justify-end">
-        <Button size="sm" onClick={_create} disabled={saving}>
-          {saving && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-          Create work order
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 
 interface LogCommFormProps {

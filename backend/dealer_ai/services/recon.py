@@ -179,6 +179,7 @@ from ..models import (
     ConditionFinding,
     Dealership,
     RECON_DECISION_TIER_CHOICES,
+    RECON_DECISION_TIER_MUST_DO,
     ReconDecision,
     Vehicle,
     VehicleCost,
@@ -196,7 +197,9 @@ from ..models import (
     WORK_ORDER_STATUS_COMPLETED,
     WORK_ORDER_STATUS_DRAFT,
     WORK_ORDER_STATUS_IN_PROGRESS,
+    WORK_ORDER_VENUE_IN_HOUSE,
     WorkOrder,
+    WorkOrderEstimateRevision,
     WorkOrderFinding,
     WorkOrderPart,
 )
@@ -632,6 +635,134 @@ def create_work_order(
     return wo
 
 
+# ---- Create from finding (SESSION_227) ------------------------------------
+
+
+def _wo_category_for_finding_category(finding_category: str) -> str:
+    """The recon page needs a category to seed a WorkOrder from a
+    finding. Since :class:`WorkOrder` already reuses the 12
+    :data:`CONDITION_CATEGORY_CHOICES` values as its own category
+    vocabulary (planning §1.3, SESSION_066 refinement — no second
+    tuple), this is an identity map. Kept as a named helper so a
+    future divergence has one seam to change."""
+    return finding_category
+
+
+def create_work_order_from_finding(
+    finding: ConditionFinding,
+    *,
+    dealership: Dealership,
+    created_by=None,
+    venue: str = WORK_ORDER_VENUE_IN_HOUSE,
+    vendor=None,
+) -> WorkOrder:
+    """One-shot: create a draft WorkOrder pre-filled from ``finding``
+    and link it, in one transaction.
+
+    The recon-one-card flow (SESSION_227): "Must do" IS the decision
+    to spend the money. Asking the operator to scroll to a separate
+    form and re-type the finding is the same double-entry problem
+    Chris hit on the ledger side. This verb closes that gap.
+
+    Idempotent: if the finding already has a live (draft / approved
+    / in_progress) WorkOrder linked, returns that WO without a
+    second create. Terminal WOs on the same finding do not count as
+    "live" — a finding that was on a cancelled WO can get a new
+    one. Callers that want the strict single-WO-per-finding rule
+    should read the returned WO's ``status`` and act accordingly.
+
+    Preconditions:
+
+    - Finding tenant matches (raises
+      :class:`CrossTenantReconError`).
+    - Parent report is ``complete`` (raises
+      :class:`IncompleteConditionReportError`).
+    """
+    _assert_finding_tenant(finding, dealership)
+    if finding.report.status != CONDITION_REPORT_STATUS_COMPLETE:
+        raise IncompleteConditionReportError(
+            f"Cannot create WorkOrder from ConditionFinding "
+            f"#{finding.pk}: parent ConditionReport is "
+            f"{finding.report.status!r}. Only completed reports "
+            "carry findings you can plan against."
+        )
+
+    with transaction.atomic():
+        # Look for a live WO already linked to this finding.
+        existing_live = (
+            WorkOrder.objects.filter(
+                dealership=dealership,
+                finding_links__finding=finding,
+                status__in=_OPEN_STATUSES,
+            )
+            .select_related("vehicle", "vendor")
+            .order_by("-created_at")
+            .first()
+        )
+        if existing_live is not None:
+            return existing_live
+
+        wo = create_work_order(
+            finding.report.vehicle,
+            dealership=dealership,
+            category=_wo_category_for_finding_category(finding.category),
+            venue=venue,
+            vendor=vendor,
+            estimated_cost=finding.estimated_cost,
+            notes=finding.description,
+        )
+        attach_findings(
+            wo, dealership=dealership, finding_ids=[finding.pk]
+        )
+        # Reload with the freshly attached link so callers see a
+        # WO whose ``finding_links.count() >= 1`` — the invariant
+        # ``approve_work_order`` depends on.
+        return WorkOrder.objects.select_related("vehicle", "vendor").get(
+            pk=wo.pk
+        )
+
+
+def create_work_orders_for_all_must_dos(
+    vehicle: Vehicle,
+    *,
+    dealership: Dealership,
+    created_by=None,
+) -> list[WorkOrder]:
+    """For each must-do finding on the vehicle's latest completed
+    report that has no live linked WorkOrder, create one via
+    :func:`create_work_order_from_finding`. Return the list of
+    freshly-created (or already-live) WOs, one per must-do finding,
+    in the report's finding order.
+
+    Idempotent — safe to call twice; the second call is a no-op if
+    every must-do already has a live WO."""
+    _assert_vehicle_tenant(vehicle, dealership)
+    latest = _latest_completed_condition_report(
+        vehicle, dealership=dealership
+    )
+    if latest is None:
+        return []
+    findings = list(
+        latest.findings.select_related("recon_decision").all()
+    )
+    results: list[WorkOrder] = []
+    for finding in findings:
+        try:
+            decision = finding.recon_decision
+        except ReconDecision.DoesNotExist:
+            continue
+        if decision.tier != RECON_DECISION_TIER_MUST_DO:
+            continue
+        results.append(
+            create_work_order_from_finding(
+                finding,
+                dealership=dealership,
+                created_by=created_by,
+            )
+        )
+    return results
+
+
 # ---- Attach / detach findings ---------------------------------------------
 
 
@@ -895,13 +1026,18 @@ def _next_estimate_seq(work_order: WorkOrder) -> int:
 
 
 def _post_estimate(
-    work_order: WorkOrder, *, seq: int, actor=None
+    work_order: WorkOrder, *, seq: int, actor=None, notes: str = ""
 ) -> Optional[VehicleCost]:
     """Post an initial or revised estimate row.
 
     Idempotent — if the resolved reference already exists, returns
     ``None`` without a second insert. Returns ``None`` also when
     ``work_order.estimated_cost`` is ``None`` (nothing to estimate).
+
+    ``notes`` carries the operator's reason for the estimate change
+    onto the ledger row. Empty by default (initial estimate has no
+    "why beyond what was authorized"); ``revise_estimate`` passes
+    the required reason string.
     """
     if work_order.estimated_cost is None:
         return None
@@ -918,20 +1054,30 @@ def _post_estimate(
         incurred_at=timezone.now(),
         vendor=_vendor_snapshot(work_order),
         reference=reference,
+        notes=notes,
         is_estimate=True,
         created_by=actor,
     )
 
 
 def _post_estimate_reversal(
-    work_order: WorkOrder, *, outstanding_amount: Decimal, seq: int, actor=None
+    work_order: WorkOrder,
+    *,
+    outstanding_amount: Decimal,
+    seq: int,
+    actor=None,
+    notes: str = "",
 ) -> Optional[VehicleCost]:
     """Post a mid-life estimate-reversal row (matches a prior
     ``estimate:<seq>``). Called from :func:`revise_estimate`.
 
     Idempotent — returns ``None`` if the resolved reference already
     exists. Returns ``None`` when ``outstanding_amount`` is zero
-    (nothing to reverse)."""
+    (nothing to reverse).
+
+    ``notes`` carries the operator's reason for the revision onto
+    the reversal row so a manager reading the Ledger months later
+    can see WHY the estimate moved without opening the WO."""
     if outstanding_amount == _ZERO:
         return None
     reference = WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL.format(
@@ -947,6 +1093,7 @@ def _post_estimate_reversal(
         incurred_at=timezone.now(),
         vendor=_vendor_snapshot(work_order),
         reference=reference,
+        notes=notes,
         is_estimate=True,
         created_by=actor,
     )
@@ -1157,45 +1304,41 @@ def revise_estimate(
     *,
     dealership: Dealership,
     new_estimated_cost: Decimal,
+    reason: str,
     revised_by=None,
 ) -> WorkOrder:
-    """Revise the estimated cost on an already-approved WorkOrder.
+    """Revise the estimated cost on an approved or in-progress WorkOrder.
 
-    Separate operator gesture from re-approval per M4.3 semantic:
-    approval is about *authorizing* the work; estimate revision is
-    about *re-pricing* it after new information (a vendor quote
-    came back higher, parts turned out to be back-ordered at a
-    premium, etc.). Both keep the WorkOrder in ``approved`` status;
-    the WO does not fall back to ``draft`` when the estimate
-    changes.
+    Separate operator gesture from re-approval: approval authorizes
+    the work; revision re-prices it after new information (vendor
+    quote came back higher, parts back-ordered at a premium, tech
+    lifted the car and found a seal). The WO does not fall back to
+    ``draft`` when the estimate changes.
 
     Preconditions:
 
-    - Current status must be ``approved``. Raises
-      :class:`InvalidReconTransitionError` from any other
-      state — an in_progress WO's next number is the actual, not a
-      re-estimate; a draft WO has never posted an estimate to
-      revise.
-    - ``new_estimated_cost`` must be nonnegative Decimal (raises
-      :class:`ValueError` on negative). A nonzero revision is
-      required to change anything; passing the same value is a
+    - Current status is ``approved`` or ``in_progress``. Revision on
+      an in-progress WO is the whole point of the "found on the
+      lift" case (SESSION_227) — the moment the revision is most
+      needed is the one state the earlier design refused. Draft has
+      no posted estimate to revise; terminal states are terminal.
+    - ``new_estimated_cost`` is a nonnegative Decimal (raises
+      :class:`ValueError` on negative). Passing the same value is a
       no-op that returns the WO unchanged.
+    - ``reason`` is a nonblank string. Raises :class:`ValueError`
+      on blank / whitespace — the ledger rows this posts carry the
+      reason and a manager reading the Ledger later needs to know
+      why the number moved.
 
-    Effects:
+    Effects (all inside one ``transaction.atomic()`` block):
 
-    - Posts an estimate reversal for the current outstanding
-      amount under ``WORKORDER:<id>:estimate_reversal:<seq>``
-      where ``seq`` matches the estimate being reversed.
-    - Posts a new estimate under
-      ``WORKORDER:<id>:estimate:<seq+1>``.
+    - Writes a :class:`WorkOrderEstimateRevision` row (from/to,
+      reason, actor, timestamp).
+    - Posts an estimate reversal (``estimate_reversal:<seq>``) for
+      the outstanding amount, ``notes`` carrying the reason.
+    - Posts a new estimate (``estimate:<seq+1>``), ``notes``
+      carrying the reason.
     - Updates ``work_order.estimated_cost`` to the new value.
-    - Both ledger posts happen inside the same
-      ``transaction.atomic()`` block so a mid-revision crash
-      leaves the ledger untouched.
-
-    Idempotent — a repeated call with the same
-    ``new_estimated_cost`` passes through as a no-op (the outstanding
-    already matches the new value).
     """
     _assert_work_order_tenant(work_order, dealership)
 
@@ -1206,20 +1349,34 @@ def revise_estimate(
             f"(got {new_estimated_cost}). Negative amounts are for "
             "reversing entries and are not accepted as an estimate."
         )
+    reason_clean = (reason or "").strip()
+    if not reason_clean:
+        raise ValueError(
+            "revise_estimate: a nonblank reason is required. The "
+            "ledger rows this posts carry the reason so a manager "
+            "reading the Ledger later can see why the estimate moved."
+        )
 
     with transaction.atomic():
         wo = _load_for_transition(work_order)
-        if wo.status != WORK_ORDER_STATUS_APPROVED:
+        if wo.status not in (
+            WORK_ORDER_STATUS_APPROVED,
+            WORK_ORDER_STATUS_IN_PROGRESS,
+        ):
             raise InvalidReconTransitionError(
                 f"Cannot revise estimate on WorkOrder #{wo.pk}: "
                 f"current status is {wo.status!r}. Estimate revision "
-                "is allowed only from 'approved'."
+                "is allowed only from 'approved' or 'in_progress' — "
+                "techs find things on the lift, and that is exactly "
+                "when the number needs to move."
             )
 
         outstanding = _outstanding_estimate_amount(wo)
         if outstanding == new_estimated_cost:
             # Nothing to change. Idempotent no-op.
             return wo
+
+        from_amount = wo.estimated_cost
 
         # Post reversal for whatever was outstanding, using the
         # sequence of the estimate being reversed. Then post the
@@ -1235,13 +1392,28 @@ def revise_estimate(
             outstanding_amount=outstanding,
             seq=reversal_seq,
             actor=revised_by,
+            notes=reason_clean,
         )
 
         wo.estimated_cost = new_estimated_cost
         wo.full_clean()
         wo.save()
 
-        _post_estimate(wo, seq=next_seq, actor=revised_by)
+        _post_estimate(
+            wo, seq=next_seq, actor=revised_by, notes=reason_clean
+        )
+
+        revision = WorkOrderEstimateRevision(
+            work_order=wo,
+            dealership=dealership,
+            from_amount=from_amount,
+            to_amount=new_estimated_cost,
+            reason=reason_clean,
+            revised_by=revised_by,
+        )
+        revision.full_clean()
+        revision.save()
+
         return wo
 
 
