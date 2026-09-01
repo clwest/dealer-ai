@@ -50,8 +50,15 @@ from ..accounting.vehicle_cost import (
     post_vehicle_cost_journal,
 )
 from ..vehicle_ledger import compute_totals
+from ..vehicle_lifecycle import (
+    advance_stage,
+    get_current_stage,
+)
 from ...models import (
     SALE_FINANCE_TYPE_CHOICES,
+    VEHICLE_STAGE_FRONTLINE,
+    VEHICLE_STAGE_HOLD_RESERVED,
+    VEHICLE_STAGE_TRIGGER_RULE,
     CustomerLead,
     Dealership,
     Sale,
@@ -171,6 +178,13 @@ def record_sale(
        Recon-WIP-clear lines. The ``posted_by_user`` kwarg
        propagates from the view so the M14.3 journal-entry browser
        shows who booked the sale.
+    3. **Advance lifecycle** ``frontline → hold_reserved`` — a sold
+       unit should come off the front line by itself. Only fires
+       when the vehicle is currently at ``frontline``; sales booked
+       on vehicles in any other stage leave the stage row alone.
+       Uses ``trigger='rule'`` + ``rule_name='sale_booked'`` so the
+       event log records that the software (not an operator) moved
+       the vehicle in response to the sale.
 
     Returns the persisted :class:`Sale` with ``gross_realized``
     populated from :func:`gross_realized`.
@@ -230,5 +244,20 @@ def record_sale(
         sale=sale,
         posted_by_user=posted_by_user,
     )
+
+    # A sold unit should come off the front line by itself. Only fire
+    # when the vehicle is currently at ``frontline`` — a sale booked
+    # on a vehicle in any other stage (archetype seed rows, backfills)
+    # is left alone.
+    stage = get_current_stage(vehicle, dealership=dealership)
+    if stage is not None and stage.current_stage == VEHICLE_STAGE_FRONTLINE:
+        advance_stage(
+            vehicle,
+            dealership=dealership,
+            to_stage=VEHICLE_STAGE_HOLD_RESERVED,
+            trigger=VEHICLE_STAGE_TRIGGER_RULE,
+            rule_name="sale_booked",
+            notes=f"Sale #{sale.pk} booked.",
+        )
 
     return sale

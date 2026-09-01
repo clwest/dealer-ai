@@ -36,9 +36,13 @@ from typing import Optional
 from django.db import transaction
 from django.utils import timezone
 
+from ..vehicle_lifecycle import advance_stage, get_current_stage
 from ...models import (
     DELIVERY_CHECKLIST_INSURANCE_VERIFIED,
     DELIVERY_CHECKLIST_KEYS,
+    VEHICLE_STAGE_HOLD_RESERVED,
+    VEHICLE_STAGE_OFF_MARKET,
+    VEHICLE_STAGE_TRIGGER_RULE,
     Delivery,
     Dealership,
     Sale,
@@ -145,6 +149,15 @@ def record_delivery(
     second ``record_delivery`` on the same Sale observes a
     serialized view of the OneToOne uniqueness invariant.
 
+    Lifecycle side effect — advances ``hold_reserved → off_market``
+    when the vehicle is currently at ``hold_reserved``. Delivery is
+    when the money lands; the sold vehicle actually leaves the lot
+    at delivery, not at sale-book. Vehicles in any other stage are
+    left alone (a Delivery arriving without a preceding sale-hook
+    hold is an unusual data shape worth surfacing, not silently
+    correcting). Uses ``trigger='rule'`` + ``rule_name='delivery_recorded'``
+    so the event log records that the software moved the vehicle.
+
     ``delivery_date`` is nullable — the workflow may start before
     the delivery date is scheduled (e.g. "insurance verified
     today; delivery date TBD"). Callers set it later via
@@ -168,13 +181,32 @@ def record_delivery(
             f"Sale #{sale.pk} already has a Delivery."
         )
 
-    return Delivery.objects.create(
+    delivery = Delivery.objects.create(
         dealership=dealership,
         sale=sale,
         delivery_date=delivery_date,
         temp_tag_number=temp_tag_number,
         notes=notes,
     )
+
+    # Delivery is when the money lands — the vehicle actually leaves.
+    # Advance ``hold_reserved → off_market`` so the aging board stops
+    # counting it. Only fires when the vehicle is currently at
+    # ``hold_reserved``; any other stage is left alone (a Delivery
+    # arriving without a preceding sale-driven hold is an unusual
+    # data shape worth surfacing, not silently correcting).
+    stage = get_current_stage(vehicle, dealership=dealership)
+    if stage is not None and stage.current_stage == VEHICLE_STAGE_HOLD_RESERVED:
+        advance_stage(
+            vehicle,
+            dealership=dealership,
+            to_stage=VEHICLE_STAGE_OFF_MARKET,
+            trigger=VEHICLE_STAGE_TRIGGER_RULE,
+            rule_name="delivery_recorded",
+            notes=f"Delivery #{delivery.pk} recorded (sale #{sale.pk}).",
+        )
+
+    return delivery
 
 
 @transaction.atomic

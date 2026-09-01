@@ -73,16 +73,15 @@ from dealer_ai.models import (
     SALE_FINANCE_TYPE_BHPH,
     STIP_TYPE_PROOF_OF_INCOME,
     VEHICLE_STAGE_COMPANY_USE,
-    VEHICLE_STAGE_DETAIL,
     VEHICLE_STAGE_FRONTLINE,
     VEHICLE_STAGE_HOLD_RESERVED,
     VEHICLE_STAGE_INCOMING,
     VEHICLE_STAGE_INSPECTION,
     VEHICLE_STAGE_LISTING,
     VEHICLE_STAGE_OFF_MARKET,
-    VEHICLE_STAGE_PHOTOGRAPHY,
     VEHICLE_STAGE_QC,
     VEHICLE_STAGE_TRIGGER_MANUAL,
+    VEHICLE_STAGE_TRIGGER_RULE,
     VEHICLE_STAGE_WHOLESALE_OUT,
     BhphNote,
     ChatMessage,
@@ -135,6 +134,7 @@ from dealer_ai.services.deal_writeups.deal_writeup import (
 from dealer_ai.services.lifecycle_aging.snapshots import snapshot_stage_ages
 from dealer_ai.services.vendor_sla.detection import detect_sla_breaches
 from dealer_ai.services.sale.computation import gross_realized
+from dealer_ai.services.vehicle_lifecycle import advance_stage, get_current_stage
 from dealer_ai.services.recon import (
     approve_work_order,
     attach_findings,
@@ -166,18 +166,28 @@ DEMO_OWNER_PASSWORD = "demo-owner-password"
 # ---------------------------------------------------------------------------
 _STAGE_PLAN: tuple[tuple[str, tuple[str, ...], int], ...] = (
     # (stage, tuple of stock numbers, days-ago the transition happened)
+    #
+    # Sold vehicles are NOT forced here. The sale hook in
+    # ``services/sale/computation.py::record_sale`` transitions
+    # ``frontline → hold_reserved`` on its own for archetype sales
+    # (RS-11, RS-12, RS-14, RS-15, RS-16); the mirrored hook in
+    # ``_originate_bhph_sale_and_note`` handles the extension BHPH
+    # sales (RS-10, RS-13). No entry below picks a sold vehicle —
+    # the seed test asserts nothing sold sits on the front line.
+    #
+    # RS-06 and RS-08 stay at their post-archetype frontline stage
+    # so the frontline aging board reads a plausible unsold spread;
+    # DETAIL and PHOTOGRAPHY lose their single-slot demo signal as a
+    # trade-off, given the archetype only ships 20 vehicles.
+    # WHOLESALE_OUT loses its single-slot signal for the same reason
+    # (RS-15 was sold retail and cannot semantically sit there).
     (VEHICLE_STAGE_INCOMING, ("RS-01", "RS-02"), 2),
     (VEHICLE_STAGE_INSPECTION, ("RS-03",), 4),
     # RS-04, RS-07, RS-17 stay at recon (archetype).
     (VEHICLE_STAGE_QC, ("RS-05",), 7),
-    (VEHICLE_STAGE_DETAIL, ("RS-06",), 9),
-    (VEHICLE_STAGE_PHOTOGRAPHY, ("RS-08",), 11),
     (VEHICLE_STAGE_LISTING, ("RS-09",), 13),
-    # Frontline is the majority; aging spans 20..60 days so the aging
-    # board has real signal at every bucket.
-    (VEHICLE_STAGE_FRONTLINE, ("RS-10", "RS-11", "RS-12", "RS-13", "RS-14"), 20),
-    (VEHICLE_STAGE_WHOLESALE_OUT, ("RS-15",), 50),
-    (VEHICLE_STAGE_HOLD_RESERVED, ("RS-16",), 25),
+    # RS-06 (detail) + RS-08 (photography) intentionally omitted so
+    # they stay at frontline post-archetype as unsold aging demo units.
     (VEHICLE_STAGE_COMPANY_USE, ("RS-18",), 100),
     (VEHICLE_STAGE_OFF_MARKET, ("RS-19", "RS-20"), 35),
 )
@@ -239,6 +249,7 @@ class Command(BaseCommand):
             # (skips events already dated on-or-before the target).
             _backdate_frontline_events_for_sales(dealership, self.stdout)
             _backdate_frontline_stage_aging(dealership, self.stdout)
+            _backdate_hold_reserved_for_sales(dealership, self.stdout)
             snapshots = _seed_stage_aging_snapshots(
                 dealership, self.stdout
             )
@@ -595,48 +606,27 @@ _FRONTLINE_AGING_DAYS_UNSOLD: tuple[int, ...] = (4, 15, 33, 62, 95)
 def _backdate_frontline_stage_aging(
     dealership: Dealership, stdout
 ) -> None:
-    """Spread ``VehicleStage.entered_at`` across frontline units so the
-    aging board reads a real distribution instead of a flat line at
-    zero.
+    """Spread ``VehicleStage.entered_at`` across unsold frontline
+    vehicles so the aging board reads a real distribution instead of
+    a flat line at zero.
 
-    The C1 review (2026-09-01) found
-    ``/admin/analytics/stage-aging-trend/?stage=frontline`` returning
-    ``p50_days=0`` across all 15 snapshots.
-
-    Cause: ``_distribute_lifecycle_stages`` short-circuits any stage
-    row whose current value matches its plan target (the
-    ``if previous_stage == stage_key: continue``) — but every frontline
-    plan target (RS-10..RS-14) is already at frontline from the
-    archetype's bootstrap signal, so ``VehicleStage.entered_at`` stays
-    at bootstrap-time (~now). ``record_sale`` (and the model-direct
-    write in ``_originate_bhph_sale_and_note``) also do not touch
-    VehicleStage, so sold-vehicle frontline rows have the same
-    problem. The snapshot verb reads current ``entered_at`` and
-    computes days-in-stage as ``max(0, snapshot_at - entered_at)`` —
-    every reading collapses to zero.
+    Sold vehicles do not appear on the front line — the sale hook in
+    ``services/sale/computation.py::record_sale`` transitions
+    ``frontline → hold_reserved`` on its own, and the extension
+    helper ``_originate_bhph_sale_and_note`` mirrors that transition
+    for its model-direct sales. Anything at frontline here is unsold
+    by construction; a sold-frontline row would be a bug that the
+    seed test asserts against.
 
     Runs BEFORE ``_seed_stage_aging_snapshots``. The 15-day snapshot
     backfill reads current state, so every stage row's ``entered_at``
     must be at its intended value before the loop starts.
 
-    Two populations:
-
-    - **Sold frontline vehicles.** Set ``entered_at`` to
-      ``sale_date - days_before_sale``, using the same
-      ``20 + (sale.pk * 3) % 25`` spread
-      ``_backdate_frontline_events_for_sales`` derives — so the stage
-      row and the earliest ``to_stage=frontline`` VehicleStageEvent
-      agree. Inventory-turn reads the event, not the row, so it
-      stays correct.
-    - **Unsold frontline vehicles.** No sale to anchor to. Spread
-      across :data:`_FRONTLINE_AGING_DAYS_UNSOLD` (deterministic by
-      stock_number so re-seeds are stable).
-
     Also backdates any ``trigger="bootstrap"`` :class:`VehicleStageEvent`
     that would post-date the newly-written ``entered_at``, so the
     vehicle's stage-event log stays in chronological order (same
     invariant ``_distribute_lifecycle_stages`` protects for the
-    twelve stages it reassigns).
+    stages it reassigns).
     """
     now = timezone.now()
     frontline_rows = list(
@@ -647,30 +637,13 @@ def _backdate_frontline_stage_aging(
         .select_related("vehicle")
         .order_by("vehicle__stock_number")
     )
-    updated_sold = 0
-    updated_unsold = 0
-    unsold_offset = 0
-    for stage_row in frontline_rows:
+    updated = 0
+    for offset, stage_row in enumerate(frontline_rows):
         vehicle = stage_row.vehicle
-        sale = Sale.objects.filter(vehicle=vehicle).first()
-        if sale is not None:
-            days_before_sale = 20 + (sale.pk * 3) % 25
-            new_entered_at = (
-                dt.datetime.combine(
-                    sale.sale_date,
-                    dt.time(9, 0),
-                    tzinfo=dt.timezone.utc,
-                )
-                - dt.timedelta(days=days_before_sale)
-            )
-            updated_sold += 1
-        else:
-            days_ago = _FRONTLINE_AGING_DAYS_UNSOLD[
-                unsold_offset % len(_FRONTLINE_AGING_DAYS_UNSOLD)
-            ]
-            unsold_offset += 1
-            new_entered_at = now - dt.timedelta(days=days_ago)
-            updated_unsold += 1
+        days_ago = _FRONTLINE_AGING_DAYS_UNSOLD[
+            offset % len(_FRONTLINE_AGING_DAYS_UNSOLD)
+        ]
+        new_entered_at = now - dt.timedelta(days=days_ago)
         VehicleStageEvent.objects.filter(
             vehicle=vehicle,
             trigger="bootstrap",
@@ -680,11 +653,51 @@ def _backdate_frontline_stage_aging(
         )
         stage_row.entered_at = new_entered_at
         stage_row.save(update_fields=["entered_at"])
+        updated += 1
     stdout.write(
-        f"backdated {updated_sold + updated_unsold} frontline "
-        f"VehicleStage row(s): {updated_sold} sold aligned to sale "
-        f"date, {updated_unsold} unsold across "
-        f"{list(_FRONTLINE_AGING_DAYS_UNSOLD)!r} days-ago."
+        f"backdated {updated} unsold frontline VehicleStage row(s) "
+        f"across {list(_FRONTLINE_AGING_DAYS_UNSOLD)!r} days-ago."
+    )
+
+
+def _backdate_hold_reserved_for_sales(
+    dealership: Dealership, stdout
+) -> None:
+    """Set ``VehicleStage.entered_at`` on each sold vehicle sitting at
+    ``hold_reserved`` to the sale date, so the aging board reads real
+    days-since-sale instead of a flat zero.
+
+    The sale hook in ``services/sale/computation.py::record_sale``
+    transitions the vehicle into ``hold_reserved`` at ~now (hook time),
+    which leaves the aging read flat. In real operation the hold
+    starts when the sale is booked, so anchoring the stage_row's
+    ``entered_at`` to ``sale_date`` gives a truthful demo reading.
+
+    Runs BEFORE ``_seed_stage_aging_snapshots``. Only touches the
+    stage row's ``entered_at`` — the paired hook event's ``entered_at``
+    is left at hook time so the log-not-backwards invariant remains
+    (latest event's ``to_stage`` still equals ``current_stage``).
+    """
+    updated = 0
+    rows = list(
+        VehicleStage.objects.filter(
+            dealership=dealership,
+            current_stage=VEHICLE_STAGE_HOLD_RESERVED,
+        ).select_related("vehicle")
+    )
+    for stage_row in rows:
+        sale = Sale.objects.filter(vehicle=stage_row.vehicle).first()
+        if sale is None:
+            continue
+        new_entered_at = dt.datetime.combine(
+            sale.sale_date, dt.time(9, 0), tzinfo=dt.timezone.utc
+        )
+        stage_row.entered_at = new_entered_at
+        stage_row.save(update_fields=["entered_at"])
+        updated += 1
+    stdout.write(
+        f"backdated {updated} sold hold_reserved VehicleStage row(s) "
+        f"to their sale date."
     )
 
 
@@ -1197,6 +1210,22 @@ def _originate_bhph_sale_and_note(
         lender_name="",
         gross_realized=Decimal("0.00"),
     )
+
+    # Mirror the ``record_sale`` lifecycle hook by hand — this helper
+    # writes the Sale directly (see class docstring) so the sale-hook
+    # side effect must be re-composed here. Otherwise the extension's
+    # sold BHPH units would sit on frontline forever.
+    stage = get_current_stage(vehicle, dealership=dealership)
+    if stage is not None and stage.current_stage == VEHICLE_STAGE_FRONTLINE:
+        advance_stage(
+            vehicle,
+            dealership=dealership,
+            to_stage=VEHICLE_STAGE_HOLD_RESERVED,
+            trigger=VEHICLE_STAGE_TRIGGER_RULE,
+            rule_name="sale_booked",
+            notes=f"Sale #{sale.pk} booked (extension seed).",
+        )
+
     first_payment_due = (
         now - dt.timedelta(days=first_payment_days_ago)
     ).date()

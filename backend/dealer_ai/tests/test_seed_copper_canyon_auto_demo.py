@@ -265,9 +265,9 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
         )
 
     def test_frontline_stage_row_entered_at_is_spread(self) -> None:
-        """The five frontline VehicleStage rows should carry
-        ``entered_at`` values spread across a plausible range —
-        specifically, not all at seed-time (~now).
+        """The frontline VehicleStage rows should carry ``entered_at``
+        values spread across a plausible range — specifically, not
+        all at seed-time (~now).
 
         This is the direct read of the fix
         :func:`_backdate_frontline_stage_aging` performs. Kept as a
@@ -293,6 +293,33 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
             f"expected frontline entered_at values spread across "
             f"multiple dates; got {len(distinct_dates)} distinct "
             f"date(s) across {len(rows)} row(s).",
+        )
+
+    def test_no_frontline_vehicle_has_a_sale(self) -> None:
+        """A sold unit must not sit on the front line.
+
+        ``services/sale/computation.py::record_sale`` transitions
+        ``frontline → hold_reserved`` on its own; the extension
+        helper ``_originate_bhph_sale_and_note`` mirrors the same
+        transition for its model-direct writes. Any frontline
+        vehicle with a Sale would mean one of those hooks did not
+        fire — the exact bug the sale-lifecycle rework fixed.
+        """
+        dealership = _demo_dealership()
+        sold_on_frontline = list(
+            Vehicle.objects.filter(
+                dealership=dealership,
+                stage__current_stage=VEHICLE_STAGE_FRONTLINE,
+                sale__isnull=False,
+            ).values_list("stock_number", flat=True)
+        )
+        self.assertEqual(
+            sold_on_frontline,
+            [],
+            "sold vehicles found on the front line: "
+            f"{sold_on_frontline}. record_sale + "
+            "_originate_bhph_sale_and_note must advance the vehicle "
+            "off frontline.",
         )
 
 

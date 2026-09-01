@@ -246,6 +246,15 @@ def _build_allowed_transitions() -> dict[str, frozenset[str]]:
     for tgt in _RETAIL_PREPARATION_STAGES:
         table.setdefault(VEHICLE_STAGE_HOLD_RESERVED, set()).add(tgt)
 
+    # Sale-to-delivery forward edge — a vehicle held via
+    # ``frontline → hold_reserved`` at sale-book advances to
+    # ``off_market`` at delivery (per TASK_sale_should_advance_lifecycle,
+    # Option B). Chris's rule: hold on sale, release on delivery
+    # (delivery = when the money lands, when the car actually leaves).
+    table.setdefault(VEHICLE_STAGE_HOLD_RESERVED, set()).add(
+        VEHICLE_STAGE_OFF_MARKET
+    )
+
     # Fixed returns: the three operational disposals that resume via
     # inspection.
     for src in (

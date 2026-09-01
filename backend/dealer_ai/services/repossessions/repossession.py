@@ -12,10 +12,14 @@ from typing import Optional
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from ..vehicle_lifecycle import advance_stage, get_current_stage
 from ...models import (
     BHPH_REPO_STATE_ORDERED,
     BHPH_REPO_STATE_RE_INTAKED,
     BHPH_REPO_STATE_RECOVERED,
+    VEHICLE_STAGE_INSPECTION,
+    VEHICLE_STAGE_OFF_MARKET,
+    VEHICLE_STAGE_TRIGGER_RULE,
     BhphNote,
     ConditionReport,
     Dealership,
@@ -160,6 +164,12 @@ def mark_re_intaked(
       (:class:`RepossessionAlreadyTerminalError`).
     - Non-``recovered`` starting state
       (:class:`InvalidStateTransitionError`).
+
+    Lifecycle side effect — advances ``off_market → inspection``
+    on the underlying vehicle so the repossessed unit walks the
+    recon pipeline again before it is retailed. Only fires when
+    the vehicle is currently at ``off_market``. Uses
+    ``trigger='rule'`` + ``rule_name='repossession_re_intake'``.
     """
     _assert_same_tenant(repossession, dealership)
     if condition_report.dealership_id != dealership.id:
@@ -189,6 +199,27 @@ def mark_re_intaked(
             "updated_at",
         ]
     )
+
+    # Bring the repossessed unit back into inventory. A repossessed
+    # car went ``hold_reserved → off_market`` at delivery; re-intake
+    # sends it back through inspection before it is retailed again.
+    # Only fires when the vehicle is at ``off_market``; other stages
+    # are left alone.
+    vehicle = condition_report.vehicle
+    stage = get_current_stage(vehicle, dealership=dealership)
+    if stage is not None and stage.current_stage == VEHICLE_STAGE_OFF_MARKET:
+        advance_stage(
+            vehicle,
+            dealership=dealership,
+            to_stage=VEHICLE_STAGE_INSPECTION,
+            trigger=VEHICLE_STAGE_TRIGGER_RULE,
+            rule_name="repossession_re_intake",
+            notes=(
+                f"Repossession #{repossession.pk} re-intaked "
+                f"(condition report #{condition_report.pk})."
+            ),
+        )
+
     return repossession
 
 

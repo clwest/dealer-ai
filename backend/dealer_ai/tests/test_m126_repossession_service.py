@@ -14,12 +14,19 @@ from dealer_ai.models import (
     BHPH_REPO_STATE_RE_INTAKED,
     BHPH_REPO_STATE_RECOVERED,
     SALE_FINANCE_TYPE_BHPH,
+    VEHICLE_STAGE_FRONTLINE,
+    VEHICLE_STAGE_INSPECTION,
+    VEHICLE_STAGE_OFF_MARKET,
+    VEHICLE_STAGE_TRIGGER_MANUAL,
+    VEHICLE_STAGE_TRIGGER_RULE,
     BhphNote,
     ConditionReport,
     Dealership,
     Repossession,
     Sale,
     Vehicle,
+    VehicleStage,
+    VehicleStageEvent,
 )
 from dealer_ai.services.repossessions import (
     CrossTenantConditionReportError,
@@ -31,6 +38,7 @@ from dealer_ai.services.repossessions import (
     mark_recovered,
     record_repossession,
 )
+from dealer_ai.services.vehicle_lifecycle import advance_stage
 
 
 def _make_note(dealership: Dealership, stock: str = "M126-SVC") -> BhphNote:
@@ -226,6 +234,51 @@ class MarkReIntakedTests(TestCase):
                 repossession=self.repo,
                 condition_report=self.report,
             )
+
+    def test_re_intake_moves_off_market_vehicle_to_inspection(self) -> None:
+        # Simulate the state left by the delivery hook (car sold +
+        # delivered, sitting at off_market before repo).
+        advance_stage(
+            self.vehicle,
+            dealership=self.dealership,
+            to_stage=VEHICLE_STAGE_OFF_MARKET,
+            trigger=VEHICLE_STAGE_TRIGGER_MANUAL,
+        )
+
+        mark_re_intaked(
+            dealership=self.dealership,
+            repossession=self.repo,
+            condition_report=self.report,
+        )
+
+        stage = VehicleStage.objects.get(vehicle=self.vehicle)
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_INSPECTION)
+
+        latest_event = (
+            VehicleStageEvent.objects.filter(vehicle=self.vehicle)
+            .order_by("-entered_at", "-pk")
+            .first()
+        )
+        assert latest_event is not None
+        self.assertEqual(latest_event.trigger, VEHICLE_STAGE_TRIGGER_RULE)
+        self.assertEqual(latest_event.to_stage, VEHICLE_STAGE_INSPECTION)
+        self.assertEqual(latest_event.from_stage, VEHICLE_STAGE_OFF_MARKET)
+        self.assertIsNone(latest_event.by)
+        self.assertIn(str(self.repo.pk), latest_event.notes)
+
+    def test_re_intake_no_op_when_vehicle_not_at_off_market(self) -> None:
+        # Vehicle stays at frontline (test-only bootstrap default).
+        stage = VehicleStage.objects.get(vehicle=self.vehicle)
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_FRONTLINE)
+
+        mark_re_intaked(
+            dealership=self.dealership,
+            repossession=self.repo,
+            condition_report=self.report,
+        )
+
+        stage.refresh_from_db()
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_FRONTLINE)
 
 
 class ListRepossessionsTests(TestCase):

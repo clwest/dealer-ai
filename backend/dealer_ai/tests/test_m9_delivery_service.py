@@ -35,9 +35,16 @@ from dealer_ai.models import (
     DELIVERY_CHECKLIST_FUELED,
     DELIVERY_CHECKLIST_INSURANCE_VERIFIED,
     SALE_FINANCE_TYPE_CASH,
+    VEHICLE_STAGE_FRONTLINE,
+    VEHICLE_STAGE_HOLD_RESERVED,
+    VEHICLE_STAGE_OFF_MARKET,
+    VEHICLE_STAGE_TRIGGER_MANUAL,
+    VEHICLE_STAGE_TRIGGER_RULE,
     Dealership,
     Sale,
     Vehicle,
+    VehicleStage,
+    VehicleStageEvent,
 )
 from dealer_ai.services.delivery import (
     CrossTenantDeliveryError,
@@ -48,6 +55,7 @@ from dealer_ai.services.delivery import (
     update_checklist_item,
     verify_insurance,
 )
+from dealer_ai.services.vehicle_lifecycle import advance_stage
 
 
 def _make_vehicle_with_sale(
@@ -249,3 +257,67 @@ class VerifyInsuranceVerbTests(TestCase):
         )
         with self.assertRaises(CrossTenantDeliveryError):
             verify_insurance(self.delivery, dealership=other)
+
+
+class RecordDeliveryLifecycleHookTests(TestCase):
+    """Delivery is when the money lands — the vehicle actually leaves.
+
+    :func:`record_delivery` advances ``hold_reserved → off_market``
+    when the vehicle is currently at ``hold_reserved`` and leaves
+    other stages alone.
+    """
+
+    def setUp(self) -> None:
+        self.dealership = Dealership.objects.create(
+            slug="m92-hook", name="M9.2 Lifecycle Hook"
+        )
+
+    def test_hook_moves_hold_reserved_vehicle_to_off_market(self) -> None:
+        vehicle, sale = _make_vehicle_with_sale(
+            self.dealership, stock="DEL-HR"
+        )
+        # Simulate the state left by the sale hook.
+        advance_stage(
+            vehicle,
+            dealership=self.dealership,
+            to_stage=VEHICLE_STAGE_HOLD_RESERVED,
+            trigger=VEHICLE_STAGE_TRIGGER_RULE,
+            rule_name="sale_booked",
+            notes=f"Sale #{sale.pk} booked.",
+        )
+
+        delivery = record_delivery(
+            vehicle,
+            dealership=self.dealership,
+            delivery_date=dt.date(2026, 8, 5),
+        )
+
+        stage = VehicleStage.objects.get(vehicle=vehicle)
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_OFF_MARKET)
+
+        latest_event = (
+            VehicleStageEvent.objects.filter(vehicle=vehicle)
+            .order_by("-entered_at", "-pk")
+            .first()
+        )
+        assert latest_event is not None
+        self.assertEqual(latest_event.trigger, VEHICLE_STAGE_TRIGGER_RULE)
+        self.assertEqual(latest_event.to_stage, VEHICLE_STAGE_OFF_MARKET)
+        self.assertEqual(latest_event.from_stage, VEHICLE_STAGE_HOLD_RESERVED)
+        self.assertIsNone(latest_event.by)
+        self.assertIn(str(delivery.pk), latest_event.notes)
+
+    def test_hook_no_op_when_vehicle_not_at_hold_reserved(self) -> None:
+        # A Delivery arriving without a preceding sale-hook hold is
+        # unusual data — the hook leaves the stage alone rather than
+        # forcing a transition.
+        vehicle, _sale = _make_vehicle_with_sale(
+            self.dealership, stock="DEL-FL"
+        )
+        stage = VehicleStage.objects.get(vehicle=vehicle)
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_FRONTLINE)
+
+        record_delivery(vehicle, dealership=self.dealership)
+
+        stage.refresh_from_db()
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_FRONTLINE)

@@ -41,12 +41,19 @@ from dealer_ai.models import (
     SALE_FINANCE_TYPE_CASH,
     SALE_FINANCE_TYPE_RETAIL,
     SOURCE_AUCTION,
+    VEHICLE_STAGE_COMPANY_USE,
+    VEHICLE_STAGE_FRONTLINE,
+    VEHICLE_STAGE_HOLD_RESERVED,
+    VEHICLE_STAGE_TRIGGER_MANUAL,
+    VEHICLE_STAGE_TRIGGER_RULE,
     CustomerLead,
     Dealership,
     Sale,
     Vehicle,
     VehicleAcquisition,
     VehicleCost,
+    VehicleStage,
+    VehicleStageEvent,
 )
 from dealer_ai.services.accounting import seed_default_coa
 from dealer_ai.services.sale import (
@@ -55,6 +62,7 @@ from dealer_ai.services.sale import (
     gross_realized,
     record_sale,
 )
+from dealer_ai.services.vehicle_lifecycle import advance_stage
 
 
 def _seed_vehicle_with_ledger(
@@ -335,3 +343,112 @@ class RecordSaleVerbTests(TestCase):
         sale.refresh_from_db()
         self.assertIsNone(sale.buyer_id)
         self.assertEqual(Sale.objects.count(), 1)
+
+
+class RecordSaleLifecycleHookTests(TestCase):
+    """A sold unit should come off the front line by itself.
+
+    The hook in :func:`record_sale` transitions
+    ``frontline → hold_reserved`` after the Sale is written, using a
+    system trigger so the event log records that the software (not
+    an operator) moved the vehicle. Vehicles in any other stage are
+    left alone.
+    """
+
+    def setUp(self) -> None:
+        self.dealership = Dealership.objects.create(
+            slug="m91-hook", name="M9.1 Lifecycle Hook"
+        )
+        seed_default_coa(self.dealership)
+
+    def test_hook_moves_frontline_vehicle_to_hold_reserved(self) -> None:
+        vehicle = _seed_vehicle_with_ledger(
+            self.dealership, stock="HOOK-FL"
+        )
+        # Test-only bootstrap signal put this at frontline.
+        stage = VehicleStage.objects.get(vehicle=vehicle)
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_FRONTLINE)
+
+        sale = record_sale(
+            vehicle,
+            dealership=self.dealership,
+            sale_date=dt.date(2026, 8, 1),
+            sold_price=Decimal("25000.00"),
+            finance_type=SALE_FINANCE_TYPE_CASH,
+        )
+
+        stage.refresh_from_db()
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_HOLD_RESERVED)
+
+        # Event carries the system trigger + names the sale.
+        latest_event = (
+            VehicleStageEvent.objects.filter(vehicle=vehicle)
+            .order_by("-entered_at", "-pk")
+            .first()
+        )
+        assert latest_event is not None
+        self.assertEqual(latest_event.trigger, VEHICLE_STAGE_TRIGGER_RULE)
+        self.assertEqual(latest_event.to_stage, VEHICLE_STAGE_HOLD_RESERVED)
+        self.assertEqual(latest_event.from_stage, VEHICLE_STAGE_FRONTLINE)
+        self.assertIsNone(latest_event.by)
+        self.assertIn(str(sale.pk), latest_event.notes)
+
+    def test_hook_no_op_when_vehicle_not_at_frontline(self) -> None:
+        vehicle = _seed_vehicle_with_ledger(
+            self.dealership, stock="HOOK-NONFL"
+        )
+        # Move the vehicle to company_use (a rare operational
+        # disposition — an unusual place to book a Sale from, but
+        # the hook leaves any non-frontline stage alone rather than
+        # forcing a transition).
+        advance_stage(
+            vehicle,
+            dealership=self.dealership,
+            to_stage=VEHICLE_STAGE_COMPANY_USE,
+            trigger=VEHICLE_STAGE_TRIGGER_MANUAL,
+        )
+
+        record_sale(
+            vehicle,
+            dealership=self.dealership,
+            sale_date=dt.date(2026, 8, 1),
+            sold_price=Decimal("25000.00"),
+            finance_type=SALE_FINANCE_TYPE_CASH,
+        )
+
+        stage = VehicleStage.objects.get(vehicle=vehicle)
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_COMPANY_USE)
+
+    def test_unwind_from_hold_reserved_returns_to_frontline(self) -> None:
+        """A sale booked and then unwound leaves the car back at
+        its prior stage, not stranded at ``hold_reserved``.
+
+        The operator advances ``hold_reserved → frontline`` via the
+        existing manual transition; the ``hold_reserved`` allow-list
+        already permits every retail-preparation stage as a return
+        target (see ``vehicle_lifecycle._build_allowed_transitions``).
+        """
+        vehicle = _seed_vehicle_with_ledger(
+            self.dealership, stock="HOOK-UNWIND"
+        )
+        record_sale(
+            vehicle,
+            dealership=self.dealership,
+            sale_date=dt.date(2026, 8, 1),
+            sold_price=Decimal("25000.00"),
+            finance_type=SALE_FINANCE_TYPE_CASH,
+        )
+        stage = VehicleStage.objects.get(vehicle=vehicle)
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_HOLD_RESERVED)
+
+        # Unwind: manually advance back to frontline (the target
+        # ``resolve_hold_reserved_return_target`` would suggest).
+        advance_stage(
+            vehicle,
+            dealership=self.dealership,
+            to_stage=VEHICLE_STAGE_FRONTLINE,
+            trigger=VEHICLE_STAGE_TRIGGER_MANUAL,
+            notes="Deal unwound; vehicle back to frontline.",
+        )
+        stage.refresh_from_db()
+        self.assertEqual(stage.current_stage, VEHICLE_STAGE_FRONTLINE)
