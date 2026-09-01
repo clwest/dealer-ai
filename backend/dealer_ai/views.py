@@ -1329,8 +1329,25 @@ def admin_vehicle_list(request):
       + sold / unavailable) so operator flows that reference a sold
       vehicle (e.g. recording a completed test drive after the
       sale) still work.
+    - ``limit`` — page size, default 100, max 200. Garbage clamped
+      to the default.
+    - ``offset`` — page offset, default 0. Garbage or negative
+      clamped to 0.
 
-    Cap at 100 rows. Ordering matches Meta (``-year, model``).
+    Response fields:
+
+    - ``count``: real total after filters (not the page length).
+      Fixed at TASK_vehicle_list_caps_and_miscounts (2026-09-01) —
+      previously returned ``len(results)``, which lied silently
+      above 100 rows and was the trigger for the truncated-and-
+      confident-about-it failure the demo store now hits.
+    - ``results``: rows for this page.
+    - ``next`` / ``previous``: absolute URLs for adjacent pages, or
+      ``null`` at the ends.
+    - ``has_more``: convenience boolean; true iff ``next`` is set.
+    - ``limit`` / ``offset``: the effective values after clamping.
+
+    Ordering matches Meta (``-year, model``).
     """
     dealership = get_current_dealership(request)
     qs = Vehicle.objects.filter(dealership=dealership)
@@ -1358,10 +1375,41 @@ def admin_vehicle_list(request):
             filters = filters | Q(year=int(needle))
         qs = qs.filter(filters)
 
-    rows = list(qs[:100])
+    _DEFAULT_LIMIT = 100
+    _MAX_LIMIT = 200
+    try:
+        limit = int(request.query_params.get("limit", _DEFAULT_LIMIT))
+    except (TypeError, ValueError):
+        limit = _DEFAULT_LIMIT
+    if limit <= 0 or limit > _MAX_LIMIT:
+        limit = _DEFAULT_LIMIT
+    try:
+        offset = int(request.query_params.get("offset", 0))
+    except (TypeError, ValueError):
+        offset = 0
+    if offset < 0:
+        offset = 0
+
+    total = qs.count()
+    rows = list(qs[offset : offset + limit])
+
+    def _page_url(new_offset: int) -> str:
+        query = request.query_params.copy()
+        query["limit"] = str(limit)
+        query["offset"] = str(new_offset)
+        return f"{request.build_absolute_uri(request.path)}?{query.urlencode()}"
+
+    next_url = _page_url(offset + limit) if offset + limit < total else None
+    previous_url = _page_url(max(offset - limit, 0)) if offset > 0 else None
+
     return Response(
         {
-            "count": len(rows),
+            "count": total,
+            "limit": limit,
+            "offset": offset,
+            "next": next_url,
+            "previous": previous_url,
+            "has_more": next_url is not None,
             "results": [
                 {
                     "id": v.pk,

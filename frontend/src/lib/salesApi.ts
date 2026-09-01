@@ -238,6 +238,11 @@ export interface AdminVehicleRow {
 
 export interface AdminVehicleListResponse {
   count: number;
+  limit: number;
+  offset: number;
+  next: string | null;
+  previous: string | null;
+  has_more: boolean;
   results: AdminVehicleRow[];
 }
 
@@ -245,6 +250,8 @@ export interface AdminVehicleListFilters {
   search?: string;
   condition?: "new" | "used" | "certified";
   is_available?: boolean;
+  limit?: number;
+  offset?: number;
 }
 
 export async function listAdminVehicles(
@@ -256,6 +263,9 @@ export async function listAdminVehicles(
   if (filters.is_available !== undefined) {
     params.set("is_available", filters.is_available ? "true" : "false");
   }
+  if (filters.limit !== undefined) params.set("limit", String(filters.limit));
+  if (filters.offset !== undefined)
+    params.set("offset", String(filters.offset));
   const qs = params.toString();
   return authGetJSON<AdminVehicleListResponse>(
     `/admin/vehicles/${qs ? `?${qs}` : ""}`,

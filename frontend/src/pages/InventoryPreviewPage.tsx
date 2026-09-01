@@ -1,27 +1,25 @@
-// SESSION_014 — Inventory preview / stub page.
-// SESSION_030 pivot — data source renamed to `sampleInventory.ts`
-// and pointed at the Copper Canyon Auto persona (mixed-make used).
+// SESSION_014 — Inventory preview page.
+// SESSION_030 pivot — pointed at the Copper Canyon Auto persona.
+// TASK_losing-deals-and-the-inventory-page (2026-09-01) — wired to
+// the backend via `/admin/vehicles/`. Previously read a static
+// twelve-car sample module that showed different stock numbers than
+// the seed, which made every per-vehicle door 404 from this page and
+// dead-ended step 2 of the demo script.
 //
-// Read-only visual surface that demos how the OS surfaces inventory.
-// Source is the sample at `frontend/src/data/sampleInventory.ts`
-// (public, demo-only). The Live Assistant page still uses real
-// backend matched_vehicles; this page is intentionally separate.
-//
-// When CRM/DMS feed integration lands, replace the data import with
-// the live source and delete the sample module.
+// The public showroom / dealership home page / hero component still
+// import from `@/data/sampleInventory` — that module is intentionally
+// left alone here; those surfaces are their own follow-up.
 
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   Camera,
   ClipboardCheck,
   DollarSign,
-  ExternalLink,
-  Gauge,
-  Sparkles,
-  Tag,
-  Wrench,
-  Zap,
+  ClipboardList,
   FileText,
+  Gauge,
+  Wrench,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -36,31 +34,86 @@ import {
 } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import {
-  SAMPLE_INVENTORY_CAPTURED_AT,
-  SAMPLE_INVENTORY,
-  SAMPLE_INVENTORY_HOMEPAGE_URL,
-  type SampleInventoryVehicle,
-  type VehicleCondition,
-} from "@/data/sampleInventory";
+  listAdminVehicles,
+  type AdminVehicleRow,
+  type AdminVehicleListResponse,
+} from "@/lib/salesApi";
+import { ApiError } from "@/lib/authFetch";
 
-const CONDITION_STYLES: Record<VehicleCondition, string> = {
+const PAGE_SIZE = 24;
+
+const CONDITION_STYLES: Record<string, string> = {
   new: "border-emerald-200 bg-emerald-50 text-emerald-700",
   used: "border-amber-200 bg-amber-50 text-amber-700",
   certified: "border-sky-200 bg-sky-50 text-sky-700",
 };
 
-const CONDITION_LABEL: Record<VehicleCondition, string> = {
+const CONDITION_LABEL: Record<string, string> = {
   new: "New",
   used: "Used",
   certified: "Certified",
 };
 
-export default function InventoryPreviewPage() {
-  const totalCount = SAMPLE_INVENTORY.length;
-  const newCount = SAMPLE_INVENTORY.filter(
-    (v) => v.condition === "new",
-  ).length;
-  const usedCount = totalCount - newCount;
+type AvailabilityFilter = "all" | "available" | "sold";
+
+interface Props {
+  /** Injected for tests. Defaults to shipped `listAdminVehicles`. */
+  loadInventory?: typeof listAdminVehicles;
+}
+
+export default function InventoryPreviewPage({
+  loadInventory = listAdminVehicles,
+}: Props = {}) {
+  const [availability, setAvailability] =
+    useState<AvailabilityFilter>("available");
+  const [offset, setOffset] = useState(0);
+  const [data, setData] = useState<AdminVehicleListResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const availabilityParam = useMemo<boolean | undefined>(() => {
+    if (availability === "available") return true;
+    if (availability === "sold") return false;
+    return undefined;
+  }, [availability]);
+
+  const fetchPage = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const body = await loadInventory({
+        is_available: availabilityParam,
+        limit: PAGE_SIZE,
+        offset,
+      });
+      setData(body);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Unable to load inventory.";
+      setError(message);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadInventory, availabilityParam, offset]);
+
+  useEffect(() => {
+    void fetchPage();
+  }, [fetchPage]);
+
+  // Reset paging when the availability filter changes.
+  useEffect(() => {
+    setOffset(0);
+  }, [availability]);
+
+  const total = data?.count ?? 0;
+  const rows = data?.results ?? [];
+  const showingFrom = total === 0 ? 0 : offset + 1;
+  const showingTo = Math.min(offset + rows.length, total);
 
   return (
     <div className="space-y-6">
@@ -69,73 +122,158 @@ export default function InventoryPreviewPage() {
           Inventory
         </h1>
         <p className="text-sm text-muted-foreground">
-          Visual preview of the dealer's lot. {newCount} new ·{" "}
-          {usedCount} used / certified.
+          Live view of the dealer's lot from{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">
+            /admin/vehicles/
+          </code>
+          .
         </p>
       </header>
 
-      <DemoBanner />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {SAMPLE_INVENTORY.map((v) => (
-          <InventoryCard key={v.vin} vehicle={v} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DemoBanner() {
-  return (
-    <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
-      <div className="space-y-0.5">
-        <div className="font-semibold">Demo data</div>
-        <div className="text-xs text-amber-800">
-          Sample of {SAMPLE_INVENTORY.length} vehicles refreshed on{" "}
-          {SAMPLE_INVENTORY_CAPTURED_AT}. Browse the full lot at{" "}
-          <a
-            href={SAMPLE_INVENTORY_HOMEPAGE_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-2"
-          >
-            the dealership's inventory page
-          </a>
-          . Used here for visual realism only — the Live Assistant uses real
-          backend inventory. Will be replaced by the CRM/DMS feed when that
-          integration lands.
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="inline-flex rounded-md border border-border bg-muted/40 p-0.5"
+          role="tablist"
+          aria-label="Availability filter"
+        >
+          {(
+            [
+              { key: "available", label: "Available" },
+              { key: "sold", label: "Sold" },
+              { key: "all", label: "All" },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={availability === key}
+              onClick={() => setAvailability(key)}
+              className={`rounded-sm px-3 py-1 text-xs font-medium transition ${
+                availability === key
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {loading && !data
+            ? "Loading…"
+            : total === 0
+              ? "No vehicles match."
+              : `Showing ${showingFrom.toLocaleString()}–${showingTo.toLocaleString()} of ${total.toLocaleString()}`}
         </div>
       </div>
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {loading && !data ? (
+        <LoadingSkeleton />
+      ) : rows.length === 0 && !error ? (
+        <EmptyState />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((v) => (
+            <InventoryCard key={v.id} vehicle={v} />
+          ))}
+        </div>
+      )}
+
+      {data && total > PAGE_SIZE ? (
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!data.previous || loading}
+            onClick={() => setOffset(Math.max(offset - PAGE_SIZE, 0))}
+          >
+            ← Previous
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Page {Math.floor(offset / PAGE_SIZE) + 1} of{" "}
+            {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!data.has_more || loading}
+            onClick={() => setOffset(offset + PAGE_SIZE)}
+          >
+            Next →
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
-  const hasMsrp = vehicle.msrp !== null && vehicle.msrp > vehicle.price;
+function LoadingSkeleton() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-64 animate-pulse rounded-lg border border-border bg-muted/40"
+        />
+      ))}
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="rounded-md border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
+      No vehicles match the current filter.
+    </div>
+  );
+}
+
+function InventoryCard({ vehicle }: { vehicle: AdminVehicleRow }) {
+  const stock = encodeURIComponent(vehicle.stock_number);
+  const conditionClass =
+    CONDITION_STYLES[vehicle.condition] ??
+    "border-slate-200 bg-slate-50 text-slate-700";
+  const conditionLabel =
+    CONDITION_LABEL[vehicle.condition] ?? vehicle.condition;
+  const price = Number(vehicle.price);
   return (
     <Card className="overflow-hidden p-0">
-      <a
-        href={vehicle.vdp_url}
-        target="_blank"
-        rel="noreferrer"
-        className="block"
-        aria-label={`Open ${vehicle.display_name} details`}
-      >
-        <div className="relative aspect-video w-full overflow-hidden bg-muted">
+      <div className="relative aspect-video w-full overflow-hidden bg-muted">
+        {vehicle.image_url ? (
           <img
             src={vehicle.image_url}
             alt={vehicle.display_name}
             loading="lazy"
-            className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+            className="h-full w-full object-cover"
           />
-          <span
-            className={`absolute left-3 top-3 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${CONDITION_STYLES[vehicle.condition]}`}
-          >
-            {CONDITION_LABEL[vehicle.condition]}
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+            No photo on file
+          </div>
+        )}
+        <span
+          className={`absolute left-3 top-3 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${conditionClass}`}
+        >
+          {conditionLabel}
+        </span>
+        {!vehicle.is_available ? (
+          <span className="absolute right-3 top-3 rounded-full border border-slate-300 bg-white/90 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+            Sold
           </span>
-        </div>
-      </a>
+        ) : null}
+      </div>
 
       <CardHeader className="pt-4">
         <div className="flex items-start justify-between gap-2">
@@ -145,18 +283,12 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             </CardTitle>
             <div className="text-xs text-muted-foreground">
               Stock #{vehicle.stock_number}
-              {vehicle.exterior_color ? ` · ${vehicle.exterior_color}` : ""}
             </div>
           </div>
           <div className="text-right">
             <div className="text-base font-bold text-primary">
-              {formatCurrency(vehicle.price)}
+              {Number.isFinite(price) ? formatCurrency(price) : vehicle.price}
             </div>
-            {hasMsrp ? (
-              <div className="text-[11px] text-muted-foreground line-through">
-                {formatCurrency(vehicle.msrp)}
-              </div>
-            ) : null}
           </div>
         </div>
       </CardHeader>
@@ -165,38 +297,15 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
         <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
             <Gauge className="h-3 w-3" />
-            {vehicle.condition === "new"
-              ? "New"
-              : `${vehicle.mileage.toLocaleString()} mi`}
+            {conditionLabel}
           </span>
-          {vehicle.drivetrain ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
-              <Tag className="h-3 w-3" />
-              {vehicle.drivetrain}
-            </span>
-          ) : null}
-          {vehicle.fuel_type ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5">
-              <Zap className="h-3 w-3" />
-              {vehicle.fuel_type}
-            </span>
-          ) : null}
+          <Badge variant="outline" className="font-normal">
+            {vehicle.is_available ? "On lot" : "Sold"}
+          </Badge>
         </div>
-        {vehicle.condition !== "new" ? (
-          <div className="pt-2">
-            <Badge variant="outline" className="font-normal">
-              VIN ending {vehicle.vin.slice(-6)}
-            </Badge>
-          </div>
-        ) : null}
       </CardContent>
 
       <CardFooter className="flex items-center justify-between gap-2 bg-muted/40 px-4 py-2.5">
-        {/* Milestone 2 · Increment 7 — Operator-only Ledger link.
-            Deliberately NOT surfaced on the public /showroom page —
-            this card lives on the operator inventory surface only.
-            Stock number is URL-encoded because dealer conventions
-            can include slashes / special chars. */}
         <div className="flex flex-wrap items-center gap-1">
           <Button
             asChild
@@ -204,59 +313,40 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             size="sm"
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <Link
-              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/ledger`}
-            >
+            <Link to={`/dealer-ai-inventory/${stock}/ledger`}>
               <BookOpen className="h-3.5 w-3.5" />
               Ledger
             </Link>
           </Button>
-          {/* Milestone 3 · Increment 7 — Condition Report operator link.
-              Same operator-only surface as Ledger; explicitly NOT on
-              /showroom. */}
           <Button
             asChild
             variant="ghost"
             size="sm"
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <Link
-              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/condition-report`}
-            >
+            <Link to={`/dealer-ai-inventory/${stock}/condition-report`}>
               <ClipboardCheck className="h-3.5 w-3.5" />
               Condition Report
             </Link>
           </Button>
-          {/* Milestone 4 · Increment 7 — Recon operator link.
-              Same operator-only surface pattern; explicitly NOT on
-              /showroom. Gated server-side by
-              IsReconManagerSalesManagerOrOwnerAtActiveDealership. */}
           <Button
             asChild
             variant="ghost"
             size="sm"
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <Link
-              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/recon`}
-            >
+            <Link to={`/dealer-ai-inventory/${stock}/recon`}>
               <Wrench className="h-3.5 w-3.5" />
               Recon
             </Link>
           </Button>
-          {/* TASK_doors-and-matrix-refresh Part B — Photos, Listing,
-              Sale doors. All three pages already exist, are routed,
-              and are tested; they simply had no link on the vehicle
-              detail row. Backend enforces role gating on each. */}
           <Button
             asChild
             variant="ghost"
             size="sm"
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <Link
-              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/photos`}
-            >
+            <Link to={`/dealer-ai-inventory/${stock}/photos`}>
               <Camera className="h-3.5 w-3.5" />
               Photos
             </Link>
@@ -267,9 +357,7 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             size="sm"
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <Link
-              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/listing`}
-            >
+            <Link to={`/dealer-ai-inventory/${stock}/listing`}>
               <FileText className="h-3.5 w-3.5" />
               Listing
             </Link>
@@ -280,25 +368,23 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             size="sm"
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <Link
-              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/sale`}
-            >
+            <Link to={`/dealer-ai-inventory/${stock}/sale`}>
               <DollarSign className="h-3.5 w-3.5" />
               Sale
             </Link>
           </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Link to={`/dealer-ai-inventory/${stock}/lifecycle`}>
+              <ClipboardList className="h-3.5 w-3.5" />
+              Lifecycle
+            </Link>
+          </Button>
         </div>
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <a href={vehicle.vdp_url} target="_blank" rel="noreferrer">
-            <ExternalLink className="h-3.5 w-3.5" />
-            View on dealer site
-          </a>
-        </Button>
       </CardFooter>
     </Card>
   );

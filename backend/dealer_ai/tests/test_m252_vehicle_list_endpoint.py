@@ -14,7 +14,10 @@ Coverage:
 - Projection shape (id, stock_number, year/make/model/trim,
   condition, price, image_url, is_available, display_name).
 - Optional filters (search, condition, is_available).
-- 100-row cap.
+- Pagination (limit/offset, honest count, next/previous URLs) — the
+  pre-2026-09-01 shape returned ``count: len(rows)`` under a silent
+  100-row cap, which lied the moment the dataset crossed 100.
+  Superseded by TASK_vehicle_list_caps_and_miscounts.
 - Ordering matches Vehicle.Meta (`-year, model`).
 """
 
@@ -220,13 +223,69 @@ class AdminVehicleListShapeTests(TestCase):
         stocks = [r["stock_number"] for r in response.json()["results"]]
         self.assertIn("ANY-1", stocks)
 
-    def test_result_cap_at_100(self) -> None:
-        # Create 105 rows; endpoint caps at 100.
-        for i in range(105):
+    def test_default_page_size_is_100_but_count_is_honest(self) -> None:
+        """TASK_vehicle_list_caps_and_miscounts (2026-09-01) — the
+        previous shape truncated at 100 and reported ``count: 100``
+        regardless of true total. The default page size stays 100
+        for wire-compat, but ``count`` now reports the real total
+        and ``has_more`` / ``next`` name the truncation explicitly.
+        """
+        for i in range(150):
             _make_vehicle(self.dealership, stock=f"CAP-{i:03d}")
         body = self.client.get(self.url).json()
         self.assertEqual(len(body["results"]), 100)
-        self.assertEqual(body["count"], 100)
+        self.assertEqual(
+            body["count"],
+            150,
+            "count must reflect the true total, not the page length",
+        )
+        self.assertTrue(body["has_more"])
+        self.assertIsNotNone(body["next"])
+        self.assertIsNone(body["previous"])
+        self.assertEqual(body["limit"], 100)
+        self.assertEqual(body["offset"], 0)
+
+    def test_limit_and_offset_paginate(self) -> None:
+        for i in range(15):
+            _make_vehicle(self.dealership, stock=f"PG-{i:03d}")
+        page1 = self.client.get(self.url, {"limit": 5, "offset": 0}).json()
+        page2 = self.client.get(self.url, {"limit": 5, "offset": 5}).json()
+        page3 = self.client.get(self.url, {"limit": 5, "offset": 10}).json()
+        self.assertEqual(page1["count"], 15)
+        self.assertEqual(page2["count"], 15)
+        self.assertEqual(page3["count"], 15)
+        self.assertEqual(len(page1["results"]), 5)
+        self.assertEqual(len(page2["results"]), 5)
+        self.assertEqual(len(page3["results"]), 5)
+        self.assertTrue(page1["has_more"])
+        self.assertTrue(page2["has_more"])
+        self.assertFalse(page3["has_more"])
+        self.assertIsNone(page1["previous"])
+        self.assertIsNotNone(page2["previous"])
+        self.assertIsNotNone(page3["previous"])
+        # Pages must not overlap and must cover the full set.
+        seen = (
+            [r["stock_number"] for r in page1["results"]]
+            + [r["stock_number"] for r in page2["results"]]
+            + [r["stock_number"] for r in page3["results"]]
+        )
+        self.assertEqual(len(seen), 15)
+        self.assertEqual(len(set(seen)), 15)
+
+    def test_limit_is_capped_and_garbage_clamped(self) -> None:
+        for i in range(5):
+            _make_vehicle(self.dealership, stock=f"CLAMP-{i:03d}")
+        # Over-max clamps to default (not to max — deliberate: a caller
+        # asking for 5,000 rows almost certainly meant a bug, not a
+        # 200-row page. Silently clamping to default is the safer read.)
+        big = self.client.get(self.url, {"limit": 9999}).json()
+        self.assertEqual(big["limit"], 100)
+        # Non-numeric garbage.
+        junk = self.client.get(self.url, {"limit": "yes-please"}).json()
+        self.assertEqual(junk["limit"], 100)
+        # Negative offset clamps to 0.
+        neg = self.client.get(self.url, {"offset": -50}).json()
+        self.assertEqual(neg["offset"], 0)
 
     def test_ordering_matches_meta(self) -> None:
         # Vehicle.Meta orders `-year, model` — newest year first, then

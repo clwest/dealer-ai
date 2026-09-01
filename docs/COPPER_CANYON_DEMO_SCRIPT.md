@@ -114,10 +114,13 @@ the model's answer.
 
 ## 2. Recon authorization gate — the pitch screen (30s)
 
-**Click:** `Inventory` in the sidebar → paste the URL bar with
-`http://127.0.0.1:5173/dealer-ai-inventory/RS-07/recon` or scroll the
-inventory grid until you find RS-07 (2016 Nissan Rogue) and click its
-**Recon** tile link.
+**Click:** `Inventory` in the sidebar, then paste
+`http://127.0.0.1:5173/dealer-ai-inventory/RS-07/recon` in the URL
+bar. Scrolling the inventory grid is not an option until the page is
+wired to the backend — the current grid shows a static twelve-car
+sample (`CC-T-01`, `CC-S-01`, ...) whose stock numbers do not exist
+in the seed, so clicking any of them 404s. Filed as
+`TASK_losing-deals-and-the-inventory-page.md` item 3.
 
 *(Every route the sidebar covers is reachable by a click. The
 per-vehicle Recon page is reached via the vehicle row's Recon tile;

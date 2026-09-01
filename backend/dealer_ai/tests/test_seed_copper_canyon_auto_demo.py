@@ -55,6 +55,8 @@ from django.test import TestCase
 
 from dealer_ai.management.commands.seed_copper_canyon_auto_demo import (
     STORE_SLUG,
+    _DELIBERATE_LOSER_STOCKS,
+    _MAX_LOSER_LOSS,
 )
 from dealer_ai.models import (
     VEHICLE_STAGE_CHOICES,
@@ -112,13 +114,34 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
         )
 
     def test_every_sale_has_positive_gross_realized(self) -> None:
-        """Assertion 1 — positive gross across every sale.
+        """Assertion 1 — signed gross with a bounded loser set.
 
-        Guards against a regression that removes the seed's
-        :func:`_normalize_sale_gross` workaround for the
-        archetype's acquisition-basis double-count before the
-        underlying product-code fix lands (see
-        ``TASK_archetype_acquisition_double_count.md``).
+        Reshaped by TASK_losing-deals-and-the-inventory-page
+        (2026-09-01) — the pre-2026-09-01 shape asserted that
+        *every* sale had positive gross, which caught the
+        archetype's acquisition-basis double-count but ruled out
+        deliberate losers a real dealer needs on the demo. This
+        version does both jobs:
+
+        - Every stock in :data:`_DELIBERATE_LOSER_STOCKS` has
+          negative gross. A loser that quietly flipped positive is
+          as much a bug as the reverse.
+        - Every other sale has positive gross. That is the archetype
+          double-count guard: if the workaround
+          (:func:`_normalize_sale_gross`) regresses, every non-loser
+          would flip negative and this fails loudly.
+        - The aggregate is positive — the store as a whole makes
+          money. A demo of a lot losing money is a different demo.
+        - No single loss is deeper than :data:`_MAX_LOSER_LOSS`.
+          The ceiling is what separates a deliberate wholesale
+          disposal from the archetype double-count reappearing —
+          the double-count produces losses in the multi-thousand
+          range (roughly the whole purchase price), which a
+          plain "some sales negative" check would miss. Removing
+          the ceiling is how the original defect would sneak back.
+        - :attr:`Sale.gross_realized` equals a fresh recompute via
+          :func:`services.sale.computation.gross_realized`, so the
+          denormalized column can't drift from the truth.
         """
         dealership = _demo_dealership()
         sales = list(
@@ -130,14 +153,31 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
             len(sales), 5,
             "seed should produce at least the 5 archetype sales",
         )
+        observed_losers: dict[str, Decimal] = {}
+        aggregate = Decimal("0")
         for sale in sales:
-            self.assertGreater(
-                sale.gross_realized,
-                Decimal("0"),
-                f"Sale pk={sale.pk} (stock={sale.vehicle.stock_number}) "
-                f"has non-positive gross_realized={sale.gross_realized}; "
-                "the archetype-double-count workaround has drifted.",
-            )
+            stock = sale.vehicle.stock_number
+            aggregate += sale.gross_realized
+            if stock in _DELIBERATE_LOSER_STOCKS:
+                self.assertLess(
+                    sale.gross_realized,
+                    Decimal("0"),
+                    f"Sale pk={sale.pk} (stock={stock}) is a declared "
+                    f"loser but gross_realized="
+                    f"{sale.gross_realized} — the loser injection in "
+                    "_extend_sales_history has drifted.",
+                )
+                observed_losers[stock] = sale.gross_realized
+            else:
+                self.assertGreater(
+                    sale.gross_realized,
+                    Decimal("0"),
+                    f"Sale pk={sale.pk} (stock={stock}) has non-"
+                    f"positive gross_realized={sale.gross_realized} "
+                    f"but is NOT a declared loser. Either it belongs "
+                    f"in _DELIBERATE_LOSERS or the archetype-double-"
+                    "count workaround has regressed.",
+                )
             recomputed = gross_realized(sale)
             self.assertEqual(
                 sale.gross_realized,
@@ -146,6 +186,36 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
                 f"{sale.gross_realized} disagrees with fresh recompute="
                 f"{recomputed}; the denormalized column is stale.",
             )
+        # Every declared loser must appear as a sale.
+        missing_losers = _DELIBERATE_LOSER_STOCKS - observed_losers.keys()
+        self.assertEqual(
+            missing_losers,
+            set(),
+            f"declared losers not booked as sales: {sorted(missing_losers)}. "
+            "The extension range in _extend_sales_history no longer "
+            "covers these stocks; move them or fix the range.",
+        )
+        # Aggregate positive — store makes money overall.
+        self.assertGreater(
+            aggregate,
+            Decimal("0"),
+            f"aggregate gross across {len(sales)} sales = {aggregate}. "
+            "The demo store must be profitable at the aggregate; a "
+            "negative total is a different demo, not this one.",
+        )
+        # Bounded loss — the guard against the archetype-double-count
+        # bug reappearing as a "deliberate loser."
+        deepest_loss = min(observed_losers.values())
+        self.assertGreaterEqual(
+            deepest_loss,
+            -_MAX_LOSER_LOSS,
+            f"deepest single loss = {deepest_loss}, exceeds the "
+            f"_MAX_LOSER_LOSS ceiling of -{_MAX_LOSER_LOSS}. A loss "
+            "that deep is almost certainly the archetype's "
+            "acquisition-basis double-count reappearing, not a "
+            "business decision — see TASK_archetype_acquisition_"
+            "double_count.md.",
+        )
 
     def test_at_least_two_work_orders_await_authorization(self) -> None:
         """Assertion 2 — draft WOs with estimated_cost and no approved_at.

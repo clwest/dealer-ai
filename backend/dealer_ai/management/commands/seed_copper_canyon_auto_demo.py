@@ -64,6 +64,8 @@ from dealer_ai.models import (
     BE_BACK_REASON_TEST_DRIVE,
     BHPH_PAYMENT_METHOD_CASH,
     CONDITION_CATEGORY_MECHANICAL,
+    CONDITION_REPORT_STATUS_COMPLETE,
+    CONDITION_SEVERITY_REQUIRED,
     CONTRACT_TYPE_RISC,
     CREDIT_APP_FORMAT_TABLET,
     DEMO_ARCHETYPE_RETAIL_SUBPRIME,
@@ -95,6 +97,7 @@ from dealer_ai.models import (
     ChatMessage,
     ChatSession,
     ConditionFinding,
+    ConditionReport,
     CreditApplication,
     CustomerLead,
     Dealership,
@@ -152,6 +155,7 @@ from dealer_ai.services.recon import (
     attach_findings,
     complete_work_order,
     create_work_order,
+    start_work_order,
 )
 from dealer_ai.services.repossessions.repossession import record_repossession
 from dealer_ai.services.test_drives.test_drive import record_test_drive
@@ -283,6 +287,14 @@ class Command(BaseCommand):
             # portfolio created after the first backdate ran. Idempotent
             # (skips events already dated on-or-before the target).
             _backdate_frontline_events_for_sales(dealership, self.stdout)
+            # Aged-loser story: any sold vehicle tagged
+            # ``_LOSER_REASON_AGED`` gets its earliest frontline event
+            # pushed back to ~105 days ago, so the lifecycle log tells
+            # the "sat past 100 days before we cut it" story that the
+            # negative gross exists to price. Must run AFTER
+            # _backdate_frontline_events_for_sales — that helper
+            # overwrites the event to a shorter window (20-44 days).
+            _backdate_aged_loser_frontline_events(dealership, self.stdout)
             _backdate_frontline_stage_aging(dealership, self.stdout)
             _backdate_hold_reserved_for_sales(dealership, self.stdout)
             _backdate_off_market_for_deliveries(dealership, self.stdout)
@@ -2316,6 +2328,333 @@ _EXTENDED_SALES_CASH = 8   # 20 %
 _EXTENDED_SALES_RETAIL = 17  # 45 %
 _EXTENDED_SALES_BHPH = 13   # 35 %
 
+
+# ---------------------------------------------------------------------------
+# Deliberate losers — TASK_losing-deals-and-the-inventory-page (2026-09-01).
+#
+# Not every retail sale makes money. A dealer with a truthful demo needs
+# a few losing sales in the trailing month so the analytics chain
+# (aggregate gross, gross-profit trend crossing zero, mean_gross_pct
+# rendering negative, trial balance still balancing) has been exercised
+# with signed values — not just the archetype's five plus-only sales.
+#
+# Six of the forty-five sales lose money — roughly one in seven, which
+# matches the ratio Chris named on 2026-09-01. Each loser has a
+# recognisable business reason a dealer would name looking at the row:
+# an aged unit that finally got cut, a recon overrun the shop opened
+# up, a trade overallowance to close a deal, two wholesale disposals
+# to auction, and a small last-mile price concession the sales
+# manager approved.
+#
+# The stocks (CC-041, CC-047, CC-053, CC-055, CC-058, CC-060) sit
+# inside the CC-023..CC-060 range that :func:`_extend_sales_history`
+# actually sells (measured 2026-09-01: the archetype's 20 vehicles
+# leave 22 of the imported CC-#### stock in prep after
+# :func:`_expand_stage_distribution` runs, so the extension pulls
+# from CC-023 onward).
+#
+# The single-loss ceiling :data:`_MAX_LOSER_LOSS` is the read that
+# separates a deliberate business decision from a ledger bug. A
+# $12,000 loss on a $9,000 car is the archetype's acquisition-basis
+# double-count (see ``TASK_archetype_acquisition_double_count.md``)
+# reappearing, not a wholesale write-down. Any test that only asserts
+# "some sales are negative" cannot tell the two apart; the ceiling
+# is what the reshaped assertion checks against.
+
+_MAX_LOSER_LOSS: Decimal = Decimal("2500.00")
+"""Cap on any single deliberate loser's negative gross.
+
+A real "cut and move it" loss on a $10-15k used unit runs a few
+hundred to a couple thousand dollars. Anything below -$2,500 is
+almost certainly the archetype's acquisition-basis double-count
+resurfacing, not a business decision. The ceiling is what
+:mod:`test_seed_copper_canyon_auto_demo` uses to distinguish the
+two — see the reshaped positive-gross assertion.
+"""
+
+_LOSER_REASON_AGED = "aged_out"
+_LOSER_REASON_RECON_OVERRUN = "recon_overrun"
+_LOSER_REASON_TRADE_OVERALLOWANCE = "trade_overallowance"
+_LOSER_REASON_WHOLESALE_DISPOSAL = "wholesale_disposal"
+_LOSER_REASON_PRICE_CONCESSION = "price_concession"
+
+
+_DELIBERATE_LOSERS: tuple[dict, ...] = (
+    # 1. The aged unit that finally moved. Its earliest frontline
+    #    event is backdated to ~105 days by
+    #    :func:`_backdate_aged_loser_frontline_events` so the vehicle
+    #    lifecycle log reads "sat past 100 days" — the aging story the
+    #    loss is the price of ignoring. Financed as BHPH: an aged unit
+    #    finally moves for a subprime buyer with an in-house note.
+    {
+        "stock": "CC-060",
+        "loss": Decimal("2200.00"),
+        "reason": _LOSER_REASON_AGED,
+        "delivery_notes": (
+            "Sat 105 days at frontline before we cut the price to move "
+            "it. Aging board had this one flagged for weeks; the loss "
+            "is what ignoring it cost."
+        ),
+    },
+    # 2. Recon overrun. Authorized $600 for a transmission flush,
+    #    actual $1,900 once the shop opened the pan up. A completed
+    #    WorkOrder with actual_cost above authorized shows on the
+    #    vehicle's recon page; the sale row shows the loss the
+    #    overrun caused. Retail — falls in the extension's retail
+    #    finance-type band (offsets 8-24 → CC-031..CC-047).
+    {
+        "stock": "CC-041",
+        "loss": Decimal("1800.00"),
+        "reason": _LOSER_REASON_RECON_OVERRUN,
+        "recon_authorized": Decimal("600.00"),
+        "recon_actual": Decimal("1900.00"),
+        "delivery_notes": (
+            "Recon overrun — authorized $600 for the transmission "
+            "flush, shop found the pan cracked. Actual came in at "
+            "$1,900. Owner ate the delta rather than back out."
+        ),
+    },
+    # 3. Trade overallowance. Front-end money we gave away to close
+    #    the deal. Retail-financed — trades only make sense against a
+    #    retail sale.
+    {
+        "stock": "CC-047",
+        "loss": Decimal("1500.00"),
+        "reason": _LOSER_REASON_TRADE_OVERALLOWANCE,
+        "delivery_notes": (
+            "Overallowance on the customer's trade to lock the deal. "
+            "Book value ran $1,500 under what we credited."
+        ),
+    },
+    # 4. Wholesale disposal (to auction). Terminal stage is
+    #    wholesale_out — no retail delivery. Overridden to CASH
+    #    finance-type because auction pays cash/wire; no lender.
+    {
+        "stock": "CC-053",
+        "loss": Decimal("1200.00"),
+        "reason": _LOSER_REASON_WHOLESALE_DISPOSAL,
+        "delivery_notes": None,
+    },
+    # 5. Second wholesale disposal — a slower-turning unit that never
+    #    generated a test drive. Same wholesale_out treatment.
+    {
+        "stock": "CC-058",
+        "loss": Decimal("900.00"),
+        "reason": _LOSER_REASON_WHOLESALE_DISPOSAL,
+        "delivery_notes": None,
+    },
+    # 6. Price concession — the sales manager approved a $500 hair-
+    #    cut on a car already priced thin. Small loss, common shape.
+    #    CC-055 lands in the BHPH band; a concession-then-BHPH is a
+    #    realistic close-a-subprime-deal move.
+    {
+        "stock": "CC-055",
+        "loss": Decimal("500.00"),
+        "reason": _LOSER_REASON_PRICE_CONCESSION,
+        "delivery_notes": (
+            "Sales manager approved a $500 concession at contract "
+            "signing to keep the deal from walking. Front gross was "
+            "already thin; concession pushed it below cost."
+        ),
+    },
+)
+
+_DELIBERATE_LOSER_STOCKS: frozenset[str] = frozenset(
+    entry["stock"] for entry in _DELIBERATE_LOSERS
+)
+_DELIBERATE_LOSER_BY_STOCK: dict[str, dict] = {
+    entry["stock"]: entry for entry in _DELIBERATE_LOSERS
+}
+
+
+def _seed_recon_overrun_wo(
+    vehicle: Vehicle,
+    *,
+    dealership: Dealership,
+    owner,
+    authorized_cost: Decimal,
+    actual_cost: Decimal,
+) -> None:
+    """Walk one WorkOrder for ``vehicle`` from draft to completed with
+    ``actual_cost`` above ``authorized_cost``.
+
+    Called from :func:`_extend_sales_history` for loser rows whose
+    reason is ``recon_overrun`` — the completion posts a real
+    :class:`VehicleCost` for the actual amount, which flows into
+    :func:`compute_totals`, which drives the negative gross on the
+    subsequent sale. The recon screen reads the ``actual`` /
+    ``authorized`` split as the visible story.
+
+    Creates a minimal :class:`ConditionReport` + :class:`ConditionFinding`
+    on the vehicle first — ``approve_work_order`` refuses WOs without
+    findings (see :mod:`dealer_ai.services.recon` docstring).
+    """
+    now = timezone.now()
+    inspected_at = now - dt.timedelta(days=14)
+    report = ConditionReport.objects.create(
+        vehicle=vehicle,
+        dealership=dealership,
+        inspector_name="Miguel Ortega",
+        inspected_at=inspected_at,
+        mileage_at_inspection=vehicle.mileage or 90_000,
+        status=CONDITION_REPORT_STATUS_COMPLETE,
+        completed_at=inspected_at + dt.timedelta(hours=2),
+        notes=(
+            "Copper Canyon demo seed — recon inspection for "
+            f"{vehicle.stock_number}."
+        ),
+    )
+    finding = ConditionFinding.objects.create(
+        report=report,
+        dealership=dealership,
+        category=CONDITION_CATEGORY_MECHANICAL,
+        severity=CONDITION_SEVERITY_REQUIRED,
+        description=(
+            "Transmission flush + pan reseal. Estimate written against "
+            "the flush only; if the pan is cracked when shop opens it, "
+            "add the reseal."
+        ),
+    )
+    vendor = Vendor.objects.filter(
+        dealership=dealership, is_active=True
+    ).order_by("pk").first()
+    if vendor is None:  # pragma: no cover — archetype seeds a vendor
+        return
+    wo = create_work_order(
+        vehicle,
+        dealership=dealership,
+        category=CONDITION_CATEGORY_MECHANICAL,
+        venue="outsourced",
+        vendor=vendor,
+        estimated_cost=authorized_cost,
+        notes=(
+            "Transmission service. Authorized against the flush estimate; "
+            "actual came in over once the shop opened the pan."
+        ),
+    )
+    attach_findings(wo, dealership=dealership, finding_ids=[finding.pk])
+    approve_work_order(
+        wo,
+        dealership=dealership,
+        approved_by=owner,
+        authorized_cost=authorized_cost,
+    )
+    start_work_order(wo, dealership=dealership, started_by=owner)
+    complete_work_order(
+        wo,
+        dealership=dealership,
+        completed_by=owner,
+        actual_cost=actual_cost,
+        actual_completion_date=(now - dt.timedelta(days=2)).date(),
+    )
+
+
+def _transition_to_wholesale_out(
+    vehicle: Vehicle,
+    *,
+    dealership: Dealership,
+    entered_at: dt.datetime,
+) -> None:
+    """Move ``vehicle`` from its current stage to ``wholesale_out``
+    directly, mirroring the model-direct pattern
+    :func:`_expand_stage_distribution` uses.
+
+    ``advance_stage`` refuses ``hold_reserved → wholesale_out`` — that
+    is a seed-only side path — so we rewrite :class:`VehicleStage` +
+    add a :class:`VehicleStageEvent` in one atomic slice. Called for
+    losers whose reason is ``wholesale_disposal``, after
+    :func:`record_sale` has stamped the vehicle at ``hold_reserved``.
+
+    ``entered_at`` should be the sale date (or nearby) so
+    :func:`_seed_stage_aging_snapshots` reads real days-since-sale
+    on the wholesale_out column. Stamping now flattens the aging
+    board for that stage — every historical snapshot would then see
+    the newly-transitioned unit as "0 days" and drag the p50 down.
+    """
+    stage_row = VehicleStage.objects.filter(
+        dealership=dealership, vehicle=vehicle
+    ).first()
+    if stage_row is None:  # pragma: no cover — record_sale creates one
+        return
+    previous = stage_row.current_stage
+    # Backdate any prior event that would post-date the new
+    # entered_at, so the vehicle's stage-event log stays
+    # chronological (same invariant _distribute_lifecycle_stages
+    # protects). record_sale stamps a ``hold_reserved`` event at
+    # ``now``, which is later than the sale-date entered_at we are
+    # about to write.
+    prior_cutoff = entered_at - dt.timedelta(minutes=30)
+    VehicleStageEvent.objects.filter(
+        vehicle=vehicle,
+        entered_at__gt=prior_cutoff,
+    ).exclude(to_stage=VEHICLE_STAGE_WHOLESALE_OUT).update(
+        entered_at=prior_cutoff,
+    )
+    stage_row.current_stage = VEHICLE_STAGE_WHOLESALE_OUT
+    stage_row.entered_at = entered_at
+    stage_row.trigger = VEHICLE_STAGE_TRIGGER_MANUAL
+    stage_row.save(update_fields=["current_stage", "entered_at", "trigger"])
+    VehicleStageEvent.objects.create(
+        dealership=dealership,
+        vehicle=vehicle,
+        from_stage=previous,
+        to_stage=VEHICLE_STAGE_WHOLESALE_OUT,
+        entered_at=entered_at,
+        trigger=VEHICLE_STAGE_TRIGGER_MANUAL,
+        notes=(
+            "Copper Canyon demo seed — wholesale disposal (cut losses "
+            "at auction rather than retail)."
+        ),
+    )
+
+
+def _backdate_aged_loser_frontline_events(
+    dealership: Dealership, stdout
+) -> None:
+    """For any deliberate loser tagged ``aged_out``, move the earliest
+    ``to_stage=frontline`` VehicleStageEvent back to ~105 days ago.
+
+    :func:`_backdate_frontline_events_for_sales` runs earlier in
+    ``handle()`` and sets a 20–44 day spread; this replaces that value
+    for the aged-loser stocks only, so the vehicle-lifecycle log reads
+    as "sat past 100 days at frontline before we cut it." Idempotent.
+    """
+    now = timezone.now()
+    target_days_ago = 105
+    target = now - dt.timedelta(days=target_days_ago)
+    updated = 0
+    for entry in _DELIBERATE_LOSERS:
+        if entry["reason"] != _LOSER_REASON_AGED:
+            continue
+        vehicle = Vehicle.objects.filter(
+            dealership=dealership, stock_number=entry["stock"]
+        ).first()
+        if vehicle is None:
+            continue
+        earliest = (
+            VehicleStageEvent.objects.filter(
+                vehicle=vehicle, to_stage=VEHICLE_STAGE_FRONTLINE
+            )
+            .order_by("entered_at")
+            .first()
+        )
+        if earliest is None or earliest.entered_at <= target:
+            continue
+        earliest.entered_at = target
+        earliest.save(update_fields=["entered_at"])
+        # Any earlier bootstrap event must move further back too so
+        # the log stays chronological.
+        VehicleStageEvent.objects.filter(
+            vehicle=vehicle,
+            trigger__in=("import", "bootstrap"),
+            entered_at__gt=target,
+        ).update(entered_at=target - dt.timedelta(hours=1))
+        updated += 1
+    stdout.write(
+        f"backdated {updated} aged-loser frontline event(s) to ~"
+        f"{target_days_ago} days ago."
+    )
+
 # Buyer names for the 38 extended-sales cohort. Yuma-shaped —
 # consistent with the persona rename map. Rotated by index; longer
 # than 38 in case future increments bump the sale count.
@@ -2382,6 +2721,7 @@ def _extend_sales_history(
     bhph_payments_recorded = 0
     deliveries_recorded = 0
 
+    losers_booked: list[dict] = []
     for offset, vehicle in enumerate(candidates):
         # Finance-type deal — first 8 cash, next 17 retail, last 13
         # BHPH. Deterministic assignment across re-runs.
@@ -2395,16 +2735,61 @@ def _extend_sales_history(
             finance_type = SALE_FINANCE_TYPE_BHPH
             lender_name = ""
 
+        # Deliberate-loser override — the six sales that lose money in
+        # the trailing month. See :data:`_DELIBERATE_LOSERS`. Wholesale
+        # disposals get forced to cash (auction pays cash/wire, no
+        # lender); everything else keeps the pace-driven finance mix.
+        loser = _DELIBERATE_LOSER_BY_STOCK.get(vehicle.stock_number)
+        if loser is not None:
+            if loser["reason"] == _LOSER_REASON_WHOLESALE_DISPOSAL:
+                finance_type = SALE_FINANCE_TYPE_CASH
+                lender_name = ""
+
         # Spread sale_date across the last 30 days so the trailing-
         # month analytics windows read a real distribution. Day 0 =
         # yesterday, day 29 = 30 days ago.
         days_since_sale = 1 + (offset * 30 // _EXTENDED_SALES_TOTAL)
         sale_date = today - dt.timedelta(days=days_since_sale)
 
-        # Sold price = full sticker (a realistic dealer negotiates,
-        # but for the demo the sticker read reads as the sale price;
-        # the archetype does the same). Sale-book JE + stage
-        # transition + is_available flip all fire from record_sale.
+        # Sold price. Winners sell at sticker (the archetype does the
+        # same); losers price at a level that produces exactly the
+        # loss the loser dict names. Purchase price = 60 % of sticker
+        # per :func:`_extend_lot_to_target_size`, so:
+        #   winner:            sold_price = sticker            → +40 %
+        #   loser (non-recon): sold_price = purchase - loss    → -loss
+        #   loser (recon):     sold_price = purchase           → -loss
+        #                       (loss comes from actual_cost > 0)
+        # Recon-overrun losers also complete a WorkOrder with
+        # actual_cost = loss BEFORE record_sale, so total_investment
+        # picks up the overrun via :func:`compute_totals`.
+        purchase_price = (vehicle.price * Decimal("0.6")).quantize(
+            Decimal("1.00")
+        )
+        if loser is None:
+            sold_price = vehicle.price
+        elif loser["reason"] == _LOSER_REASON_RECON_OVERRUN:
+            _seed_recon_overrun_wo(
+                vehicle,
+                dealership=dealership,
+                owner=owner,
+                authorized_cost=loser["recon_authorized"],
+                actual_cost=loser["recon_actual"],
+            )
+            # WO completion posts a VehicleCost for actual_cost, so
+            # total_investment = purchase + actual. To land gross at
+            # exactly -loss:
+            #     sold_price = purchase + actual - loss
+            # (Not purchase + authorized — that formulation left
+            # gross = -(actual - authorized), which is only the
+            # overrun delta, not the intended loss.)
+            sold_price = (
+                purchase_price + loser["recon_actual"] - loser["loss"]
+            ).quantize(Decimal("1.00"))
+        else:
+            sold_price = (purchase_price - loser["loss"]).quantize(
+                Decimal("1.00")
+            )
+
         # Buyer as a walk-in lead so the deal has customer trail.
         buyer_name = _EXTENDED_BUYER_NAMES[offset % len(_EXTENDED_BUYER_NAMES)]
         buyer = CustomerLead.objects.create(
@@ -2420,13 +2805,22 @@ def _extend_sales_history(
             vehicle,
             dealership=dealership,
             sale_date=sale_date,
-            sold_price=vehicle.price,
+            sold_price=sold_price,
             finance_type=finance_type,
             buyer=buyer,
             lender_name=lender_name,
             posted_by_user=owner,
         )
         counts[finance_type] += 1
+        if loser is not None:
+            losers_booked.append(
+                {
+                    "stock": vehicle.stock_number,
+                    "reason": loser["reason"],
+                    "target_loss": loser["loss"],
+                    "sale_pk": sale.pk,
+                }
+            )
 
         # BHPH note origination — the note books at sale time and
         # runs weekly for two years, mirroring the archetype
@@ -2468,12 +2862,42 @@ def _extend_sales_history(
                 )
                 bhph_payments_recorded += 1
 
-        # Delivery — every extension sale is delivered. Delivery
-        # date is 1-4 days after sale, capped at yesterday.
+        # Wholesale disposal — no retail delivery. The vehicle moves
+        # directly from hold_reserved → wholesale_out. Cutting losses
+        # at auction is the classic "we ate this one" shape a dealer
+        # will recognise on the aging board. Stamp the transition at
+        # the sale date so the wholesale_out aging column doesn't
+        # collapse to zero when snapshots backfill.
+        if (
+            loser is not None
+            and loser["reason"] == _LOSER_REASON_WHOLESALE_DISPOSAL
+        ):
+            wholesale_entered_at = dt.datetime.combine(
+                sale_date, dt.time(15, 0), tzinfo=dt.timezone.utc
+            )
+            _transition_to_wholesale_out(
+                vehicle,
+                dealership=dealership,
+                entered_at=wholesale_entered_at,
+            )
+            continue
+
+        # Delivery — every non-wholesaled extension sale is delivered.
+        # Delivery date is 1-4 days after sale, capped at yesterday.
+        # Loser delivery notes carry the loss narrative (aged /
+        # recon overrun / trade overallowance / price concession) so
+        # the sale row's negative gross has a matching story in the
+        # delivery record.
         delivery_lag_days = 1 + (offset % 4)
         delivery_date = sale_date + dt.timedelta(days=delivery_lag_days)
         if delivery_date > yesterday:
             delivery_date = yesterday
+        default_notes = (
+            "Copper Canyon demo seed — extended sales history delivery."
+        )
+        delivery_notes = (
+            (loser or {}).get("delivery_notes") or default_notes
+        )
         # Only record the delivery if the vehicle is currently at
         # ``hold_reserved`` (the state ``record_sale`` puts it in).
         # If a prior partial run already delivered it, skip.
@@ -2488,26 +2912,29 @@ def _extend_sales_history(
                 dealership=dealership,
                 delivery_date=delivery_date,
                 temp_tag_number=f"TT-{vehicle.stock_number}",
-                notes=(
-                    "Copper Canyon demo seed — extended sales history "
-                    "delivery."
-                ),
+                notes=delivery_notes,
             )
             deliveries_recorded += 1
 
+    loser_summary = ", ".join(
+        f"{row['stock']}={row['reason']}(-${row['target_loss']})"
+        for row in losers_booked
+    ) or "none"
     stdout.write(
         f"extended sales history: booked "
         f"cash={counts['cash']}, retail={counts['retail']}, "
         f"bhph={counts['bhph']} sale(s); "
         f"created {bhph_notes_created} BHPH note(s) with "
         f"{bhph_payments_recorded} payment(s); "
-        f"recorded {deliveries_recorded} deliveries."
+        f"recorded {deliveries_recorded} deliveries; "
+        f"deliberate losers: {loser_summary}."
     )
     return {
         "sales_by_type": counts,
         "bhph_notes": bhph_notes_created,
         "bhph_payments": bhph_payments_recorded,
         "deliveries": deliveries_recorded,
+        "losers_booked": losers_booked,
     }
 
 
