@@ -407,7 +407,15 @@ urlpatterns = [
         views_listings.admin_listing_unpublish,
         name="admin-listing-unpublish",
     ),
-    # Public showroom endpoint (AllowAny — retail gate is the auth).
+    # Public showroom endpoints (AllowAny — retail gate is the auth).
+    # List added SESSION_226 so PublicShowroomPage / DealershipHomePage /
+    # Hero can render live inventory instead of the deleted
+    # sampleInventory.ts snapshot.
+    path(
+        "showroom/vehicles/",
+        views_showroom.showroom_vehicle_list,
+        name="showroom-vehicle-list",
+    ),
     path(
         "showroom/vehicles/<str:stock_number>/",
         views_showroom.showroom_vehicle_detail,

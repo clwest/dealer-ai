@@ -19,6 +19,7 @@ Coverage of every endpoint in ``views_recon.py``:
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from decimal import Decimal
 
@@ -428,6 +429,60 @@ class ReconDashboardFlow(TestCase):
             self.client, "admin-recon-dashboard", args=("OTHER-DASH",)
         )
         self.assertEqual(res.status_code, 404)
+
+    def test_dashboard_open_work_orders_sort_before_terminal(self):
+        """SESSION_226 (TASK_walkable-demo-and-servers-up 1c).
+
+        Recon page opens on the WO row a manager needs to act on:
+        open work (draft / approved / in_progress) ahead of terminal
+        work (completed / cancelled), then ``-created_at`` within
+        each group. Fix landed in ``views_recon.py::admin_recon_
+        dashboard`` on the queryset (annotated ``_status_priority``
+        + explicit ``order_by``), so API callers see the same truth
+        as the frontend.
+        """
+        older_completed = WorkOrder.objects.create(
+            dealership=self.dealership,
+            vehicle=self.vehicle,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            venue=WORK_ORDER_VENUE_IN_HOUSE,
+            status=WORK_ORDER_STATUS_COMPLETED,
+        )
+        newer_draft = WorkOrder.objects.create(
+            dealership=self.dealership,
+            vehicle=self.vehicle,
+            category=CONDITION_CATEGORY_MECHANICAL,
+            venue=WORK_ORDER_VENUE_IN_HOUSE,
+            status=WORK_ORDER_STATUS_DRAFT,
+            estimated_cost=Decimal("1450.00"),
+        )
+        # Force created_at so the draft is genuinely older than the
+        # completed WO — the old -created_at-only sort would have put
+        # the completed row first. Ordering must beat that.
+        older_created_at = timezone.now() - dt.timedelta(days=3)
+        newer_created_at = timezone.now() - dt.timedelta(days=1)
+        WorkOrder.objects.filter(pk=older_completed.pk).update(
+            created_at=newer_created_at  # completed WO gets the newer date
+        )
+        WorkOrder.objects.filter(pk=newer_draft.pk).update(
+            created_at=older_created_at  # draft WO gets the older date
+        )
+
+        res = _get(
+            self.client, "admin-recon-dashboard", args=("M46-DASH",)
+        )
+        self.assertEqual(res.status_code, 200)
+        wos = res.json()["work_orders"]
+        self.assertEqual(len(wos), 2)
+        self.assertEqual(
+            wos[0]["id"],
+            newer_draft.pk,
+            f"draft WO should sort ahead of completed WO even when "
+            f"completed is newer; got order: "
+            f"{[(w['id'], w['status']) for w in wos]}",
+        )
+        self.assertEqual(wos[0]["status"], WORK_ORDER_STATUS_DRAFT)
+        self.assertEqual(wos[1]["status"], WORK_ORDER_STATUS_COMPLETED)
 
 
 # ============================================================================

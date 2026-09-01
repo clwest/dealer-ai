@@ -54,19 +54,24 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from dealer_ai.management.commands.seed_copper_canyon_auto_demo import (
+    DEMO_OWNER_USERNAME,
     STORE_SLUG,
     _DELIBERATE_LOSER_STOCKS,
     _MAX_LOSER_LOSS,
     _MIN_LOSER_LOSS,
 )
 from dealer_ai.models import (
+    BHPH_AGING_BUCKET_CURRENT,
     VEHICLE_STAGE_CHOICES,
     VEHICLE_STAGE_FRONTLINE,
     VEHICLE_STAGE_HOLD_RESERVED,
     VEHICLE_STAGE_OFF_MARKET,
     WORK_ORDER_STATUS_DRAFT,
+    BhphNote,
+    CreditApplication,
     Dealership,
     Delivery,
+    Repossession,
     Sale,
     SlaBreachRecord,
     StageAgingSnapshot,
@@ -75,8 +80,11 @@ from dealer_ai.models import (
     VehicleStageEvent,
     WorkOrder,
 )
+from dealer_ai.services.demo_store.synthetic_names import SYNTHETIC_NAMES
 from dealer_ai.services.sale.computation import gross_realized
 from dealer_ai.services.tenancy import get_default_dealership
+
+from ._auth_helpers import authenticated_client
 
 
 def _run_seed() -> None:
@@ -531,6 +539,182 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
             "delivered off_market count does not match Delivery rows; "
             "one of the stage transitions ran without record_delivery.",
         )
+
+    # -------------------------------------------------------------------
+    # Post-2026-09-01 walkable-demo shape locks
+    # (TASK_walkable-demo-and-servers-up.md).
+    # -------------------------------------------------------------------
+
+    def test_fni_incoming_endpoint_has_no_synthetic_tester_names(self) -> None:
+        """Assertion 8 — the F&I Incoming screen never reads an
+        archetype tester name.
+
+        SESSION_226 fix: the persona-rename step in the seed used to
+        rename CustomerLead rows only; a CreditApplication seeded by
+        the archetype from :data:`SYNTHETIC_NAMES` carried its tester
+        name (e.g. "Umbria Rehearsalton") straight onto the F&I
+        Incoming screen. Rename map now also covers
+        ``CreditApplication.applicant_full_name``.
+
+        Test is at the SCREEN's endpoint (M32/M33/M35 read path,
+        ``GET /admin/credit-applications/list/?intake=true``), not at
+        the model, per TASK_walkable-demo-and-servers-up done-means:
+        "F&I incoming endpoint on a fresh seed contains no name from
+        SYNTHETIC_NAMES (grep of the JSON, count 0)".
+        """
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+
+        dealership = _demo_dealership()
+        User = get_user_model()
+        owner = User.objects.get(username=DEMO_OWNER_USERNAME)
+        client = authenticated_client(owner)
+
+        response = client.get(
+            reverse("dealer_ai:admin-credit-application-list") + "?intake=true"
+        )
+        self.assertEqual(response.status_code, 200)
+        applications = response.json().get("credit_applications", [])
+        self.assertGreater(
+            len(applications),
+            0,
+            "F&I Incoming endpoint returned zero applications on a "
+            "fresh seed; the archetype should originate at least one.",
+        )
+
+        # Sanity: also check the DB directly — the endpoint lists
+        # intake-only rows, so a CA that already has a Contract is
+        # filtered out. The rename must land regardless of intake state.
+        hits_in_db = list(
+            CreditApplication.objects.filter(
+                dealership=dealership,
+                applicant_full_name__in=list(SYNTHETIC_NAMES),
+            ).values_list("applicant_full_name", flat=True)
+        )
+        self.assertEqual(
+            hits_in_db,
+            [],
+            "CreditApplication rows still carry SYNTHETIC_NAMES: "
+            f"{hits_in_db!r}. Extend "
+            "_ARCHETYPE_LEAD_RENAMES or the CA-rename block in "
+            "_persona_rename_archetype_rows.",
+        )
+
+        endpoint_names = [
+            app["applicant_full_name"] for app in applications
+        ]
+        endpoint_hits = sorted(set(endpoint_names) & set(SYNTHETIC_NAMES))
+        self.assertEqual(
+            endpoint_hits,
+            [],
+            "F&I Incoming endpoint returned SYNTHETIC_NAMES applicant "
+            f"names: {endpoint_hits!r}. Extend the rename map.",
+        )
+
+    def test_bhph_portfolio_endpoint_shows_delinquency_and_repossession(
+        self,
+    ) -> None:
+        """Assertion 9 — the BHPH portfolio screen reads its own book.
+
+        SESSION_226 fix: the summary endpoint bins on
+        :attr:`BhphNote.current_bucket`, which is written only by the
+        M12.3 delinquency detector. Beat runs it at 08:00 daily; a
+        freshly-seeded DB has never seen it. The seed now calls
+        ``detect_delinquencies_for_dealership`` at the end so the
+        histogram reads the shape ``_extend_bhph_portfolio``
+        originates: one delinquent note (RS-13, ~25 days past due)
+        and one repossession (RS-10), plus extension-sale-originated
+        BHPH notes that mostly stay Current.
+
+        Test is at the SCREEN's endpoint (M12.7
+        ``GET /admin/bhph/analytics/summary/``) per
+        TASK_walkable-demo-and-servers-up done-means: "past-due
+        note ≥ 1, repossession ≥ 1, cure rate < 100 %; a seed test
+        asserts it through the endpoint".
+        """
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+
+        dealership = _demo_dealership()
+        User = get_user_model()
+        owner = User.objects.get(username=DEMO_OWNER_USERNAME)
+        client = authenticated_client(owner)
+
+        response = client.get(
+            reverse("dealer_ai:admin-bhph-analytics-summary")
+        )
+        self.assertEqual(response.status_code, 200)
+        summary = response.json()
+
+        histogram = summary["bucket_histogram"]
+        past_due_rows = [
+            row
+            for row in histogram
+            if row["bucket"] != BHPH_AGING_BUCKET_CURRENT
+            and row["note_count"] > 0
+        ]
+        self.assertGreaterEqual(
+            len(past_due_rows),
+            1,
+            "BHPH aging histogram reads all-Current — the delinquency "
+            "detector never ran. Seed must call "
+            "detect_delinquencies_for_dealership(dealership_id=...) "
+            f"after all BhphNotes are created. Histogram: {histogram!r}",
+        )
+
+        cure_rate_str = summary["cure_rate"]
+        self.assertIsNotNone(
+            cure_rate_str,
+            "cure_rate is None on a seeded portfolio — endpoint "
+            "should compute a ratio when the portfolio has notes.",
+        )
+        cure_rate = Decimal(cure_rate_str)
+        self.assertLess(
+            cure_rate,
+            Decimal("1.0000"),
+            "cure_rate reads 100 % on a seeded portfolio that "
+            "originates a delinquent note (RS-13) and a repossession "
+            "(RS-10). Detector didn't run, or the extension seed "
+            "isn't creating the past-due notes it should.",
+        )
+
+        # Repossession is not a bucket — it is a separate row on
+        # :class:`Repossession`. The demo pitch depends on both
+        # existing on a fresh seed.
+        repossession_count = Repossession.objects.filter(
+            dealership=dealership
+        ).count()
+        self.assertGreaterEqual(
+            repossession_count,
+            1,
+            "no Repossession rows on the fresh seed — "
+            "_extend_bhph_portfolio's RS-10 repossession call did "
+            "not fire.",
+        )
+
+        # And the underlying BhphNote for RS-10 must be past-due,
+        # since ``record_repossession`` doesn't touch bucket state —
+        # the detector does. A pass here proves the detector wired
+        # up the repossession's own note too.
+        repo_notes = BhphNote.objects.filter(
+            dealership=dealership,
+            sale__vehicle__stock_number="RS-10",
+        )
+        self.assertGreaterEqual(
+            repo_notes.count(),
+            1,
+            "no BhphNote against RS-10 — _extend_bhph_portfolio's "
+            "origination step did not run.",
+        )
+        for note in repo_notes:
+            self.assertNotEqual(
+                note.current_bucket,
+                BHPH_AGING_BUCKET_CURRENT,
+                f"RS-10 BhphNote {note.pk} reads Current bucket even "
+                "though the seed originates it 70 days past the first "
+                "payment date. The detector's projection is off, or "
+                "the seed changed shape.",
+            )
 
 
 class CopperCanyonAutoSeedIdempotencyTests(TestCase):

@@ -120,6 +120,9 @@ from dealer_ai.services.accounting.journal import (
     post_journal_entry,
 )
 from dealer_ai.services.be_backs.be_back import record_be_back
+from dealer_ai.services.bhph_delinquency.tasks import (
+    detect_delinquencies_for_dealership,
+)
 from dealer_ai.services.bhph_notes.bhph_note import record_bhph_note
 from dealer_ai.services.bhph_payments.bhph_payment import record_payment
 from dealer_ai.services.demo_store.registry import (
@@ -310,6 +313,23 @@ class Command(BaseCommand):
             )
             estimate_buyer = _seed_buyer_estimate_accuracy(
                 dealership, owner, self.stdout
+            )
+            # BHPH portfolio aging — the summary endpoint reads
+            # ``BhphNote.current_bucket``, which only the delinquency
+            # detector writes. Beat runs it daily at 08:00; a freshly-
+            # seeded DB never has. Without this call, the aging
+            # histogram reads all-Current + cure rate 100 %, even
+            # though _extend_bhph_portfolio originates one note ~25
+            # days past due (RS-13) and one repossession (RS-10).
+            # Idempotent (updates only when the derived value drifts
+            # from the stored one), so re-runs are safe.
+            bhph_delinquency = detect_delinquencies_for_dealership(
+                dealership_id=dealership.pk
+            )
+            self.stdout.write(
+                "materialised BHPH delinquency: "
+                f"buckets={bhph_delinquency['bucket_histogram']!r}, "
+                f"transitioned={bhph_delinquency['transitioned_count']}."
             )
 
         self.stdout.write(
@@ -1095,11 +1115,31 @@ def _persona_rename_archetype_rows(
         lead.save(update_fields=["name", "email"])
         renamed_leads += 1
 
+    # CreditApplication.applicant_full_name is a standalone CharField
+    # populated by the archetype's ``_seed_credit_applications`` directly
+    # from ``SYNTHETIC_NAMES`` — the lead/sale rename above does not
+    # touch it, so the F&I Incoming screen still reads the tester name
+    # (e.g. "Umbria Rehearsalton"). Match on the same lead-rename map so
+    # a CA rides the buyer/lead persona name it was originally paired
+    # with; miss = no rename (defensive: any CA name not in the map is
+    # either the seed's own hard-coded "Nathan Wei" or a future add).
+    renamed_credit_applications = 0
+    for app in CreditApplication.objects.filter(
+        dealership=dealership,
+        applicant_full_name__in=list(_ARCHETYPE_LEAD_RENAMES.keys()),
+    ):
+        app.applicant_full_name = _ARCHETYPE_LEAD_RENAMES[
+            app.applicant_full_name
+        ]
+        app.save(update_fields=["applicant_full_name"])
+        renamed_credit_applications += 1
+
     stdout.write(
         f"persona-renamed archetype rows: "
         f"vendors={renamed_vendors} (stripped '(demo)'), "
         f"salespeople={renamed_salespeople}, "
-        f"leads={renamed_leads}."
+        f"leads={renamed_leads}, "
+        f"credit_applications={renamed_credit_applications}."
     )
 
 

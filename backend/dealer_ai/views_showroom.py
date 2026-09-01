@@ -1,14 +1,23 @@
 """Milestone 6 · Increment 5 (SESSION_086) — public showroom endpoint.
 
-One DRF endpoint that serves the retail-gated public view of a
-single vehicle for the customer-facing marketing / showroom UI:
+Two DRF endpoints that serve the retail-gated public view of the
+customer-facing marketing / showroom UI:
 
+- ``GET /api/dealer-ai/showroom/vehicles/`` — list retail-eligible
+  vehicles (``stage='frontline'``, debug stocks excluded). Added
+  at SESSION_226 (TASK_walkable-demo-and-servers-up 1d) so the
+  public showroom, homepage teaser and hero visuals can call the
+  real backend instead of importing ``frontend/src/data/
+  sampleInventory.ts``. Publish gate is NOT applied on this list —
+  the operator lot on Copper Canyon's install has ~130 frontline
+  units and zero VehicleListing rows (M6 publishing is deferred);
+  requiring a published listing here would leave the list empty.
 - ``GET /api/dealer-ai/showroom/vehicles/<stock_number>/`` — return
-  vehicle facts + published listing body + primary photo URL. Only
-  vehicles that are ``stage='frontline'`` AND have a published
-  :class:`VehicleListing` are visible. Missing / non-visible
-  vehicles return HTTP 404 with the truthful "not currently
-  available for retail" copy per SESSION_075 §5.i.
+  a single vehicle's facts + published listing body + primary photo.
+  Requires both frontline stage AND a published
+  :class:`VehicleListing` (older SESSION_086 contract). Missing /
+  non-visible vehicles return HTTP 404 with the truthful "not
+  currently available for retail" copy per SESSION_075 §5.i.
 
 URL segment shape per SESSION_086 §2 Option A user-confirmed:
 ``stock_number`` (customer-friendly URLs; matches M6.2 canonical
@@ -20,8 +29,9 @@ Marketplace / AutoTrader — that's Milestone 11+.
 
 **No authentication required.** This is the public read surface;
 customers hit it directly (via marketing links, embed frames, etc.).
-The retail gate (frontline + published listing) is the authorization
-— non-retail vehicles simply do not exist for the public caller.
+The retail gate (frontline stage, plus published listing for the
+detail endpoint) is the authorization — non-retail vehicles simply
+do not exist for the public caller.
 """
 
 from __future__ import annotations
@@ -35,11 +45,16 @@ from .models import VehiclePhoto
 from .services.chat_engine import (
     CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY,
     customer_lookup_visible_vehicle_by_stock,
+    customer_visible_vehicles,
 )
 from .services.photo_storage import (
     ObjectStorageError,
     _get_default_adapter,
 )
+
+
+_SHOWROOM_LIST_MAX_LIMIT = 200
+_SHOWROOM_LIST_DEFAULT_LIMIT = 48
 
 
 def _project_primary_photo(vehicle) -> dict | None:
@@ -107,6 +122,97 @@ def _project_gallery(vehicle, *, limit: int = 20) -> list:
             }
         )
     return projected
+
+
+def _project_showroom_row(vehicle) -> dict:
+    """Public-safe list projection for one retail-eligible vehicle.
+
+    Mirrors the shape the deleted ``frontend/src/data/
+    sampleInventory.ts`` module handed to the three consumers
+    (PublicShowroomPage, DealershipHomePage, Hero), so the frontend
+    edit is a pure hook-swap rather than a render refactor.
+
+    No cost data, no lifecycle stage, no operator notes — only the
+    fields a shopper's browser needs.
+    """
+    return {
+        "vin": vehicle.vin or "",
+        "stock_number": vehicle.stock_number,
+        "year": vehicle.year,
+        "make": vehicle.make,
+        "model": vehicle.model,
+        "trim": vehicle.trim or "",
+        "condition": vehicle.condition,
+        "drivetrain": vehicle.drivetrain or "",
+        "fuel_type": vehicle.fuel_type or "",
+        "exterior_color": vehicle.exterior_color or "",
+        "mileage": vehicle.mileage,
+        "price": str(vehicle.price),
+        "msrp": str(vehicle.msrp) if vehicle.msrp is not None else None,
+        "image_url": vehicle.image_url or "",
+        "vdp_url": vehicle.url or "",
+        "display_name": str(vehicle),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def showroom_vehicle_list(request):
+    """GET — retail-eligible vehicle list for the public showroom.
+
+    Response body:
+
+    - ``count`` — total retail-eligible vehicles matched (before the
+      limit / offset window).
+    - ``limit`` / ``offset`` — echo of applied window.
+    - ``results`` — list of public-safe vehicle projections.
+
+    Query params (all optional):
+
+    - ``q`` — case-insensitive substring match against year / make /
+      model / trim / stock_number / exterior_color.
+    - ``limit`` — page size (default 48, hard-capped at 200).
+    - ``offset`` — page offset (default 0).
+
+    Retail gate: ``customer_visible_vehicles()`` (frontline stage,
+    debug stocks excluded). Publish requirement is intentionally NOT
+    applied — see the module docstring.
+    """
+    qs = customer_visible_vehicles().order_by("-year", "make", "model", "pk")
+
+    query_term = (request.GET.get("q") or "").strip()
+    if query_term:
+        from django.db.models import Q as _Q
+
+        qs = qs.filter(
+            _Q(stock_number__icontains=query_term)
+            | _Q(make__icontains=query_term)
+            | _Q(model__icontains=query_term)
+            | _Q(trim__icontains=query_term)
+            | _Q(exterior_color__icontains=query_term)
+        )
+
+    try:
+        offset = max(0, int(request.GET.get("offset", "0")))
+    except (TypeError, ValueError):
+        offset = 0
+    try:
+        limit = int(request.GET.get("limit", _SHOWROOM_LIST_DEFAULT_LIMIT))
+    except (TypeError, ValueError):
+        limit = _SHOWROOM_LIST_DEFAULT_LIMIT
+    limit = max(1, min(_SHOWROOM_LIST_MAX_LIMIT, limit))
+
+    total = qs.count()
+    page = list(qs[offset : offset + limit])
+
+    return Response(
+        {
+            "count": total,
+            "limit": limit,
+            "offset": offset,
+            "results": [_project_showroom_row(v) for v in page],
+        }
+    )
 
 
 @api_view(["GET"])

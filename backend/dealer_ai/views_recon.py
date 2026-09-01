@@ -36,6 +36,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Optional
 
+from django.db.models import Case, IntegerField, Value, When
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -52,6 +53,9 @@ from .models import (
     VendorCommunication,
     WORK_ORDER_PART_SOURCE_TYPE_CHOICES,
     WORK_ORDER_PART_STATUS_CHOICES,
+    WORK_ORDER_STATUS_APPROVED,
+    WORK_ORDER_STATUS_DRAFT,
+    WORK_ORDER_STATUS_IN_PROGRESS,
     WORK_ORDER_VENUE_CHOICES,
     WorkOrder,
     WorkOrderPart,
@@ -712,11 +716,31 @@ def admin_recon_dashboard(request, stock_number):
             ],
         }
 
+    # Open work (draft / approved / in_progress) sorts ahead of
+    # terminal work (completed / cancelled), so the recon page opens
+    # on the row a manager actually needs to act on — the awaiting-
+    # authorization draft is the whole point of the recon-gate pitch.
+    # -created_at breaks ties within each priority band so the newest
+    # open WO leads, and the newest terminal WO leads its own group.
+    # Kept in the queryset (not the frontend) so any client reading
+    # this endpoint gets the same truth.
+    open_wo_status = (
+        WORK_ORDER_STATUS_DRAFT,
+        WORK_ORDER_STATUS_APPROVED,
+        WORK_ORDER_STATUS_IN_PROGRESS,
+    )
     work_orders = (
         WorkOrder.objects.filter(vehicle=vehicle, dealership=dealership)
         .select_related("vendor", "assignee")
         .prefetch_related("finding_links__finding", "parts")
-        .order_by("-created_at")
+        .annotate(
+            _status_priority=Case(
+                When(status__in=open_wo_status, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("_status_priority", "-created_at")
     )
     comms = (
         VendorCommunication.objects.filter(

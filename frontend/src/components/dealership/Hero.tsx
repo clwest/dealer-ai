@@ -6,12 +6,23 @@
 // reference becomes a "Talk to AI" CTA that scrolls to the
 // embedded chat band below; the lifestyle chips become example
 // prompts that prefill the assistant.
+//
+// SESSION_226 (TASK_walkable-demo-and-servers-up 1d): the hero
+// visual pulls a featured vehicle from the AllowAny
+// `/api/dealer-ai/showroom/vehicles/` endpoint via
+// `listShowroomVehicles`. When the store has no photo on the
+// featured vehicle, the background falls through to a solid brand-
+// ink panel rather than a stock image the store doesn't own.
 
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Bot, Car, ShieldCheck, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { SAMPLE_INVENTORY } from "@/data/sampleInventory";
+import {
+  listShowroomVehicles,
+  type ShowroomVehicle,
+} from "@/lib/showroomApi";
 import { useBrand } from "@/lib/brand";
 
 const TRUST_POINTS = [
@@ -28,23 +39,43 @@ const INTENT_CHIPS = [
   "Trade-in value",
 ];
 
-const HERO_VEHICLE = SAMPLE_INVENTORY[5];
-
 export default function Hero() {
   const brand = useBrand();
+  const [heroVehicle, setHeroVehicle] = useState<ShowroomVehicle | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Pull one vehicle just past the first-three teaser slots (offset
+    // 5) so the hero and the DealershipHomePage InventoryTeaser row
+    // don't feature the same vehicle. Failure = no hero card, which
+    // is fine: the section still reads as a hero pitch.
+    listShowroomVehicles({ limit: 1, offset: 5 })
+      .then((response) => {
+        if (cancelled) return;
+        setHeroVehicle(response.results[0] ?? null);
+      })
+      .catch(() => {
+        /* silent — hero degrades to no-vehicle mode. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="relative isolate min-h-[680px] overflow-hidden bg-brand-ink text-white">
-      <div
-        className="absolute inset-0 -z-20"
-        aria-hidden
-      >
-        <img
-          src={HERO_VEHICLE.image_url}
-          alt=""
-          className="h-full w-full object-cover"
-        />
-      </div>
+      {heroVehicle?.image_url ? (
+        <div
+          className="absolute inset-0 -z-20"
+          aria-hidden
+        >
+          <img
+            src={heroVehicle.image_url}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        </div>
+      ) : null}
       <div className="absolute inset-0 -z-10 bg-brand-ink/75" aria-hidden />
       <div className="absolute inset-x-0 bottom-0 -z-10 h-32 bg-gradient-to-t from-background to-transparent" />
 
@@ -116,16 +147,27 @@ export default function Hero() {
           </div>
         </div>
 
-        <HeroVisual dealershipName={brand.dealershipName} />
+        <HeroVisual
+          dealershipName={brand.dealershipName}
+          featured={heroVehicle}
+        />
       </div>
     </section>
   );
 }
 
-function HeroVisual({ dealershipName }: { dealershipName: string }) {
+function HeroVisual({
+  dealershipName,
+  featured,
+}: {
+  dealershipName: string;
+  featured: ShowroomVehicle | null;
+}) {
   // Simulated chat preview — purely decorative, conveys what the
   // real assistant does without spinning up a session on every page
-  // load. Real chat is the next section below.
+  // load. Real chat is the next section below. Match card falls
+  // through to a generic "on the lot" line when no featured vehicle
+  // is available (empty store or endpoint down).
   return (
     <div className="relative mx-auto w-full max-w-md lg:max-w-none">
       <div className="overflow-hidden rounded-lg border border-white/15 bg-brand-ink/90 shadow-2xl shadow-black/40 backdrop-blur">
@@ -153,20 +195,22 @@ function HeroVisual({ dealershipName }: { dealershipName: string }) {
             who="ai"
             text="Got it. With $2,500 down at 72mo, here are 3 trucks that match — a Maverick Hybrid lands you at $341/mo on the lot today."
           />
-          <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-white/50">
-              Match · in budget
+          {featured ? (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-white/50">
+                Match · in budget
+              </div>
+              <div className="mt-0.5 text-sm font-semibold text-white">
+                {featured.display_name}
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs text-white/70">
+                <span>Stock #{featured.stock_number}</span>
+                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                  From the lot
+                </span>
+              </div>
             </div>
-            <div className="mt-0.5 text-sm font-semibold text-white">
-              {HERO_VEHICLE.display_name}
-            </div>
-            <div className="mt-1 flex items-center justify-between text-xs text-white/70">
-              <span>Stock #{HERO_VEHICLE.stock_number}</span>
-              <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                From the lot
-              </span>
-            </div>
-          </div>
+          ) : null}
           <ChatRow who="user" text="What about with my 2018 Ranger as a trade?" />
           <div className="flex justify-start">
             <div className="rounded-2xl rounded-bl-sm bg-white/10 px-3 py-2 text-xs text-white/80">

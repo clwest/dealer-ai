@@ -39,6 +39,11 @@ Dealer OS/
 # Claude Code session-local artifacts (scheduled_tasks.lock, etc.)
 .claude/
 
+# Session-run artifacts (detached-server PID files and logs).
+# Populated by SESSION_226's Part-3 boot for Cowork's browser walk;
+# not checked in — everything is regenerated on the next boot.
+.run/
+
 # Internal build-archaeology archive. Preserved privately outside
 # the repository (e.g. ../dealer-ai-internal-docs/); never tracked
 # in the public tree. Defensive rule in case a local copy is ever

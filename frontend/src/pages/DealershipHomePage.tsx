@@ -5,7 +5,13 @@
 // operator dashboard. It uses the same AssistantChat implementation
 // through AssistantBand, so the demo exercises the production chat
 // surface without changing chat behavior.
+//
+// SESSION_226 (TASK_walkable-demo-and-servers-up 1d): the featured
+// teaser row pulls the first three vehicles from the AllowAny
+// `/api/dealer-ai/showroom/vehicles/` endpoint via
+// `listShowroomVehicles`. The old sampleInventory.ts import is gone.
 
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, BadgeCheck, Bot, Clock, ShieldCheck } from "lucide-react";
 
@@ -16,13 +22,11 @@ import SiteNav from "@/components/dealership/SiteNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  SAMPLE_INVENTORY,
-  type SampleInventoryVehicle,
-} from "@/data/sampleInventory";
+  listShowroomVehicles,
+  type ShowroomVehicle,
+} from "@/lib/showroomApi";
 import { useBrand } from "@/lib/brand";
 import { formatCurrency } from "@/lib/utils";
-
-const FEATURED = SAMPLE_INVENTORY.slice(0, 3);
 
 export default function DealershipHomePage() {
   const brand = useBrand();
@@ -137,6 +141,33 @@ export default function DealershipHomePage() {
 }
 
 function InventoryTeaser() {
+  // Pull the top three retail-eligible vehicles from the same
+  // AllowAny endpoint the showroom page uses. No hardcoded fallback
+  // on failure — an empty teaser is truer than a fixed set that
+  // stops matching the store.
+  const [featured, setFeatured] = useState<ShowroomVehicle[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    listShowroomVehicles({ limit: 3 })
+      .then((response) => {
+        if (cancelled) return;
+        setFeatured(response.results);
+        setStatus("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section id="showroom" className="border-b border-border bg-background py-14">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -156,26 +187,50 @@ function InventoryTeaser() {
             </Link>
           </Button>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {FEATURED.map((vehicle) => (
-            <FeaturedVehicle key={vehicle.vin} vehicle={vehicle} />
-          ))}
-        </div>
+        {status === "loading" ? (
+          <div className="rounded-lg border border-border bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
+            Loading inventory…
+          </div>
+        ) : null}
+        {status === "error" ? (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-10 text-center text-sm text-destructive">
+            Inventory feed isn't reachable right now.
+          </div>
+        ) : null}
+        {status === "ready" && featured.length === 0 ? (
+          <div className="rounded-lg border border-border bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
+            No retail-ready vehicles are on the lot right now.
+          </div>
+        ) : null}
+        {status === "ready" && featured.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {featured.map((vehicle) => (
+              <FeaturedVehicle key={vehicle.stock_number} vehicle={vehicle} />
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
-function FeaturedVehicle({ vehicle }: { vehicle: SampleInventoryVehicle }) {
+function FeaturedVehicle({ vehicle }: { vehicle: ShowroomVehicle }) {
+  const priceValue = Number.parseFloat(vehicle.price) || 0;
   return (
     <article className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
       <div className="aspect-[16/10] overflow-hidden bg-muted">
-        <img
-          src={vehicle.image_url}
-          alt={vehicle.display_name}
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
+        {vehicle.image_url ? (
+          <img
+            src={vehicle.image_url}
+            alt={vehicle.display_name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs uppercase tracking-wider text-muted-foreground">
+            No photo yet
+          </div>
+        )}
       </div>
       <div className="space-y-3 p-4">
         <div>
@@ -183,12 +238,13 @@ function FeaturedVehicle({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             {vehicle.display_name}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Stock #{vehicle.stock_number} · {vehicle.drivetrain}
+            Stock #{vehicle.stock_number}
+            {vehicle.drivetrain ? ` · ${vehicle.drivetrain}` : ""}
           </div>
         </div>
         <div className="flex items-center justify-between">
           <div className="text-lg font-bold text-primary">
-            {formatCurrency(vehicle.price)}
+            {formatCurrency(priceValue)}
           </div>
           <Button asChild size="sm" variant="ghost" className="gap-1.5">
             <Link

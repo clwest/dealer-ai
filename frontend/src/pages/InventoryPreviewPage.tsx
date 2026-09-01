@@ -6,9 +6,13 @@
 // the seed, which made every per-vehicle door 404 from this page and
 // dead-ended step 2 of the demo script.
 //
-// The public showroom / dealership home page / hero component still
-// import from `@/data/sampleInventory` — that module is intentionally
-// left alone here; those surfaces are their own follow-up.
+// SESSION_226 (TASK_walkable-demo-and-servers-up 1d) — the public
+// showroom / dealership home page / hero component were also
+// rewired to their own AllowAny endpoint
+// (`/api/dealer-ai/showroom/vehicles/` via `listShowroomVehicles`),
+// so `frontend/src/data/sampleInventory.ts` was deleted this session.
+// This operator page continues to use the admin endpoint above;
+// customer-facing surfaces use the public one.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
