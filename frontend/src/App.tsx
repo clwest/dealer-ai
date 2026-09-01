@@ -71,8 +71,10 @@ export const NAV_ITEMS: NavItem[] = [
     end: false,
   },
   // TASK_doors-and-matrix-refresh Part B — BHPH portfolio front door.
-  // Backend-gated on IsCollectionsManagerOrOwnerAtActiveDealership;
-  // other roles get the forbidden branch, matching the F&I nav pattern.
+  // Backend-gated on IsSalesManagerOrOwnerAtActiveDealership
+  // (see backend/dealer_ai/views_bhph_notes.py:52, _M121_PERMS —
+  // there is no separate collections role); other roles get the
+  // forbidden branch, matching the F&I nav pattern.
   {
     to: "/dealer-ai-bhph/portfolio",
     label: "BHPH",
@@ -83,7 +85,9 @@ export const NAV_ITEMS: NavItem[] = [
   // Points at the trial balance rather than journal entries because
   // the trial balance is the read-primary surface (JE creation is
   // reachable from the admin card and from the trial-balance page).
-  // Backend-gated on IsOfficeManagerOrOwnerAtActiveDealership.
+  // Backend-gated on IsSalesManagerOrOwnerAtActiveDealership
+  // (see backend/dealer_ai/views_accounting.py:83, _M131_PERMS —
+  // there is no separate office role).
   {
     to: "/dealer-ai-accounting/trial-balance",
     label: "Accounting",
