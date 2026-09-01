@@ -57,6 +57,7 @@ from dealer_ai.management.commands.seed_copper_canyon_auto_demo import (
     STORE_SLUG,
     _DELIBERATE_LOSER_STOCKS,
     _MAX_LOSER_LOSS,
+    _MIN_LOSER_LOSS,
 )
 from dealer_ai.models import (
     VEHICLE_STAGE_CHOICES,
@@ -132,13 +133,18 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
           would flip negative and this fails loudly.
         - The aggregate is positive — the store as a whole makes
           money. A demo of a lot losing money is a different demo.
-        - No single loss is deeper than :data:`_MAX_LOSER_LOSS`.
-          The ceiling is what separates a deliberate wholesale
-          disposal from the archetype double-count reappearing —
-          the double-count produces losses in the multi-thousand
-          range (roughly the whole purchase price), which a
-          plain "some sales negative" check would miss. Removing
-          the ceiling is how the original defect would sneak back.
+        - No single loss falls outside the two-sided band
+          ``[-_MAX_LOSER_LOSS, -_MIN_LOSER_LOSS]``. The ceiling
+          separates a deliberate wholesale disposal from the
+          archetype double-count reappearing — the double-count
+          produces losses in the multi-thousand range (roughly the
+          whole purchase price), which a plain "some sales
+          negative" check would miss. The floor (added in the
+          2026-09-01 Cowork rework) keeps a rounding artifact
+          from passing as a deliberate loss — a $200 concession
+          is a real story, a $0.50 loss is a bug. Removing either
+          bound is how a defect would sneak back through this
+          check.
         - :attr:`Sale.gross_realized` equals a fresh recompute via
           :func:`services.sale.computation.gross_realized`, so the
           denormalized column can't drift from the truth.
@@ -203,19 +209,37 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
             "The demo store must be profitable at the aggregate; a "
             "negative total is a different demo, not this one.",
         )
-        # Bounded loss — the guard against the archetype-double-count
-        # bug reappearing as a "deliberate loser."
-        deepest_loss = min(observed_losers.values())
-        self.assertGreaterEqual(
-            deepest_loss,
-            -_MAX_LOSER_LOSS,
-            f"deepest single loss = {deepest_loss}, exceeds the "
-            f"_MAX_LOSER_LOSS ceiling of -{_MAX_LOSER_LOSS}. A loss "
-            "that deep is almost certainly the archetype's "
-            "acquisition-basis double-count reappearing, not a "
-            "business decision — see TASK_archetype_acquisition_"
-            "double_count.md.",
-        )
+        # Two-sided band on every declared loser:
+        # - -_MAX_LOSER_LOSS <= gross: guard against the archetype
+        #   acquisition-double-count reappearing (multi-thousand
+        #   losses would pass a bare "some sales negative" check
+        #   but are almost never a real business decision).
+        # - gross <= -_MIN_LOSER_LOSS: keep rounding artifacts from
+        #   passing as deliberate losses. Added in the 2026-09-01
+        #   Cowork rework; matters more when losses run small on
+        #   purpose (the $150-$400 "it could be $200" band).
+        for stock, loss in sorted(observed_losers.items()):
+            self.assertGreaterEqual(
+                loss,
+                -_MAX_LOSER_LOSS,
+                f"declared loser {stock} has gross={loss}, "
+                f"deeper than the _MAX_LOSER_LOSS ceiling of "
+                f"-{_MAX_LOSER_LOSS}. That deep is almost "
+                "certainly the archetype's acquisition-basis "
+                "double-count reappearing — see "
+                "TASK_archetype_acquisition_double_count.md.",
+            )
+            self.assertLessEqual(
+                loss,
+                -_MIN_LOSER_LOSS,
+                f"declared loser {stock} has gross={loss}, "
+                f"shallower than the _MIN_LOSER_LOSS floor of "
+                f"-{_MIN_LOSER_LOSS}. That shallow is more likely "
+                "a rounding artifact than a deliberate loss — "
+                "either the asking_pct_of_cost for this loser is "
+                "too close to 1.0, or the loser doesn't belong "
+                "in _DELIBERATE_LOSERS at all.",
+            )
 
     def test_at_least_two_work_orders_await_authorization(self) -> None:
         """Assertion 2 — draft WOs with estimated_cost and no approved_at.

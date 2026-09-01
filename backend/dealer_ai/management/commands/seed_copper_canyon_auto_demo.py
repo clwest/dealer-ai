@@ -2372,6 +2372,17 @@ resurfacing, not a business decision. The ceiling is what
 two — see the reshaped positive-gross assertion.
 """
 
+_MIN_LOSER_LOSS: Decimal = Decimal("50.00")
+"""Floor on any single deliberate loser's negative gross.
+
+A gross shallower than -$50 is more likely a rounding artifact
+than a deliberate business decision. The floor keeps the sign
+convention exercised at magnitudes a dealer would notice — a
+$200 concession is a real "keep the deal from walking" story; a
+$0.50 loss is a bug. Two-sided band with :data:`_MAX_LOSER_LOSS`
+per the 2026-09-01 Cowork rework review.
+"""
+
 _LOSER_REASON_AGED = "aged_out"
 _LOSER_REASON_RECON_OVERRUN = "recon_overrun"
 _LOSER_REASON_TRADE_OVERALLOWANCE = "trade_overallowance"
@@ -2379,16 +2390,40 @@ _LOSER_REASON_WHOLESALE_DISPOSAL = "wholesale_disposal"
 _LOSER_REASON_PRICE_CONCESSION = "price_concession"
 
 
+# The construction is asking-price-driven, per Cowork's 2026-09-01
+# rework review. Each loser names ``asking_pct_of_cost`` — the
+# fraction of cost basis a dealer would ask for the unit — and
+# :func:`gross_realized` reports whatever falls out. The original
+# implementation subtracted a target loss from cost, which
+# produced sold prices like $4,881.20 on a $12,000 car (a -45%
+# hair-cut nobody would ask for). Real deals run the other way:
+# the market gives a price, the loss is the consequence.
+#
+# Bands (approximate; a first pass at the trade — Chris to correct):
+# - Retail losers: asking 88-98 % of cost → loss ~2-12 % of sale
+# - Wholesale disposals: asking 82-90 % of cost → loss ~10-20 %
+#   of sale, because dumping to auction is meaningfully worse
+#   than retailing thin
+# - At least two losses in the $150-$400 band — Chris's actual
+#   "it could be $200" case, and the small-magnitude sign test
+#   the previous version was missing
+#
+# Cost basis:
+# - Non-recon losers: cost = purchase_price (60 % of sticker)
+# - Recon overrun (CC-041): cost = purchase_price + recon_actual,
+#   since :func:`_seed_recon_overrun_wo` posts a VehicleCost that
+#   flows through :func:`compute_totals`
+
 _DELIBERATE_LOSERS: tuple[dict, ...] = (
-    # 1. The aged unit that finally moved. Its earliest frontline
-    #    event is backdated to ~105 days by
-    #    :func:`_backdate_aged_loser_frontline_events` so the vehicle
-    #    lifecycle log reads "sat past 100 days" — the aging story the
-    #    loss is the price of ignoring. Financed as BHPH: an aged unit
-    #    finally moves for a subprime buyer with an in-house note.
+    # 1. The aged unit that finally moved — the marquee beat, the
+    #    one the aging board flags at ~105 days. Priced to move
+    #    below cost; a real "we cut it to clear the lot" gesture
+    #    reads as ~9 % under cost on a subprime BHPH buyer. Was
+    #    -45 % in the pre-rework version, which reads as a
+    #    catastrophe, not a business decision.
     {
         "stock": "CC-060",
-        "loss": Decimal("2200.00"),
+        "asking_pct_of_cost": Decimal("0.91"),
         "reason": _LOSER_REASON_AGED,
         "delivery_notes": (
             "Sat 105 days at frontline before we cut the price to move "
@@ -2399,12 +2434,13 @@ _DELIBERATE_LOSERS: tuple[dict, ...] = (
     # 2. Recon overrun. Authorized $600 for a transmission flush,
     #    actual $1,900 once the shop opened the pan up. A completed
     #    WorkOrder with actual_cost above authorized shows on the
-    #    vehicle's recon page; the sale row shows the loss the
-    #    overrun caused. Retail — falls in the extension's retail
-    #    finance-type band (offsets 8-24 → CC-031..CC-047).
+    #    vehicle's recon page; the sale row shows a small loss the
+    #    overrun caused after retail pricing absorbed most of it.
+    #    Asking price sits at 97 % of the extended cost, so the
+    #    resulting loss lands in the $150-$400 band.
     {
         "stock": "CC-041",
-        "loss": Decimal("1800.00"),
+        "asking_pct_of_cost": Decimal("0.97"),
         "reason": _LOSER_REASON_RECON_OVERRUN,
         "recon_authorized": Decimal("600.00"),
         "recon_actual": Decimal("1900.00"),
@@ -2415,46 +2451,52 @@ _DELIBERATE_LOSERS: tuple[dict, ...] = (
         ),
     },
     # 3. Trade overallowance. Front-end money we gave away to close
-    #    the deal. Retail-financed — trades only make sense against a
-    #    retail sale.
+    #    the deal. Retail-financed — trades only make sense against
+    #    a retail sale. Asking 96 % of cost is a real "we allowed
+    #    too much on the trade and the front gross is thin" story.
     {
         "stock": "CC-047",
-        "loss": Decimal("1500.00"),
+        "asking_pct_of_cost": Decimal("0.96"),
         "reason": _LOSER_REASON_TRADE_OVERALLOWANCE,
         "delivery_notes": (
             "Overallowance on the customer's trade to lock the deal. "
-            "Book value ran $1,500 under what we credited."
+            "Book value ran under what we credited; front gross came "
+            "in below cost."
         ),
     },
     # 4. Wholesale disposal (to auction). Terminal stage is
     #    wholesale_out — no retail delivery. Overridden to CASH
     #    finance-type because auction pays cash/wire; no lender.
+    #    Auction proceeds run ~85 % of what we have in it — the
+    #    asymmetry that lets a demo dealer see wholesale losses
+    #    read visibly deeper than retail write-downs.
     {
         "stock": "CC-053",
-        "loss": Decimal("1200.00"),
+        "asking_pct_of_cost": Decimal("0.85"),
         "reason": _LOSER_REASON_WHOLESALE_DISPOSAL,
         "delivery_notes": None,
     },
     # 5. Second wholesale disposal — a slower-turning unit that never
-    #    generated a test drive. Same wholesale_out treatment.
+    #    generated a test drive. Auction at 87 % of cost.
     {
         "stock": "CC-058",
-        "loss": Decimal("900.00"),
+        "asking_pct_of_cost": Decimal("0.87"),
         "reason": _LOSER_REASON_WHOLESALE_DISPOSAL,
         "delivery_notes": None,
     },
-    # 6. Price concession — the sales manager approved a $500 hair-
-    #    cut on a car already priced thin. Small loss, common shape.
-    #    CC-055 lands in the BHPH band; a concession-then-BHPH is a
-    #    realistic close-a-subprime-deal move.
+    # 6. Price concession — Chris's own "it could be $200" case.
+    #    Sales manager approved a small last-mile hair-cut on a
+    #    car already priced thin; loss lands ~$200, in the
+    #    $150-$400 band the small-magnitude sign test needs.
     {
         "stock": "CC-055",
-        "loss": Decimal("500.00"),
+        "asking_pct_of_cost": Decimal("0.972"),
         "reason": _LOSER_REASON_PRICE_CONCESSION,
         "delivery_notes": (
-            "Sales manager approved a $500 concession at contract "
-            "signing to keep the deal from walking. Front gross was "
-            "already thin; concession pushed it below cost."
+            "Sales manager approved a small last-mile concession at "
+            "contract signing to keep the deal from walking. Front "
+            "gross was already thin; the concession pushed it below "
+            "cost."
         ),
     },
 )
@@ -2752,43 +2794,38 @@ def _extend_sales_history(
         sale_date = today - dt.timedelta(days=days_since_sale)
 
         # Sold price. Winners sell at sticker (the archetype does the
-        # same); losers price at a level that produces exactly the
-        # loss the loser dict names. Purchase price = 60 % of sticker
-        # per :func:`_extend_lot_to_target_size`, so:
-        #   winner:            sold_price = sticker            → +40 %
-        #   loser (non-recon): sold_price = purchase - loss    → -loss
-        #   loser (recon):     sold_price = purchase           → -loss
-        #                       (loss comes from actual_cost > 0)
-        # Recon-overrun losers also complete a WorkOrder with
-        # actual_cost = loss BEFORE record_sale, so total_investment
-        # picks up the overrun via :func:`compute_totals`.
+        # same). Losers are priced *asking-first, loss-as-consequence*
+        # per Cowork's 2026-09-01 rework — the constant names an
+        # ``asking_pct_of_cost`` per loser and the resulting gross
+        # falls out of ``sold_price - total_investment``. The
+        # previous formulation subtracted a target loss from cost,
+        # which produced $4,881.20 sold prices on $12k cars — a
+        # -45 % hair-cut nobody would ask for.
+        #
+        # Purchase price = 60 % of sticker per
+        # :func:`_extend_lot_to_target_size`. For recon overrun
+        # losers, add ``recon_actual`` — :func:`_seed_recon_overrun_wo`
+        # posts a VehicleCost for the actual amount, so
+        # :func:`compute_totals` counts it in total_investment.
         purchase_price = (vehicle.price * Decimal("0.6")).quantize(
             Decimal("1.00")
         )
         if loser is None:
             sold_price = vehicle.price
-        elif loser["reason"] == _LOSER_REASON_RECON_OVERRUN:
-            _seed_recon_overrun_wo(
-                vehicle,
-                dealership=dealership,
-                owner=owner,
-                authorized_cost=loser["recon_authorized"],
-                actual_cost=loser["recon_actual"],
-            )
-            # WO completion posts a VehicleCost for actual_cost, so
-            # total_investment = purchase + actual. To land gross at
-            # exactly -loss:
-            #     sold_price = purchase + actual - loss
-            # (Not purchase + authorized — that formulation left
-            # gross = -(actual - authorized), which is only the
-            # overrun delta, not the intended loss.)
-            sold_price = (
-                purchase_price + loser["recon_actual"] - loser["loss"]
-            ).quantize(Decimal("1.00"))
         else:
-            sold_price = (purchase_price - loser["loss"]).quantize(
-                Decimal("1.00")
-            )
+            cost_basis = purchase_price
+            if loser["reason"] == _LOSER_REASON_RECON_OVERRUN:
+                _seed_recon_overrun_wo(
+                    vehicle,
+                    dealership=dealership,
+                    owner=owner,
+                    authorized_cost=loser["recon_authorized"],
+                    actual_cost=loser["recon_actual"],
+                )
+                cost_basis = cost_basis + loser["recon_actual"]
+            sold_price = (
+                cost_basis * loser["asking_pct_of_cost"]
+            ).quantize(Decimal("1.00"))
 
         # Buyer as a walk-in lead so the deal has customer trail.
         buyer_name = _EXTENDED_BUYER_NAMES[offset % len(_EXTENDED_BUYER_NAMES)]
@@ -2817,7 +2854,8 @@ def _extend_sales_history(
                 {
                     "stock": vehicle.stock_number,
                     "reason": loser["reason"],
-                    "target_loss": loser["loss"],
+                    "asking_pct_of_cost": loser["asking_pct_of_cost"],
+                    "sold_price": sold_price,
                     "sale_pk": sale.pk,
                 }
             )
@@ -2917,7 +2955,8 @@ def _extend_sales_history(
             deliveries_recorded += 1
 
     loser_summary = ", ".join(
-        f"{row['stock']}={row['reason']}(-${row['target_loss']})"
+        f"{row['stock']}={row['reason']}"
+        f"(ask={row['asking_pct_of_cost']}·sold=${row['sold_price']})"
         for row in losers_booked
     ) or "none"
     stdout.write(
