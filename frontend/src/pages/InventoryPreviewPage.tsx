@@ -10,7 +10,19 @@
 // When CRM/DMS feed integration lands, replace the data import with
 // the live source and delete the sample module.
 
-import { BookOpen, ClipboardCheck, ExternalLink, Gauge, Sparkles, Tag, Wrench, Zap } from "lucide-react";
+import {
+  BookOpen,
+  Camera,
+  ClipboardCheck,
+  DollarSign,
+  ExternalLink,
+  Gauge,
+  Sparkles,
+  Tag,
+  Wrench,
+  Zap,
+  FileText,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -185,7 +197,7 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             this card lives on the operator inventory surface only.
             Stock number is URL-encoded because dealer conventions
             can include slashes / special chars. */}
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             asChild
             variant="ghost"
@@ -230,6 +242,49 @@ function InventoryCard({ vehicle }: { vehicle: SampleInventoryVehicle }) {
             >
               <Wrench className="h-3.5 w-3.5" />
               Recon
+            </Link>
+          </Button>
+          {/* TASK_doors-and-matrix-refresh Part B — Photos, Listing,
+              Sale doors. All three pages already exist, are routed,
+              and are tested; they simply had no link on the vehicle
+              detail row. Backend enforces role gating on each. */}
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Link
+              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/photos`}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              Photos
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Link
+              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/listing`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Listing
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Link
+              to={`/dealer-ai-inventory/${encodeURIComponent(vehicle.stock_number)}/sale`}
+            >
+              <DollarSign className="h-3.5 w-3.5" />
+              Sale
             </Link>
           </Button>
         </div>

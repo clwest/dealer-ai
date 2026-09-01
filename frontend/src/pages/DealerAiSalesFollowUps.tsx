@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CadenceConfigPanel } from "@/components/sales/CadenceConfigPanel";
+import { SalesWorkspaceNav } from "@/components/sales/SalesWorkspaceNav";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -106,6 +107,7 @@ export default function DealerAiSalesFollowUps() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <SalesWorkspaceNav />
       <div>
         <h1 className="text-2xl font-semibold">Follow-up work-queue</h1>
         <p className="text-sm text-muted-foreground">

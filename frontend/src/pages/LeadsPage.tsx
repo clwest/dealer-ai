@@ -187,12 +187,23 @@ export default function LeadsPage() {
             context before a salesperson follows up.
           </p>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/dealer-ai-overview">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to Overview
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* TASK_doors-and-matrix-refresh Part B — entry into the
+              /dealer-ai-sales/* workspace. Without this link the four
+              sales pages (leads, follow-ups, be-backs, test-drives)
+              remain reachable only by URL, and the be-backs and
+              test-drives doors added to the shared SalesWorkspaceNav
+              have no click-path from the sidebar. */}
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/dealer-ai-sales/leads">Sales workspace</Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/dealer-ai-overview">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Overview
+            </Link>
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-3 md:grid-cols-4">

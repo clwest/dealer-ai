@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { SalesWorkspaceNav } from "@/components/sales/SalesWorkspaceNav";
 import {
   Card,
   CardContent,
@@ -43,6 +44,7 @@ export default function DealerAiSalesTestDrives() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <SalesWorkspaceNav />
       <div>
         <h1 className="text-2xl font-semibold">Test drives</h1>
         <p className="text-sm text-muted-foreground">

@@ -79,8 +79,13 @@ test.describe(
 
       // ---------------------------------------------------------------
       // Step 2 — land on the BHPH portfolio.
+      //          TASK_doors-and-matrix-refresh Part B — reach the
+      //          portfolio via the new sidebar door (BHPH) rather
+      //          than direct URL. Proves the door is wired.
       // ---------------------------------------------------------------
-      await page.goto("/dealer-ai-bhph/portfolio");
+      await page.goto("/dealer-ai-overview");
+      await page.getByRole("link", { name: "BHPH", exact: true }).click();
+      await expect(page).toHaveURL(/\/dealer-ai-bhph\/portfolio$/);
       await expect(
         page.getByRole("heading", { level: 1, name: "BHPH Portfolio" }),
       ).toBeVisible({ timeout: 15_000 });

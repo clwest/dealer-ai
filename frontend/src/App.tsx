@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   BarChart3,
+  BookOpen,
   Bot,
   Car,
   ClipboardCheck,
@@ -12,6 +13,7 @@ import {
   Settings,
   Users,
   UserSquare,
+  Wallet,
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 
@@ -36,7 +38,7 @@ interface NavItem {
   end: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
+export const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-overview", label: "Overview", icon: LayoutDashboard, end: false },
   { to: "/dealer-ai-live-assistant", label: "Live Assistant", icon: Bot, end: false },
   { to: "/dealer-ai-inventory", label: "Inventory", icon: Car, end: false },
@@ -66,6 +68,26 @@ const NAV_ITEMS: NavItem[] = [
     to: "/dealer-ai-f-and-i/incoming",
     label: "Incoming",
     icon: ClipboardCheck,
+    end: false,
+  },
+  // TASK_doors-and-matrix-refresh Part B — BHPH portfolio front door.
+  // Backend-gated on IsCollectionsManagerOrOwnerAtActiveDealership;
+  // other roles get the forbidden branch, matching the F&I nav pattern.
+  {
+    to: "/dealer-ai-bhph/portfolio",
+    label: "BHPH",
+    icon: Wallet,
+    end: false,
+  },
+  // TASK_doors-and-matrix-refresh Part B — accountant's front door.
+  // Points at the trial balance rather than journal entries because
+  // the trial balance is the read-primary surface (JE creation is
+  // reachable from the admin card and from the trial-balance page).
+  // Backend-gated on IsOfficeManagerOrOwnerAtActiveDealership.
+  {
+    to: "/dealer-ai-accounting/trial-balance",
+    label: "Accounting",
+    icon: BookOpen,
     end: false,
   },
   { to: "/dealer-ai-onboarding", label: "Setup", icon: Settings, end: false },

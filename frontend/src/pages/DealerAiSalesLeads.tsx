@@ -44,6 +44,7 @@ import { useCallback, useEffect, useState } from "react";
 import LeadDetailModal from "@/components/LeadDetailModal";
 import { LeadIntakeForm } from "@/components/sales/LeadIntakeForm";
 import { ReferralLeadFormExtras } from "@/components/sales/ReferralLeadFormExtras";
+import { SalesWorkspaceNav } from "@/components/sales/SalesWorkspaceNav";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -123,6 +124,7 @@ export default function DealerAiSalesLeads() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <SalesWorkspaceNav />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Sales leads</h1>
