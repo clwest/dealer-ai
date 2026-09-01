@@ -95,6 +95,7 @@ from dealer_ai.models import (
     DealWriteup,
     GLAccount,
     Sale,
+    Salesperson,
     UserDealershipRole,
     Vehicle,
     VehicleAcquisition,
@@ -114,6 +115,7 @@ from dealer_ai.services.demo_store.registry import (
     create_demo_store,
     reset_demo_store,
 )
+from dealer_ai.services.demo_store.synthetic_data import synthetic_email
 from dealer_ai.services.f_and_i.contract import record_contract, sign_contract
 from dealer_ai.services.f_and_i.credit_application import (
     record_credit_application,
@@ -131,6 +133,7 @@ from dealer_ai.services.deal_writeups.deal_writeup import (
     record_deal_writeup,
 )
 from dealer_ai.services.lifecycle_aging.snapshots import snapshot_stage_ages
+from dealer_ai.services.vendor_sla.detection import detect_sla_breaches
 from dealer_ai.services.sale.computation import gross_realized
 from dealer_ai.services.recon import (
     approve_work_order,
@@ -231,6 +234,11 @@ class Command(BaseCommand):
             chat_events = _seed_chat_sessions_with_guard_events(
                 dealership, self.stdout
             )
+            # Second call — catches the two BHPH sales _extend_bhph_
+            # portfolio created after the first backdate ran. Idempotent
+            # (skips events already dated on-or-before the target).
+            _backdate_frontline_events_for_sales(dealership, self.stdout)
+            _backdate_frontline_stage_aging(dealership, self.stdout)
             snapshots = _seed_stage_aging_snapshots(
                 dealership, self.stdout
             )
@@ -238,6 +246,9 @@ class Command(BaseCommand):
                 dealership, owner, self.stdout
             )
             sla_wo_pk = _seed_sla_stale_wo(dealership, owner, self.stdout)
+            sla_breaches = _materialize_sla_breaches(
+                dealership, self.stdout
+            )
             estimate_buyer = _seed_buyer_estimate_accuracy(
                 dealership, owner, self.stdout
             )
@@ -260,6 +271,7 @@ class Command(BaseCommand):
                 f"stage_aging_snapshots={snapshots}, "
                 f"deal_writeup_pk={writeup_pk}, "
                 f"sla_stale_wo_pk={sla_wo_pk}, "
+                f"sla_breach_records={sla_breaches}, "
                 f"buyer_estimate_buyer_id={estimate_buyer}."
             )
         )
@@ -567,6 +579,116 @@ def _backdate_frontline_events_for_sales(
 
 
 # ---------------------------------------------------------------------------
+# Frontline aging — spread VehicleStage.entered_at so the aging board
+# reads a real distribution instead of a flat line at zero.
+# ---------------------------------------------------------------------------
+
+# Days-ago pattern for unsold frontline vehicles. Chosen so the p50
+# reads as a plausible aging distribution: one unit under a week
+# (fresh), one around a month (normal), one past 90 days (aged out —
+# wholesale or drop the price). The 2026-08-31 competitive teardown
+# named the aging board as one of two capabilities absent from every
+# competitor; a flat-at-zero read renders it useless.
+_FRONTLINE_AGING_DAYS_UNSOLD: tuple[int, ...] = (4, 15, 33, 62, 95)
+
+
+def _backdate_frontline_stage_aging(
+    dealership: Dealership, stdout
+) -> None:
+    """Spread ``VehicleStage.entered_at`` across frontline units so the
+    aging board reads a real distribution instead of a flat line at
+    zero.
+
+    The C1 review (2026-09-01) found
+    ``/admin/analytics/stage-aging-trend/?stage=frontline`` returning
+    ``p50_days=0`` across all 15 snapshots.
+
+    Cause: ``_distribute_lifecycle_stages`` short-circuits any stage
+    row whose current value matches its plan target (the
+    ``if previous_stage == stage_key: continue``) — but every frontline
+    plan target (RS-10..RS-14) is already at frontline from the
+    archetype's bootstrap signal, so ``VehicleStage.entered_at`` stays
+    at bootstrap-time (~now). ``record_sale`` (and the model-direct
+    write in ``_originate_bhph_sale_and_note``) also do not touch
+    VehicleStage, so sold-vehicle frontline rows have the same
+    problem. The snapshot verb reads current ``entered_at`` and
+    computes days-in-stage as ``max(0, snapshot_at - entered_at)`` —
+    every reading collapses to zero.
+
+    Runs BEFORE ``_seed_stage_aging_snapshots``. The 15-day snapshot
+    backfill reads current state, so every stage row's ``entered_at``
+    must be at its intended value before the loop starts.
+
+    Two populations:
+
+    - **Sold frontline vehicles.** Set ``entered_at`` to
+      ``sale_date - days_before_sale``, using the same
+      ``20 + (sale.pk * 3) % 25`` spread
+      ``_backdate_frontline_events_for_sales`` derives — so the stage
+      row and the earliest ``to_stage=frontline`` VehicleStageEvent
+      agree. Inventory-turn reads the event, not the row, so it
+      stays correct.
+    - **Unsold frontline vehicles.** No sale to anchor to. Spread
+      across :data:`_FRONTLINE_AGING_DAYS_UNSOLD` (deterministic by
+      stock_number so re-seeds are stable).
+
+    Also backdates any ``trigger="bootstrap"`` :class:`VehicleStageEvent`
+    that would post-date the newly-written ``entered_at``, so the
+    vehicle's stage-event log stays in chronological order (same
+    invariant ``_distribute_lifecycle_stages`` protects for the
+    twelve stages it reassigns).
+    """
+    now = timezone.now()
+    frontline_rows = list(
+        VehicleStage.objects.filter(
+            dealership=dealership,
+            current_stage=VEHICLE_STAGE_FRONTLINE,
+        )
+        .select_related("vehicle")
+        .order_by("vehicle__stock_number")
+    )
+    updated_sold = 0
+    updated_unsold = 0
+    unsold_offset = 0
+    for stage_row in frontline_rows:
+        vehicle = stage_row.vehicle
+        sale = Sale.objects.filter(vehicle=vehicle).first()
+        if sale is not None:
+            days_before_sale = 20 + (sale.pk * 3) % 25
+            new_entered_at = (
+                dt.datetime.combine(
+                    sale.sale_date,
+                    dt.time(9, 0),
+                    tzinfo=dt.timezone.utc,
+                )
+                - dt.timedelta(days=days_before_sale)
+            )
+            updated_sold += 1
+        else:
+            days_ago = _FRONTLINE_AGING_DAYS_UNSOLD[
+                unsold_offset % len(_FRONTLINE_AGING_DAYS_UNSOLD)
+            ]
+            unsold_offset += 1
+            new_entered_at = now - dt.timedelta(days=days_ago)
+            updated_unsold += 1
+        VehicleStageEvent.objects.filter(
+            vehicle=vehicle,
+            trigger="bootstrap",
+            entered_at__gt=new_entered_at,
+        ).update(
+            entered_at=new_entered_at - dt.timedelta(hours=1)
+        )
+        stage_row.entered_at = new_entered_at
+        stage_row.save(update_fields=["entered_at"])
+    stdout.write(
+        f"backdated {updated_sold + updated_unsold} frontline "
+        f"VehicleStage row(s): {updated_sold} sold aligned to sale "
+        f"date, {updated_unsold} unsold across "
+        f"{list(_FRONTLINE_AGING_DAYS_UNSOLD)!r} days-ago."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Sale gross normalization — every sale posts a plausible front gross
 # ---------------------------------------------------------------------------
 
@@ -637,31 +759,98 @@ def _normalize_sale_gross(dealership: Dealership, stdout) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Yuma-shaped names for the four archetype-created Salesperson rows.
+# Match by existing name (not SYNTHETIC_NAMES index) so a future
+# reordering of ``synthetic_names.py`` breaks loudly at import-time
+# (KeyError-shaped) rather than silently swapping which row gets which
+# name. Salesperson.slug stays stable — the Team page shows Name, but
+# the M4C advisor-scoping permission classes key on user identity.
+_ARCHETYPE_SALESPERSON_RENAMES: dict[str, str] = {
+    "Alexis Testworth": "Miguel Ortega",
+    "Avery Mockington": "Ashley Nguyen",
+    "Jamie Demoson": "Rafael Herrera",
+    "Morgan Fictionton": "Danielle Kim",
+}
+
+# Yuma-shaped names for the archetype's CustomerLead rows — the 15
+# leads from _seed_leads plus the 5 buyer leads from _seed_sales.
+# Names picked for the Copper Canyon persona (Yuma, AZ — border town,
+# mixed Anglo + Hispanic). Consistent with the seed's own extensions
+# (Elena Vargas, Marcus Delgado, Priya Alvarez).
+_ARCHETYPE_LEAD_RENAMES: dict[str, str] = {
+    # Leads (SYNTHETIC_NAMES 10..24).
+    "Blake Simulton": "Carlos Reyes",
+    "Cameron Practiceworth": "Sofia Mendoza",
+    "Drew Rehearsalson": "Anthony Torres",
+    "Emerson Scenariofield": "Isabella Ruiz",
+    "Finley Storybrook": "David Lam",
+    "Harper Draftly": "Maria Contreras",
+    "Indigo Sketchford": "Julio Salazar",
+    "Kai Blueprintworth": "Jasmine Ford",
+    "Logan Prototypeton": "Sebastian Cortez",
+    "Maddox Diagrammer": "Alicia Vega",
+    "Nolan Fixturely": "Tomas Guerrero",
+    "Oakley Sandboxson": "Beatriz Molina",
+    "Parker Rehearsalworth": "Nathan Chavez",
+    "Quincy Stubfield": "Vanessa Padilla",
+    "Rowan Blankspace": "Gabriel Ortiz",
+    # Buyers created by _seed_sales (SYNTHETIC_NAMES 25..29).
+    "Sawyer Placeholderfield": "Ricardo Navarro",
+    "Tatum Testflight": "Angela Vasquez",
+    "Umbria Rehearsalton": "Christian Aguilar",
+    "Vale Dryrunson": "Monica Solis",
+    "Wren Trialbrook": "Ernesto Duarte",
+}
+
+
 def _persona_rename_archetype_rows(
     dealership: Dealership, stdout
 ) -> None:
-    """Rename archetype-created vendor rows so the demo does not
-    read as an obvious test fixture.
+    """Rename archetype-created rows so the persona-facing demo screens
+    do not read as an obvious test fixture.
 
-    Per the 2026-09-01 Correction section of the task file: the
-    Copper Canyon persona already exists in
-    ``docs/research/INDEPENDENT_DEALER_PIVOT.md``. Consistency with
-    the persona doc beats plausibility. Two specific renames the
-    corrections call out:
+    The Copper Canyon persona is documented in
+    ``docs/research/INDEPENDENT_DEALER_PIVOT.md`` (Yuma, AZ —
+    independent, mixed-make used lot, credit-inclusive, bilingual-
+    friendly). Consistency with the persona doc beats the archetype's
+    tester-safety naming for rows that show up on the demo's own
+    screens.
 
-    - ``Desert Auto Repair (demo)`` → ``Desert Auto Repair``
-    - Any vendor whose ``name`` ends with ``(demo)`` gets the
-      suffix stripped.
+    Three renames — vendor, salesperson, lead:
+
+    - **Vendors.** Any vendor whose ``name`` ends with ``(demo)``
+      gets the suffix stripped. Also normalizes their
+      ``@demo.dealer-ai.example`` emails to the ``.example`` short
+      form so the vendor list reads clean.
+    - **Salespeople.** The four archetype-created rows
+      (:data:`_ARCHETYPE_SALESPERSON_RENAMES`) get Yuma-shaped names
+      via a local override. The linked :class:`User`'s
+      ``first_name`` / ``last_name`` / ``email`` follow. The
+      ``username`` stays stable (``<dealership.slug>-<slug>``) so the
+      login credentials the demo owner recorded still work; the
+      Salesperson ``slug`` stays stable so ``advisor-*`` references
+      throughout the seed do not need to be re-plumbed. Only the
+      display-facing fields change.
+    - **Customer leads.** The 15 leads plus 5 buyer leads seeded
+      through :data:`services.demo_store.synthetic_names.SYNTHETIC_NAMES`
+      get renamed via :data:`_ARCHETYPE_LEAD_RENAMES`, with emails
+      recomputed through :func:`synthetic_email`. Only rows whose
+      current name matches a key in the map are touched — the seed's
+      own extensions (Elena Vargas / Marcus Delgado / Priya Alvarez
+      via ``_originate_bhph_sale_and_note`` / ``_extend_fni_chain``)
+      stay untouched because they were already Yuma-shaped.
 
     Deliberately does **not** touch
-    :data:`services/demo_store/synthetic_names.py` — the
-    ``Testworth`` / ``Rehearsalton`` convention there is a tester-
-    safety doctrine (M18.1 planning) and belongs in the archetype's
-    world, not the persona-facing demo. Names that were already
-    populated on archetype rows via ``SYNTHETIC_NAMES`` (buyers,
-    staff) stay as-is; the demo persona reaches its customers via
-    the seed's *own* helpers (see ``_originate_bhph_sale_and_note``
-    for BHPH buyers) rather than the archetype's synthetic roster.
+    :data:`services/demo_store/synthetic_names.py` (per
+    TASK_c11-demo-seed-truthfulness.md non-goal): the
+    ``Testworth`` / ``Rehearsalton`` convention there is the M18.1
+    tester-safety doctrine and still governs archetype-internal
+    fixtures and every acceptance test. The persona-override happens
+    inside this seed, not in the shared roster.
+
+    Idempotent — the second pass finds already-renamed rows because
+    match is on the current name string; renamed rows will not
+    match a key in the maps and are skipped.
     """
     demo_suffix_vendors = Vendor.objects.filter(
         dealership=dealership, name__endswith=" (demo)"
@@ -677,8 +866,40 @@ def _persona_rename_archetype_rows(
             )
         vendor.save(update_fields=["name", "email"])
         renamed_vendors += 1
+
+    renamed_salespeople = 0
+    for salesperson in Salesperson.objects.filter(
+        dealership=dealership,
+        name__in=list(_ARCHETYPE_SALESPERSON_RENAMES.keys()),
+    ).select_related("user"):
+        new_name = _ARCHETYPE_SALESPERSON_RENAMES[salesperson.name]
+        salesperson.name = new_name
+        salesperson.save(update_fields=["name"])
+        user = salesperson.user
+        if user is not None:
+            first, _, last = new_name.partition(" ")
+            user.first_name = first
+            user.last_name = last
+            user.email = synthetic_email(new_name)
+            user.save(update_fields=["first_name", "last_name", "email"])
+        renamed_salespeople += 1
+
+    renamed_leads = 0
+    for lead in CustomerLead.objects.filter(
+        dealership=dealership,
+        name__in=list(_ARCHETYPE_LEAD_RENAMES.keys()),
+    ):
+        new_name = _ARCHETYPE_LEAD_RENAMES[lead.name]
+        lead.name = new_name
+        lead.email = synthetic_email(new_name)
+        lead.save(update_fields=["name", "email"])
+        renamed_leads += 1
+
     stdout.write(
-        f"stripped '(demo)' suffix from {renamed_vendors} vendor row(s)."
+        f"persona-renamed archetype rows: "
+        f"vendors={renamed_vendors} (stripped '(demo)'), "
+        f"salespeople={renamed_salespeople}, "
+        f"leads={renamed_leads}."
     )
 
 
@@ -1701,6 +1922,51 @@ def _seed_sla_stale_wo(
         f"seeded SLA-stale outsourced WO pk={wo.pk} approved 8 days ago."
     )
     return wo.pk
+
+
+# ---------------------------------------------------------------------------
+# SLA breach materialization — run the M7.4 detection verb so
+# SlaBreachRecord rows exist for the /admin/analytics/sla-breach-
+# patterns/ endpoint to read.
+# ---------------------------------------------------------------------------
+
+
+def _materialize_sla_breaches(
+    dealership: Dealership, stdout
+) -> int:
+    """Run :func:`services.vendor_sla.detection.detect_sla_breaches` for
+    the tenant so the stale outsourced WO seeded by
+    :func:`_seed_sla_stale_wo` shows up as an :class:`SlaBreachRecord`.
+
+    The C1 review (2026-09-01) found
+    ``/admin/analytics/sla-breach-patterns/`` returning
+    ``total_breach_count=0`` even though ``detect_sla_breaches``
+    reported one approved-stale breach when called live. Cause: the
+    verb computes live and *also* materializes ``SlaBreachRecord`` via
+    ``_materialize_breach_record`` (M8.1 addition per
+    ``MILESTONE_8_PLANNING.md`` §5.b Option B); the endpoint reads the
+    persisted rows, but nothing in the seed had ever called the verb,
+    so the table was empty. In prod, the M7.4 Celery orchestrator runs
+    at 04:00 daily — none of that is running during a fresh seed.
+
+    Same relationship as :func:`_seed_stage_aging_snapshots` and the
+    aging-trend endpoint: the seed composes existing verbs to make the
+    materialized read-model non-empty. Idempotent — the verb's
+    ``get_or_create`` on
+    ``(work_order, kind, detected_at_date)`` no-ops on re-run.
+
+    Returns the number of :class:`SlaBreachRecord` rows the invocation
+    added (equal to ``report.breach_count`` on a fresh DB;
+    zero on re-run).
+    """
+    report = detect_sla_breaches(dealership)
+    stdout.write(
+        f"materialized SLA breaches: "
+        f"approved_stale={report.approved_stale_count}, "
+        f"in_progress_past_eta={report.in_progress_past_eta_count} "
+        f"(total={report.breach_count})."
+    )
+    return report.breach_count
 
 
 # ---------------------------------------------------------------------------
