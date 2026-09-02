@@ -659,15 +659,17 @@ class TransitionPartStatusDisallowed(TestCase):
                 new_status=WORK_ORDER_PART_STATUS_NEEDED,
             )
 
-    def test_installed_is_terminal(self):
-        part = self._at_status(WORK_ORDER_PART_STATUS_INSTALLED)
+    def test_installed_allows_returned_only(self):
+        # SESSION_228 Part 1b — an installed part can be returned
+        # (posts a parts-ledger reversal). Every other target is
+        # still refused.
         for target in (
             WORK_ORDER_PART_STATUS_NEEDED,
             WORK_ORDER_PART_STATUS_ORDERED,
             WORK_ORDER_PART_STATUS_RECEIVED,
-            WORK_ORDER_PART_STATUS_RETURNED,
             WORK_ORDER_PART_STATUS_BACKORDERED,
         ):
+            part = self._at_status(WORK_ORDER_PART_STATUS_INSTALLED)
             with self.assertRaises(InvalidReconTransitionError):
                 transition_part_status(
                     part, dealership=self.default, new_status=target
@@ -870,32 +872,33 @@ class PartsSurviveTerminalTransitions(TestCase):
 # ============================================================================
 
 
-class NoLedgerSideEffectsFromPartsOperations(TestCase):
-    """Planning §5.h: parts do NOT independently post to
-    VehicleCost. Their cost lives on the WorkOrder's estimate /
-    actual aggregate. Locks the M4.4 → M4.3 boundary."""
+class PartsLedgerPostingsFromSESSION_228(TestCase):
+    """SESSION_228 Part 1b — parts DO post to VehicleCost on install
+    (under the ``parts`` category, reference
+    ``WORKORDER:<wo_id>:parts:<part_id>``), and installed→returned
+    posts a reversal. Every other lifecycle transition — add /
+    update / order / receive / delete — leaves the ledger untouched.
+    Supersedes the pre-Part-1b lock that asserted zero ledger side
+    effects across the whole parts lifecycle."""
 
-    def test_full_parts_lifecycle_creates_no_vehicle_cost(self):
+    def test_add_update_order_receive_do_not_touch_the_ledger(self):
         default = Dealership.objects.get(slug="default")
-        vehicle = _make_vehicle("M44-LDG", default)
+        vehicle = _make_vehicle("M228-LDG", default)
         report = _make_report(vehicle, default)
         finding = _make_finding(report, default)
         wo = _draft_wo(vehicle, default, finding)
         pre = VehicleCost.objects.count()
-        # Add.
         part = add_part(
             wo,
             dealership=default,
             name="Lifecycle test",
             unit_cost=Decimal("175.00"),
         )
-        # Update.
         update_part(
             part,
             dealership=default,
             unit_cost=Decimal("185.00"),
         )
-        # Transitions.
         transition_part_status(
             part,
             dealership=default,
@@ -906,18 +909,52 @@ class NoLedgerSideEffectsFromPartsOperations(TestCase):
             dealership=default,
             new_status=WORK_ORDER_PART_STATUS_RECEIVED,
         )
+        deletable = add_part(wo, dealership=default, name="Deletable")
+        delete_part(deletable, dealership=default)
+        self.assertEqual(VehicleCost.objects.count(), pre)
+
+    def test_install_posts_a_parts_row_and_return_reverses_it(self):
+        default = Dealership.objects.get(slug="default")
+        vehicle = _make_vehicle("M228-INS", default)
+        report = _make_report(vehicle, default)
+        finding = _make_finding(report, default)
+        wo = _draft_wo(vehicle, default, finding)
+        part = add_part(
+            wo,
+            dealership=default,
+            name="A/C compressor",
+            unit_cost=Decimal("350.00"),
+        )
+        transition_part_status(
+            part,
+            dealership=default,
+            new_status=WORK_ORDER_PART_STATUS_ORDERED,
+        )
+        transition_part_status(
+            part,
+            dealership=default,
+            new_status=WORK_ORDER_PART_STATUS_RECEIVED,
+        )
+        pre = VehicleCost.objects.count()
         transition_part_status(
             part,
             dealership=default,
             new_status=WORK_ORDER_PART_STATUS_INSTALLED,
         )
-        # Delete (need a fresh part since installed can't be deleted
-        # on approved, and this WO is still draft — but the installed
-        # part can't be deleted on draft either? Actually it can —
-        # delete gates on parent WO status, not part status).
-        deletable = add_part(wo, dealership=default, name="Deletable")
-        delete_part(deletable, dealership=default)
-        self.assertEqual(VehicleCost.objects.count(), pre)
+        install_ref = f"WORKORDER:{wo.pk}:parts:{part.pk}"
+        install_row = VehicleCost.objects.get(reference=install_ref)
+        self.assertEqual(install_row.amount, Decimal("350.00"))
+        self.assertEqual(install_row.category, "parts")
+        self.assertEqual(VehicleCost.objects.count(), pre + 1)
+        transition_part_status(
+            part,
+            dealership=default,
+            new_status=WORK_ORDER_PART_STATUS_RETURNED,
+        )
+        reversal_ref = f"WORKORDER:{wo.pk}:parts_reversal:{part.pk}"
+        reversal_row = VehicleCost.objects.get(reference=reversal_ref)
+        self.assertEqual(reversal_row.amount, Decimal("-350.00"))
+        self.assertEqual(reversal_row.category, "parts")
 
 
 # ============================================================================

@@ -31,6 +31,8 @@ import VehicleLifecyclePage from "@/pages/VehicleLifecyclePage";
 import VehicleListingEditorPage from "@/pages/VehicleListingEditorPage";
 import VehiclePhotoGalleryPage from "@/pages/VehiclePhotoGalleryPage";
 import VehicleReconPage from "@/pages/VehicleReconPage";
+import ReconAuthorizationQueuePage from "@/pages/ReconAuthorizationQueuePage";
+import ReconSettingsPage from "@/pages/ReconSettingsPage";
 import VehicleSalePage from "@/pages/VehicleSalePage";
 import LeadsPage from "@/pages/LeadsPage";
 import LiveAssistantPage from "@/pages/LiveAssistantPage";
@@ -94,6 +96,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route
                 path="dealer-ai-inventory/:stock/recon"
                 element={<VehicleReconPage />}
+              />
+              <Route
+                path="dealer-ai-recon/needs-authorization"
+                element={<ReconAuthorizationQueuePage />}
+              />
+              <Route
+                path="dealer-ai-recon/settings"
+                element={<ReconSettingsPage />}
               />
               <Route
                 path="dealer-ai-inventory/:stock/lifecycle"

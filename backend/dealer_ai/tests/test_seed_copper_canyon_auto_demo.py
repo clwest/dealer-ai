@@ -272,6 +272,54 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
             f"{draft_awaiting.count()}",
         )
 
+    def test_session_228_seed_shape(self) -> None:
+        """SESSION_228 — Copper Canyon runs in budget mode, the rate
+        card is populated, and the needs-authorization queue is
+        non-empty with every queued WO over its car's budget."""
+        from dealer_ai.models import (
+            DealerOnboardingProfile,
+            ReconRateCard,
+        )
+        from dealer_ai.services import recon_budget
+
+        dealership = _demo_dealership()
+        profile = DealerOnboardingProfile.objects.filter(
+            dealership=dealership
+        ).first()
+        self.assertIsNotNone(profile)
+        assert profile is not None
+        self.assertEqual(
+            profile.recon_authorization_mode,
+            DealerOnboardingProfile.RECON_AUTHORIZATION_MODE_BUDGET,
+        )
+        self.assertGreaterEqual(
+            ReconRateCard.objects.filter(
+                dealership=dealership, active=True
+            ).count(),
+            5,
+        )
+        self.assertTrue(
+            ReconRateCard.objects.filter(
+                dealership=dealership,
+                retail_default=True,
+                active=True,
+            ).exists(),
+            "expected at least one retail_default rate-card item",
+        )
+        queue = list(recon_budget.needs_authorization_queue(dealership))
+        self.assertGreaterEqual(len(queue), 2)
+        for wo in queue:
+            overage = recon_budget.overage_for(
+                wo, dealership=dealership
+            )
+            self.assertGreater(
+                overage,
+                0,
+                f"queued WO #{wo.pk} on {wo.vehicle.stock_number} "
+                "must be over its car's recon budget — that's why it "
+                "landed on the queue",
+            )
+
     def test_no_vehicle_lifecycle_log_runs_backwards(self) -> None:
         """Assertion 3 — every vehicle's stage-event log ends at its
         current stage.

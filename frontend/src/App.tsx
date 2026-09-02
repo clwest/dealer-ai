@@ -7,6 +7,7 @@ import {
   Car,
   ClipboardCheck,
   GraduationCap,
+  Inbox,
   LayoutDashboard,
   LineChart,
   Menu,
@@ -14,6 +15,7 @@ import {
   Users,
   UserSquare,
   Wallet,
+  Wrench,
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 
@@ -42,6 +44,23 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/dealer-ai-overview", label: "Overview", icon: LayoutDashboard, end: false },
   { to: "/dealer-ai-live-assistant", label: "Live Assistant", icon: Bot, end: false },
   { to: "/dealer-ai-inventory", label: "Inventory", icon: Car, end: false },
+  // SESSION_228 — cross-lot Needs-authorization queue. The
+  // recon-budget exception queue: WOs that failed the store's
+  // budget check and are waiting on a human. Gated on
+  // IsReconManagerSalesManagerOrOwnerAtActiveDealership at the
+  // backend (recon-manager pattern).
+  {
+    to: "/dealer-ai-recon/needs-authorization",
+    label: "Recon queue",
+    icon: Inbox,
+    end: false,
+  },
+  {
+    to: "/dealer-ai-recon/settings",
+    label: "Recon settings",
+    icon: Wrench,
+    end: false,
+  },
   { to: "/dealer-ai-leads", label: "Leads", icon: UserSquare, end: false },
   { to: "/dealer-ai-manager-chat", label: "Coaching Mode", icon: GraduationCap, end: false },
   { to: "/dealer-ai-admin", label: "Admin", icon: LineChart, end: true },

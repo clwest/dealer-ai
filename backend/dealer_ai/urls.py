@@ -254,6 +254,38 @@ urlpatterns = [
         views_recon.admin_recon_create_must_do_work_orders,
         name="admin-recon-create-must-do-work-orders",
     ),
+    # SESSION_228 — recon budget + rate card + needs-authorization
+    # queue + send-to-wholesale.
+    path(
+        "admin/recon/settings/",
+        views_recon.admin_recon_settings,
+        name="admin-recon-settings",
+    ),
+    path(
+        "admin/recon/rate-cards/",
+        views_recon.admin_rate_card_list,
+        name="admin-rate-card-list",
+    ),
+    path(
+        "admin/recon/rate-cards/<int:item_id>/",
+        views_recon.admin_rate_card_detail,
+        name="admin-rate-card-detail",
+    ),
+    path(
+        "admin/recon/needs-authorization/",
+        views_recon.admin_recon_needs_authorization_queue,
+        name="admin-recon-needs-authorization",
+    ),
+    path(
+        "admin/work-orders/<int:wo_id>/authorize-with-override/",
+        views_recon.admin_authorize_with_override,
+        name="admin-work-order-authorize-with-override",
+    ),
+    path(
+        "admin/vehicles/<str:stock_number>/send-to-wholesale/",
+        views_recon.admin_send_vehicle_to_wholesale,
+        name="admin-vehicle-send-to-wholesale",
+    ),
     path(
         "admin/work-orders/<int:wo_id>/approve/",
         views_recon.admin_work_order_approve,

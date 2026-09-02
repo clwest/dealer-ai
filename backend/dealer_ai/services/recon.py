@@ -161,6 +161,7 @@ from ..models import (
     CATEGORY_MISC_DEALER_EXPENSES,
     CATEGORY_OIL_SERVICE,
     CATEGORY_PAINT,
+    CATEGORY_PARTS,
     CATEGORY_TIRES,
     CATEGORY_UPHOLSTERY,
     CONDITION_CATEGORY_ACCESSORIES,
@@ -260,6 +261,13 @@ WORKORDER_LEDGER_REF_ESTIMATE_REVERSAL_CANCEL = (
     "WORKORDER:{wo_id}:estimate_reversal:cancel"
 )
 WORKORDER_LEDGER_REF_ACTUAL = "WORKORDER:{wo_id}:actual"
+# SESSION_228 — parts post their own ledger rows on install; return
+# posts a reversal. Keeps parts vs. labor spend legible in the
+# category breakdown ("recon-cost-per-source stays honest").
+WORKORDER_LEDGER_REF_PARTS = "WORKORDER:{wo_id}:parts:{part_id}"
+WORKORDER_LEDGER_REF_PARTS_REVERSAL = (
+    "WORKORDER:{wo_id}:parts_reversal:{part_id}"
+)
 
 
 # WorkOrder.category (12 M3 finding categories) → VehicleCost.category
@@ -656,20 +664,20 @@ def create_work_order_from_finding(
     venue: str = WORK_ORDER_VENUE_IN_HOUSE,
     vendor=None,
 ) -> WorkOrder:
-    """One-shot: create a draft WorkOrder pre-filled from ``finding``
-    and link it, in one transaction.
+    """One-shot: create a draft WorkOrder pre-filled from ``finding``,
+    link it, and dispatch through the recon-budget gate — all in one
+    transaction.
 
     The recon-one-card flow (SESSION_227): "Must do" IS the decision
-    to spend the money. Asking the operator to scroll to a separate
-    form and re-type the finding is the same double-entry problem
-    Chris hit on the ledger side. This verb closes that gap.
+    to spend the money. This verb closes the double-entry gap. When
+    the store runs in ``budget`` mode (SESSION_228) and the new WO
+    fits under the car's cap, ``authorize_or_queue`` will move it
+    straight to ``approved`` and post the estimate to the ledger —
+    the "we only bother you about cars that go over" pitch.
 
     Idempotent: if the finding already has a live (draft / approved
     / in_progress) WorkOrder linked, returns that WO without a
-    second create. Terminal WOs on the same finding do not count as
-    "live" — a finding that was on a cancelled WO can get a new
-    one. Callers that want the strict single-WO-per-finding rule
-    should read the returned WO's ``status`` and act accordingly.
+    second create.
 
     Preconditions:
 
@@ -714,9 +722,17 @@ def create_work_order_from_finding(
         attach_findings(
             wo, dealership=dealership, finding_ids=[finding.pk]
         )
-        # Reload with the freshly attached link so callers see a
-        # WO whose ``finding_links.count() >= 1`` — the invariant
-        # ``approve_work_order`` depends on.
+        # SESSION_228 — dispatch through the budget gate. In
+        # ``per_job`` mode this is a no-op and the WO stays draft
+        # (the existing behaviour tests rely on). In ``budget``
+        # mode, under-budget WOs auto-authorize; over-budget WOs
+        # stay draft and appear on the Needs-authorization queue.
+        from . import recon_budget as _rb
+        _rb.authorize_or_queue(
+            wo, dealership=dealership, actor=created_by
+        )
+        # Reload with the freshly attached link + any status change
+        # from authorize_or_queue.
         return WorkOrder.objects.select_related("vehicle", "vendor").get(
             pk=wo.pk
         )
@@ -1154,6 +1170,71 @@ def _post_cancel_reversal(
         vendor=_vendor_snapshot(work_order),
         reference=reference,
         is_estimate=True,
+        created_by=actor,
+    )
+
+
+def _post_parts_install(
+    part: WorkOrderPart, *, actor=None
+) -> Optional[VehicleCost]:
+    """Post the parts-side ledger row when a part transitions to
+    ``installed``. Signed positive, category ``parts``, reference
+    ``WORKORDER:<wo>:parts:<part>``. Idempotent via the reference.
+
+    Called only from :func:`transition_part_status`. Kept keyed on
+    part_pk (not sequence) because parts are the natural unit — a
+    return refers to the specific part that was installed."""
+    if part.unit_cost is None:
+        return None
+    reference = WORKORDER_LEDGER_REF_PARTS.format(
+        wo_id=part.work_order_id, part_id=part.pk
+    )
+    if VehicleCost.objects.filter(reference=reference).exists():
+        return None
+    amount = Decimal(part.unit_cost) * Decimal(part.quantity or 1)
+    label = part.name + (f" ({part.variant})" if hasattr(part, "variant") else "")
+    return _add_cost(
+        part.work_order.vehicle,
+        dealership=part.work_order.dealership,
+        category=CATEGORY_PARTS,
+        amount=amount,
+        incurred_at=timezone.now(),
+        vendor=_vendor_snapshot(part.work_order),
+        reference=reference,
+        notes=f"Part installed: {part.name}",
+        is_estimate=False,
+        created_by=actor,
+    )
+
+
+def _post_parts_return(
+    part: WorkOrderPart, *, actor=None
+) -> Optional[VehicleCost]:
+    """Reverse the parts-side ledger row when an installed part is
+    returned. Signed negative. Idempotent; no-op if the original
+    install row does not exist (the part was never installed, so
+    nothing to reverse)."""
+    install_ref = WORKORDER_LEDGER_REF_PARTS.format(
+        wo_id=part.work_order_id, part_id=part.pk
+    )
+    reversal_ref = WORKORDER_LEDGER_REF_PARTS_REVERSAL.format(
+        wo_id=part.work_order_id, part_id=part.pk
+    )
+    if not VehicleCost.objects.filter(reference=install_ref).exists():
+        return None
+    if VehicleCost.objects.filter(reference=reversal_ref).exists():
+        return None
+    amount = -(Decimal(part.unit_cost) * Decimal(part.quantity or 1))
+    return _add_cost(
+        part.work_order.vehicle,
+        dealership=part.work_order.dealership,
+        category=CATEGORY_PARTS,
+        amount=amount,
+        incurred_at=timezone.now(),
+        vendor=_vendor_snapshot(part.work_order),
+        reference=reversal_ref,
+        notes=f"Part returned: {part.name}",
+        is_estimate=False,
         created_by=actor,
     )
 
@@ -1715,8 +1796,11 @@ _PART_ALLOWED_TRANSITIONS = {
         WORK_ORDER_PART_STATUS_INSTALLED: "installed_at",
         WORK_ORDER_PART_STATUS_RETURNED: "returned_at",
     },
-    # Terminal for the parts lifecycle in M4.4.
-    WORK_ORDER_PART_STATUS_INSTALLED: {},
+    # SESSION_228 (Part 1b) — a part installed in error can be
+    # returned. Posts a reversal to the parts ledger family.
+    WORK_ORDER_PART_STATUS_INSTALLED: {
+        WORK_ORDER_PART_STATUS_RETURNED: "returned_at",
+    },
     WORK_ORDER_PART_STATUS_RETURNED: {},
 }
 
@@ -1961,6 +2045,14 @@ def transition_part_status(
             setattr(refreshed, timestamp_field, timezone.now().date())
         refreshed.full_clean()
         refreshed.save()
+        # SESSION_228 Part 1b — the parts side of the ledger.
+        # Install posts a parts row; return of an installed part
+        # reverses it. Idempotent via reference lookup so replay
+        # is safe.
+        if new_status == WORK_ORDER_PART_STATUS_INSTALLED:
+            _post_parts_install(refreshed, actor=actor)
+        elif new_status == WORK_ORDER_PART_STATUS_RETURNED:
+            _post_parts_return(refreshed, actor=actor)
         return refreshed
 
 

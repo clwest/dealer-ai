@@ -1069,6 +1069,38 @@ class DealerOnboardingProfile(models.Model):
         max_digits=5, decimal_places=2, null=True, blank=True
     )
 
+    # SESSION_228 (recon-budget-and-price-sheet). The recon
+    # authorization gate is one of two competitive differentiators;
+    # historically approve-every-job (Chris's wholesale process).
+    # Retail indie lots typically run a per-car recon budget: work
+    # under the number happens; over-budget queues for a manager.
+    # ``mode`` = ``per_job`` (today's behaviour) or ``budget``.
+    # Existing stores default to ``per_job`` so nothing changes for
+    # anyone until they flip it.
+    RECON_AUTHORIZATION_MODE_PER_JOB = "per_job"
+    RECON_AUTHORIZATION_MODE_BUDGET = "budget"
+    RECON_AUTHORIZATION_MODE_CHOICES = [
+        (RECON_AUTHORIZATION_MODE_PER_JOB, "Approve every job"),
+        (RECON_AUTHORIZATION_MODE_BUDGET, "Auto-authorize under budget"),
+    ]
+    recon_authorization_mode = models.CharField(
+        max_length=16,
+        choices=RECON_AUTHORIZATION_MODE_CHOICES,
+        default=RECON_AUTHORIZATION_MODE_PER_JOB,
+    )
+    # Default budget when no acquisition-cost band matches. Nullable
+    # so ``per_job`` stores don't have to invent a number.
+    recon_budget_default = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    # Optional ordered bands. Each entry:
+    # {"up_to": Decimal or null, "budget": Decimal}. Sorted by
+    # ``up_to``; the first band whose ``up_to`` is >= the vehicle's
+    # acquisition price applies. ``up_to: null`` is the catch-all
+    # top band. Empty list = ``recon_budget_default`` applies to
+    # every car.
+    recon_budget_bands = models.JSONField(default=list, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1820,6 +1852,20 @@ class ConditionFinding(models.Model):
         null=True,
         blank=True,
         related_name="findings_discovered_during",
+    )
+    # SESSION_228 (recon-budget-and-price-sheet). Nullable FK to a
+    # rate-card row when the inspector picked the item from the
+    # store's flat-rate sheet; NULL when the finding was typed as
+    # free text. Useful for reporting later — e.g. "how often does
+    # the LOF item actually get done at the flat rate" — but the
+    # authoritative estimate is still ``estimated_cost`` on the
+    # finding, copied at pick time.
+    rate_card_item = models.ForeignKey(
+        "ReconRateCard",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="findings",
     )
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -2688,6 +2734,118 @@ class WorkOrderFinding(models.Model):
                         )
                     }
                 )
+
+
+class VehicleReconBudgetOverride(models.Model):
+    """Per-vehicle recon budget override, additive.
+
+    Chris asked (2026-09-01): when a car comes in over the store's
+    recon budget, a manager should be able to authorize the extra
+    with a reason, and the extra sticks to THAT CAR only. Modeled
+    as an append-only log: each row raises the car's effective
+    budget by ``amount`` and carries the reason that justified it,
+    the granter, and when. The effective override is the SUM of
+    rows on the vehicle; ``recon_budget_for(vehicle)`` composes
+    band-for-car + SUM(overrides).
+
+    Not a field on Vehicle: the audit trail is the whole point. A
+    car that goes 400 over twice for two different reasons should
+    read as two events, not one silent number that lost the
+    history.
+    """
+
+    vehicle = models.ForeignKey(
+        "Vehicle",
+        on_delete=models.CASCADE,
+        related_name="recon_budget_overrides",
+    )
+    # Denormalised tenant guard, matches the M2/M3/M4 pattern.
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="vehicle_recon_budget_overrides",
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.TextField()
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    granted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-granted_at",)
+        verbose_name = "Vehicle recon budget override"
+        verbose_name_plural = "Vehicle recon budget overrides"
+
+    def __str__(self) -> str:
+        return (
+            f"+${self.amount} on #{self.vehicle_id} "
+            f"({self.reason[:40]}…)"
+        )
+
+
+class ReconRateCard(models.Model):
+    """Store-level flat-rate item for the inspection sheet.
+
+    Chris's intake model (2026-09-01): "since they are done so often
+    they usually just have some type of flat cost to them. Even when
+    you get into tires, you just buy at a standard price on sizes,
+    so if a car has 16-inch tires I just know how much those are
+    going to cost." The inspector picks from this list; the pick
+    fills the finding's category, description and estimated cost.
+
+    ``retail_default=True`` items are pre-populated on every new
+    inspection in stores whose ``recon_authorization_mode`` is
+    ``budget`` (LOF is the canonical example — every retail car
+    gets one). Free-text findings still work; a sheet that blocks
+    the unusual job is worse than no sheet.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="recon_rate_cards",
+    )
+    # Human-facing item name. e.g. "LOF", "Brakes (front axle)",
+    # "Tires (16-inch)".
+    name = models.CharField(max_length=128)
+    # WorkOrder category the item maps to when the operator picks
+    # it. Uses the same 12-value CONDITION_CATEGORY vocabulary as
+    # WorkOrder.category (SESSION_066 shared vocab).
+    work_order_category = models.CharField(
+        max_length=32,
+        choices=CONDITION_CATEGORY_CHOICES,
+    )
+    flat_price = models.DecimalField(max_digits=10, decimal_places=2)
+    # Optional variant tag ("16-inch", "front axle") that makes the
+    # picker's list scannable without collapsing distinct-price items.
+    variant = models.CharField(max_length=64, blank=True, default="")
+    # Pre-ticked on every inspection when the store runs in
+    # ``budget`` (retail) mode. Wholesalers don't pre-tick anything.
+    retail_default = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name", "variant")
+        verbose_name = "Recon rate card item"
+        verbose_name_plural = "Recon rate card items"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("dealership", "name", "variant"),
+                name="uniq_rate_card_per_store",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        if self.variant:
+            return f"{self.name} · {self.variant}"
+        return self.name
 
 
 class WorkOrderEstimateRevision(models.Model):

@@ -367,29 +367,35 @@ export function WorkOrderCard({
         {/* Estimate → actual story on completed. */}
         {wo.status === "completed" ? (
           <div className="rounded border bg-emerald-50 p-2 text-sm text-emerald-900">
-            Estimated {wo.estimated_cost != null ? `$${wo.estimated_cost}` : "—"} ·
-            actual {wo.actual_cost != null ? `$${wo.actual_cost}` : "—"}
+            Labor {wo.actual_cost != null ? `$${wo.actual_cost}` : "—"} +
+            parts ${wo.parts_actual} = total ${wo.total_actual}
+            <div className="text-xs text-emerald-800">
+              Estimated ${wo.total_estimate}
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div>
-              <div className="text-muted-foreground">Estimated</div>
+              <div className="text-muted-foreground">Labor est</div>
               <div className="font-medium">
                 {wo.estimated_cost != null ? `$${wo.estimated_cost}` : "—"}
               </div>
             </div>
             <div>
-              <div className="text-muted-foreground">Authorized</div>
-              <div className="font-medium">
-                {wo.authorized_cost != null ? `$${wo.authorized_cost}` : "—"}
-              </div>
+              <div className="text-muted-foreground">Parts est</div>
+              <div className="font-medium">${wo.parts_estimate}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Actual</div>
-              <div className="font-medium">
-                {wo.actual_cost != null ? `$${wo.actual_cost}` : "—"}
-              </div>
+              <div className="text-muted-foreground">Total est</div>
+              <div className="font-medium">${wo.total_estimate}</div>
             </div>
+          </div>
+        )}
+
+        {/* SESSION_228 — auto-authorized-under-budget note. */}
+        {wo.notes && wo.notes.startsWith("auto-authorized") && (
+          <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
+            {wo.notes.split(".")[0]}.
           </div>
         )}
 
@@ -889,7 +895,7 @@ export function WorkOrderCard({
               Revise estimate
             </Button>
             <Input
-              placeholder="Actual cost"
+              placeholder="Labor actual"
               value={actualCost}
               onChange={(e) => setActualCost(e.target.value)}
               className="h-8 w-28 text-xs"
@@ -904,7 +910,7 @@ export function WorkOrderCard({
               Cancel WO
             </Button>
             <Button size="sm" onClick={_complete} disabled={saving}>
-              Complete — actual ${actualCost || "…"}
+              Complete — labor ${actualCost || "…"} + parts ${wo.parts_actual}
             </Button>
           </>
         )}

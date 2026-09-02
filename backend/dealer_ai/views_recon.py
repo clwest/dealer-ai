@@ -65,8 +65,14 @@ from .models import (
     RECON_DECISION_TIER_CHOICES,
     ReconDecision,
 )
-from .permissions import IsReconManagerSalesManagerOrOwnerAtActiveDealership
+from .permissions import (
+    IsDealerOwnerAtActiveDealership,
+    IsReconManagerSalesManagerOrOwnerAtActiveDealership,
+    IsSalesManagerOrOwnerAtActiveDealership,
+)
 from .services import recon as recon_service
+from .services import recon_budget as recon_budget_service
+from .services import vehicle_lifecycle as lifecycle_service
 from .services import vendor_comm as vendor_comm_service
 from .services.condition_report import (
     latest_completed_condition_report,
@@ -76,6 +82,10 @@ from .services.recon import (
     IncompleteConditionReportError,
     InvalidReconTransitionError,
     ReconImmutableError,
+)
+from .services.recon_budget import (
+    BudgetCheckError,
+    CrossTenantRateCardError,
 )
 from .services.tenancy import get_current_dealership
 from .services.vendor_comm import (
@@ -88,6 +98,13 @@ from .services.vendor_comm import (
 
 _M46_PERMS = [
     IsAuthenticated & IsReconManagerSalesManagerOrOwnerAtActiveDealership
+]
+_OWNER_ONLY_PERMS = [IsAuthenticated & IsDealerOwnerAtActiveDealership]
+# Send-to-wholesale needs sales_manager or owner authority — the
+# same set that gates every commercial-disposition stage in the
+# lifecycle service (owner + sales_manager per M5 §5.f).
+_WHOLESALE_PERMS = [
+    IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership
 ]
 
 
@@ -326,6 +343,13 @@ def _project_work_order(wo: WorkOrder) -> dict:
         "estimate_revisions": [
             _project_estimate_revision(r) for r in revisions
         ],
+        # SESSION_228 Part 1b — parts roll into the WO's money.
+        # Frontend reads these to render "Labor $X + Parts $Y =
+        # $Total" on every card without recomputing.
+        "parts_estimate": str(recon_budget_service.parts_estimate(wo)),
+        "parts_actual": str(recon_budget_service.parts_actual(wo)),
+        "total_estimate": str(recon_budget_service.wo_estimate_total(wo)),
+        "total_actual": str(recon_budget_service.wo_actual_total(wo)),
     }
 
 
@@ -389,10 +413,21 @@ def _map_service_error(exc: Exception) -> Response:
     """Translate a service-layer domain error into an appropriate
     DRF response. Every M4.6 endpoint routes its service calls
     through a try/except that funnels here."""
-    if isinstance(exc, (CrossTenantReconError, CrossTenantVendorCommError)):
+    if isinstance(
+        exc,
+        (
+            CrossTenantReconError,
+            CrossTenantVendorCommError,
+            CrossTenantRateCardError,
+        ),
+    ):
         return Response(
             {"detail": "Not found."},
             status=status.HTTP_404_NOT_FOUND,
+        )
+    if isinstance(exc, BudgetCheckError):
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
         )
     if isinstance(
         exc,
@@ -1421,4 +1456,342 @@ def admin_comm_log(request):
     return Response(
         {"communication": _project_comm(comm)},
         status=status.HTTP_201_CREATED,
+    )
+
+
+# ============================================================================
+# SESSION_228 — recon budget + rate card + needs-authorization queue
+# ============================================================================
+
+
+def _project_rate_card_item(item) -> dict:
+    return {
+        "id": item.pk,
+        "name": item.name,
+        "work_order_category": item.work_order_category,
+        "flat_price": str(item.flat_price),
+        "variant": item.variant,
+        "retail_default": item.retail_default,
+        "active": item.active,
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
+    }
+
+
+def _project_settings(profile) -> dict:
+    if profile is None:
+        return {
+            "recon_authorization_mode": "per_job",
+            "recon_budget_default": None,
+            "recon_budget_bands": [],
+        }
+    return {
+        "recon_authorization_mode": profile.recon_authorization_mode,
+        "recon_budget_default": (
+            str(profile.recon_budget_default)
+            if profile.recon_budget_default is not None
+            else None
+        ),
+        "recon_budget_bands": list(profile.recon_budget_bands or []),
+    }
+
+
+class ReconSettingsUpdateRequestSerializer(serializers.Serializer):
+    recon_authorization_mode = serializers.ChoiceField(
+        choices=[("per_job", "Per job"), ("budget", "Budget")],
+        required=False,
+    )
+    recon_budget_default = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        allow_null=True,
+    )
+    recon_budget_bands = serializers.ListField(
+        child=serializers.DictField(), required=False
+    )
+
+
+class RateCardCreateRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=128)
+    work_order_category = serializers.ChoiceField(
+        choices=CONDITION_CATEGORY_CHOICES
+    )
+    flat_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=Decimal("0")
+    )
+    variant = serializers.CharField(
+        max_length=64, required=False, allow_blank=True, default=""
+    )
+    retail_default = serializers.BooleanField(required=False, default=False)
+    active = serializers.BooleanField(required=False, default=True)
+
+
+class RateCardUpdateRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=128, required=False)
+    work_order_category = serializers.ChoiceField(
+        choices=CONDITION_CATEGORY_CHOICES, required=False
+    )
+    flat_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+    )
+    variant = serializers.CharField(
+        max_length=64, required=False, allow_blank=True
+    )
+    retail_default = serializers.BooleanField(required=False)
+    active = serializers.BooleanField(required=False)
+
+
+class AuthorizeWithOverrideRequestSerializer(serializers.Serializer):
+    reason = serializers.CharField(min_length=1)
+
+
+class SendToWholesaleRequestSerializer(serializers.Serializer):
+    reason = serializers.CharField(min_length=1)
+
+
+# ---- Store settings (owner only) ------------------------------------------
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes(_OWNER_ONLY_PERMS)
+def admin_recon_settings(request):
+    """Read or update the store's recon authorization + budget
+    settings. Owner-only, matches the sensitivity of every other
+    store-shape decision (dealer_type, floor_plan_apr etc.)."""
+    dealership = get_current_dealership(request)
+    from .models import DealerOnboardingProfile
+    profile = recon_budget_service._store_profile(dealership)
+    if request.method == "GET":
+        return Response({"settings": _project_settings(profile)})
+    serializer = ReconSettingsUpdateRequestSerializer(
+        data=request.data, partial=True
+    )
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+    if profile is None:
+        profile = DealerOnboardingProfile.objects.create(
+            dealership=dealership,
+            recon_authorization_mode=data.get(
+                "recon_authorization_mode", "per_job"
+            ),
+        )
+    for field in (
+        "recon_authorization_mode",
+        "recon_budget_default",
+        "recon_budget_bands",
+    ):
+        if field in data:
+            setattr(profile, field, data[field])
+    profile.full_clean()
+    profile.save()
+    return Response({"settings": _project_settings(profile)})
+
+
+# ---- Rate card (owner + recon manager) ------------------------------------
+
+
+@api_view(["GET", "POST"])
+@permission_classes(_M46_PERMS)
+def admin_rate_card_list(request):
+    dealership = get_current_dealership(request)
+    if request.method == "GET":
+        include_inactive = request.query_params.get("include_inactive") == "1"
+        items = recon_budget_service.list_rate_card_items(
+            dealership, active_only=not include_inactive
+        )
+        return Response(
+            {"items": [_project_rate_card_item(i) for i in items]}
+        )
+    serializer = RateCardCreateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        item = recon_budget_service.create_rate_card_item(
+            dealership, **serializer.validated_data
+        )
+    except Exception as exc:
+        return _map_service_error(exc)
+    return Response(
+        {"item": _project_rate_card_item(item)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes(_M46_PERMS)
+def admin_rate_card_detail(request, item_id):
+    from .models import ReconRateCard
+    dealership = get_current_dealership(request)
+    try:
+        item = ReconRateCard.objects.filter(dealership=dealership).get(
+            pk=item_id
+        )
+    except ReconRateCard.DoesNotExist:
+        return Response(
+            {"detail": "Rate card item not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if request.method == "DELETE":
+        try:
+            recon_budget_service.deactivate_rate_card_item(
+                item, dealership=dealership
+            )
+        except Exception as exc:
+            return _map_service_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    serializer = RateCardUpdateRequestSerializer(
+        data=request.data, partial=True
+    )
+    serializer.is_valid(raise_exception=True)
+    try:
+        item = recon_budget_service.update_rate_card_item(
+            item, dealership=dealership, **serializer.validated_data
+        )
+    except Exception as exc:
+        return _map_service_error(exc)
+    return Response({"item": _project_rate_card_item(item)})
+
+
+# ---- Needs-authorization queue --------------------------------------------
+
+
+@api_view(["GET"])
+@permission_classes(_M46_PERMS)
+def admin_recon_needs_authorization_queue(request):
+    """Cross-lot queue of draft WOs with linked findings — the
+    exception queue behind the budget-gate pitch. Each row carries
+    its overage so the manager can triage in the browser."""
+    dealership = get_current_dealership(request)
+    queue = recon_budget_service.needs_authorization_queue(dealership)
+    payload = []
+    for wo in queue:
+        overage = recon_budget_service.overage_for(
+            wo, dealership=dealership
+        )
+        budget = recon_budget_service.recon_budget_for(
+            wo.vehicle, dealership=dealership
+        )
+        payload.append(
+            {
+                "work_order": _project_work_order(wo),
+                "overage": str(overage),
+                "budget": str(budget) if budget is not None else None,
+            }
+        )
+    return Response({"queue": payload})
+
+
+# ---- Authorize with override (per-vehicle budget raise) -------------------
+
+
+@api_view(["POST"])
+@permission_classes(_M46_PERMS)
+def admin_authorize_with_override(request, wo_id):
+    """Authorize a queued WO by raising its car's budget by the
+    overage. Non-blank reason required — the whole point of
+    :class:`VehicleReconBudgetOverride` is the audit trail."""
+    dealership = get_current_dealership(request)
+    wo = _lookup_work_order_or_404(dealership, wo_id)
+    if wo is None:
+        return Response(
+            {"detail": "Work order not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    serializer = AuthorizeWithOverrideRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    reason = serializer.validated_data["reason"]
+    overage = recon_budget_service.overage_for(wo, dealership=dealership)
+    try:
+        if overage > 0:
+            recon_budget_service.record_budget_override(
+                wo.vehicle,
+                dealership=dealership,
+                amount=overage,
+                reason=reason,
+                granted_by=request.user,
+            )
+        recon_service.approve_work_order(
+            wo, dealership=dealership, approved_by=request.user
+        )
+    except Exception as exc:
+        return _map_service_error(exc)
+    wo = _lookup_work_order_or_404(dealership, wo.pk)
+    return Response({"work_order": _project_work_order(wo)})
+
+
+# ---- Send to wholesale (owner / sales manager) ----------------------------
+
+
+@api_view(["POST"])
+@permission_classes(_WHOLESALE_PERMS)
+def admin_send_vehicle_to_wholesale(request, stock_number):
+    """Cancel every open WO on the vehicle with the operator's
+    reason, then advance the vehicle to ``wholesale_out``.
+    Prior spend stays on the ledger (Chris's "the board warned
+    you" demo beat)."""
+    dealership = get_current_dealership(request)
+    vehicle = _lookup_vehicle_or_404(dealership, stock_number)
+    if vehicle is None:
+        return Response(
+            {"detail": "Vehicle not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    serializer = SendToWholesaleRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    reason = serializer.validated_data["reason"]
+    try:
+        open_wos = WorkOrder.objects.filter(
+            vehicle=vehicle,
+            dealership=dealership,
+            status__in=(
+                WORK_ORDER_STATUS_DRAFT,
+                WORK_ORDER_STATUS_APPROVED,
+                WORK_ORDER_STATUS_IN_PROGRESS,
+            ),
+        )
+        for wo in open_wos:
+            recon_service.cancel_work_order(
+                wo,
+                dealership=dealership,
+                cancelled_by=request.user,
+                cancellation_reason=reason,
+            )
+        lifecycle_service.ensure_current_stage(
+            vehicle, dealership=dealership, actor=request.user
+        )
+        lifecycle_service.advance_stage(
+            vehicle,
+            dealership=dealership,
+            to_stage="wholesale_out",
+            trigger="manual",
+            actor=request.user,
+            notes=reason,
+        )
+    except lifecycle_service.CrossTenantLifecycleError:
+        return Response(
+            {"detail": "Not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except lifecycle_service.UnauthorizedStageTransitionError as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN
+        )
+    except (
+        lifecycle_service.InvalidStageTransitionError,
+        lifecycle_service.StageAlreadyCurrentError,
+    ) as exc:
+        return Response(
+            {"detail": str(exc)}, status=status.HTTP_409_CONFLICT
+        )
+    except Exception as exc:
+        return _map_service_error(exc)
+    return Response(
+        {
+            "vehicle_stock_number": vehicle.stock_number,
+            "new_stage": "wholesale_out",
+        }
     )

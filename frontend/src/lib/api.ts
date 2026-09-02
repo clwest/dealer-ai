@@ -1528,6 +1528,42 @@ export interface WorkOrder {
   parts: WorkOrderPart[];
   ledger_rows: WorkOrderLedgerRow[];
   estimate_revisions: WorkOrderEstimateRevision[];
+  // SESSION_228 Part 1b — parts + labor rollup so the card reads
+  // the money the same way the budget check does.
+  parts_estimate: string;
+  parts_actual: string;
+  total_estimate: string;
+  total_actual: string;
+}
+
+// SESSION_228 — recon budget + rate card + needs-authorization queue.
+export interface ReconBudgetBand {
+  up_to: string | null;
+  budget: string;
+}
+
+export interface ReconSettings {
+  recon_authorization_mode: "per_job" | "budget";
+  recon_budget_default: string | null;
+  recon_budget_bands: ReconBudgetBand[];
+}
+
+export interface ReconRateCardItem {
+  id: number;
+  name: string;
+  work_order_category: string;
+  flat_price: string;
+  variant: string;
+  retail_default: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NeedsAuthorizationQueueRow {
+  work_order: WorkOrder;
+  overage: string;
+  budget: string | null;
 }
 
 export interface ReconDecision {
@@ -1834,6 +1870,80 @@ export function createMustDoWorkOrders(stock: string) {
       stock,
     )}/recon/create-must-do-work-orders/`,
     {},
+  );
+}
+
+// SESSION_228 — settings, rate card, queue, override + wholesale.
+
+export function fetchReconSettings() {
+  return authGetJSON<{ settings: ReconSettings }>(
+    `${_adminBase()}/recon/settings/`,
+  );
+}
+
+export function updateReconSettings(body: Partial<ReconSettings>) {
+  return authPatchJSON<{ settings: ReconSettings }>(
+    `${_adminBase()}/recon/settings/`,
+    body,
+  );
+}
+
+export function fetchRateCardItems(includeInactive = false) {
+  const query = includeInactive ? "?include_inactive=1" : "";
+  return authGetJSON<{ items: ReconRateCardItem[] }>(
+    `${_adminBase()}/recon/rate-cards/${query}`,
+  );
+}
+
+export interface RateCardCreatePayload {
+  name: string;
+  work_order_category: string;
+  flat_price: string;
+  variant?: string;
+  retail_default?: boolean;
+  active?: boolean;
+}
+
+export function createRateCardItem(body: RateCardCreatePayload) {
+  return authPostJSON<{ item: ReconRateCardItem }>(
+    `${_adminBase()}/recon/rate-cards/`,
+    body,
+  );
+}
+
+export function updateRateCardItem(
+  id: number,
+  body: Partial<RateCardCreatePayload>,
+) {
+  return authPatchJSON<{ item: ReconRateCardItem }>(
+    `${_adminBase()}/recon/rate-cards/${id}/`,
+    body,
+  );
+}
+
+export function deactivateRateCardItem(id: number) {
+  return authDelete(`${_adminBase()}/recon/rate-cards/${id}/`);
+}
+
+export function fetchNeedsAuthorizationQueue() {
+  return authGetJSON<{ queue: NeedsAuthorizationQueueRow[] }>(
+    `${_adminBase()}/recon/needs-authorization/`,
+  );
+}
+
+export function authorizeWithOverride(woId: number, reason: string) {
+  return authPostJSON<{ work_order: WorkOrder }>(
+    `${_adminBase()}/work-orders/${woId}/authorize-with-override/`,
+    { reason },
+  );
+}
+
+export function sendVehicleToWholesale(stock: string, reason: string) {
+  return authPostJSON<{ vehicle_stock_number: string; new_stage: string }>(
+    `${_adminBase()}/vehicles/${encodeURIComponent(
+      stock,
+    )}/send-to-wholesale/`,
+    { reason },
   );
 }
 

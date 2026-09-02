@@ -5,7 +5,7 @@
 // ``onCreated`` handler which appends the new finding to state and
 // re-groups.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,9 @@ import {
   CONDITION_CATEGORY_CHOICES,
   CONDITION_SEVERITY_CHOICES,
   createConditionFinding,
+  fetchRateCardItems,
   type ConditionFinding,
+  type ReconRateCardItem,
 } from "@/lib/api";
 
 interface Props {
@@ -44,6 +46,26 @@ export function AddFindingForm({ stock, reportId, onCreated }: Props) {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // SESSION_228 — rate-card picker. Loaded lazily on first expand
+  // so the page render doesn't pay for the fetch when nobody is
+  // adding a finding.
+  const [rateCard, setRateCard] = useState<ReconRateCardItem[]>([]);
+  useEffect(() => {
+    if (!expanded) return;
+    fetchRateCardItems(false)
+      .then((r) => setRateCard(r.items))
+      .catch(() => setRateCard([]));
+  }, [expanded]);
+
+  function _pickFromSheet(itemId: string) {
+    if (!itemId) return;
+    const item = rateCard.find((i) => String(i.id) === itemId);
+    if (!item) return;
+    setCategory(item.work_order_category);
+    const label = item.variant ? `${item.name} · ${item.variant}` : item.name;
+    setDescription(label);
+    setEstimatedCost(String(item.flat_price));
+  }
 
   function reset() {
     setCategory(CONDITION_CATEGORY_CHOICES[0].value);
@@ -100,6 +122,30 @@ export function AddFindingForm({ stock, reportId, onCreated }: Props) {
         Add finding
       </h3>
       <div className="mt-3 flex flex-col gap-3">
+        {rateCard.length > 0 && (
+          <label className="flex flex-col gap-1 text-xs font-medium">
+            Pick from the price sheet (or type below)
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                _pickFromSheet(e.target.value);
+                // Reset the picker so the operator can pick again
+                // if they want to layer picks. The chosen values
+                // now live in the form fields.
+                e.target.value = "";
+              }}
+              className="rounded border border-input bg-background px-2 py-1.5 text-sm"
+            >
+              <option value="">— Pick an item —</option>
+              {rateCard.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                  {item.variant ? ` · ${item.variant}` : ""} — ${item.flat_price}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-xs font-medium">
             Category

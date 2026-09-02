@@ -251,6 +251,7 @@ class Command(BaseCommand):
             dealership = _provision_store(self.stdout)
             owner = _provision_owner(dealership, self.stdout)
             _provision_onboarding_profile(dealership, self.stdout)
+            rate_card_count = _provision_rate_card(dealership, self.stdout)
             _distribute_lifecycle_stages(dealership, self.stdout)
             imported_count = _extend_lot_to_target_size(
                 dealership, self.stdout
@@ -340,6 +341,7 @@ class Command(BaseCommand):
                 f"(password={DEMO_OWNER_PASSWORD!r}), "
                 f"completed_vendor_perf_wos={completed_vendor_perf}, "
                 f"awaiting_authorization_wos={awaiting_auth}, "
+                f"rate_card_items={rate_card_count}, "
                 f"imported_extension_vehicles={imported_count}, "
                 f"bhph_notes={bhph_summary}, "
                 f"fni={fni_summary}, "
@@ -493,11 +495,131 @@ def _provision_onboarding_profile(dealership: Dealership, stdout) -> None:
     if not created and profile.dealership_name != STORE_NAME:
         profile.dealership_name = STORE_NAME
         profile.save(update_fields=["dealership_name"])
+    # SESSION_228 — Copper Canyon runs in budget mode. Default $1,200,
+    # three bands so the demo shows the "$6k car vs $25k car doesn't
+    # get the same number" story from Chris's intake walk. Always
+    # rewrites so a run picks up the current defaults.
+    profile.recon_authorization_mode = (
+        DealerOnboardingProfile.RECON_AUTHORIZATION_MODE_BUDGET
+    )
+    profile.recon_budget_default = Decimal("1200.00")
+    profile.recon_budget_bands = [
+        {"up_to": "10000", "budget": "1200"},
+        {"up_to": "20000", "budget": "1800"},
+        {"up_to": None, "budget": "2500"},
+    ]
+    profile.save(
+        update_fields=[
+            "recon_authorization_mode",
+            "recon_budget_default",
+            "recon_budget_bands",
+            "updated_at",
+        ]
+    )
     verb = "created" if created else "reused"
     stdout.write(
         f"{verb} onboarding profile for {dealership.slug!r} "
-        f"(dealership_name={STORE_NAME!r})."
+        f"(dealership_name={STORE_NAME!r}, "
+        "recon_authorization_mode='budget')."
     )
+
+
+def _provision_rate_card(dealership: Dealership, stdout) -> int:
+    """SESSION_228 — flat-rate price sheet for Copper Canyon."""
+    from dealer_ai.models import (
+        CONDITION_CATEGORY_COSMETIC,
+        CONDITION_CATEGORY_ELECTRICAL,
+        CONDITION_CATEGORY_FLUIDS,
+        CONDITION_CATEGORY_GLASS,
+        CONDITION_CATEGORY_MECHANICAL,
+        CONDITION_CATEGORY_SAFETY,
+        CONDITION_CATEGORY_TIRES,
+        ReconRateCard,
+    )
+
+    items = [
+        # LOF is the retail_default — pre-ticked on every inspection.
+        ("LOF", "", CONDITION_CATEGORY_FLUIDS, Decimal("59.00"), True),
+        (
+            "Brakes",
+            "front axle",
+            CONDITION_CATEGORY_SAFETY,
+            Decimal("245.00"),
+            False,
+        ),
+        (
+            "Brakes",
+            "rear axle",
+            CONDITION_CATEGORY_SAFETY,
+            Decimal("225.00"),
+            False,
+        ),
+        (
+            "Tires",
+            "15-inch (set of 4)",
+            CONDITION_CATEGORY_TIRES,
+            Decimal("380.00"),
+            False,
+        ),
+        (
+            "Tires",
+            "16-inch (set of 4)",
+            CONDITION_CATEGORY_TIRES,
+            Decimal("440.00"),
+            False,
+        ),
+        (
+            "Tires",
+            "18-inch (set of 4)",
+            CONDITION_CATEGORY_TIRES,
+            Decimal("620.00"),
+            False,
+        ),
+        (
+            "Full detail",
+            "",
+            CONDITION_CATEGORY_COSMETIC,
+            Decimal("175.00"),
+            True,
+        ),
+        (
+            "Windshield replacement",
+            "",
+            CONDITION_CATEGORY_GLASS,
+            Decimal("325.00"),
+            False,
+        ),
+        (
+            "Spare key cut + program",
+            "",
+            CONDITION_CATEGORY_ELECTRICAL,
+            Decimal("140.00"),
+            False,
+        ),
+        (
+            "AC recharge",
+            "",
+            CONDITION_CATEGORY_MECHANICAL,
+            Decimal("95.00"),
+            False,
+        ),
+    ]
+    count = 0
+    for name, variant, category, price, retail_default in items:
+        ReconRateCard.objects.update_or_create(
+            dealership=dealership,
+            name=name,
+            variant=variant,
+            defaults=dict(
+                work_order_category=category,
+                flat_price=price,
+                retail_default=retail_default,
+                active=True,
+            ),
+        )
+        count += 1
+    stdout.write(f"provisioned recon rate card: {count} items.")
+    return count
 
 
 # ---------------------------------------------------------------------------

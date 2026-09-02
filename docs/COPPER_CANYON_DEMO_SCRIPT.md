@@ -114,42 +114,40 @@ the model's answer.
 
 ## 2. Recon authorization gate — the pitch screen (30s)
 
-**Click:** `Inventory` in the sidebar, then paste
-`http://127.0.0.1:5173/dealer-ai-inventory/RS-07/recon` in the URL
-bar. Scrolling the inventory grid is not an option until the page is
-wired to the backend — the current grid shows a static twelve-car
-sample (`CC-T-01`, `CC-S-01`, ...) whose stock numbers do not exist
-in the seed, so clicking any of them 404s. Filed as
-`TASK_losing-deals-and-the-inventory-page.md` item 3.
+**Click:** `Recon queue` in the sidebar. SESSION_228 added the
+cross-lot **Needs authorization** door so the pitch stops requiring
+a typed URL to a specific stock.
 
-*(Every route the sidebar covers is reachable by a click. The
-per-vehicle Recon page is reached via the vehicle row's Recon tile;
-there is no sidebar door for "all draft WOs across the lot." That is a
-finding worth writing down, not a step to fake.)*
+**What lands:** "Recon — needs authorization" with the two draft
+WOs the seed authored on RS-07 and RS-17 (each priced $1,450 and
+$1,670). Copper Canyon runs in **budget** mode with a $1,200
+default, so both WOs exceeded the cap and landed in the queue.
+Each row shows the overage in words: "Over budget · $250" and
+"Over budget · $470", the store cap ($1,200), and the labor +
+parts + total breakdown.
 
-**What lands:** "Recon · Stock #RS-07 · 2016 Rogue." Two condition
-findings at the top ("Rear tires below 4/32", "Front brake pads at
-3mm"). Below, a **Work orders** section with two rows:
+**What to say:** *"Copper Canyon Auto has told the system that any
+job under $1,200 per car can just happen — under budget, the
+recon manager doesn't need to bother the owner. But when the
+transmission shop quotes $1,450, the money doesn't move. It
+lands here, on one screen, across every car on the lot. Two of
+these are sitting right now. The pitch is not that we approve
+work — it's that we only bother you about the cars that go
+over."*
 
-1. WO #2 — outsourced to Desert Auto Repair, status **Completed**,
-   $600 estimate / $660 actual.
-2. WO #4 — outsourced to Yuma Transmission Specialists, status
-   **Draft**, $1,450 estimate, **Authorized: —**.
+**Optional:** Click **Authorize with reason** on one of the rows,
+type a short reason ("owner approved — trans is critical") and
+Confirm. The row disappears from the queue (WO is now approved,
+budget for that car has been raised), and the recon page for
+that stock now shows the WO in green as authorized-under-budget
+(the override lifted the cap).
 
-The draft row is the point. Scroll to it.
-
-**What to say:** *"This is the recon manager saying he wants to send
-this Rogue out for $1,450 of transmission work. The estimate came in
-above the budget line, so nothing happens until the owner clicks
-Approve. Every other product in this category records recon spend
-after the vendor does the work. Here the money doesn't move until
-the person paying the bill says yes. Two of these are sitting on the
-lot right now — pull up RS-17 to see the other one."*
-
-**Optional:** Click **Approve** on WO #4 to show the flow. If you do,
-the row moves from Draft to Approved and posts an authorized-cost
-number. Skip if you want the queue to still read as a queue at the
-end of the demo.
+**Second beat if you have time:** back on the queue, click **Send
+to wholesale** on the other row, type "recon overrun, going
+wholesale". Cancels the WO, moves the car to `wholesale_out`,
+prior spend stays on the ledger — that is the "the board warned
+you" demo beat Chris asked for. See docs/DEMO_SCRIPT variant if
+you want to price the loss on the aging board.
 
 ---
 
