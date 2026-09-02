@@ -164,6 +164,7 @@ from ..models import (
     CATEGORY_PARTS,
     CATEGORY_TIRES,
     CATEGORY_UPHOLSTERY,
+    Vendor,
     CONDITION_CATEGORY_ACCESSORIES,
     CONDITION_CATEGORY_BODY,
     CONDITION_CATEGORY_COSMETIC,
@@ -192,6 +193,7 @@ from ..models import (
     WORK_ORDER_PART_STATUS_RECEIVED,
     WORK_ORDER_PART_STATUS_RETURNED,
     WORK_ORDER_PART_SOURCE_IN_STOCK,
+    WORK_ORDER_PART_SOURCE_OUTSIDE_VENDOR,
     WORK_ORDER_PART_SOURCE_TYPE_CHOICES,
     WORK_ORDER_STATUS_APPROVED,
     WORK_ORDER_STATUS_CANCELLED,
@@ -1872,6 +1874,17 @@ def add_part(
             "Valid values live in "
             "``dealer_ai.models.WORK_ORDER_PART_SOURCE_TYPE_CHOICES``."
         )
+    # SESSION_228.1 — outside_vendor requires a nonblank source_name
+    # (Chris: "they will have a name and things like that"), and
+    # links to the tenant's Vendor when the name matches.
+    resolved_vendor = None
+    if source_type == WORK_ORDER_PART_SOURCE_OUTSIDE_VENDOR:
+        if not (source_name or "").strip():
+            raise ValueError(
+                "add_part: source_name is required when source_type "
+                "is 'outside_vendor'. Outside vendors have names."
+            )
+        resolved_vendor = _lookup_vendor_by_name(dealership, source_name)
 
     with transaction.atomic():
         wo = _load_for_transition(work_order)
@@ -1891,6 +1904,7 @@ def add_part(
             description=description,
             source_type=source_type,
             source_name=source_name,
+            vendor=resolved_vendor,
             unit_cost=unit_cost,
             notes=notes,
             status=WORK_ORDER_PART_STATUS_NEEDED,
@@ -1898,6 +1912,17 @@ def add_part(
         part.full_clean()
         part.save()
         return part
+
+
+def _lookup_vendor_by_name(dealership, name: str):
+    """Case-insensitive Vendor lookup by name at the tenant.
+    Returns ``None`` if no match — the source_name is still stored
+    as the free-text snapshot."""
+    match = (
+        Vendor.objects.filter(dealership=dealership, name__iexact=name.strip())
+        .first()
+    )
+    return match
 
 
 def update_part(
@@ -1965,6 +1990,18 @@ def update_part(
         )
         for field, value in updates.items():
             setattr(refreshed, field, value)
+        # SESSION_228.1 — same outside-vendor enforcement as add_part.
+        # Re-run on every save because either the source_type OR the
+        # source_name may have changed.
+        if refreshed.source_type == WORK_ORDER_PART_SOURCE_OUTSIDE_VENDOR:
+            if not (refreshed.source_name or "").strip():
+                raise ValueError(
+                    "update_part: source_name is required when "
+                    "source_type is 'outside_vendor'."
+                )
+            refreshed.vendor = _lookup_vendor_by_name(
+                dealership, refreshed.source_name
+            )
         refreshed.full_clean()
         refreshed.save()
         return refreshed

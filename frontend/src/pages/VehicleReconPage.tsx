@@ -274,6 +274,11 @@ export default function VehicleReconPage() {
           <div className="text-sm text-muted-foreground">
             {dashboard.vehicle.year} {dashboard.vehicle.model}
           </div>
+          {dashboard.recon_budget != null && (
+            <div className="mt-1 inline-flex rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-800">
+              Recon spend: ${dashboard.recon_spend} of ${dashboard.recon_budget}
+            </div>
+          )}
         </div>
       </div>
 

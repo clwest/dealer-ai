@@ -231,6 +231,17 @@ def _project_part(part: WorkOrderPart) -> dict:
         "status": part.status,
         "source_type": part.source_type,
         "source_name": part.source_name,
+        # SESSION_228.1 — linked Vendor when outside_vendor source_name
+        # matched a store record.
+        "vendor": (
+            {
+                "id": part.vendor_id,
+                "slug": part.vendor.slug,
+                "name": part.vendor.name,
+            }
+            if part.vendor_id is not None
+            else None
+        ),
         "ordered_at": part.ordered_at,
         "received_at": part.received_at,
         "installed_at": part.installed_at,
@@ -274,6 +285,23 @@ def _project_estimate_revision(revision) -> dict:
     }
 
 
+def _project_budget_override(override) -> dict:
+    """SESSION_228.1 — surface each per-vehicle recon-budget override
+    on the WO projection so a manager reading the card sees WHY the
+    cap moved and by how much."""
+    return {
+        "id": override.pk,
+        "amount": str(override.amount),
+        "reason": override.reason,
+        "granted_by": (
+            override.granted_by.username
+            if override.granted_by_id is not None
+            else None
+        ),
+        "granted_at": override.granted_at,
+    }
+
+
 def _project_work_order(wo: WorkOrder) -> dict:
     # Ledger rows this WO has posted (all five families:
     # estimate:<seq>, estimate_reversal:<seq>,
@@ -289,6 +317,12 @@ def _project_work_order(wo: WorkOrder) -> dict:
         .order_by("created_at")
     )
     revisions = wo.estimate_revisions.select_related("revised_by").all()
+    # SESSION_228.1 — per-vehicle recon-budget overrides, additive.
+    # Every card that reads a WO on this car surfaces the override
+    # history so the auto-authorization / queue notes have context.
+    overrides = wo.vehicle.recon_budget_overrides.select_related(
+        "granted_by"
+    ).order_by("-granted_at")
     return {
         "id": wo.pk,
         "vehicle_stock_number": wo.vehicle.stock_number,
@@ -342,6 +376,9 @@ def _project_work_order(wo: WorkOrder) -> dict:
         "ledger_rows": [_project_ledger_row(c) for c in ledger_rows],
         "estimate_revisions": [
             _project_estimate_revision(r) for r in revisions
+        ],
+        "budget_overrides": [
+            _project_budget_override(o) for o in overrides
         ],
         # SESSION_228 Part 1b — parts roll into the WO's money.
         # Frontend reads these to render "Labor $X + Parts $Y =
@@ -834,6 +871,10 @@ def admin_recon_dashboard(request, stock_number):
                     "discovered_on_work_order_id": (
                         f.discovered_on_work_order_id
                     ),
+                    # SESSION_228.1 — surface the rate-card link on
+                    # findings so the frontend can render "(from LOF
+                    # rate card)" or link back to the sheet.
+                    "rate_card_item_id": f.rate_card_item_id,
                 }
                 for f in findings
             ],
@@ -872,6 +913,17 @@ def admin_recon_dashboard(request, stock_number):
         .select_related("vendor", "work_order", "drafted_by")
         .order_by("-created_at")
     )
+    # SESSION_228.1 — the page needs to show "$409 of $1,800 used"
+    # per car, so budget + spend go in the top-level payload.
+    # Both are `None` for `per_job` stores or budget-mode stores with
+    # no cap filled in — the frontend renders the numbers only when
+    # both are set.
+    budget = recon_budget_service.recon_budget_for(
+        vehicle, dealership=dealership
+    )
+    spend = recon_budget_service.recon_spend_for(
+        vehicle, dealership=dealership
+    )
     return Response(
         {
             "vehicle": {
@@ -882,6 +934,8 @@ def admin_recon_dashboard(request, stock_number):
             "latest_condition_report": report_projection,
             "work_orders": [_project_work_order(wo) for wo in work_orders],
             "communications": [_project_comm(c) for c in comms],
+            "recon_budget": str(budget) if budget is not None else None,
+            "recon_spend": str(spend),
         }
     )
 

@@ -91,10 +91,13 @@ from ..models import (
     CONDITION_REPORT_STATUS_COMPLETE,
     CONDITION_REPORT_STATUS_DRAFT,
     CONDITION_SEVERITY_CHOICES,
+    CONDITION_SEVERITY_REQUIRED,
     ConditionFinding,
     ConditionFindingPhoto,
     ConditionReport,
     Dealership,
+    DealerOnboardingProfile,
+    ReconRateCard,
     Vehicle,
     WorkOrder,
 )
@@ -371,6 +374,40 @@ def create_report(
     )
     report.full_clean()
     report.save()
+
+    # SESSION_228.1 — on stores whose recon_authorization_mode is
+    # `budget`, seed the report with one finding per active
+    # retail_default rate-card item. The inspector deletes what does
+    # not apply. Chris's intake model: on a retail lot the LOF is a
+    # default that is already there when the sheet opens, not a
+    # finding the inspector adds. `per_job` stores are byte-for-byte
+    # unchanged — no defaults.
+    profile = (
+        DealerOnboardingProfile.objects.filter(dealership=dealership)
+        .order_by("-updated_at")
+        .first()
+    )
+    if (
+        profile is not None
+        and profile.recon_authorization_mode
+        == DealerOnboardingProfile.RECON_AUTHORIZATION_MODE_BUDGET
+    ):
+        defaults = ReconRateCard.objects.filter(
+            dealership=dealership, retail_default=True, active=True
+        ).order_by("name", "variant")
+        for item in defaults:
+            label = f"{item.name} · {item.variant}" if item.variant else item.name
+            finding = ConditionFinding(
+                report=report,
+                dealership=dealership,
+                category=item.work_order_category,
+                severity=CONDITION_SEVERITY_REQUIRED,
+                description=label,
+                estimated_cost=item.flat_price,
+                rate_card_item=item,
+            )
+            finding.full_clean()
+            finding.save()
     return report
 
 

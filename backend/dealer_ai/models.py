@@ -2139,9 +2139,15 @@ WORK_ORDER_PART_SOURCE_ONLINE = "online"
 WORK_ORDER_PART_SOURCE_SALVAGE = "salvage"
 WORK_ORDER_PART_SOURCE_IN_STOCK = "in_stock"
 WORK_ORDER_PART_SOURCE_CUSTOMER_SUPPLIED = "customer_supplied"
+# SESSION_228.1 — Chris's mental-model addition, decided
+# 2026-09-01 evening. Sits at the top of the picker so it is
+# the natural choice when a body shop / transmission specialist
+# / A/C shop supplied the part.
+WORK_ORDER_PART_SOURCE_OUTSIDE_VENDOR = "outside_vendor"
 WORK_ORDER_PART_SOURCE_OTHER = "other"
 
 WORK_ORDER_PART_SOURCE_TYPE_CHOICES = (
+    (WORK_ORDER_PART_SOURCE_OUTSIDE_VENDOR, "Outside vendor / body shop"),
     (WORK_ORDER_PART_SOURCE_OEM_DEALER, "OEM dealer counter"),
     (WORK_ORDER_PART_SOURCE_LOCAL_PARTS, "Local parts store"),
     (WORK_ORDER_PART_SOURCE_ONLINE, "Online"),
@@ -2980,10 +2986,24 @@ class WorkOrderPart(models.Model):
         choices=WORK_ORDER_PART_SOURCE_TYPE_CHOICES,
         default=WORK_ORDER_PART_SOURCE_IN_STOCK,
     )
-    # Free-text vendor / store name at the parts side. No FK to
-    # :class:`Vendor` because parts suppliers are a different
-    # population from recon vendors (planning §1.5).
+    # Free-text vendor / store name at the parts side. Kept even
+    # when ``vendor`` is set so the name-at-time-of-order is the
+    # immutable snapshot (matches the vendor snapshot pattern on
+    # VehicleCost). SESSION_228.1 — required when
+    # ``source_type == outside_vendor`` (Chris's mental model:
+    # outside vendors have names).
     source_name = models.CharField(max_length=255, blank=True, default="")
+    # SESSION_228.1 — optional link to a store :class:`Vendor` when
+    # the outside-vendor source_name matches an existing record.
+    # PROTECT because Vendor deletion is already PROTECT everywhere
+    # it appears (planning §5.b Option A).
+    vendor = models.ForeignKey(
+        "Vendor",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="parts",
+    )
     ordered_at = models.DateField(null=True, blank=True)
     received_at = models.DateField(null=True, blank=True)
     installed_at = models.DateField(null=True, blank=True)

@@ -95,14 +95,35 @@ def authorization_mode(dealership: Dealership) -> str:
 # ---- Budget for a car -----------------------------------------------------
 
 
+def _band_basis_for(vehicle: Vehicle) -> Decimal:
+    """Return the amount bands are keyed against for ``vehicle``.
+
+    Chris's framing (and the SESSION_228.1 review): bands are by
+    acquisition COST, not by asking price. A car acquired for
+    $6,802 lives in band 1 whether it is later priced at $8k or
+    $12k. Uses ``vehicle.acquisition_total`` (sum of every cash
+    line on the acquisition row — purchase price + fees +
+    transportation + title). Falls back to ``vehicle.price`` only
+    when the car has no acquisition record yet — every fresh trade
+    has an acquisition record within seconds, but the fallback keeps
+    the check working during the narrow window between Vehicle
+    create and VehicleAcquisition create.
+    """
+    total = getattr(vehicle, "acquisition_total", None)
+    if total and Decimal(total) > Decimal("0"):
+        return Decimal(total)
+    return Decimal(str(getattr(vehicle, "price", None) or "0"))
+
+
 def _base_budget_from_bands(
     profile: DealerOnboardingProfile, vehicle: Vehicle
 ) -> Optional[Decimal]:
-    """Pick the band whose ``up_to`` covers the vehicle's price,
-    else fall back to ``recon_budget_default``. Returns ``None``
-    when neither is set (store has budget mode on but hasn't
-    filled in a number — treated as "no cap"; ``authorize_or_queue``
-    then acts like ``per_job``)."""
+    """Pick the band whose ``up_to`` covers the vehicle's acquisition
+    total (see :func:`_band_basis_for`), else fall back to
+    ``recon_budget_default``. Returns ``None`` when neither is set
+    (store has budget mode on but hasn't filled in a number —
+    treated as "no cap"; ``authorize_or_queue`` then acts like
+    ``per_job``)."""
     bands = list(profile.recon_budget_bands or [])
     # Sort bands by up_to; None (catch-all) comes last.
     def _band_key(b):
@@ -111,10 +132,10 @@ def _base_budget_from_bands(
             return (1, Decimal("0"))
         return (0, Decimal(str(up_to)))
 
-    price = Decimal(str(getattr(vehicle, "price", None) or "0"))
+    basis = _band_basis_for(vehicle)
     for band in sorted(bands, key=_band_key):
         up_to = band.get("up_to")
-        if up_to is None or price <= Decimal(str(up_to)):
+        if up_to is None or basis <= Decimal(str(up_to)):
             budget = band.get("budget")
             if budget is not None:
                 return Decimal(str(budget))
@@ -306,6 +327,17 @@ def authorize_or_queue(
             )
             wo.refresh_from_db()
             return wo, True
+        # SESSION_228.1 — a queued WO gets a symmetric note so a
+        # manager reading the card sees WHY it is waiting without
+        # having to open the queue. "$X over the $Y cap" mirrors
+        # the auto-authorized "$X of $Y" line.
+        over = new_total - budget
+        queue_prefix = (
+            f"needs authorization: ${over} over the ${budget} cap. "
+        )
+        if not (wo.notes or "").startswith("needs authorization:"):
+            wo.notes = (queue_prefix + (wo.notes or "")).strip()
+            wo.save(update_fields=["notes", "updated_at"])
         return wo, False
 
 

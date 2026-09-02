@@ -561,15 +561,23 @@ class WorkOrderPartStatusVocabulary(TestCase):
 
 
 class WorkOrderPartSourceTypeVocabulary(TestCase):
-    """Seven canonical source-type values per SESSION_066 finalization
-    (adds ``customer_supplied`` — meaningfully distinct from
-    ``in_stock`` because warranty + liability differ)."""
+    """Eight canonical source-type values as of SESSION_228.1.
+    Chris added ``outside_vendor`` (2026-09-01 evening) — a body
+    shop / transmission specialist / A/C shop that supplies a
+    part; distinct from ``local_parts`` because outside vendors
+    have names and often exist as :class:`Vendor` records already.
 
-    def test_choices_contain_exactly_seven_canonical_sources(self):
+    SESSION_066 first shipped seven (adding ``customer_supplied`` —
+    meaningfully distinct from ``in_stock`` because warranty +
+    liability differ)."""
+
+    def test_choices_contain_exactly_eight_canonical_sources(self):
+        from dealer_ai.models import WORK_ORDER_PART_SOURCE_OUTSIDE_VENDOR
         keys = {key for key, _ in WORK_ORDER_PART_SOURCE_TYPE_CHOICES}
         self.assertEqual(
             keys,
             {
+                WORK_ORDER_PART_SOURCE_OUTSIDE_VENDOR,
                 WORK_ORDER_PART_SOURCE_OEM_DEALER,
                 WORK_ORDER_PART_SOURCE_LOCAL_PARTS,
                 WORK_ORDER_PART_SOURCE_ONLINE,
@@ -579,7 +587,7 @@ class WorkOrderPartSourceTypeVocabulary(TestCase):
                 WORK_ORDER_PART_SOURCE_OTHER,
             },
         )
-        self.assertEqual(len(WORK_ORDER_PART_SOURCE_TYPE_CHOICES), 7)
+        self.assertEqual(len(WORK_ORDER_PART_SOURCE_TYPE_CHOICES), 8)
 
     def test_customer_supplied_present(self):
         # Explicit check — this is the SESSION_066 finalization.

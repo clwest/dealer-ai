@@ -128,6 +128,8 @@ export function WorkOrderCard({
   const [partQty, setPartQty] = useState("1");
   const [partCost, setPartCost] = useState("");
   const [partSource, setPartSource] = useState("in_stock");
+  // SESSION_228.1 — outside_vendor requires a vendor name.
+  const [partSourceName, setPartSourceName] = useState("");
 
   // Revise-estimate form state.
   const [newEstimate, setNewEstimate] = useState(wo.estimated_cost ?? "");
@@ -274,12 +276,17 @@ export function WorkOrderCard({
       setError("Part name is required.");
       return;
     }
+    if (partSource === "outside_vendor" && !partSourceName.trim()) {
+      setError("Vendor name is required for an outside vendor.");
+      return;
+    }
     const res = await _guard(() =>
       addWorkOrderPart(wo.id, {
         name: partName,
         quantity: parseInt(partQty, 10) || 1,
         unit_cost: partCost.trim() || null,
         source_type: partSource,
+        source_name: partSourceName.trim() || undefined,
       }),
     );
     if (res) {
@@ -288,6 +295,7 @@ export function WorkOrderCard({
       setPartName("");
       setPartCost("");
       setPartQty("1");
+      setPartSourceName("");
     }
   }
 
@@ -392,10 +400,31 @@ export function WorkOrderCard({
           </div>
         )}
 
-        {/* SESSION_228 — auto-authorized-under-budget note. */}
+        {/* SESSION_228 — auto-authorized-under-budget note.
+            SESSION_228.1 — the symmetric queued note. */}
         {wo.notes && wo.notes.startsWith("auto-authorized") && (
           <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
             {wo.notes.split(".")[0]}.
+          </div>
+        )}
+        {wo.notes && wo.notes.startsWith("needs authorization:") && (
+          <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+            {wo.notes.split(".")[0]}.
+          </div>
+        )}
+        {wo.budget_overrides.length > 0 && (
+          <div className="rounded border border-slate-200 bg-slate-50 p-2 text-xs">
+            <div className="font-medium text-slate-800">
+              Budget overrides on this car
+            </div>
+            <div className="space-y-1 pt-1">
+              {wo.budget_overrides.map((o) => (
+                <div key={o.id} className="text-slate-700">
+                  +${o.amount} · {o.reason} —{" "}
+                  {o.granted_by ?? "—"} · {_formatDateTime(o.granted_at)}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -591,6 +620,13 @@ export function WorkOrderCard({
                     ))}
                   </select>
                 </div>
+                {partSource === "outside_vendor" && (
+                  <Input
+                    placeholder="Vendor name (required for outside vendor)"
+                    value={partSourceName}
+                    onChange={(e) => setPartSourceName(e.target.value)}
+                  />
+                )}
                 <div className="flex justify-end gap-2">
                   <Button
                     size="sm"
@@ -602,7 +638,12 @@ export function WorkOrderCard({
                   <Button
                     size="sm"
                     onClick={_addPart}
-                    disabled={saving || !partName.trim()}
+                    disabled={
+                      saving ||
+                      !partName.trim() ||
+                      (partSource === "outside_vendor" &&
+                        !partSourceName.trim())
+                    }
                   >
                     Save part
                   </Button>

@@ -1412,6 +1412,11 @@ def _seed_awaiting_authorization_wos(
             dealership=dealership,
             finding_ids=[findings[0].pk],
         )
+        # SESSION_228.1 — run the queued WO through authorize_or_queue
+        # so it picks up the "needs authorization: $X over the $Y cap"
+        # note the same way a user-created over-budget WO does.
+        from dealer_ai.services import recon_budget as _rb
+        _rb.authorize_or_queue(wo, dealership=dealership, actor=owner)
         # Backdate the created_at so the aging read is not "0 minutes"
         # — the owner should see the estimate has been sitting for
         # roughly a day, not that it just arrived. Uses .update() to

@@ -1389,6 +1389,10 @@ export const WORK_ORDER_PART_SOURCE_TYPE_CHOICES: Array<{
   value: string;
   label: string;
 }> = [
+  // SESSION_228.1 — Chris's mental-model addition. Sits first so
+  // the natural choice when a body shop / transmission specialist
+  // supplied the part is one option away.
+  { value: "outside_vendor", label: "Outside vendor / body shop" },
   { value: "oem_dealer", label: "OEM dealer counter" },
   { value: "local_parts", label: "Local parts store" },
   { value: "online", label: "Online" },
@@ -1469,6 +1473,7 @@ export interface WorkOrderPart {
   status: string;
   source_type: string;
   source_name: string;
+  vendor: { id: number; slug: string; name: string } | null;
   ordered_at: string | null;
   received_at: string | null;
   installed_at: string | null;
@@ -1476,6 +1481,14 @@ export interface WorkOrderPart {
   notes: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface WorkOrderBudgetOverride {
+  id: number;
+  amount: string;
+  reason: string;
+  granted_by: string | null;
+  granted_at: string;
 }
 
 export interface WorkOrderLedgerRow {
@@ -1534,6 +1547,9 @@ export interface WorkOrder {
   parts_actual: string;
   total_estimate: string;
   total_actual: string;
+  // SESSION_228.1 — per-vehicle recon-budget overrides granted on
+  // this car, additive. Every WO on the car surfaces the history.
+  budget_overrides: WorkOrderBudgetOverride[];
 }
 
 // SESSION_228 — recon budget + rate card + needs-authorization queue.
@@ -1649,6 +1665,10 @@ export interface ReconDashboardResponse {
   latest_condition_report: ReconDashboardReport | null;
   work_orders: WorkOrder[];
   communications: VendorCommunication[];
+  // SESSION_228.1 — cap + running spend so the page can render
+  // "$X of $Y used" without a second round-trip.
+  recon_budget?: string | null;
+  recon_spend?: string;
 }
 
 // ---- Request payload types ----
