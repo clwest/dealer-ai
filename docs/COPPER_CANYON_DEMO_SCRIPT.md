@@ -31,6 +31,19 @@ written here.** The state was clicked and screenshotted on 2026-09-01.
 
 ## Setup (60 seconds before the demo)
 
+**Public dealership routing.** The anonymous customer chat and public
+showroom bind to whichever store `DEALER_AI_PUBLIC_DEALERSHIP_SLUG` in
+`backend/.env` names. On this box:
+
+```
+DEALER_AI_PUBLIC_DEALERSHIP_SLUG=copper-canyon-auto
+```
+
+Without that line every anonymous visitor lands on the empty
+single-tenant default and the showroom + assistant return zero cars
+(SESSION_232.2). The seed prints the same reminder at the end of its
+output.
+
 ```bash
 # One terminal — backend on :8001
 cd backend

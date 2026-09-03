@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 
 from dealer_ai.models import Dealership, Vehicle
 from dealer_ai.services.inventory_search import (
@@ -91,6 +91,92 @@ class PublicChatScopingTests(TestCase):
         self.assertIn("CB-1", matched_stocks)
 
     def test_start_chat_without_header_binds_to_default(self):
+        client = Client()
+        resp = client.post(
+            "/api/dealer-ai/chat/start/",
+            data={},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        from dealer_ai.models import ChatSession
+
+        session = ChatSession.objects.get(id=resp.json()["session"]["id"])
+        self.assertEqual(session.dealership_id, self.store_a.pk)
+
+
+# ---------------------------------------------------------------------------
+# SESSION_232.2 — DEALER_AI_PUBLIC_DEALERSHIP_SLUG deployment setting
+# ---------------------------------------------------------------------------
+
+
+class ConfiguredPublicSlugRoutingTests(TestCase):
+    """With the setting naming a live store, anonymous callers land
+    on it instead of the empty single-tenant default."""
+
+    def setUp(self):
+        from dealer_ai.models import DealerOnboardingProfile
+
+        self.store_a = get_default_dealership()  # ghost default
+        self.store_b = Dealership.objects.create(
+            name="Copper Canyon Auto", slug="copper-canyon-auto"
+        )
+        DealerOnboardingProfile.objects.create(
+            dealership=self.store_b,
+            dealership_name="Copper Canyon Auto",
+            store_location="Yuma, AZ",
+        )
+        _mk(self.store_b, "CC-081", "Silverado 1500", price="13235")
+        _mk(self.store_b, "CC-080", "Silverado 1500", price="17062")
+        invalidate_inventory_vocabulary(self.store_a.pk)
+        invalidate_inventory_vocabulary(self.store_b.pk)
+
+    @override_settings(DEALER_AI_PUBLIC_DEALERSHIP_SLUG="copper-canyon-auto")
+    def test_anonymous_profile_returns_configured_store(self):
+        client = Client()
+        resp = client.get("/api/dealer-ai/onboarding/profile/")
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertEqual(payload["dealership_slug"], "copper-canyon-auto")
+        self.assertEqual(payload["dealership_name"], "Copper Canyon Auto")
+
+    @override_settings(DEALER_AI_PUBLIC_DEALERSHIP_SLUG="copper-canyon-auto")
+    def test_anonymous_chat_binds_to_configured_store(self):
+        client = Client()
+        resp = client.post(
+            "/api/dealer-ai/chat/start/",
+            data={"initial_message": "got any Silverados?"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        body = resp.json()
+        from dealer_ai.models import ChatSession
+
+        session = ChatSession.objects.get(id=body["session"]["id"])
+        self.assertEqual(session.dealership_id, self.store_b.pk)
+        stocks = {v["stock_number"] for v in body["matched_vehicles"]}
+        self.assertTrue({"CC-081", "CC-080"} & stocks)
+
+    @override_settings(DEALER_AI_PUBLIC_DEALERSHIP_SLUG="copper-canyon-auto")
+    def test_header_still_wins_over_configured_slug(self):
+        client = Client()
+        resp = client.post(
+            "/api/dealer-ai/chat/start/",
+            data={},
+            content_type="application/json",
+            **{HDR: self.store_a.slug},
+        )
+        self.assertEqual(resp.status_code, 201)
+        from dealer_ai.models import ChatSession
+
+        session = ChatSession.objects.get(id=resp.json()["session"]["id"])
+        self.assertEqual(session.dealership_id, self.store_a.pk)
+
+    @override_settings(DEALER_AI_PUBLIC_DEALERSHIP_SLUG="")
+    def test_setting_unset_falls_back_to_default(self):
+        # Explicit override to blank — the resolver falls through to
+        # the terminal default (single-tenant behaviour preserved when
+        # the deployment has not opted in). This test's box has the
+        # setting live in backend/.env, so we clear it here.
         client = Client()
         resp = client.post(
             "/api/dealer-ai/chat/start/",

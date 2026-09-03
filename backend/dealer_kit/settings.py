@@ -136,6 +136,17 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# SESSION_232.2 — public dealership routing. An anonymous browser can
+# not tell the backend which store it is; the deployment declares it
+# with this env var. ``services.tenancy.get_current_dealership``
+# consults auth → X-Dealership-Slug header → this slug → the
+# single-tenant default. Blank on multi-tenant SaaS deployments where
+# the header is the source of truth. See docs/COPPER_CANYON_DEMO_
+# SCRIPT.md for the value on the demo box.
+DEALER_AI_PUBLIC_DEALERSHIP_SLUG = os.getenv(
+    "DEALER_AI_PUBLIC_DEALERSHIP_SLUG", ""
+).strip()
+
 # Milestone 3 · Increment 4 — provider-neutral photo storage.
 #
 # Configuration uses Django 5.0's ``STORAGES`` dict (the modern

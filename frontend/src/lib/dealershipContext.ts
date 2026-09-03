@@ -1,20 +1,16 @@
 // SESSION_232 addendum — module-level cache for the resolved
 // dealership slug. Public/embed chat + showroom fetches attach it as
-// ``X-Dealership-Slug`` so the multi-store backend routes anonymous
+// ``X-Dealership-Slug`` so a multi-store backend routes anonymous
 // callers to the right store.
 //
 // The slug is primed by ``fetchOnboardingProfile`` (used by
-// ``useBrand``); the app boots that on first render, so by the time
-// the customer starts a chat or the showroom fetches inventory the
-// header is available. Falls back to a build-time default from
-// ``import.meta.env.VITE_DEALERSHIP_SLUG`` when set (useful for
-// embedded / cross-domain deployments that never call the branding
-// endpoint before the first chat turn).
+// ``useBrand``). SESSION_232.2 removed the ``VITE_DEALERSHIP_SLUG``
+// build-time fallback — one place, not two: the backend decides
+// which store a public deployment belongs to via
+// ``DEALER_AI_PUBLIC_DEALERSHIP_SLUG`` in ``backend/.env``. The
+// frontend only echoes what the branding endpoint tells it.
 
-const BUILD_TIME_FALLBACK =
-  ((import.meta.env.VITE_DEALERSHIP_SLUG as string | undefined) ?? "").trim();
-
-let cachedSlug: string = BUILD_TIME_FALLBACK;
+let cachedSlug: string = "";
 
 export function setDealershipSlug(slug: string | null | undefined): void {
   const trimmed = (slug ?? "").trim();

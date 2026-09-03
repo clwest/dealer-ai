@@ -191,7 +191,7 @@ def get_active_membership(user):
 def get_current_dealership(request) -> "Dealership":
     """Return the :class:`Dealership` for the current request context.
 
-    Composes three orthogonal signals in priority order. Each layer is
+    Composes four orthogonal signals in priority order. Each layer is
     a distinct concern; they are ordered by *specificity of intent*,
     not by *strength of authentication*.
 
@@ -206,18 +206,22 @@ def get_current_dealership(request) -> "Dealership":
        partner integrations) to declare tenancy explicitly. Silent
        fall-through when the header is missing or the slug does not
        resolve — no exception.
-    3. **Default fallback.** :func:`get_default_dealership` — the
+    3. **Deployment-configured public store.** ``settings.
+       DEALER_AI_PUBLIC_DEALERSHIP_SLUG`` (env-driven; blank when
+       unset). Added SESSION_232.2: an anonymous visitor cannot tell
+       the backend which store it is, so the deployment does. When
+       this setting is set AND resolves to a live Dealership, use it.
+       Without it every anonymous / header-less caller hit the
+       single-tenant default and the customer chat/showroom bound to
+       the empty ghost store on a multi-store install.
+    4. **Default fallback.** :func:`get_default_dealership` — the
        terminal fallback. Guarantees this function never returns
        ``None`` even in a fully anonymous, header-less request.
 
-    Never returns ``None``. Never raises on unknown header slugs (the
-    header is a hint, not a contract; treating it as a contract would
-    let a caller induce a 500 by sending a bogus slug).
-
-    Not called by any view yet — 4C (advisor workspace) and 4D (admin
-    endpoints) are the first consumers. This function is deliberately
-    landed one increment ahead of its callers so the resolver's
-    behavior can be locked by tests in isolation.
+    Never returns ``None``. Never raises on unknown header slugs or
+    an unknown setting slug (both are hints, not contracts; treating
+    either as a contract would let a caller or a bad env value
+    induce a 500).
     """
     user = getattr(request, "user", None)
     membership = get_active_membership(user)
@@ -231,6 +235,18 @@ def get_current_dealership(request) -> "Dealership":
         header_dealership = Dealership.objects.filter(slug=header_value).first()
         if header_dealership is not None:
             return header_dealership
+
+    from django.conf import settings
+
+    configured = (
+        getattr(settings, "DEALER_AI_PUBLIC_DEALERSHIP_SLUG", "") or ""
+    ).strip()
+    if configured:
+        from ..models import Dealership
+
+        configured_dealership = Dealership.objects.filter(slug=configured).first()
+        if configured_dealership is not None:
+            return configured_dealership
 
     return get_default_dealership()
 

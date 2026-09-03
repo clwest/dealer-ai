@@ -338,6 +338,21 @@ class Command(BaseCommand):
                 f"transitioned={bhph_delinquency['transitioned_count']}."
             )
 
+        # SESSION_232.2 — reseeding without wiring the public-dealership
+        # env var leaves the public chat + showroom bound to the empty
+        # ghost "Default Dealership" (id 1). Print the exact env line
+        # so nobody rebuilds the demo store and then has to trace it
+        # again.
+        self.stdout.write(
+            self.style.WARNING(
+                f"\n  Public site → set in backend/.env:\n"
+                f"    DEALER_AI_PUBLIC_DEALERSHIP_SLUG={dealership.slug}\n"
+                f"  Without it, anonymous /api/dealer-ai/chat/start/ and\n"
+                f"  /api/dealer-ai/showroom/vehicles/ bind to the default\n"
+                f"  tenant and the customer chat returns zero cars.\n"
+            )
+        )
+
         self.stdout.write(
             self.style.SUCCESS(
                 "seed_copper_canyon_auto_demo OK — "

@@ -149,6 +149,42 @@ class GetCurrentDealershipResolver(TestCase):
         req = self._request(user=self.user)
         self.assertEqual(get_current_dealership(req), self.other)
 
+    # --- SESSION_232.2 — DEALER_AI_PUBLIC_DEALERSHIP_SLUG layer --------------
+
+    def test_configured_slug_wins_over_terminal_default(self):
+        from django.test import override_settings
+
+        with override_settings(
+            DEALER_AI_PUBLIC_DEALERSHIP_SLUG=self.other.slug
+        ):
+            req = self._request()
+            self.assertEqual(get_current_dealership(req), self.other)
+
+    def test_configured_slug_unknown_falls_through_to_default(self):
+        from django.test import override_settings
+
+        with override_settings(
+            DEALER_AI_PUBLIC_DEALERSHIP_SLUG="no-such-slug"
+        ):
+            req = self._request()
+            self.assertEqual(get_current_dealership(req), self.default)
+
+    def test_header_still_wins_over_configured_slug(self):
+        from django.test import override_settings
+
+        with override_settings(
+            DEALER_AI_PUBLIC_DEALERSHIP_SLUG=self.default.slug
+        ):
+            req = self._request(headers={"X-Dealership-Slug": self.other.slug})
+            self.assertEqual(get_current_dealership(req), self.other)
+
+    def test_unset_configured_slug_leaves_default_behaviour(self):
+        from django.test import override_settings
+
+        with override_settings(DEALER_AI_PUBLIC_DEALERSHIP_SLUG=""):
+            req = self._request()
+            self.assertEqual(get_current_dealership(req), self.default)
+
     def test_membership_beats_header_when_both_present(self):
         # Auth is the strongest signal of intent — the user chose to
         # log in as themselves. A header pointing at a *different*
