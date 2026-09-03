@@ -36,17 +36,21 @@ def _model_is_reasoning(model: str) -> bool:
 
 @register()
 def openai_sdk_model_mismatch(app_configs, **kwargs) -> List[CheckWarning]:
-    """W001 — warn one line when the configured OpenAI model needs a
-    parameter the installed SDK does not accept.
+    """W001 — informational one-liner when the configured OpenAI model
+    needs a parameter the installed SDK's Python signature does not
+    accept.
 
-    Detects the reasoning-model / legacy-SDK combination that caused the
-    2026-09-03 outage: the provider will send ``max_completion_tokens``
-    for any ``gpt-5*`` / ``o1*`` / ``o3*`` / ``o4*`` model, but SDKs
-    older than ``openai==1.45`` do not accept that keyword.
+    Detects the reasoning-model / legacy-SDK combination that caused
+    the 2026-09-03 outage: the provider will send
+    ``max_completion_tokens`` for any ``gpt-5*`` / ``o1*`` / ``o3*``
+    / ``o4*`` model, but SDKs older than ``openai==1.45`` have no
+    such keyword in their Python signature.
 
-    The provider retries once with ``max_tokens`` when the mismatch
-    is detected at request time, but the pin should be bumped so the
-    first call succeeds and the retry path is only a safety net.
+    The provider handles the drift by retrying the request with
+    ``extra_body={"max_completion_tokens": N}`` — the SDK forwards
+    that JSON field to the API without signature validation — so
+    requests DO reach the API on the pinned SDK. This warning is
+    informational: it flags an old pin, not a broken request path.
     """
     provider = (
         getattr(settings, "DEALER_AI_LLM_PROVIDER", "ollama") or "ollama"
@@ -102,16 +106,19 @@ def openai_sdk_model_mismatch(app_configs, **kwargs) -> List[CheckWarning]:
     return [
         CheckWarning(
             (
-                "openai %s does not accept `max_completion_tokens`, which "
-                "the configured OPENAI_MODEL=%s requires; each request "
-                "falls back to a legacy retry until the pin is bumped."
+                "openai %s is older than the configured OPENAI_MODEL=%s "
+                "expects; the Python signature has no "
+                "`max_completion_tokens` keyword, so each request "
+                "carries it in extra_body instead. Requests reach the "
+                "API, but the pin is old."
             )
             % (installed, model),
             hint=(
-                "Bump `openai` inside backend/.venv to >=1.45 (do NOT "
-                "reinstall against the pyenv-global interpreter — see "
-                "SESSION_224 env-drift note). Or set OPENAI_MODEL to a "
-                "non-reasoning model such as gpt-4o-mini."
+                "Bump `openai` inside backend/.venv to >=1.45 when the "
+                "next env-drift window opens (do NOT reinstall against "
+                "the pyenv-global interpreter — see SESSION_224 env-drift "
+                "note). Or set OPENAI_MODEL to a non-reasoning model "
+                "such as gpt-4o-mini."
             ),
             id="dealer_ai.W001",
         )

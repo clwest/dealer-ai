@@ -18,14 +18,18 @@ logger = logging.getLogger(__name__)
 _REASONING_PREFIXES = ("gpt-5", "o1", "o3", "o4")
 
 # SDK-drift retry marker. openai==1.30.5 (May 2024) predates reasoning
-# models entirely and rejects ``max_completion_tokens`` with
-# ``TypeError: Completions.create() got an unexpected keyword argument
-# 'max_completion_tokens'``. When the demo runs on that SDK against a
-# gpt-5* model, we retry once with the legacy ``max_tokens`` param so
-# the request has a chance to reach the API instead of failing at the
-# client boundary. See ``dealer_ai.checks`` and
-# ``tests/test_llm_provider_guard.py`` for the guard that surfaces the
-# same mismatch at startup and in CI.
+# models entirely and its ``chat.completions.create()`` Python signature
+# has no ``max_completion_tokens`` keyword. The SDK does, however, ship
+# an ``extra_body`` kwarg that forwards arbitrary JSON fields into the
+# request body without signature validation (see the local
+# ``openai/resources/chat/completions.py``). When the demo runs on that
+# pin against a gpt-5* model we retry once with the reasoning shape
+# carried in ``extra_body`` so the request reaches the API with the
+# right parameter name — the legacy ``max_tokens`` fallback shipped
+# earlier does not work: the API rejects it with "Unsupported
+# parameter: 'max_tokens' is not supported with this model. Use
+# 'max_completion_tokens' instead." See ``dealer_ai.checks`` and
+# ``tests/test_llm_provider_guard.py``.
 _UNEXPECTED_KWARG_RE = re.compile(
     r"unexpected keyword argument ['\"]?"
     r"(max_completion_tokens|reasoning_effort|max_tokens|temperature)['\"]?"
@@ -65,21 +69,24 @@ class OpenAIProvider(LLMProvider):
             params["temperature"] = temperature
         return params
 
-    def _legacy_fallback_params(self, params: dict, *, max_tokens: int) -> dict:
-        """Rebuild params using the pre-reasoning-model shape.
+    def _extra_body_reasoning_params(self, params: dict, *, max_tokens: int) -> dict:
+        """Rebuild params using ``extra_body`` for the reasoning-model shape.
 
-        ``max_completion_tokens`` was added to the OpenAI Python SDK
-        after 1.30.5, so a demo running on that pin against a gpt-5*
-        model TypeErrors at the client boundary. Fall back to the
-        legacy ``max_tokens`` name; the API server still accepts it as
-        a compatibility alias on current reasoning models.
+        The SDK's ``extra_body`` kwarg forwards arbitrary JSON fields
+        into the request body without signature validation, so a
+        client whose Python signature lacks ``max_completion_tokens``
+        can still deliver it to the API. Temperature is omitted —
+        reasoning models only accept the default and any explicit
+        value is a 400 — and ``max_tokens`` is omitted because the
+        API rejects it for these families.
         """
-        legacy = {
+        return {
             "model": params["model"],
             "messages": params["messages"],
-            "max_tokens": max(max_tokens * 2, 1200),
+            "extra_body": {
+                "max_completion_tokens": max(max_tokens * 2, 1200),
+            },
         }
-        return legacy
 
     def chat(
         self,
@@ -97,25 +104,28 @@ class OpenAIProvider(LLMProvider):
             resp = self._client.chat.completions.create(**params)
         except TypeError as exc:
             # SDK-drift: the client rejected a keyword the current model
-            # family expects. Retry once with the pre-reasoning-model
-            # shape before giving up. Any other TypeError means our
-            # own call site is wrong and should not be papered over.
+            # family expects. Retry once carrying max_completion_tokens
+            # in extra_body so the SDK's signature stops rejecting it
+            # and the API sees the correct parameter name. Any other
+            # TypeError means our own call site is wrong and should
+            # not be papered over.
             if _is_reasoning_model(self.model) and _UNEXPECTED_KWARG_RE.search(str(exc)):
                 logger.warning(
-                    "OpenAI SDK/model drift — retrying with legacy max_tokens "
-                    "shape (model=%s, first_error=%s). "
+                    "OpenAI SDK/model drift — retrying with "
+                    "extra_body={max_completion_tokens} shape "
+                    "(model=%s, first_error=%s). "
                     "See dealer_ai.checks W001 for the underlying pin mismatch.",
                     self.model,
                     exc,
                 )
-                legacy_params = self._legacy_fallback_params(
+                retry_params = self._extra_body_reasoning_params(
                     params, max_tokens=max_tokens
                 )
                 try:
-                    resp = self._client.chat.completions.create(**legacy_params)
+                    resp = self._client.chat.completions.create(**retry_params)
                 except Exception as retry_exc:  # noqa: BLE001
                     logger.warning(
-                        "OpenAI legacy-shape retry failed: %s", retry_exc
+                        "OpenAI extra_body retry failed: %s", retry_exc
                     )
                     raise ProviderUnavailable(
                         f"OpenAI request failed after SDK-drift retry: {retry_exc}"

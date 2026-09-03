@@ -72,20 +72,21 @@ class OpenAIProviderShapeCompatTests(TestCase):
         }[prefix]
 
     def test_every_reasoning_family_produces_a_deliverable_request(self):
-        """For each reasoning family we support, at least one of the
-        first-try shape (``max_completion_tokens``) or the retry shape
-        (``max_tokens``) must be accepted by the installed SDK. If
-        both were rejected the provider could not talk to the model
-        at all, and the demo would never reach the API.
+        """For each reasoning family we support, the provider must be
+        able to deliver the request — either as the first-try shape
+        the SDK signature already accepts, or, when the signature is
+        too old, as the ``extra_body`` retry shape (which bypasses
+        signature validation and forwards the JSON field to the API).
+        Also asserts the SDK ships ``extra_body`` at all: if a future
+        SDK drops it, this test surfaces the drift before a demo does.
 
-        NOTE: this test was written to fail on ``openai==1.30.5`` +
-        ``gpt-5-mini`` BEFORE the ``TypeError`` retry existed in
-        ``OpenAIProvider.chat()`` — its first-try shape used
-        ``max_completion_tokens`` and the SDK rejected it with
-        ``TypeError``. The retry (added in the same change as this
-        test) is what makes it green today. See
-        ``dealer_ai.checks.W001`` for the operator-facing warning
-        that keeps the underlying pin-and-model mismatch visible.
+        The earlier legacy-``max_tokens`` fallback shipped in the
+        same session as this test was shown to fail against the
+        live OpenAI API — it returned "Unsupported parameter:
+        'max_tokens' is not supported with this model. Use
+        'max_completion_tokens' instead." The extra_body path is the
+        only signature-less way to send ``max_completion_tokens``
+        from an SDK that has no such keyword.
         """
         for prefix in _REASONING_PREFIXES:
             model = self._sample_model_for(prefix)
@@ -96,22 +97,28 @@ class OpenAIProviderShapeCompatTests(TestCase):
                 temperature=0.4,
                 max_tokens=800,
             )
-            fallback = provider._legacy_fallback_params(first_try, max_tokens=800)
             first_ok = all(k in sig.parameters for k in first_try)
-            fallback_ok = all(k in sig.parameters for k in fallback)
+            # The retry path relies on the SDK carrying an
+            # ``extra_body`` kwarg. If that ever goes away the retry
+            # cannot fire and the provider is stuck.
+            extra_body_supported = "extra_body" in sig.parameters
             self.assertTrue(
-                first_ok or fallback_ok,
+                first_ok or extra_body_supported,
                 msg=(
-                    f"Neither the first-try nor the legacy-fallback param "
-                    f"shape is deliverable for model {model!r}. "
+                    f"Model {model!r} is undeliverable: the SDK "
+                    f"signature accepts neither the first-try shape "
+                    f"({sorted(first_try)}) nor an extra_body kwarg. "
                     f"SDK signature accepts: "
                     f"{sorted(k for k in sig.parameters)[:12]}"
                 ),
             )
 
-    def test_typeerror_on_unexpected_kwarg_triggers_legacy_retry(self):
+    def test_typeerror_on_unexpected_kwarg_triggers_extra_body_retry(self):
         """The retry fires when the SDK rejects ``max_completion_tokens``
-        with a matching TypeError, and re-raises anything else.
+        with a matching TypeError. The retry call carries
+        ``extra_body={"max_completion_tokens": N}`` and MUST NOT carry
+        ``max_tokens`` or ``temperature`` — the live API rejects
+        both for reasoning models.
         """
 
         class _FakeCompletions:
@@ -150,13 +157,36 @@ class OpenAIProviderShapeCompatTests(TestCase):
         reply = provider.chat([{"role": "user", "content": "hello"}])
 
         self.assertEqual(reply, "ok")
-        # First call used max_completion_tokens (rejected); second used
-        # legacy max_tokens shape.
+        # First call used max_completion_tokens as a top-level kwarg
+        # (rejected by the SDK signature); second call carries the
+        # same field inside extra_body so the SDK forwards it as JSON
+        # without signature validation.
         calls = provider._client.chat.completions.calls  # type: ignore[attr-defined]
         self.assertEqual(len(calls), 2)
         self.assertIn("max_completion_tokens", calls[0])
-        self.assertNotIn("max_completion_tokens", calls[1])
-        self.assertIn("max_tokens", calls[1])
+
+        retry_call = calls[1]
+        self.assertNotIn(
+            "max_completion_tokens", retry_call,
+            "retry must not carry max_completion_tokens as a top-level "
+            "kwarg (the SDK signature rejects it); it belongs in extra_body",
+        )
+        self.assertNotIn(
+            "max_tokens", retry_call,
+            "retry must not carry max_tokens — the live API returned "
+            "'Unsupported parameter: max_tokens is not supported with "
+            "this model' on 2026-09-03",
+        )
+        self.assertNotIn(
+            "temperature", retry_call,
+            "retry must not carry temperature — reasoning models only "
+            "accept the default and any explicit value is a 400",
+        )
+        self.assertIn("extra_body", retry_call)
+        self.assertIn("max_completion_tokens", retry_call["extra_body"])
+        self.assertGreaterEqual(
+            retry_call["extra_body"]["max_completion_tokens"], 1200
+        )
 
     def test_unrelated_exception_raises_provider_unavailable(self):
         class _FakeCompletions:
