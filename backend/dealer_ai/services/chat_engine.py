@@ -22,7 +22,11 @@ from .intent_parser import (
     regex_extract,
 )
 from .inventory_search import search_vehicles
-from .llm.base import LLMProvider
+from .llm.base import (
+    CUSTOMER_OUTAGE_REPLY,
+    LLMProvider,
+    ProviderUnavailable,
+)
 from .llm.factory import get_llm_provider
 from .manager_chat_response import MANAGER_COACHING_HINT
 from .onboarding_overrides import (
@@ -6405,7 +6409,25 @@ class ChatEngine:
             messages.append({"role": "system", "content": profile_block})
         messages.extend(self._history_for_llm())
 
-        reply_text = self.provider.chat(messages, temperature=0.4, max_tokens=600)
+        provider_unavailable_this_turn = False
+        try:
+            reply_text = self.provider.chat(
+                messages, temperature=0.4, max_tokens=600
+            )
+        except ProviderUnavailable as exc:
+            # The provider raised rather than returning prose — this is an
+            # outage, not a bad answer. Skip the scrub stack (nothing in
+            # the apology matches it), pass a fixed apology through, and
+            # mark the turn so the manager coaching surface can render a
+            # degraded reply instead of ``_coaching_fallback()``.
+            logger.warning(
+                "LLM provider unavailable (session=%s, provider=%s): %s",
+                self.session.id,
+                self.provider.name,
+                exc,
+            )
+            reply_text = CUSTOMER_OUTAGE_REPLY
+            provider_unavailable_this_turn = True
         if not reply_text:
             reply_text = (
                 "I want to make sure I get this right — could you tell me a bit more "
@@ -6690,7 +6712,13 @@ class ChatEngine:
             scrubs_fired.append("category_label")
         if meta_narration_fallback_fired:
             assistant_metadata["meta_narration_fallback"] = True
-        if post_safety_rewritten:
+        if provider_unavailable_this_turn:
+            # Takes priority over every other flag — the outage is the
+            # single most useful signal for auditing this turn, and no
+            # scrub ran on the apology text anyway. The manager-chat
+            # view keys off this flag to skip enforce_coaching_shape.
+            assistant_metadata["flag"] = "provider_unavailable"
+        elif post_safety_rewritten:
             assistant_metadata["flag"] = "post_llm_safety_rewrite"
         elif internal_confusion_fallback_fired:
             assistant_metadata["flag"] = "internal_confusion_fallback"

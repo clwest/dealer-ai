@@ -17,6 +17,12 @@ class DealerAiConfig(AppConfig):
 
         register_default_dealership_autofill()
 
+        # Import registers the `manage.py check` warnings under
+        # dealer_ai.W*.  The 2026-09-03 demo walk showed a dealer
+        # boots the stack for a demo — not pytest — so the SDK / model
+        # drift needs to surface at startup as a one-line warning.
+        from . import checks  # noqa: F401
+
         # Milestone 5 · Increment 5 (SESSION_079) — test-only Vehicle
         # stage auto-bootstrap.
         #

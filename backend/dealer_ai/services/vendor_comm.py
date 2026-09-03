@@ -95,7 +95,7 @@ from ..models import (
     WorkOrder,
     WorkOrderPart,
 )
-from .llm.base import LLMProvider
+from .llm.base import LLMProvider, ProviderUnavailable
 from .llm.factory import get_llm_provider
 from .llm_safety import apply_post_llm_scrubs
 
@@ -454,7 +454,16 @@ def draft_communication(
     )
 
     llm = provider or get_llm_provider()
-    raw = llm.chat(messages, temperature=0.4, max_tokens=800)
+    try:
+        raw = llm.chat(messages, temperature=0.4, max_tokens=800)
+    except ProviderUnavailable as exc:
+        # Never persist an outage apology as a vendor draft — the
+        # operator would see it under a "Copy message" button. Surface
+        # as an empty-draft failure so the view returns 422.
+        raise EmptyDraftError(
+            f"draft_communication: LLM provider unavailable ({exc}). "
+            "Draft NOT persisted."
+        ) from exc
 
     cleaned, scrubs_fired, dropped_reason = apply_post_llm_scrubs(
         raw, kind=kind, recon_source_bundle=source_bundle

@@ -79,6 +79,7 @@ from .services.follow_up import (
 )
 from .services.handoff_service import build_handoff_packet, packet_to_text
 from .services.lead_service import create_lead_from_session
+from .services.llm.base import MANAGER_OUTAGE_REPLY
 from .services.manager_chat_response import enforce_coaching_shape
 from .services.pipeline import pipeline_snapshot
 from .services.tenancy import get_current_dealership, get_default_dealership
@@ -1019,6 +1020,22 @@ def manager_chat(request):
     )
     engine = ChatEngine(session=session)
     result = engine.handle_user_message(message)
+
+    # Distinguish an outage from an off-shape reply. When
+    # ``chat_engine`` catches ``ProviderUnavailable`` it stamps
+    # ``metadata.flag = "provider_unavailable"`` on the persisted
+    # assistant message. Running enforce_coaching_shape on that string
+    # would replace an honest outage message with a coaching template
+    # that looks like the LLM answered — the exact failure the demo
+    # walk on 2026-09-03 caught (byte-identical replies to unrelated
+    # customer prompts). Return the manager-side degraded reply
+    # instead, and skip the coaching-shape enforcer entirely.
+    assistant_meta = result.assistant_message.metadata or {}
+    if assistant_meta.get("flag") == "provider_unavailable":
+        return Response(
+            {"reply": MANAGER_OUTAGE_REPLY, "provider_unavailable": True},
+            status=status.HTTP_200_OK,
+        )
 
     # SESSION_010 hotfix + SESSION_011 structural enforcement.
     # The chat engine already received MANAGER_COACHING_HINT via the

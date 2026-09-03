@@ -11,7 +11,7 @@ from typing import Iterable
 
 import requests
 
-from .base import ChatMessage, LLMProvider
+from .base import ChatMessage, LLMProvider, ProviderUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +53,14 @@ class OllamaProvider(LLMProvider):
             r.raise_for_status()
             data = r.json()
         except requests.RequestException as exc:
-            # Expected fallback path — Ollama not running, model not pulled, etc.
-            # Keep the log a single warning line so demos aren't drowned in tracebacks.
+            # Ollama not running, model not pulled, network error. Callers
+            # at surface boundaries decide the user-visible response;
+            # returning apology prose here would look like a normal
+            # reply and get scrubbed / stored as one.
             logger.warning("Ollama request to %s failed: %s", url, exc)
-            return (
-                "I'm having trouble reaching the local AI model right now. "
-                "Please make sure Ollama is running and the model is pulled, "
-                "then try again."
-            )
+            raise ProviderUnavailable(
+                f"Ollama request to {url} failed: {exc}"
+            ) from exc
 
         msg = data.get("message") or {}
         content = msg.get("content") or data.get("response") or ""
