@@ -18,6 +18,7 @@ nothing changes for anyone until the store flips it.
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from typing import Optional
 
@@ -40,6 +41,32 @@ from ..models import (
 from . import recon as recon_service
 
 _ZERO = Decimal("0.00")
+_CENTS = Decimal("0.01")
+
+# SESSION_229 Part 4 — the queued note was surviving override
+# authorization, so an Approved chip and an amber "needs
+# authorization" note appeared on the same card. Strip the note in
+# the override path (backend, so the stored note stops lying too).
+# Matches the exact prefix written by ``authorize_or_queue``:
+# "needs authorization: $X over the $Y cap. "
+_QUEUED_NOTE_PREFIX_RE = re.compile(
+    r"^needs authorization: \$[\d.,]+ over the \$[\d.,]+ cap\.\s*"
+)
+
+
+def strip_queued_note_prefix(notes: str) -> str:
+    """Remove the ``needs authorization: ...`` prefix written by
+    :func:`authorize_or_queue`. Leaves the operator's own notes
+    untouched."""
+    return _QUEUED_NOTE_PREFIX_RE.sub("", notes or "", count=1)
+
+
+def _q(value: Decimal) -> Decimal:
+    """Quantize a Decimal to two places. SESSION_229 Part 3 fixes
+    the shape at the source so ``recon_budget`` and ``recon_spend``
+    stop drifting from ``"1200.00"`` to ``"1644"`` after an
+    override."""
+    return value.quantize(_CENTS)
 
 # Statuses that count against the per-car budget on the estimate
 # side (labor + parts). Cancelled WOs do not contribute; completed
@@ -166,7 +193,7 @@ def recon_budget_for(
         .aggregate(total=Sum("amount"))
         .get("total")
     ) or _ZERO
-    return base + override_sum
+    return _q(Decimal(base) + Decimal(override_sum))
 
 
 # ---- Spend on a car -------------------------------------------------------
@@ -237,7 +264,7 @@ def recon_spend_for(
         elif wo.status == WORK_ORDER_STATUS_COMPLETED:
             total += _wo_actual_total(wo)
         # cancelled: contributes zero
-    return total
+    return _q(total)
 
 
 # ---- Public totals ------------------------------------------------------
@@ -474,6 +501,10 @@ def needs_authorization_queue(dealership: Dealership):
     Sorted oldest-first so the manager works through the backlog
     in FIFO order — matches "morning triage" ergonomics.
     """
+    # SESSION_229 Part 6b — the queue card renders year/make/model
+    # and acquisition_total per row, so pull the vehicle's
+    # OneToOne acquisition record along with the vehicle to keep
+    # acquisition_total off the N+1 path.
     return (
         WorkOrder.objects.filter(
             dealership=dealership,
@@ -481,7 +512,7 @@ def needs_authorization_queue(dealership: Dealership):
         )
         .annotate(finding_count=Sum("finding_links__id"))
         .filter(finding_count__isnull=False)
-        .select_related("vehicle", "vendor")
+        .select_related("vehicle", "vehicle__acquisition", "vendor")
         .prefetch_related("finding_links__finding", "parts")
         .order_by("created_at")
     )
@@ -499,4 +530,4 @@ def overage_for(work_order: WorkOrder, *, dealership: Dealership) -> Decimal:
     )
     total_with_wo = prior_spend + _wo_estimate_total(work_order)
     delta = total_with_wo - budget
-    return delta if delta > 0 else _ZERO
+    return _q(delta) if delta > 0 else _ZERO

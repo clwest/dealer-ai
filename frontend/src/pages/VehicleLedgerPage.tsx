@@ -39,6 +39,7 @@ import {
   ForbiddenError,
   UnauthenticatedError,
 } from "@/lib/authFetch";
+import { formatMoney } from "@/lib/utils";
 import {
   ACQUISITION_SOURCE_CHOICES,
   COST_CATEGORY_CHOICES,
@@ -73,16 +74,15 @@ function daysInInventoryBadgeClass(days: number | null): string {
   return "bg-rose-100 text-rose-800 border-rose-200";
 }
 
-function formatMoney(value: string): string {
-  // The backend already sends fixed two-decimal-place strings; we
-  // just need to add a thousands separator + dollar sign for display.
-  // Never parse through Number for arithmetic — this is display-only
-  // string manipulation.
-  const negative = value.startsWith("-");
-  const bare = negative ? value.slice(1) : value;
-  const [whole = "0", frac = "00"] = bare.split(".");
-  const withCommas = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${negative ? "−" : ""}$${withCommas}.${frac}`;
+// SESSION_229 Part 5 — `new Date().toISOString()` is UTC. On the
+// Add-a-cost form that meant the default field pre-filled six hours
+// ahead of local (in Yuma at 7:50 PM the field said 01:50 AM next
+// day). Cost display rows were correctly local. This aligns the
+// default to local now so operators post costs to the right day.
+function _localNowForDateTimeLocal(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 
 function formatDate(iso: string): string {
@@ -887,7 +887,7 @@ function AddCostForm({
   const [category, setCategory] = useState(COST_CATEGORY_CHOICES[0]?.value ?? "");
   const [amount, setAmount] = useState("");
   const [incurredAt, setIncurredAt] = useState(
-    () => new Date().toISOString().slice(0, 16), // datetime-local expects YYYY-MM-DDTHH:mm
+    () => _localNowForDateTimeLocal(), // datetime-local expects YYYY-MM-DDTHH:mm in the browser's timezone
   );
   const [vendor, setVendor] = useState("");
   const [reference, setReference] = useState("");

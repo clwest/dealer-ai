@@ -1580,6 +1580,23 @@ export interface NeedsAuthorizationQueueRow {
   work_order: WorkOrder;
   overage: string;
   budget: string | null;
+  // SESSION_229 Part 6a — money already committed on this car,
+  // excluding the WO being reviewed. The card wants a manager to
+  // read cap + prior + this job + overage as one sum without doing
+  // arithmetic in their head.
+  prior_spend: string;
+  // SESSION_229 Part 6b — the vehicle the queued WO is on. Year /
+  // make / model tells the manager what the car IS; acquisition
+  // total and asking price tell them what it is WORTH.
+  vehicle: {
+    stock_number: string;
+    year: number;
+    make: string;
+    model: string;
+    trim: string;
+    acquisition_total: string;
+    asking_price: string;
+  };
 }
 
 export interface ReconDecision {

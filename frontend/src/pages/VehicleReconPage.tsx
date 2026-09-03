@@ -42,6 +42,7 @@ import {
   ForbiddenError,
   UnauthenticatedError,
 } from "@/lib/authFetch";
+import { formatMoney } from "@/lib/utils";
 import {
   createMustDoWorkOrders,
   fetchReconDashboard,
@@ -154,6 +155,10 @@ export default function VehicleReconPage() {
         ? dashboard.work_orders.map((w) => (w.id === wo.id ? wo : w))
         : [wo, ...dashboard.work_orders],
     });
+    // SESSION_229 Part 2 — the header's recon_spend / recon_budget
+    // ride on the dashboard payload, not the WO. Refetch so the
+    // header stops lagging behind writes.
+    void _refetch();
   }
 
   function _onWorkOrderCreated(wo: WorkOrder) {
@@ -178,6 +183,8 @@ export default function VehicleReconPage() {
           }
         : null,
     });
+    // Same reason as _onWorkOrderUpdated — refresh the header.
+    void _refetch();
   }
 
   function _onCommUpdated(comm: VendorCommunication) {
@@ -276,7 +283,8 @@ export default function VehicleReconPage() {
           </div>
           {dashboard.recon_budget != null && (
             <div className="mt-1 inline-flex rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-800">
-              Recon spend: ${dashboard.recon_spend} of ${dashboard.recon_budget}
+              Recon spend: {formatMoney(dashboard.recon_spend ?? "0")} of{" "}
+              {formatMoney(dashboard.recon_budget)}
             </div>
           )}
         </div>

@@ -27,6 +27,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/AuthContext";
 import { ApiError, ForbiddenError, UnauthenticatedError } from "@/lib/authFetch";
+import { formatMoney } from "@/lib/utils";
 import {
   authorizeWithOverride,
   cancelWorkOrder,
@@ -75,6 +76,21 @@ export default function ReconAuthorizationQueuePage() {
     _load();
   }, [_load]);
 
+  // SESSION_229 Part 6c — one line at the top so a manager sees
+  // total over-budget dollars before triaging the list. Kept above
+  // the early returns so the hook order stays stable.
+  const totalOverage = useMemo(() => {
+    let cents = 0n;
+    for (const row of rows) {
+      const [whole = "0", frac = "00"] = row.overage.split(".");
+      const padded = (frac + "00").slice(0, 2);
+      cents += BigInt(whole) * 100n + BigInt(padded);
+    }
+    const whole = cents / 100n;
+    const frac = (cents % 100n).toString().padStart(2, "0");
+    return `${whole.toString()}.${frac}`;
+  }, [rows]);
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 p-8 text-sm text-muted-foreground">
@@ -101,6 +117,11 @@ export default function ReconAuthorizationQueuePage() {
           Over-budget work orders across the lot. We only bother you about
           cars that go over.
         </p>
+        {rows.length > 0 && (
+          <p className="mt-2 text-sm font-medium text-amber-900">
+            You have {formatMoney(totalOverage)} of over-budget work waiting.
+          </p>
+        )}
       </div>
 
       {rows.length === 0 ? (
@@ -173,6 +194,14 @@ function QueueRow({
     }
   }
 
+  const vehicleLabel = [
+    row.vehicle.year,
+    row.vehicle.make,
+    row.vehicle.model,
+    row.vehicle.trim,
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-2">
@@ -182,12 +211,18 @@ function QueueRow({
               to={`/dealer-ai-inventory/${encodeURIComponent(wo.vehicle_stock_number)}/recon`}
               className="hover:underline"
             >
-              #{wo.vehicle_stock_number} · {wo.category}
+              #{wo.vehicle_stock_number} · {vehicleLabel} · {wo.category}
             </Link>
           </CardTitle>
           <div className="text-xs text-muted-foreground">
             WO #{wo.id} · {wo.venue}
             {wo.vendor && <span> · {wo.vendor.name}</span>}
+          </div>
+          {/* SESSION_229 Part 6b — acquisition + asking answer
+              "is this car worth it?" without leaving the queue. */}
+          <div className="text-xs text-muted-foreground">
+            Acquired for {formatMoney(row.vehicle.acquisition_total)} · asking{" "}
+            {formatMoney(row.vehicle.asking_price)}
           </div>
           {wo.findings.length > 0 && (
             <div className="mt-1 text-sm">
@@ -196,15 +231,21 @@ function QueueRow({
           )}
         </div>
         <div className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
-          Over budget · ${row.overage}
+          Over budget · {formatMoney(row.overage)}
           {row.budget && (
             <div className="text-muted-foreground">
-              Store cap: ${row.budget}
+              Store cap: {formatMoney(row.budget)}
             </div>
           )}
+          {/* SESSION_229 Part 6a — the missing row. Cap + prior +
+              this job now reads as a sum. */}
           <div className="text-muted-foreground">
-            Labor ${wo.estimated_cost ?? "0.00"} + Parts $
-            {wo.parts_estimate} = ${wo.total_estimate}
+            Already committed on this car: {formatMoney(row.prior_spend)}
+          </div>
+          <div className="text-muted-foreground">
+            This WO: labor {formatMoney(wo.estimated_cost ?? "0.00")} + parts{" "}
+            {formatMoney(wo.parts_estimate)} ={" "}
+            {formatMoney(wo.total_estimate)}
           </div>
         </div>
       </CardHeader>

@@ -934,6 +934,9 @@ def admin_recon_dashboard(request, stock_number):
             "latest_condition_report": report_projection,
             "work_orders": [_project_work_order(wo) for wo in work_orders],
             "communications": [_project_comm(c) for c in comms],
+            # SESSION_229 Part 3 — both fields already quantize to
+            # two places at the service layer; the string cast here
+            # is the last stop before the wire.
             "recon_budget": str(budget) if budget is not None else None,
             "recon_spend": str(spend),
         }
@@ -1718,7 +1721,13 @@ def admin_rate_card_detail(request, item_id):
 def admin_recon_needs_authorization_queue(request):
     """Cross-lot queue of draft WOs with linked findings — the
     exception queue behind the budget-gate pitch. Each row carries
-    its overage so the manager can triage in the browser."""
+    its overage so the manager can triage in the browser.
+
+    SESSION_229 Part 6 — the row now also carries ``prior_spend``
+    (already committed on the car) and vehicle year/make/model +
+    acquisition_total + asking_price so a manager can answer "is
+    this car worth $1,670?" without a second round trip.
+    """
     dealership = get_current_dealership(request)
     queue = recon_budget_service.needs_authorization_queue(dealership)
     payload = []
@@ -1729,14 +1738,49 @@ def admin_recon_needs_authorization_queue(request):
         budget = recon_budget_service.recon_budget_for(
             wo.vehicle, dealership=dealership
         )
+        prior_spend = recon_budget_service.recon_spend_for(
+            wo.vehicle, dealership=dealership, exclude_wo=wo
+        )
+        # SESSION_229 Part 6b — the queue queryset select_related's
+        # ``vehicle__acquisition`` so this touches the prefetched
+        # row rather than triggering a per-vehicle query.
+        acquisition_total = _acquisition_cash_total(wo.vehicle)
         payload.append(
             {
                 "work_order": _project_work_order(wo),
                 "overage": str(overage),
                 "budget": str(budget) if budget is not None else None,
+                "prior_spend": str(prior_spend),
+                "vehicle": {
+                    "stock_number": wo.vehicle.stock_number,
+                    "year": wo.vehicle.year,
+                    "make": wo.vehicle.make,
+                    "model": wo.vehicle.model,
+                    "trim": wo.vehicle.trim,
+                    "acquisition_total": str(acquisition_total),
+                    "asking_price": str(wo.vehicle.price),
+                },
             }
         )
     return Response({"queue": payload})
+
+
+def _acquisition_cash_total(vehicle) -> Decimal:
+    """Sum of every cash line on the vehicle's acquisition row, or
+    zero when no acquisition exists yet. Reads the OneToOne
+    accessor directly so a prefetched ``vehicle__acquisition`` on
+    the caller's queryset stays out of the N+1 path."""
+    try:
+        acq = vehicle.acquisition
+    except Exception:  # VehicleAcquisition.DoesNotExist
+        return Decimal("0.00")
+    return (
+        Decimal(acq.purchase_price)
+        + Decimal(acq.buyer_fees)
+        + Decimal(acq.arbitration_fees)
+        + Decimal(acq.transportation_cost)
+        + Decimal(acq.title_acquisition_cost)
+    ).quantize(Decimal("0.01"))
 
 
 # ---- Authorize with override (per-vehicle budget raise) -------------------
@@ -1771,6 +1815,17 @@ def admin_authorize_with_override(request, wo_id):
         recon_service.approve_work_order(
             wo, dealership=dealership, approved_by=request.user
         )
+        # SESSION_229 Part 4 — the "needs authorization:" queued
+        # prefix used to survive override authorize, so an
+        # Approved chip and an amber queued note appeared on the
+        # same card. Strip in the backend so the stored note stops
+        # lying too — any other reader (queue, ledger, exports)
+        # gets the corrected note.
+        wo.refresh_from_db()
+        stripped = recon_budget_service.strip_queued_note_prefix(wo.notes)
+        if stripped != wo.notes:
+            wo.notes = stripped
+            wo.save(update_fields=["notes", "updated_at"])
     except Exception as exc:
         return _map_service_error(exc)
     wo = _lookup_work_order_or_404(dealership, wo.pk)

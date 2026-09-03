@@ -37,6 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PartRow } from "@/components/recon/PartRow";
 import { WorkOrderStatusBadge } from "@/components/recon/WorkOrderStatusBadge";
 import { ApiError } from "@/lib/authFetch";
+import { formatMoney } from "@/lib/utils";
 import {
   addFindingDuringWork,
   addWorkOrderPart,
@@ -375,10 +376,11 @@ export function WorkOrderCard({
         {/* Estimate → actual story on completed. */}
         {wo.status === "completed" ? (
           <div className="rounded border bg-emerald-50 p-2 text-sm text-emerald-900">
-            Labor {wo.actual_cost != null ? `$${wo.actual_cost}` : "—"} +
-            parts ${wo.parts_actual} = total ${wo.total_actual}
+            Labor {wo.actual_cost != null ? formatMoney(wo.actual_cost) : "—"} +
+            parts {formatMoney(wo.parts_actual)} = total{" "}
+            {formatMoney(wo.total_actual)}
             <div className="text-xs text-emerald-800">
-              Estimated ${wo.total_estimate}
+              Estimated {formatMoney(wo.total_estimate)}
             </div>
           </div>
         ) : (
@@ -386,30 +388,32 @@ export function WorkOrderCard({
             <div>
               <div className="text-muted-foreground">Labor est</div>
               <div className="font-medium">
-                {wo.estimated_cost != null ? `$${wo.estimated_cost}` : "—"}
+                {wo.estimated_cost != null ? formatMoney(wo.estimated_cost) : "—"}
               </div>
             </div>
             <div>
               <div className="text-muted-foreground">Parts est</div>
-              <div className="font-medium">${wo.parts_estimate}</div>
+              <div className="font-medium">{formatMoney(wo.parts_estimate)}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Total est</div>
-              <div className="font-medium">${wo.total_estimate}</div>
+              <div className="font-medium">{formatMoney(wo.total_estimate)}</div>
             </div>
           </div>
         )}
 
         {/* SESSION_228 — auto-authorized-under-budget note.
-            SESSION_228.1 — the symmetric queued note. */}
+            SESSION_228.1 — the symmetric queued note.
+            SESSION_229 — render the full note; splitting on "." was
+            truncating at the decimal point in the dollar amount. */}
         {wo.notes && wo.notes.startsWith("auto-authorized") && (
           <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
-            {wo.notes.split(".")[0]}.
+            {wo.notes}
           </div>
         )}
         {wo.notes && wo.notes.startsWith("needs authorization:") && (
           <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-            {wo.notes.split(".")[0]}.
+            {wo.notes}
           </div>
         )}
         {wo.budget_overrides.length > 0 && (
@@ -420,7 +424,7 @@ export function WorkOrderCard({
             <div className="space-y-1 pt-1">
               {wo.budget_overrides.map((o) => (
                 <div key={o.id} className="text-slate-700">
-                  +${o.amount} · {o.reason} —{" "}
+                  +{formatMoney(o.amount)} · {o.reason} —{" "}
                   {o.granted_by ?? "—"} · {_formatDateTime(o.granted_at)}
                 </div>
               ))}
@@ -563,8 +567,8 @@ export function WorkOrderCard({
                   className="rounded border bg-slate-50 p-2 text-xs"
                 >
                   <div>
-                    {r.from_amount != null ? `$${r.from_amount}` : "—"} → $
-                    {r.to_amount}
+                    {r.from_amount != null ? formatMoney(r.from_amount) : "—"} →{" "}
+                    {formatMoney(r.to_amount)}
                   </div>
                   <div className="text-slate-700">{r.reason}</div>
                   <div className="text-muted-foreground">
@@ -820,12 +824,12 @@ export function WorkOrderCard({
                       </div>
                       <div
                         className={
-                          Number(r.amount) < 0
+                          r.amount.startsWith("-")
                             ? "text-destructive font-medium"
                             : "font-medium"
                         }
                       >
-                        ${r.amount}
+                        {formatMoney(r.amount)}
                       </div>
                     </div>
                     {r.notes && (
@@ -896,7 +900,7 @@ export function WorkOrderCard({
               </div>
             ) : (
               <Button size="sm" onClick={_authorize} disabled={saving}>
-                Authorize ${authorizeAmount}
+                Authorize {formatMoney(authorizeAmount)}
               </Button>
             )}
           </>
@@ -951,7 +955,9 @@ export function WorkOrderCard({
               Cancel WO
             </Button>
             <Button size="sm" onClick={_complete} disabled={saving}>
-              Complete — labor ${actualCost || "…"} + parts ${wo.parts_actual}
+              Complete — labor{" "}
+              {actualCost ? formatMoney(actualCost) : "$…"} + parts{" "}
+              {formatMoney(wo.parts_actual)}
             </Button>
           </>
         )}
