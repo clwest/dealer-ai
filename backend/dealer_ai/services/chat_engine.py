@@ -3207,7 +3207,7 @@ def customer_lookup_visible_vehicle_by_id(vehicle_id):
     )
 
 
-def customer_lookup_visible_vehicle_by_stock(stock_number: str):
+def customer_lookup_visible_vehicle_by_stock(stock_number: str, dealership=None):
     """Same gate as :func:`customer_lookup_visible_vehicle_by_id`,
     keyed by ``stock_number``.
 
@@ -3216,17 +3216,21 @@ def customer_lookup_visible_vehicle_by_stock(stock_number: str):
     SESSION_086 §2 Option A user-confirmed. Stock-number keying
     matches the M6.2 canonical photo-key namespacing
     (``vehicles/<stock>/photos/...``).
+
+    SESSION_232 addendum — optional ``dealership`` scoping so the
+    public detail endpoint honours the caller's ``X-Dealership-Slug``
+    header. Backwards-compatible: legacy callers still get the
+    single-tenant behaviour.
     """
     from ..models import VEHICLE_LISTING_STATUS_PUBLISHED
 
-    return (
-        customer_visible_vehicles()
-        .filter(
-            stock_number=stock_number,
-            listing__status=VEHICLE_LISTING_STATUS_PUBLISHED,
-        )
-        .first()
+    qs = customer_visible_vehicles().filter(
+        stock_number=stock_number,
+        listing__status=VEHICLE_LISTING_STATUS_PUBLISHED,
     )
+    if dealership is not None:
+        qs = qs.filter(dealership=dealership)
+    return qs.first()
 
 
 # Item 12 — "both" wording drift.

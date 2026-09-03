@@ -7,6 +7,8 @@
 // authFetch. Session cookies are not sent so a broken session
 // cannot break a customer page.
 
+import { dealershipHeader } from "@/lib/dealershipContext";
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/dealer-ai";
 
 export type ShowroomCondition = "new" | "used" | "certified";
@@ -60,8 +62,11 @@ export async function listShowroomVehicles(
   if (filters.offset !== undefined)
     params.set("offset", String(filters.offset));
   const qs = params.toString();
+  // SESSION_232 — send X-Dealership-Slug so the backend scopes the
+  // list to the correct store on a multi-store install.
   const res = await fetch(
     `${API_BASE}/showroom/vehicles/${qs ? `?${qs}` : ""}`,
+    { headers: dealershipHeader() },
   );
   if (!res.ok) {
     const text = await res.text();

@@ -157,8 +157,15 @@ def start_chat(request):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
 
+    # SESSION_232 addendum — public chat must land on the store the
+    # customer is actually shopping at. ``get_current_dealership``
+    # walks auth → X-Dealership-Slug header → default; the public
+    # embed/showroom client sends the slug from the branding profile.
+    # Before this fix every public session bound to the single-tenant
+    # default and the vocabulary-scoped search returned zero results
+    # for shoppers on multi-store installs.
     session = ChatSession.objects.create(
-        dealership=get_default_dealership(),
+        dealership=get_current_dealership(request),
         customer_name=data.get("customer_name", ""),
         customer_email=data.get("customer_email", ""),
         customer_phone=data.get("customer_phone", ""),
@@ -1087,7 +1094,12 @@ def onboarding_profile(request):
 
     if request.method == "GET":
         if profile is None:
-            return Response(ONBOARDING_DEFAULTS)
+            # SESSION_232 addendum — even the no-profile shape must
+            # carry the resolved dealership slug so the public/embed
+            # client can send it back as ``X-Dealership-Slug``.
+            return Response(
+                {**ONBOARDING_DEFAULTS, "dealership_slug": dealership.slug}
+            )
         return Response(DealerOnboardingProfileSerializer(profile).data)
 
     partial = request.method == "PATCH"

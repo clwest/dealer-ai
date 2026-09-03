@@ -23,6 +23,7 @@ import {
   listShowroomVehicles,
   type ShowroomVehicle,
 } from "@/lib/showroomApi";
+import { fetchOnboardingProfile } from "@/lib/api";
 import { useBrand } from "@/lib/brand";
 
 const TRUST_POINTS = [
@@ -47,12 +48,20 @@ export default function Hero() {
     // Pull a broad enough sample to derive both the featured vehicle
     // and store-shaped chips. offset=5 keeps the featured slot from
     // colliding with the DealershipHomePage InventoryTeaser row.
-    Promise.all([
-      listShowroomVehicles({ limit: 1, offset: 5 }),
-      listShowroomVehicles({ limit: 50, offset: 0 }),
-    ])
-      .then(([featuredResp, sampleResp]) => {
-        if (cancelled) return;
+    // SESSION_232 addendum — prime the dealership-slug cache before
+    // any showroom fetch fires so the multi-store backend routes to
+    // the right store instead of the empty default tenant.
+    fetchOnboardingProfile()
+      .catch(() => null)
+      .then(() =>
+        Promise.all([
+          listShowroomVehicles({ limit: 1, offset: 5 }),
+          listShowroomVehicles({ limit: 50, offset: 0 }),
+        ]),
+      )
+      .then((responses) => {
+        if (cancelled || !responses) return;
+        const [featuredResp, sampleResp] = responses;
         setHeroVehicle(featuredResp.results[0] ?? null);
         setChips(deriveIntentChips(sampleResp.results));
       })

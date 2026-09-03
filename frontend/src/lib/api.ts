@@ -19,6 +19,7 @@ import {
   authPostJSON,
   authPutJSON,
 } from "@/lib/authFetch";
+import { dealershipHeader, setDealershipSlug } from "@/lib/dealershipContext";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/dealer-ai";
 
@@ -119,7 +120,13 @@ export interface LeadResponse extends LeadInput {
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // SESSION_232 — thread ``X-Dealership-Slug`` on public POSTs so
+    // ``get_current_dealership`` routes the chat session to the
+    // right store instead of the single-tenant default.
+    headers: {
+      "Content-Type": "application/json",
+      ...dealershipHeader(),
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -744,6 +751,11 @@ export function loadDemoScenarios(opts: { reset?: boolean } = {}) {
 // ---- SESSION_008: dealer onboarding profile (singleton) -------------------
 
 export interface OnboardingProfilePayload {
+  /** SESSION_232 — dealer slug so the public/embed client can send
+   *  it back as ``X-Dealership-Slug`` on chat + showroom calls. Read
+   *  from the branding endpoint; the backend routes anonymous
+   *  callers on multi-store installs by this. */
+  dealership_slug?: string;
   dealership_name: string;
   store_location: string;
   main_brands: string;
@@ -796,8 +808,14 @@ export interface OnboardingProfilePayload {
   updated_at?: string;
 }
 
-export function fetchOnboardingProfile() {
-  return getJSON<OnboardingProfilePayload>(`/onboarding/profile/`);
+export async function fetchOnboardingProfile() {
+  const payload = await getJSON<OnboardingProfilePayload>(
+    `/onboarding/profile/`,
+  );
+  // SESSION_232 — prime the module cache so subsequent public
+  // chat / showroom fetches carry the correct X-Dealership-Slug.
+  setDealershipSlug(payload.dealership_slug);
+  return payload;
 }
 
 export function saveOnboardingProfile(payload: OnboardingProfilePayload) {

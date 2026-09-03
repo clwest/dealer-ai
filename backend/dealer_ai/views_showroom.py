@@ -51,6 +51,7 @@ from .services.photo_storage import (
     ObjectStorageError,
     _get_default_adapter,
 )
+from .services.tenancy import get_current_dealership
 
 
 _SHOWROOM_LIST_MAX_LIMIT = 200
@@ -178,8 +179,18 @@ def showroom_vehicle_list(request):
     Retail gate: ``customer_visible_vehicles()`` (frontline stage,
     debug stocks excluded). Publish requirement is intentionally NOT
     applied — see the module docstring.
+
+    SESSION_232 addendum — scope to the resolved dealership.
+    ``get_current_dealership`` walks auth → ``X-Dealership-Slug``
+    header → default. Without this the showroom returned every
+    store's frontline cars on a multi-store install.
     """
-    qs = customer_visible_vehicles().order_by("-year", "make", "model", "pk")
+    dealership = get_current_dealership(request)
+    qs = (
+        customer_visible_vehicles()
+        .filter(dealership=dealership)
+        .order_by("-year", "make", "model", "pk")
+    )
 
     query_term = (request.GET.get("q") or "").strip()
     if query_term:
@@ -237,7 +248,12 @@ def showroom_vehicle_detail(request, stock_number: str):
     not published): HTTP 404 with the truthful
     :data:`CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY` per SESSION_075 §5.i.
     """
-    vehicle = customer_lookup_visible_vehicle_by_stock(stock_number)
+    # SESSION_232 addendum — scope detail lookup to the resolved
+    # dealership so a stock number in one store cannot leak through
+    # another store's showroom URL.
+    vehicle = customer_lookup_visible_vehicle_by_stock(
+        stock_number, dealership=get_current_dealership(request)
+    )
     if vehicle is None:
         return Response(
             {"detail": CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY},

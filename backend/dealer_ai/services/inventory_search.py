@@ -156,6 +156,16 @@ def inventory_vocabulary(dealership) -> Dict[str, Dict[str, str]]:
         key = _normalise_model_token(model_value)
         if key:
             vocab[key] = {"model_iexact": model_value}
+        # SESSION_232 addendum — also register the head word of a
+        # multi-word model. "Silverado 1500" → head "silverado" →
+        # ``model_icontains`` "Silverado" so a shopper who types
+        # "silverados" (singular "silverado") hits the row without
+        # having to spell out the trim/generation suffix.
+        parts = model_value.strip().split()
+        if len(parts) > 1:
+            head_token = _normalise_model_token(parts[0])
+            if head_token and head_token not in vocab:
+                vocab[head_token] = {"model_icontains": parts[0]}
 
     for body in body_styles:
         vocab[body.lower()] = {"body_style": body}

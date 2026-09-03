@@ -193,6 +193,37 @@ class MixedMakeVocabularyTests(TestCase):
 
 
 class VocabularyCacheTests(TestCase):
+    def test_multiword_model_registers_head_token(self):
+        """SESSION_232 addendum — "Silverado 1500" also registers
+        head-word ``silverado`` (model_icontains), so a shopper who
+        types "silverados" (singular "silverado") matches without
+        having to spell the trim/generation suffix."""
+        dealership = get_default_dealership()
+        _make_vehicle(
+            "H-1",
+            model="Silverado 1500",
+            make="Chevrolet",
+            body_style="truck",
+        )
+        invalidate_inventory_vocabulary(dealership.pk)
+        vocab = inventory_vocabulary(dealership)
+        self.assertIn("silverado1500", vocab)
+        self.assertEqual(vocab["silverado1500"], {"model_iexact": "Silverado 1500"})
+        self.assertIn("silverado", vocab)
+        self.assertEqual(vocab["silverado"], {"model_icontains": "Silverado"})
+
+    def test_head_token_finds_the_vehicle(self):
+        v = _make_vehicle(
+            "H-2",
+            model="Silverado 1500",
+            make="Chevrolet",
+            body_style="truck",
+            price="16000",
+        )
+        invalidate_inventory_vocabulary(get_default_dealership().pk)
+        results = search_vehicles("silverados")
+        self.assertIn(v.id, {r.id for r in results})
+
     def test_vocabulary_rebuilds_after_new_vehicle(self):
         dealership = get_default_dealership()
         # Baseline: no Silverado in the store.

@@ -23,6 +23,7 @@ import {
   type ShowroomCondition,
   type ShowroomVehicle,
 } from "@/lib/showroomApi";
+import { fetchOnboardingProfile } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 type FilterKey = "all" | ShowroomCondition | "hybrid" | "awd";
@@ -53,9 +54,13 @@ export default function PublicShowroomPage() {
   useEffect(() => {
     let cancelled = false;
     setStatus("loading");
-    listShowroomVehicles({ limit: 200 })
+    // SESSION_232 addendum — prime the dealership-slug cache so the
+    // list is scoped to the caller's store on multi-store installs.
+    fetchOnboardingProfile()
+      .catch(() => null)
+      .then(() => listShowroomVehicles({ limit: 200 }))
       .then((response) => {
-        if (cancelled) return;
+        if (cancelled || !response) return;
         setInventory(response.results);
         setStatus("ready");
       })

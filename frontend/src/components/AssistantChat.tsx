@@ -22,6 +22,7 @@ import AssistantVehicleCard from "@/components/AssistantVehicleCard";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
+  fetchOnboardingProfile,
   sendDealerMessage,
   startDealerChat,
   type ChatMessage,
@@ -100,6 +101,16 @@ export default function AssistantChat({
 
   async function ensureSession(): Promise<string> {
     if (sessionId) return sessionId;
+    // SESSION_232 addendum — ensure the dealership-slug cache is
+    // primed BEFORE creating the session, so the backend binds it
+    // to the correct store rather than the default tenant. Failure
+    // to fetch the profile is non-fatal — the cache retains any
+    // slug set by another page-level component (SiteNav / Hero).
+    try {
+      await fetchOnboardingProfile();
+    } catch {
+      /* silent — chat still starts; may land on the default tenant. */
+    }
     const res = await startDealerChat({});
     setSessionId(res.session.id);
     return res.session.id;

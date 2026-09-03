@@ -423,11 +423,24 @@ ONBOARDING_DEFAULTS: dict = {
 
 
 class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
-    """Flat snake_case payload mirroring all 35 onboarding fields (27 pre-SESSION_032 + 8 indie shape-of-business)."""
+    """Flat snake_case payload mirroring all 35 onboarding fields (27 pre-SESSION_032 + 8 indie shape-of-business).
+
+    SESSION_232 addendum — exposes ``dealership_slug`` (read-only) so
+    the public/embed frontend can send it back as the
+    ``X-Dealership-Slug`` header on chat and showroom calls. The
+    header is how the multi-store backend routes anonymous callers
+    to the right store; without it every public session bound to the
+    default tenant.
+    """
+
+    dealership_slug = serializers.CharField(
+        source="dealership.slug", read_only=True
+    )
 
     class Meta:
         model = DealerOnboardingProfile
         fields = [
+            "dealership_slug",
             "dealership_name",
             "store_location",
             "main_brands",
