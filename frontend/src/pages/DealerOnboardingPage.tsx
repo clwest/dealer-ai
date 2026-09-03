@@ -18,6 +18,7 @@ import {
   Circle,
   ClipboardList,
   Coins,
+  DollarSign,
   Loader2,
   Megaphone,
   Settings,
@@ -29,9 +30,11 @@ import {
 import { DEFAULT_DEALER, PRODUCT } from "@/config/defaultDealer";
 import {
   fetchOnboardingProfile,
+  fetchPaymentPreview,
   saveOnboardingProfile,
   uploadOnboardingLogo,
   type OnboardingProfilePayload,
+  type PaymentPreviewResponse,
 } from "@/lib/api";
 
 interface DealershipProfile {
@@ -95,12 +98,23 @@ interface IndieBusiness {
   makesCarried: string;
 }
 
+// SESSION_238 — per-store payment defaults for the est-payment line.
+// Empty string = "unset — payment_engine fallback (7.49 / 72 / 10)".
+// Kept as strings so the numeric inputs can render empty vs. zero
+// without a null/NaN dance.
+interface PaymentDefaults {
+  defaultApr: string;
+  defaultTermMonths: string;
+  defaultDownPaymentPct: string;
+}
+
 interface OnboardingState {
   dealership: DealershipProfile;
   manager: ManagerPreferences;
   salesperson: SalespersonProfile;
   assistant: AssistantBehavior;
   indie: IndieBusiness;
+  payments: PaymentDefaults;
   checklist: PilotChecklist;
 }
 
@@ -137,7 +151,21 @@ const SALESPERSON_TONE_OPTIONS = [
   "Highly technical",
 ];
 
-const SECTION_COUNT = 6; // dealership, manager, salesperson, assistant, indie, checklist
+// SESSION_238 — kept in sync with services/payment_engine.py and
+// backend/dealer_ai/serializers.py PAYMENT_DEFAULT_* bounds. Any
+// change here needs the matching change on the backend (the preview
+// endpoint validates against the backend constants).
+const PAYMENT_APR_MIN = 0;
+const PAYMENT_APR_MAX = 40;
+const PAYMENT_TERM_MIN = 12;
+const PAYMENT_TERM_MAX = 96;
+const PAYMENT_DOWN_MIN = 0;
+const PAYMENT_DOWN_MAX = 50;
+const PAYMENT_FALLBACK_APR = 7.49;
+const PAYMENT_FALLBACK_TERM = 72;
+const PAYMENT_FALLBACK_DOWN_PCT = 10;
+
+const SECTION_COUNT = 7; // dealership, manager, salesperson, assistant, indie, payments, checklist
 
 const EMPTY_STATE: OnboardingState = {
   dealership: {
@@ -179,6 +207,11 @@ const EMPTY_STATE: OnboardingState = {
     warrantyOffering: "",
     creditRangeServed: "",
     makesCarried: "",
+  },
+  payments: {
+    defaultApr: "",
+    defaultTermMonths: "",
+    defaultDownPaymentPct: "",
   },
   checklist: {
     inventoryConnected: false,
@@ -232,6 +265,22 @@ function fromApi(payload: OnboardingProfilePayload): OnboardingState {
       creditRangeServed: payload.credit_range_served,
       makesCarried: payload.makes_carried,
     },
+    payments: {
+      defaultApr:
+        payload.default_apr === null || payload.default_apr === undefined
+          ? ""
+          : String(payload.default_apr),
+      defaultTermMonths:
+        payload.default_term_months === null ||
+        payload.default_term_months === undefined
+          ? ""
+          : String(payload.default_term_months),
+      defaultDownPaymentPct:
+        payload.default_down_payment_pct === null ||
+        payload.default_down_payment_pct === undefined
+          ? ""
+          : String(payload.default_down_payment_pct),
+    },
     checklist: {
       inventoryConnected: payload.inventory_connected,
       financeRulesReviewed: payload.finance_rules_reviewed,
@@ -280,6 +329,21 @@ function toApi(state: OnboardingState): OnboardingProfilePayload {
     warranty_offering: state.indie.warrantyOffering,
     credit_range_served: state.indie.creditRangeServed,
     makes_carried: state.indie.makesCarried,
+    // SESSION_238 — empty string maps to null so the backend
+    // treats the field as unset and cards fall back to the
+    // payment_engine constants.
+    default_apr:
+      state.payments.defaultApr.trim() === ""
+        ? null
+        : Number(state.payments.defaultApr),
+    default_term_months:
+      state.payments.defaultTermMonths.trim() === ""
+        ? null
+        : Number(state.payments.defaultTermMonths),
+    default_down_payment_pct:
+      state.payments.defaultDownPaymentPct.trim() === ""
+        ? null
+        : Number(state.payments.defaultDownPaymentPct),
   };
 }
 
@@ -317,7 +381,7 @@ export default function DealerOnboardingPage() {
     };
   }, []);
 
-  const { dealership, manager, salesperson, assistant, indie, checklist } = state;
+  const { dealership, manager, salesperson, assistant, indie, payments, checklist } = state;
   const setDealership = (next: DealershipProfile) =>
     setState((s) => ({ ...s, dealership: next }));
   const setManager = (next: ManagerPreferences) =>
@@ -328,6 +392,8 @@ export default function DealerOnboardingPage() {
     setState((s) => ({ ...s, assistant: next }));
   const setIndie = (updater: (prev: IndieBusiness) => IndieBusiness) =>
     setState((s) => ({ ...s, indie: updater(s.indie) }));
+  const setPayments = (updater: (prev: PaymentDefaults) => PaymentDefaults) =>
+    setState((s) => ({ ...s, payments: updater(s.payments) }));
   const setChecklist = (
     updater: (prev: PilotChecklist) => PilotChecklist,
   ) => setState((s) => ({ ...s, checklist: updater(s.checklist) }));
@@ -343,12 +409,52 @@ export default function DealerOnboardingPage() {
       // Indie section — complete when dealer type is chosen AND BHPH
       // is explicitly configured (either enabled or disabled).
       Boolean(indie.dealerType && indie.bhphConfigured),
+      // SESSION_238 — payment defaults section is complete only when
+      // all three fields are populated. Falling back silently to the
+      // module constants is not a real answer.
+      Boolean(
+        payments.defaultApr.trim() &&
+          payments.defaultTermMonths.trim() &&
+          payments.defaultDownPaymentPct.trim(),
+      ),
       Object.values(checklist).every(Boolean),
     ].filter(Boolean).length;
     return { sectionsDone, total: SECTION_COUNT };
-  }, [dealership, manager, salesperson, assistant, indie, checklist]);
+  }, [dealership, manager, salesperson, assistant, indie, payments, checklist]);
+
+  // SESSION_238 — gate save on the payment-defaults validators so a
+  // dealer can't PUT an out-of-range APR / term / down%. Backend
+  // validates too; the frontend gate is UX so the button doesn't
+  // send a request we already know will 400.
+  const paymentDefaultsHasError =
+    validatePaymentField(
+      payments.defaultApr,
+      PAYMENT_APR_MIN,
+      PAYMENT_APR_MAX,
+      "APR",
+    ) !== null ||
+    validatePaymentField(
+      payments.defaultTermMonths,
+      PAYMENT_TERM_MIN,
+      PAYMENT_TERM_MAX,
+      "Term",
+      { integer: true },
+    ) !== null ||
+    validatePaymentField(
+      payments.defaultDownPaymentPct,
+      PAYMENT_DOWN_MIN,
+      PAYMENT_DOWN_MAX,
+      "Down payment",
+    ) !== null;
 
   const handleSave = async () => {
+    if (paymentDefaultsHasError) {
+      setSaveStatus("error");
+      setSaveError(
+        "Fix the payment estimate errors before saving.",
+      );
+      return;
+    }
     setSaveStatus("saving");
     setSaveError(null);
     try {
@@ -841,7 +947,13 @@ export default function DealerOnboardingPage() {
         </div>
       </SectionCard>
 
-      {/* Section 7 — Pilot checklist */}
+      {/* Section 7 — Payment estimates (SESSION_238) */}
+      <PaymentDefaultsSection
+        payments={payments}
+        onChange={setPayments}
+      />
+
+      {/* Section 8 — Pilot checklist */}
       <SectionCard
         icon={<ClipboardList className="h-4 w-4" />}
         title="Next steps checklist"
@@ -899,7 +1011,7 @@ export default function DealerOnboardingPage() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saveStatus === "saving"}
+          disabled={saveStatus === "saving" || paymentDefaultsHasError}
           className="rounded-md bg-brand-blue px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-blue/90 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {saveStatus === "saving" ? "Saving…" : "Save changes"}
@@ -1177,6 +1289,234 @@ interface SelectFieldProps {
   value: string;
   onChange: (value: string) => void;
   options: string[];
+}
+
+// SESSION_238 — payment-defaults block. Three numeric fields with
+// dealer-word labels, an effective-value placeholder that reads the
+// current fallback aloud ("using 7.49% until you set one"), and a
+// live example line for a $12,000 car that mirrors the assistant
+// card's est-payment string. The example is fetched from the backend
+// (POST /onboarding/payment-preview/) rather than recomputed here so
+// there is one formula in the app.
+function parseNumericInput(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  return Number.isFinite(value) ? value : null;
+}
+
+function validatePaymentField(
+  raw: string,
+  lo: number,
+  hi: number,
+  label: string,
+  { integer = false }: { integer?: boolean } = {},
+): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) {
+    return `${label} must be a number.`;
+  }
+  if (integer && !Number.isInteger(value)) {
+    return `${label} must be a whole number.`;
+  }
+  if (value < lo || value > hi) {
+    return `${label} must be between ${lo} and ${hi}.`;
+  }
+  return null;
+}
+
+function PaymentDefaultsSection({
+  payments,
+  onChange,
+}: {
+  payments: PaymentDefaults;
+  onChange: (updater: (prev: PaymentDefaults) => PaymentDefaults) => void;
+}) {
+  const aprError = validatePaymentField(
+    payments.defaultApr,
+    PAYMENT_APR_MIN,
+    PAYMENT_APR_MAX,
+    "APR",
+  );
+  const termError = validatePaymentField(
+    payments.defaultTermMonths,
+    PAYMENT_TERM_MIN,
+    PAYMENT_TERM_MAX,
+    "Term",
+    { integer: true },
+  );
+  const downError = validatePaymentField(
+    payments.defaultDownPaymentPct,
+    PAYMENT_DOWN_MIN,
+    PAYMENT_DOWN_MAX,
+    "Down payment",
+  );
+
+  const anyError = Boolean(aprError || termError || downError);
+
+  // Debounce the preview so a running edit doesn't fire a request
+  // per keystroke. 250 ms is short enough to feel live and long
+  // enough to skip most in-flight typing.
+  const [preview, setPreview] = useState<PaymentPreviewResponse | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (anyError) {
+      setPreview(null);
+      setPreviewError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const apr = parseNumericInput(payments.defaultApr);
+      const termMonths = parseNumericInput(payments.defaultTermMonths);
+      const downPaymentPct = parseNumericInput(payments.defaultDownPaymentPct);
+      fetchPaymentPreview({
+        apr: apr ?? undefined,
+        termMonths: termMonths ?? undefined,
+        downPaymentPct: downPaymentPct ?? undefined,
+      })
+        .then((response) => {
+          if (controller.signal.aborted) return;
+          setPreview(response);
+          setPreviewError(null);
+        })
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return;
+          setPreview(null);
+          setPreviewError(err instanceof Error ? err.message : String(err));
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [
+    anyError,
+    payments.defaultApr,
+    payments.defaultTermMonths,
+    payments.defaultDownPaymentPct,
+  ]);
+
+  const aprPlaceholder = `using ${PAYMENT_FALLBACK_APR}% until you set one`;
+  const termPlaceholder = `using ${PAYMENT_FALLBACK_TERM} until you set one`;
+  const downPlaceholder = `using ${PAYMENT_FALLBACK_DOWN_PCT}% until you set one`;
+
+  return (
+    <SectionCard
+      icon={<DollarSign className="h-4 w-4" />}
+      title="Payment estimates"
+      subtitle="Your store's numbers for the est. $/mo line on every showroom card and the AI assistant's reply."
+    >
+      <div className="grid gap-4 sm:grid-cols-3">
+        <NumericField
+          label="Starting APR for estimates"
+          value={payments.defaultApr}
+          onChange={(v) => onChange((p) => ({ ...p, defaultApr: v }))}
+          placeholder={aprPlaceholder}
+          helperText="0–40% range. Sales confirms the real rate at handoff."
+          suffix="%"
+          error={aprError}
+          step="0.01"
+        />
+        <NumericField
+          label="Term (months)"
+          value={payments.defaultTermMonths}
+          onChange={(v) => onChange((p) => ({ ...p, defaultTermMonths: v }))}
+          placeholder={termPlaceholder}
+          helperText="12–96 months. Common bands: 36, 48, 60, 72, 84."
+          error={termError}
+          step="1"
+        />
+        <NumericField
+          label="Down payment (% of price)"
+          value={payments.defaultDownPaymentPct}
+          onChange={(v) =>
+            onChange((p) => ({ ...p, defaultDownPaymentPct: v }))
+          }
+          placeholder={downPlaceholder}
+          helperText="0–50% range. Chat overrides with the buyer's stated down."
+          suffix="%"
+          error={downError}
+          step="0.01"
+        />
+      </div>
+      <div
+        className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3"
+        data-testid="payment-preview"
+      >
+        <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+          Live example — a $12,000 car
+        </div>
+        <div className="mt-1 text-sm text-brand-ink">
+          {anyError ? (
+            <span className="text-slate-400">Fix the errors above to see the example.</span>
+          ) : previewError ? (
+            <span className="text-rose-600">Preview failed: {previewError}</span>
+          ) : preview ? (
+            <span>
+              A $12,000 car would show{" "}
+              <span className="font-semibold">{preview.line.label}</span>
+            </span>
+          ) : (
+            <span className="text-slate-400">Loading example…</span>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+interface NumericFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  helperText?: string;
+  suffix?: string;
+  error?: string | null;
+  step?: string;
+}
+
+function NumericField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  helperText,
+  suffix,
+  error,
+  step,
+}: NumericFieldProps) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-semibold text-slate-600">{label}</span>
+      <div className="relative flex items-center">
+        <input
+          type="number"
+          inputMode="decimal"
+          className={`input pr-9 ${error ? "border-rose-400 focus-visible:ring-rose-300" : ""}`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          step={step}
+          aria-invalid={error ? "true" : undefined}
+        />
+        {suffix ? (
+          <span className="pointer-events-none absolute right-3 text-xs text-slate-400">
+            {suffix}
+          </span>
+        ) : null}
+      </div>
+      {error ? (
+        <span className="text-[11px] text-rose-600">{error}</span>
+      ) : helperText ? (
+        <span className="text-[11px] text-slate-500">{helperText}</span>
+      ) : null}
+    </label>
+  );
 }
 
 function SelectField({ label, value, onChange, options }: SelectFieldProps) {

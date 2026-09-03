@@ -320,6 +320,23 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
                 "landed on the queue",
             )
 
+    def test_seed_writes_explicit_payment_defaults(self) -> None:
+        """SESSION_238 — the demo store must not sit silently on the
+        payment_engine module fallback. The seed sets all three
+        payment default fields so the overview readiness reads
+        "payment defaults set"."""
+        from dealer_ai.models import DealerOnboardingProfile
+
+        dealership = _demo_dealership()
+        profile = DealerOnboardingProfile.objects.filter(
+            dealership=dealership
+        ).first()
+        self.assertIsNotNone(profile)
+        assert profile is not None
+        self.assertEqual(profile.default_apr, Decimal("7.49"))
+        self.assertEqual(profile.default_term_months, 72)
+        self.assertEqual(profile.default_down_payment_pct, Decimal("10.00"))
+
     def test_no_vehicle_lifecycle_log_runs_backwards(self) -> None:
         """Assertion 3 — every vehicle's stage-event log ends at its
         current stage.

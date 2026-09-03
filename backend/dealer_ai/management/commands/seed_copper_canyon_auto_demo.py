@@ -581,11 +581,21 @@ def _provision_onboarding_profile(dealership: Dealership, stdout) -> None:
         {"up_to": "20000", "budget": "1800"},
         {"up_to": None, "budget": "2500"},
     ]
+    # SESSION_238 — write the demo store's payment defaults explicitly
+    # (same values the payment_engine constants used as fallback), so
+    # the overview readiness can honestly say "payment defaults set"
+    # and the demo isn't silently on the module fallback path.
+    profile.default_apr = Decimal("7.49")
+    profile.default_term_months = 72
+    profile.default_down_payment_pct = Decimal("10.00")
     profile.save(
         update_fields=[
             "recon_authorization_mode",
             "recon_budget_default",
             "recon_budget_bands",
+            "default_apr",
+            "default_term_months",
+            "default_down_payment_pct",
             "updated_at",
         ]
     )

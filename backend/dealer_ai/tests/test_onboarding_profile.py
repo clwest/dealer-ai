@@ -448,6 +448,11 @@ class OnboardingReadinessTests(TestCase):
         self.assertIn("3 vehicles", readiness["inventory_source"])
         self.assertIn("demo seed", readiness["inventory_source"])
 
+    def test_empty_store_reports_payment_defaults_unset(self):
+        # SESSION_238 — cold store, no profile, no store-set numbers.
+        readiness = self._get_readiness()
+        self.assertFalse(readiness["payment_defaults_set"])
+
     def test_derived_readiness_ignores_stored_booleans(self):
         """Stored booleans stay on the profile for backwards
         compatibility, but the derived flags must not be swayed by
@@ -465,3 +470,206 @@ class OnboardingReadinessTests(TestCase):
         readiness = self._get_readiness()
         self.assertFalse(readiness["salespeople_added"])
         self.assertFalse(readiness["inventory_connected"])
+
+
+class OnboardingPaymentDefaultsTests(TestCase):
+    """SESSION_238 — the three per-store payment defaults must round-
+    trip through PATCH and PUT, must reject out-of-range values with
+    a plain sentence, and must flip ``readiness.payment_defaults_set``
+    once all three are populated so the overview stops nudging the
+    dealer to configure them."""
+
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
+
+    def test_patch_round_trips_payment_defaults(self):
+        # PATCH from a freshly-created profile — the field-level
+        # updates must land without also having to re-send every
+        # other field on the profile.
+        body = {
+            "default_apr": "6.99",
+            "default_term_months": 60,
+            "default_down_payment_pct": "12.5",
+        }
+        res = self.client.patch(
+            URL, data=json.dumps(body), content_type="application/json"
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        # DRF serializes DecimalField as a string; the frontend
+        # tolerates both, but the wire shape is the string.
+        self.assertEqual(data["default_apr"], "6.99")
+        self.assertEqual(data["default_term_months"], 60)
+        self.assertEqual(data["default_down_payment_pct"], "12.50")
+        profile = DealerOnboardingProfile.objects.get()
+        self.assertEqual(str(profile.default_apr), "6.99")
+        self.assertEqual(profile.default_term_months, 60)
+        self.assertEqual(str(profile.default_down_payment_pct), "12.50")
+
+    def test_readiness_flips_when_all_three_set(self):
+        # Before the save the store is on the payment_engine fallback,
+        # so ``payment_defaults_set`` must read False.
+        pre = self.client.get(URL).json()
+        self.assertFalse(pre["readiness"]["payment_defaults_set"])
+        self.client.patch(
+            URL,
+            data=json.dumps(
+                {
+                    "default_apr": "7.49",
+                    "default_term_months": 72,
+                    "default_down_payment_pct": "10.00",
+                }
+            ),
+            content_type="application/json",
+        )
+        post = self.client.get(URL).json()
+        self.assertTrue(post["readiness"]["payment_defaults_set"])
+
+    def test_patch_rejects_apr_above_forty(self):
+        # The task pins APR bounds at 0-40; a 60 must fail with a
+        # plain sentence on the field name.
+        res = self.client.patch(
+            URL,
+            data=json.dumps({"default_apr": "60.00"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400, res.content)
+        body = res.json()
+        self.assertIn("default_apr", body)
+        self.assertIn("40", body["default_apr"][0])
+
+    def test_patch_rejects_term_below_min(self):
+        res = self.client.patch(
+            URL,
+            data=json.dumps({"default_term_months": 6}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400, res.content)
+        body = res.json()
+        self.assertIn("default_term_months", body)
+
+    def test_patch_rejects_down_payment_above_fifty(self):
+        res = self.client.patch(
+            URL,
+            data=json.dumps({"default_down_payment_pct": "80.00"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400, res.content)
+        body = res.json()
+        self.assertIn("default_down_payment_pct", body)
+
+    def test_null_values_persist_as_unset(self):
+        # Explicit null clears the field back to fallback behavior.
+        self.client.patch(
+            URL,
+            data=json.dumps(
+                {
+                    "default_apr": "7.49",
+                    "default_term_months": 72,
+                    "default_down_payment_pct": "10.00",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.client.patch(
+            URL,
+            data=json.dumps(
+                {
+                    "default_apr": None,
+                    "default_term_months": None,
+                    "default_down_payment_pct": None,
+                }
+            ),
+            content_type="application/json",
+        )
+        profile = DealerOnboardingProfile.objects.get()
+        self.assertIsNone(profile.default_apr)
+        self.assertIsNone(profile.default_term_months)
+        self.assertIsNone(profile.default_down_payment_pct)
+
+    def test_saved_defaults_drive_card_estimated_payment_line(self):
+        """A card rendered after the dealer sets store defaults must
+        run its est-payment line through those numbers — not through
+        the payment_engine module fallback. The label already reads
+        the term ("72 mo"); locking a term of 60 and asserting on it
+        proves the store's value reached the card path."""
+        from dealer_ai.models import Vehicle
+        from dealer_ai.serializers import VehicleSerializer
+        from dealer_ai.services.tenancy import get_default_dealership
+
+        self.client.patch(
+            URL,
+            data=json.dumps(
+                {
+                    "default_apr": "5.00",
+                    "default_term_months": 60,
+                    "default_down_payment_pct": "20.00",
+                }
+            ),
+            content_type="application/json",
+        )
+        dealership = get_default_dealership()
+        vehicle = Vehicle.objects.create(
+            dealership=dealership,
+            stock_number="CC-PAY-01",
+            year=2022,
+            model="Sedan",
+            price=20000,
+            source="test",
+        )
+        profile = DealerOnboardingProfile.objects.get()
+        data = dict(
+            VehicleSerializer(
+                vehicle, context={"onboarding_profile": profile}
+            ).data
+        )
+        line = data["estimated_payment_line"]
+        self.assertIsNotNone(line)
+        # Store-set 60 month term flows into the label.
+        self.assertIn("60 mo", line["label"])
+        # 20% down of $20,000 = $4,000 (formatted with a comma).
+        self.assertIn("$4,000 down", line["label"])
+        self.assertEqual(line["term_months"], 60)
+        self.assertEqual(line["apr"], 5.0)
+
+
+class OnboardingPaymentPreviewTests(TestCase):
+    """SESSION_238 — the preview endpoint mirrors the per-card
+    formula so the onboarding page's live example line matches the
+    est-payment line the assistant renders. Public GET; no auth
+    required so the preview works even before the profile is saved
+    (identical to how the onboarding GET is public for branding)."""
+
+    PREVIEW_URL = reverse("dealer_ai:onboarding-payment-preview")
+
+    def test_preview_returns_label_for_supplied_params(self):
+        res = self.client.get(
+            self.PREVIEW_URL
+            + "?apr=7.49&term_months=72&down_payment_pct=10"
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        self.assertEqual(data["price"], 12000.0)
+        self.assertIn("72 mo", data["line"]["label"])
+        self.assertIn("$1,200 down", data["line"]["label"])
+        self.assertIn("W.A.C.", data["line"]["label"])
+
+    def test_preview_uses_fallback_when_no_params(self):
+        res = self.client.get(self.PREVIEW_URL)
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        # Without params, fallback is 7.49 / 72 / 10 — the label
+        # therefore reads the same as the fully-parameterised case
+        # above.
+        self.assertIn("72 mo", data["line"]["label"])
+        self.assertIn("$1,200 down", data["line"]["label"])
+
+    def test_preview_rejects_out_of_range_apr(self):
+        res = self.client.get(self.PREVIEW_URL + "?apr=60")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("APR", res.json()["detail"])
+
+    def test_preview_rejects_non_numeric(self):
+        res = self.client.get(self.PREVIEW_URL + "?apr=abc")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("APR", res.json()["detail"])

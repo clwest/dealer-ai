@@ -44,6 +44,7 @@ function makeReadiness(
     inventory_connected: false,
     inventory_count: 0,
     inventory_source: "",
+    payment_defaults_set: true,
     ...overrides,
   };
 }
@@ -87,6 +88,9 @@ function makeProfile(
     warranty_offering: "",
     credit_range_served: "",
     makes_carried: "",
+    default_apr: null,
+    default_term_months: null,
+    default_down_payment_pct: null,
     readiness: makeReadiness(),
     ...overrides,
   };

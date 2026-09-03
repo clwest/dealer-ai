@@ -491,7 +491,25 @@ ONBOARDING_DEFAULTS: dict = {
     "warranty_offering": "",
     "credit_range_served": "",
     "makes_carried": "",
+    # SESSION_238 — per-store payment defaults for the est-payment
+    # line. Null = "unset; fall back to payment_engine constants
+    # (7.49 / 72 / 10)". The dealer sets real numbers on the
+    # onboarding page.
+    "default_apr": None,
+    "default_term_months": None,
+    "default_down_payment_pct": None,
 }
+
+
+# SESSION_238 — validation bounds for the three payment-default
+# fields. Kept out of the serializer body so the preview endpoint
+# can reuse them without pulling in the serializer.
+PAYMENT_DEFAULT_APR_MIN = 0
+PAYMENT_DEFAULT_APR_MAX = 40
+PAYMENT_DEFAULT_TERM_MIN = 12
+PAYMENT_DEFAULT_TERM_MAX = 96
+PAYMENT_DEFAULT_DOWN_PCT_MIN = 0
+PAYMENT_DEFAULT_DOWN_PCT_MAX = 50
 
 
 class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
@@ -558,16 +576,54 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
             "warranty_offering",
             "credit_range_served",
             "makes_carried",
+            # SESSION_238 — per-store payment defaults for the est-payment
+            # line. Nullable; when null the payment_engine module constants
+            # (7.49 / 72 / 10) supply the fallback.
+            "default_apr",
+            "default_term_months",
+            "default_down_payment_pct",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
 
+    def validate_default_apr(self, value):
+        if value is None:
+            return value
+        if not (PAYMENT_DEFAULT_APR_MIN <= float(value) <= PAYMENT_DEFAULT_APR_MAX):
+            raise serializers.ValidationError(
+                f"APR must be between {PAYMENT_DEFAULT_APR_MIN}% "
+                f"and {PAYMENT_DEFAULT_APR_MAX}%."
+            )
+        return value
+
+    def validate_default_term_months(self, value):
+        if value is None:
+            return value
+        if not (PAYMENT_DEFAULT_TERM_MIN <= int(value) <= PAYMENT_DEFAULT_TERM_MAX):
+            raise serializers.ValidationError(
+                f"Term must be between {PAYMENT_DEFAULT_TERM_MIN} "
+                f"and {PAYMENT_DEFAULT_TERM_MAX} months."
+            )
+        return value
+
+    def validate_default_down_payment_pct(self, value):
+        if value is None:
+            return value
+        if not (
+            PAYMENT_DEFAULT_DOWN_PCT_MIN <= float(value) <= PAYMENT_DEFAULT_DOWN_PCT_MAX
+        ):
+            raise serializers.ValidationError(
+                f"Down payment must be between {PAYMENT_DEFAULT_DOWN_PCT_MIN}% "
+                f"and {PAYMENT_DEFAULT_DOWN_PCT_MAX}%."
+            )
+        return value
+
     def get_readiness(self, obj) -> dict:
-        return compute_readiness(obj.dealership)
+        return compute_readiness(obj.dealership, profile=obj)
 
 
-def compute_readiness(dealership) -> dict:
+def compute_readiness(dealership, *, profile=None) -> dict:
     """Compute the readiness signals the store can prove for itself.
 
     SESSION_235 (overview honesty). The dealership either has
@@ -576,6 +632,12 @@ def compute_readiness(dealership) -> dict:
     is how the overview ended up telling a dealer "Sales team not
     added yet" while three people were on the team and 130 cars
     were on the lot. Compute; don't flag.
+
+    SESSION_238 (payment defaults). ``payment_defaults_set`` is
+    true when the profile has all three of default_apr,
+    default_term_months, default_down_payment_pct populated —
+    i.e. the store's own numbers are driving the est-payment
+    line and cards are not silently on the 7.49 / 72 / 10 fallback.
 
     Returns the shape:
         {
@@ -587,6 +649,7 @@ def compute_readiness(dealership) -> dict:
                                          #   "130 vehicles · demo seed"
                                          #   "24 vehicles · CSV import"
                                          #   ""  when count == 0
+          "payment_defaults_set": bool,  # all three of APR/term/down set
         }
     """
     salespeople_count = Salesperson.objects.filter(
@@ -594,6 +657,12 @@ def compute_readiness(dealership) -> dict:
     ).count()
     vehicles_qs = Vehicle.objects.filter(dealership=dealership)
     inventory_count = vehicles_qs.count()
+    payment_defaults_set = bool(
+        profile is not None
+        and profile.default_apr is not None
+        and profile.default_term_months
+        and profile.default_down_payment_pct is not None
+    )
     return {
         "salespeople_added": salespeople_count > 0,
         "salespeople_count": salespeople_count,
@@ -602,6 +671,7 @@ def compute_readiness(dealership) -> dict:
         "inventory_source": _summarize_inventory_source(
             vehicles_qs, inventory_count
         ),
+        "payment_defaults_set": payment_defaults_set,
     }
 
 

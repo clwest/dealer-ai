@@ -810,6 +810,11 @@ export interface OnboardingReadinessPayload {
   inventory_connected: boolean;
   inventory_count: number;
   inventory_source: string;
+  /** SESSION_238 — true when the store has set its own APR / term /
+   *  down%. False = cards silently on the payment_engine fallback
+   *  (7.49 / 72 / 10). Overview surfaces this so a dealer knows the
+   *  quoted payments are their numbers, not ours. */
+  payment_defaults_set: boolean;
 }
 
 export interface OnboardingProfilePayload {
@@ -868,9 +873,50 @@ export interface OnboardingProfilePayload {
    *  (CSV, legacy franchise-oriented) — backend prefers this field
    *  and falls back to `main_brands` for legacy profiles. */
   makes_carried: string;
+  /** SESSION_238 — per-store payment defaults for the est-payment
+   *  line. Null = "unset — payment_engine fallback in play
+   *  (7.49% / 72 mo / 10%)". Stored as strings on the wire
+   *  because DRF serializes DecimalField that way — the frontend
+   *  parses to Number for the input controls. */
+  default_apr: string | number | null;
+  default_term_months: number | null;
+  default_down_payment_pct: string | number | null;
   // Server-managed; present on GET, ignored on PUT.
   created_at?: string;
   updated_at?: string;
+}
+
+// SESSION_238 — payment-preview endpoint response. The label mirrors
+// the assistant card's est-payment line exactly.
+export interface PaymentPreviewResponse {
+  price: number;
+  line: {
+    label: string;
+    monthly_payment: number;
+    down_payment: number;
+    term_months: number;
+    apr: number;
+  };
+}
+
+export async function fetchPaymentPreview(params: {
+  apr?: number;
+  termMonths?: number;
+  downPaymentPct?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params.apr !== undefined && !Number.isNaN(params.apr))
+    q.set("apr", String(params.apr));
+  if (params.termMonths !== undefined && !Number.isNaN(params.termMonths))
+    q.set("term_months", String(params.termMonths));
+  if (
+    params.downPaymentPct !== undefined &&
+    !Number.isNaN(params.downPaymentPct)
+  )
+    q.set("down_payment_pct", String(params.downPaymentPct));
+  return getJSON<PaymentPreviewResponse>(
+    `/onboarding/payment-preview/?${q.toString()}`,
+  );
 }
 
 export async function fetchOnboardingProfile() {

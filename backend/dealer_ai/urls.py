@@ -120,6 +120,12 @@ urlpatterns = [
         views.onboarding_logo_upload,
         name="onboarding-logo-upload",
     ),
+    # SESSION_238 — live est-payment preview for the onboarding page.
+    path(
+        "onboarding/payment-preview/",
+        views.onboarding_payment_preview,
+        name="onboarding-payment-preview",
+    ),
     # SESSION_010: stateless manager-side chat tester.
     path(
         "manager-chat/",

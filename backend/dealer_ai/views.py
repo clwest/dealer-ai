@@ -66,6 +66,7 @@ from django.utils import timezone
 from .services.ad_copy import generate_ad_copy
 from .services.audit import audit_events_snapshot
 from .services.chat_engine import ChatEngine
+from .services.payment_engine import render_estimated_payment_line
 from .permissions import (
     IsAdvisorForSlug,
     IsDealerOwnerAtActiveDealership,
@@ -1180,7 +1181,7 @@ def onboarding_profile(request):
                 {
                     **ONBOARDING_DEFAULTS,
                     "dealership_slug": dealership.slug,
-                    "readiness": compute_readiness(dealership),
+                    "readiness": compute_readiness(dealership, profile=None),
                 }
             )
         return Response(DealerOnboardingProfileSerializer(profile).data)
@@ -1267,6 +1268,104 @@ def onboarding_logo_upload(request):
     return Response(
         DealerOnboardingProfileSerializer(profile).data, status=status.HTTP_200_OK
     )
+
+
+# SESSION_238 — payment-defaults live preview.
+# Reuses ``render_estimated_payment_line`` so the onboarding page's live
+# example is the same formula the assistant cards run. Public GET so the
+# preview keeps refreshing while the dealer types even before they save.
+_PAYMENT_PREVIEW_PRICE = 12000.0
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def onboarding_payment_preview(request):
+    """Render the est-payment line for a $12,000 car using the caller's
+    APR / term / down% query params.
+
+    Query params (all optional; missing keys fall through to the
+    module defaults in ``services.payment_engine``):
+        apr — annual percentage rate, percent units (e.g. 7.49)
+        term_months — integer months
+        down_payment_pct — percent of price (e.g. 10)
+
+    Same validation bounds the serializer enforces on save. Rejects
+    out-of-range values with a plain sentence so the field-level
+    error can render as-is.
+    """
+    from .serializers import (
+        PAYMENT_DEFAULT_APR_MAX,
+        PAYMENT_DEFAULT_APR_MIN,
+        PAYMENT_DEFAULT_DOWN_PCT_MAX,
+        PAYMENT_DEFAULT_DOWN_PCT_MIN,
+        PAYMENT_DEFAULT_TERM_MAX,
+        PAYMENT_DEFAULT_TERM_MIN,
+    )
+
+    def _parse_float(key, lo, hi, label):
+        raw = request.query_params.get(key)
+        if raw in (None, ""):
+            return None
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            raise ValueError(f"{label} must be a number.")
+        if not (lo <= value <= hi):
+            raise ValueError(
+                f"{label} must be between {lo} and {hi}."
+            )
+        return value
+
+    def _parse_int(key, lo, hi, label):
+        raw = request.query_params.get(key)
+        if raw in (None, ""):
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError(f"{label} must be a whole number.")
+        if not (lo <= value <= hi):
+            raise ValueError(
+                f"{label} must be between {lo} and {hi}."
+            )
+        return value
+
+    try:
+        apr = _parse_float(
+            "apr",
+            PAYMENT_DEFAULT_APR_MIN,
+            PAYMENT_DEFAULT_APR_MAX,
+            "APR",
+        )
+        term = _parse_int(
+            "term_months",
+            PAYMENT_DEFAULT_TERM_MIN,
+            PAYMENT_DEFAULT_TERM_MAX,
+            "Term",
+        )
+        down_pct = _parse_float(
+            "down_payment_pct",
+            PAYMENT_DEFAULT_DOWN_PCT_MIN,
+            PAYMENT_DEFAULT_DOWN_PCT_MAX,
+            "Down payment",
+        )
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    defaults: dict = {}
+    if apr is not None:
+        defaults["apr"] = apr
+    if term is not None:
+        defaults["term_months"] = term
+    if down_pct is not None:
+        defaults["down_payment_pct"] = down_pct
+    line = render_estimated_payment_line(_PAYMENT_PREVIEW_PRICE, defaults=defaults)
+    if line is None:
+        return Response(
+            {"detail": "Unable to compute preview."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return Response({"price": _PAYMENT_PREVIEW_PRICE, "line": line})
 
 
 # ---- Milestone 1 · Increment 4E — browser auth flow -----------------------

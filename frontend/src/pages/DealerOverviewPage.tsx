@@ -494,6 +494,17 @@ function deriveAttentionItems(
       cta: "Onboarding",
     });
   }
+  // SESSION_238 — nudge the dealer to set their own APR / term / down.
+  // Until they do, the est-payment line on every card is on the
+  // payment_engine module fallback (7.49 / 72 / 10).
+  if (readiness && !readiness.payment_defaults_set) {
+    items.push({
+      id: "payment-defaults",
+      text: "Set your APR, term and down for the est. payment line.",
+      href: "/dealer-ai-onboarding",
+      cta: "Onboarding",
+    });
+  }
   if (readiness && !readiness.inventory_connected) {
     items.push({
       id: "inventory",
