@@ -263,11 +263,19 @@ CORS_ALLOWED_ORIGINS = [
 # dev server (:5173) which proxies to Django (:8001); the Origin the
 # browser sends is the vite URL, not the Django one. Configurable via
 # env so prod (single-origin behind one domain) can override.
+#
+# :5174 is the Playwright acceptance frontend port (SESSION_235). It
+# runs its own vite dev on :5174 so it can never proxy the dev vite's
+# /api at :8001; the Origin the acceptance browser sends is :5174, so
+# it has to be trusted here too, otherwise every signed-in POST/PATCH
+# fails the middleware's Origin check with 403 before the view runs.
+# The 22-fail acceptance count logged in
+# docs/_internal/TASK_acceptance-green-again.md was this exact drift.
 CSRF_TRUSTED_ORIGINS = [
     o.strip()
     for o in os.getenv(
         "CSRF_TRUSTED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:3000,http://127.0.0.1:3000",
     ).split(",")
     if o.strip()
 ]

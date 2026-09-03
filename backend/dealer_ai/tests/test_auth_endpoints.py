@@ -330,6 +330,72 @@ class CsrfEnforcedOnAuthenticatedMutations(TestCase):
         self.assertEqual(res.status_code, 404, res.content)
 
 
+class CsrfTrustedOriginsCoverAcceptancePort(TestCase):
+    """SESSION_235.1 regression lock — the acceptance frontend runs
+    on :5174 (SESSION_235). Django's ``CsrfViewMiddleware`` rejects
+    any unsafe request whose ``Origin`` header is not in
+    ``CSRF_TRUSTED_ORIGINS``, so :5174 has to be trusted or every
+    signed-in POST/PATCH from the acceptance browser fails with 403
+    "Origin checking failed" before the view runs.
+
+    The 22-fail acceptance count logged in
+    ``docs/_internal/TASK_acceptance-green-again.md`` was this exact
+    drift: the port was moved without the trust list catching up.
+    """
+
+    def setUp(self):
+        self.password = "correct-horse-battery-staple"
+        self.user = User.objects.create_user(
+            username="csrf-origin-user", password=self.password
+        )
+        make_membership(
+            self.user, get_default_dealership(), ROLE_DEALER_OWNER
+        )
+        self.client_csrf = Client(enforce_csrf_checks=True)
+
+    def _login(self) -> str:
+        me = self.client_csrf.get(reverse("dealer_ai:auth-me"))
+        token = me.cookies["csrftoken"].value
+        res = self.client_csrf.post(
+            reverse("dealer_ai:auth-login"),
+            data={"username": "csrf-origin-user", "password": self.password},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        return self.client_csrf.cookies["csrftoken"].value
+
+    def test_acceptance_port_5174_is_a_trusted_origin(self):
+        token = self._login()
+        res = self.client_csrf.post(
+            reverse("dealer_ai:admin-lead-assign", args=[1]),
+            data={"salesperson_id": None},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+            HTTP_ORIGIN="http://127.0.0.1:5174",
+        )
+        # 404 — no lead pk=1 for this tenant. The point is the request
+        # passed the Origin check + CSRF token check and reached the
+        # view. Before adding :5174 to CSRF_TRUSTED_ORIGINS this returned
+        # 403 "CSRF Failed: Origin checking failed".
+        self.assertEqual(res.status_code, 404, res.content)
+
+    def test_untrusted_origin_is_still_rejected(self):
+        token = self._login()
+        res = self.client_csrf.post(
+            reverse("dealer_ai:admin-lead-assign", args=[1]),
+            data={"salesperson_id": None},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+            HTTP_ORIGIN="http://evil.example:5199",
+        )
+        # The Origin check runs before the token check, so the message
+        # names the origin — this is what the acceptance backend logs
+        # for :5174 without the fix.
+        self.assertEqual(res.status_code, 403)
+        self.assertIn(b"Origin checking failed", res.content)
+
+
 class PublicBrandingRemainsUnauthenticated(TestCase):
     """§3 compatibility invariant lock: public branding must render
     without a session. If this test ever fails, `useBrand()` on
