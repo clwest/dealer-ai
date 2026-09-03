@@ -173,7 +173,19 @@ class VehicleSerializer(serializers.ModelSerializer):
         if cached is not None:
             return cached
         defaults = _payment_defaults_from_context(self.context)
-        return render_estimated_payment_line(obj.price, defaults=defaults)
+        # SESSION_235 (finding 50) — when a chat session has stated a
+        # down payment or term, thread those onto the payment line so
+        # the assistant-card label matches the numbers the LLM is
+        # quoting. Store defaults still supply anything the session
+        # left blank; the showroom (which has no session) is unaffected.
+        session_down = self.context.get("session_down_payment")
+        session_term = self.context.get("session_term_months")
+        return render_estimated_payment_line(
+            obj.price,
+            defaults=defaults,
+            down_payment=session_down,
+            term_months=session_term,
+        )
 
 
 def _payment_defaults_from_context(context: dict) -> dict:
@@ -491,16 +503,26 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
     header is how the multi-store backend routes anonymous callers
     to the right store; without it every public session bound to the
     default tenant.
+
+    SESSION_235 addendum — exposes ``readiness`` (read-only) with
+    computed values the store can prove for itself (are there any
+    active salespeople? any vehicles? which source?). The overview
+    page reads these instead of the stored booleans so it can never
+    tell a dealer "Sales team not added yet" when three people are
+    on the team. Stored booleans remain for backwards compatibility
+    but must not be read by anything the store can compute.
     """
 
     dealership_slug = serializers.CharField(
         source="dealership.slug", read_only=True
     )
+    readiness = serializers.SerializerMethodField()
 
     class Meta:
         model = DealerOnboardingProfile
         fields = [
             "dealership_slug",
+            "readiness",
             "dealership_name",
             "store_location",
             "main_brands",
@@ -540,6 +562,80 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+    def get_readiness(self, obj) -> dict:
+        return compute_readiness(obj.dealership)
+
+
+def compute_readiness(dealership) -> dict:
+    """Compute the readiness signals the store can prove for itself.
+
+    SESSION_235 (overview honesty). The dealership either has
+    active salespeople or it doesn't; it either has vehicles or
+    it doesn't. Asking a human to also flip a checkbox to say so
+    is how the overview ended up telling a dealer "Sales team not
+    added yet" while three people were on the team and 130 cars
+    were on the lot. Compute; don't flag.
+
+    Returns the shape:
+        {
+          "salespeople_added":   bool,   # ≥1 active salesperson
+          "salespeople_count":   int,
+          "inventory_connected": bool,   # ≥1 vehicle
+          "inventory_count":     int,
+          "inventory_source":    str,    # human label, e.g.
+                                         #   "130 vehicles · demo seed"
+                                         #   "24 vehicles · CSV import"
+                                         #   ""  when count == 0
+        }
+    """
+    salespeople_count = Salesperson.objects.filter(
+        dealership=dealership, is_active=True
+    ).count()
+    vehicles_qs = Vehicle.objects.filter(dealership=dealership)
+    inventory_count = vehicles_qs.count()
+    return {
+        "salespeople_added": salespeople_count > 0,
+        "salespeople_count": salespeople_count,
+        "inventory_connected": inventory_count > 0,
+        "inventory_count": inventory_count,
+        "inventory_source": _summarize_inventory_source(
+            vehicles_qs, inventory_count
+        ),
+    }
+
+
+def _summarize_inventory_source(vehicles_qs, count: int) -> str:
+    """Compose the "130 vehicles · demo seed" label.
+
+    Groups the raw ``source`` values into three human labels so the
+    attention list can name where the cars came from: demo seed,
+    CSV import, or live feed. Empty when there are no vehicles.
+    """
+    if count == 0:
+        return ""
+    raw_sources = list(
+        vehicles_qs.exclude(source="")
+        .values_list("source", flat=True)
+        .distinct()
+    )
+    demo = any("seed" in s.lower() or "demo" in s.lower() for s in raw_sources)
+    csv = any(s.lower().startswith("csv") for s in raw_sources)
+    feed = any(
+        not ("seed" in s.lower() or "demo" in s.lower() or s.lower().startswith("csv"))
+        for s in raw_sources
+    )
+    labels = []
+    if demo:
+        labels.append("demo seed")
+    if csv:
+        labels.append("CSV import")
+    if feed:
+        labels.append("live feed")
+    if not labels:
+        labels.append("legacy")
+    noun = "vehicle" if count == 1 else "vehicles"
+    return f"{count} {noun} · {' + '.join(labels)}"
 
 
 # ---- Vehicle investment ledger serializers (Milestone 2 · Increment 6) ----

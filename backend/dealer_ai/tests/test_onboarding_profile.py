@@ -378,3 +378,90 @@ class OnboardingIndieFieldsTests(TestCase):
         # Django REST framework's ChoiceField returns 400 for values
         # outside the choices list.
         self.assertEqual(r.status_code, 400, r.content)
+
+
+class OnboardingReadinessTests(TestCase):
+    """SESSION_235 — the ``readiness`` block on the profile payload
+    reports what the store can prove for itself. The overview page
+    reads these instead of stored booleans so the attention list can
+    never say "Sales team not added yet" while three people are on
+    the team and 130 cars are on the lot.
+    """
+
+    def _get_readiness(self):
+        res = self.client.get(URL)
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        self.assertIn("readiness", data)
+        return data["readiness"]
+
+    def test_empty_store_reports_both_flags_false(self):
+        # No profile, no salespeople, no vehicles — a fresh install.
+        readiness = self._get_readiness()
+        self.assertFalse(readiness["salespeople_added"])
+        self.assertEqual(readiness["salespeople_count"], 0)
+        self.assertFalse(readiness["inventory_connected"])
+        self.assertEqual(readiness["inventory_count"], 0)
+        self.assertEqual(readiness["inventory_source"], "")
+
+    def test_store_with_team_and_inventory_reports_both_flags_true(self):
+        from dealer_ai.models import Salesperson, Vehicle
+        from dealer_ai.services.tenancy import get_default_dealership
+
+        dealership = get_default_dealership()
+        Salesperson.objects.create(
+            dealership=dealership,
+            slug="ashley-nguyen",
+            name="Ashley Nguyen",
+            is_active=True,
+        )
+        Salesperson.objects.create(
+            dealership=dealership,
+            slug="danielle-kim",
+            name="Danielle Kim",
+            is_active=True,
+        )
+        # An inactive salesperson does not count — matches the
+        # assignment dropdown + team-page filter.
+        Salesperson.objects.create(
+            dealership=dealership,
+            slug="ex-employee",
+            name="Ex Employee",
+            is_active=False,
+        )
+        for i in range(3):
+            Vehicle.objects.create(
+                dealership=dealership,
+                stock_number=f"CC-{i:03d}",
+                year=2023,
+                model="Ranger",
+                price=32000,
+                source="copper_canyon_seed",
+            )
+        readiness = self._get_readiness()
+        self.assertTrue(readiness["salespeople_added"])
+        self.assertEqual(readiness["salespeople_count"], 2)
+        self.assertTrue(readiness["inventory_connected"])
+        self.assertEqual(readiness["inventory_count"], 3)
+        # Source label names the origin so the sentence can stay
+        # honest — "3 vehicles · demo seed", not "3 vehicles".
+        self.assertIn("3 vehicles", readiness["inventory_source"])
+        self.assertIn("demo seed", readiness["inventory_source"])
+
+    def test_derived_readiness_ignores_stored_booleans(self):
+        """Stored booleans stay on the profile for backwards
+        compatibility, but the derived flags must not be swayed by
+        them — a store that ticked "salespeople_added" but has zero
+        active salespeople still reads False."""
+        # Save a profile with the stored booleans on, no team behind
+        # them.
+        body = {
+            **ONBOARDING_DEFAULTS,
+            "salespeople_added": True,
+            "inventory_connected": True,
+        }
+        client = dealer_owner_client_at_default()
+        client.put(URL, data=json.dumps(body), content_type="application/json")
+        readiness = self._get_readiness()
+        self.assertFalse(readiness["salespeople_added"])
+        self.assertFalse(readiness["inventory_connected"])

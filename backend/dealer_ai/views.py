@@ -47,6 +47,7 @@ from .serializers import (
     DealerOnboardingProfileSerializer,
     ManagerChatInputSerializer,
     ONBOARDING_DEFAULTS,
+    compute_readiness,
     PhotoAttachSerializer,
     PhotoRequestUploadSerializer,
     SalespersonAdminSerializer,
@@ -189,7 +190,11 @@ def start_chat(request):
         # vehicle serializer resolves the store's payment defaults for
         # the est-payment-line render. Defaults are memoized on the
         # serializer context so N cards trigger one profile fetch.
-        serializer_ctx = {"request": request}
+        # SESSION_235 (finding 50) — also thread the session's stated
+        # down/term so cards that didn't go through the budget
+        # classifier still render the customer's numbers, not store
+        # defaults.
+        serializer_ctx = _chat_serializer_context(request, session)
         response_payload["assistant_message"] = ChatMessageSerializer(
             result.assistant_message, context=serializer_ctx
         ).data
@@ -218,7 +223,8 @@ def send_message(request):
 
     # SESSION_234 (finding 31) — same context threading as start_chat
     # above so the est-payment-line resolves the store's defaults.
-    serializer_ctx = {"request": request}
+    # SESSION_235 (finding 50) — plus session down/term.
+    serializer_ctx = _chat_serializer_context(request, session)
     return Response(
         {
             "assistant_message": ChatMessageSerializer(
@@ -229,6 +235,32 @@ def send_message(request):
             ).data,
         }
     )
+
+
+def _chat_serializer_context(request, session) -> dict:
+    """Build the vehicle-serializer context for a chat response.
+
+    Threads the request (for payment-defaults lookup) and — when the
+    session has already extracted a stated down payment or term —
+    those numbers so the est-payment line on every card matches the
+    customer's inputs rather than the store baseline. See
+    ``get_estimated_payment_line`` in serializers.py.
+    """
+    ctx: dict = {"request": request}
+    profile = dict(getattr(session, "extracted_profile", None) or {})
+    raw_down = profile.get("down_payment")
+    if raw_down not in (None, ""):
+        try:
+            ctx["session_down_payment"] = float(raw_down)
+        except (TypeError, ValueError):
+            pass
+    raw_term = profile.get("term_months")
+    if raw_term not in (None, ""):
+        try:
+            ctx["session_term_months"] = int(raw_term)
+        except (TypeError, ValueError):
+            pass
+    return ctx
 
 
 @api_view(["POST"])
@@ -1140,8 +1172,16 @@ def onboarding_profile(request):
             # SESSION_232 addendum — even the no-profile shape must
             # carry the resolved dealership slug so the public/embed
             # client can send it back as ``X-Dealership-Slug``.
+            # SESSION_235 addendum — and it must carry ``readiness``
+            # so the overview page renders the same shape whether or
+            # not the owner has ever saved the onboarding form. Uses
+            # the same computed values a saved profile would.
             return Response(
-                {**ONBOARDING_DEFAULTS, "dealership_slug": dealership.slug}
+                {
+                    **ONBOARDING_DEFAULTS,
+                    "dealership_slug": dealership.slug,
+                    "readiness": compute_readiness(dealership),
+                }
             )
         return Response(DealerOnboardingProfileSerializer(profile).data)
 

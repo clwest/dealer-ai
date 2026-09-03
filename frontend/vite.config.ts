@@ -22,10 +22,17 @@ function applyEmbedHeaders(
 }
 
 // Override the backend target with VITE_API_PROXY_TARGET in frontend/.env.local
-// when port 8000 is taken by another local service.
+// when port 8000 is taken by another local service. Process env takes
+// precedence over the .env file so callers that spawn vite with a
+// specific target (e.g. Playwright's acceptance frontend on :5174
+// pointing at :8101) always win, even if the developer's .env.local
+// points the dev vite at :8001.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const proxyTarget = env.VITE_API_PROXY_TARGET || "http://127.0.0.1:8000";
+  const proxyTarget =
+    process.env.VITE_API_PROXY_TARGET ||
+    env.VITE_API_PROXY_TARGET ||
+    "http://127.0.0.1:8000";
 
   const frameAncestors = embedFrameAncestors(env);
 

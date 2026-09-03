@@ -24,11 +24,14 @@ import { fileURLToPath } from "node:url";
 const IS_CI = Boolean(process.env.CI);
 
 // Server ports. Backend uses a dedicated port so the acceptance suite
-// never touches the local dev DB on :8000.
+// never touches the local dev DB on :8000. Frontend uses its own port
+// so the suite never borrows the dev frontend on :5173 (SESSION_235
+// finding: `reuseExistingServer: !IS_CI` was reusing the dev vite,
+// whose /api proxy targets the dev backend on :8001 — every persona
+// login hit the wrong database). See docs/_internal/TASK_overview-
+// tells-the-truth.md Part 0.
 const BACKEND_PORT = 8101;
-// Vite dev in both local + CI per §0.a M20.5 amendment (see webServer
-// block below). Single port for both modes.
-const FRONTEND_PORT = 5173;
+const FRONTEND_PORT = 5174;
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const FRONTEND_URL = `http://127.0.0.1:${FRONTEND_PORT}`;
 
@@ -185,7 +188,11 @@ export default defineConfig({
       command: `python3 manage.py migrate --run-syncdb --noinput && python3 manage.py runserver 127.0.0.1:${BACKEND_PORT} --noreload`,
       cwd: BACKEND_DIR,
       url: `${BACKEND_URL}/api/dealer-ai/auth/me/`,
-      reuseExistingServer: !IS_CI,
+      // Never reuse — the acceptance backend must always be the one
+      // Playwright launched, against :8101 / the isolated test DB.
+      // Reusing a dev backend that migrated a different schema (or
+      // pointed at :8000) is the exact failure Part 0 exists to stop.
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         M20_ACCEPTANCE_DB: "1",
@@ -208,9 +215,17 @@ export default defineConfig({
       command: `npm run dev -- --host 127.0.0.1 --port ${FRONTEND_PORT} --strictPort`,
       cwd: FRONTEND_DIR,
       url: FRONTEND_URL,
-      reuseExistingServer: !IS_CI,
+      // Never reuse — the acceptance frontend runs on its own port
+      // (:5174) so it cannot proxy at a dev vite that points at the
+      // dev backend on :8001. This is the fix for the SESSION_234
+      // acceptance run that read 1 pass / 6 fail / 26 not run because
+      // the reused frontend was talking to the wrong database.
+      reuseExistingServer: false,
       timeout: 240_000,
       env: {
+        // Pin the proxy at the acceptance backend by construction so
+        // the frontend can never talk to :8000/:8001 during a suite
+        // run, even if a stray vite from the dev pair is up.
         VITE_API_PROXY_TARGET: BACKEND_URL,
       },
       stdout: "pipe",

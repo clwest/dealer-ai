@@ -49,6 +49,11 @@ import {
 interface AttentionItem {
   id: string;
   text: string;
+  /** SESSION_235 — when the store is missing something, the item
+   *  links to where the owner can fix it. Omit for items that
+   *  don't have a natural fix route. */
+  href?: string;
+  cta?: string;
 }
 
 export default function DealerOverviewPage() {
@@ -154,6 +159,17 @@ function CoachingSummaryCard({
   audit: AuditEventsResponse | null;
 }) {
   const totals = audit?.totals;
+  const windowLabel = coachingWindowLabel(audit);
+  // SESSION_235 — never dress zeros as activity. When the window
+  // saw no coaching events, say so plainly instead of showing four
+  // "0"s under headings that suggest something happened. Loading and
+  // fetch-failure both render "—" via ``formatCount`` on the stats.
+  const totalActivity =
+    (totals?.total_guard_events ?? 0) +
+    (totals?.scrubs_fired ?? 0) +
+    (totals?.post_llm_rewrites ?? 0) +
+    (totals?.pre_llm_short_circuits ?? 0);
+  const hasNoEvents = audit !== null && totalActivity === 0;
   return (
     <Card>
       <CardHeader>
@@ -162,29 +178,51 @@ function CoachingSummaryCard({
           <CardTitle>Coaching summary</CardTitle>
         </div>
         <CardDescription>
-          How well the assistant is following your training, last 24 hours.
+          How well the assistant is following your training, {windowLabel}.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-4">
-        <Stat
-          label="Rules enforced"
-          value={formatCount(totals?.total_guard_events)}
-        />
-        <Stat
-          label="Phrases scrubbed"
-          value={formatCount(totals?.scrubs_fired)}
-        />
-        <Stat
-          label="Replies rewritten"
-          value={formatCount(totals?.post_llm_rewrites)}
-        />
-        <Stat
-          label="Early stops"
-          value={formatCount(totals?.pre_llm_short_circuits)}
-        />
+      <CardContent>
+        {hasNoEvents ? (
+          <EmptyLine text={`No coaching events ${windowLabel}.`} />
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <Stat
+              label="Rules enforced"
+              value={formatCount(totals?.total_guard_events)}
+            />
+            <Stat
+              label="Phrases scrubbed"
+              value={formatCount(totals?.scrubs_fired)}
+            />
+            <Stat
+              label="Replies rewritten"
+              value={formatCount(totals?.post_llm_rewrites)}
+            />
+            <Stat
+              label="Early stops"
+              value={formatCount(totals?.pre_llm_short_circuits)}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
+}
+
+function coachingWindowLabel(audit: AuditEventsResponse | null): string {
+  // Prefer the window the backend actually queried over hard-coding
+  // "last 24 hours" — audit_events_snapshot exposes ``window_hours``
+  // and ``since`` and either can flex to 7d/30d in the future.
+  const hours = audit?.window_hours;
+  if (typeof hours === "number" && Number.isFinite(hours) && hours > 0) {
+    if (hours === 24) return "in the last 24 hours";
+    if (hours % 24 === 0) {
+      const days = hours / 24;
+      return `in the last ${days} day${days === 1 ? "" : "s"}`;
+    }
+    return `in the last ${hours} hours`;
+  }
+  return "in the last 24 hours";
 }
 
 function RecentActivityCard({
@@ -325,7 +363,21 @@ function AttentionItemsCard({
                   aria-hidden
                   className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
                 />
-                <span>{item.text}</span>
+                <span className="min-w-0 flex-1">
+                  {item.text}
+                  {item.href ? (
+                    <>
+                      {" "}
+                      <Link
+                        to={item.href}
+                        className="inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline"
+                      >
+                        {item.cta ?? "Fix"}
+                        <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>
@@ -410,26 +462,60 @@ function deriveAttentionItems(
 ): AttentionItem[] {
   if (!profile) return [];
   const items: AttentionItem[] = [];
+  // SESSION_235 — free-text policy fields (banned phrases, payment
+  // disclaimer) still live on the profile because the store can't
+  // prove them for itself. Team and inventory come from
+  // ``profile.readiness`` (computed backend-side) so this list can
+  // never say "not added" when the data is there. Stored booleans
+  // for demo/pilot checklist remain honest as "did the human
+  // confirm" flags.
+  const readiness = profile.readiness;
   if (!profile.banned_phrases?.trim()) {
-    items.push({ id: "banned", text: "Banned phrases not configured." });
+    items.push({
+      id: "banned",
+      text: "Add banned phrases the assistant should never use.",
+      href: "/dealer-ai-onboarding",
+      cta: "Onboarding",
+    });
   }
-  if (!profile.salespeople_added) {
-    items.push({ id: "team", text: "Sales team not added yet." });
+  if (readiness && !readiness.salespeople_added) {
+    items.push({
+      id: "team",
+      text: "Add your first salesperson so leads can be assigned.",
+      href: "/dealer-ai-admin/team",
+      cta: "Team",
+    });
   }
   if (!profile.payment_disclaimer?.trim()) {
-    items.push({ id: "disclaimer", text: "Payment disclaimer not set." });
+    items.push({
+      id: "disclaimer",
+      text: "Add a payment disclaimer for estimated quotes.",
+      href: "/dealer-ai-onboarding",
+      cta: "Onboarding",
+    });
   }
-  if (!profile.inventory_connected) {
-    items.push({ id: "inventory", text: "Inventory feed not connected." });
+  if (readiness && !readiness.inventory_connected) {
+    items.push({
+      id: "inventory",
+      text: "Connect an inventory source so the assistant has cars to show.",
+      href: "/dealer-ai-admin/inventory",
+      cta: "Inventory",
+    });
   }
   if (!profile.finance_rules_reviewed) {
-    items.push({ id: "finance", text: "Finance rules not reviewed." });
+    items.push({
+      id: "finance",
+      text: "Review your finance rules with the pilot lead.",
+    });
   }
   if (!profile.demo_prompts_tested) {
-    items.push({ id: "demo", text: "Demo prompts not tested." });
+    items.push({
+      id: "demo",
+      text: "Walk the assistant through the demo prompts.",
+    });
   }
   if (!profile.pilot_approved) {
-    items.push({ id: "pilot", text: "Pilot review pending." });
+    items.push({ id: "pilot", text: "Sign off pilot review." });
   }
   return items.slice(0, 4); // keep the card scannable
 }

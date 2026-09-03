@@ -19,6 +19,9 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 
+# SESSION_235 (finding 49) — franchise-prime starting assumption. Real
+# stores set APR / term / down% on DealerOnboardingProfile and
+# ``resolve_store_payment_defaults`` overrides these baselines.
 DEFAULT_APR = 7.49  # %
 DEFAULT_TERM_MONTHS = 72
 DEFAULT_DOWN_PAYMENT_PCT = 10.0  # %, generic starting assumption for the est-payment line

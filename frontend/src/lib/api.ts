@@ -798,12 +798,29 @@ export function loadDemoScenarios(opts: { reset?: boolean } = {}) {
 
 // ---- SESSION_008: dealer onboarding profile (singleton) -------------------
 
+export interface OnboardingReadinessPayload {
+  /** SESSION_235 — computed readiness the store can prove for
+   *  itself. The overview page reads these instead of the stored
+   *  booleans so the attention list can never tell a dealer
+   *  "Sales team not added yet" while three people are on the team.
+   *  ``inventory_source`` is a human label like
+   *  "130 vehicles · demo seed" — empty when count is 0. */
+  salespeople_added: boolean;
+  salespeople_count: number;
+  inventory_connected: boolean;
+  inventory_count: number;
+  inventory_source: string;
+}
+
 export interface OnboardingProfilePayload {
   /** SESSION_232 — dealer slug so the public/embed client can send
    *  it back as ``X-Dealership-Slug`` on chat + showroom calls. Read
    *  from the branding endpoint; the backend routes anonymous
    *  callers on multi-store installs by this. */
   dealership_slug?: string;
+  /** SESSION_235 — see OnboardingReadinessPayload above. Present on
+   *  every GET response (including the no-profile shape). */
+  readiness?: OnboardingReadinessPayload;
   dealership_name: string;
   store_location: string;
   main_brands: string;
