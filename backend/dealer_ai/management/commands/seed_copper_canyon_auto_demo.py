@@ -53,6 +53,7 @@ refresh.md`` §C1):
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -176,6 +177,58 @@ STORE_SLUG = "copper-canyon-auto"
 STORE_NAME = "Copper Canyon Auto"
 DEMO_OWNER_USERNAME = "demo-owner"
 DEMO_OWNER_PASSWORD = "demo-owner-password"
+
+
+# ---------------------------------------------------------------------------
+# Acquisition cost bands — the CC-#### imported pool only.
+#
+# Chris, 2026-09-03: "we just made up numbers, there's no real dealer,
+# and every dealer will kind of buy according to their own inventory
+# needs since they will understand the lenders." So the seed does not
+# pretend to a single cost. Front gross on a retail winner is a band,
+# widened by price tier — cheap cars on a subprime lot carry the
+# fattest percentage, luxury-ish holds less. Cost basis on the
+# VehicleAcquisition row is asking − (band gross), keyed on stock
+# number so re-seeds are stable and no two cars share a percentage
+# unless they share one stock number.
+#
+# The RS-* archetype already carries explicit ``cost_basis`` values;
+# this constant does not touch it. Deliberate losers keep the
+# cost-first / asking-as-consequence mechanic — the band changes the
+# cost basis they read, not the mechanic.
+#
+# To change the shape of front gross the demo shows, change the band
+# — not the formula. Each row: ``(exclusive upper price, low gross %,
+# high gross %)``; a ``None`` upper price is the open top tier.
+# ---------------------------------------------------------------------------
+_ACQUISITION_COST_BANDS: tuple[tuple[Decimal | None, Decimal, Decimal], ...] = (
+    (Decimal("10000"), Decimal("0.18"), Decimal("0.32")),
+    (Decimal("16000"), Decimal("0.12"), Decimal("0.24")),
+    (None, Decimal("0.08"), Decimal("0.18")),
+)
+
+
+def _derive_acquisition_cost(vehicle: Vehicle) -> Decimal:
+    """Return the seed's cost basis for ``vehicle``.
+
+    Deterministic per stock number: the same CC-#### stock always
+    resolves to the same cost. Picks the band by asking price, then
+    interpolates within the band's [low, high] gross-percent range
+    using a hash of the stock number. Cost = asking × (1 - gross_pct).
+
+    Only meaningful for the CC-#### imported pool. RS-* archetype rows
+    carry their own ``cost_basis`` values and never call through this.
+    """
+    price = vehicle.price
+    _, low_pct, high_pct = _ACQUISITION_COST_BANDS[-1]
+    for upper, band_low, band_high in _ACQUISITION_COST_BANDS:
+        if upper is None or price < upper:
+            low_pct, high_pct = band_low, band_high
+            break
+    stock_bytes = hashlib.md5(vehicle.stock_number.encode("utf-8")).digest()
+    fraction = Decimal(int.from_bytes(stock_bytes[:2], "big")) / Decimal(65535)
+    gross_pct = low_pct + (high_pct - low_pct) * fraction
+    return (price * (Decimal("1") - gross_pct)).quantize(Decimal("1.00"))
 
 
 # ---------------------------------------------------------------------------
@@ -2357,8 +2410,11 @@ def _extend_lot_to_target_size(
 
     Every imported vehicle also gets a :class:`VehicleAcquisition`
     row so :func:`services.sale.record_sale` can compute a truthful
-    ``gross_realized`` at sale time. Purchase price runs ~60 % of
-    retail — the ratio the archetype uses for its ``cost_basis``.
+    ``gross_realized`` at sale time. Purchase price is derived by
+    :func:`_derive_acquisition_cost` — a per-price-tier band, keyed on
+    stock number for stability across re-seeds. See
+    :data:`_ACQUISITION_COST_BANDS` for the rationale and Chris's
+    quote.
 
     Returns the number of vehicles created.
     """
@@ -2384,8 +2440,9 @@ def _extend_lot_to_target_size(
 
     # Provision VehicleAcquisition for each newly-imported vehicle so
     # ``record_sale`` can compute a truthful ``gross_realized`` at
-    # sale time. Purchase price = 60 % of retail (matches the
-    # archetype's ``cost_basis`` ratio). Skip vehicles that somehow
+    # sale time. Purchase price is banded by asking-price tier via
+    # :func:`_derive_acquisition_cost`; see
+    # :data:`_ACQUISITION_COST_BANDS`. Skip vehicles that somehow
     # already have an acquisition (idempotent re-runs of this
     # function against a partial state).
     provisioned = 0
@@ -2405,9 +2462,7 @@ def _extend_lot_to_target_size(
             else SOURCE_TRADE if offset % 3 == 1
             else SOURCE_PRIVATE
         )
-        purchase_price = (vehicle.price * Decimal("0.6")).quantize(
-            Decimal("1.00")
-        )
+        purchase_price = _derive_acquisition_cost(vehicle)
         # Purchase date runs 30-90 days ago so acquisitions predate
         # every sale the seed lands afterward.
         days_ago = 30 + (offset * 7) % 61
@@ -2996,14 +3051,15 @@ def _extend_sales_history(
         # which produced $4,881.20 sold prices on $12k cars — a
         # -45 % hair-cut nobody would ask for.
         #
-        # Purchase price = 60 % of sticker per
-        # :func:`_extend_lot_to_target_size`. For recon overrun
-        # losers, add ``recon_actual`` — :func:`_seed_recon_overrun_wo`
-        # posts a VehicleCost for the actual amount, so
+        # Purchase price is derived by
+        # :func:`_derive_acquisition_cost` — same helper
+        # :func:`_extend_lot_to_target_size` uses when it writes the
+        # VehicleAcquisition row, so the loser's local cost basis
+        # matches what the ledger sees. For recon overrun losers, add
+        # ``recon_actual`` — :func:`_seed_recon_overrun_wo` posts a
+        # VehicleCost for the actual amount, so
         # :func:`compute_totals` counts it in total_investment.
-        purchase_price = (vehicle.price * Decimal("0.6")).quantize(
-            Decimal("1.00")
-        )
+        purchase_price = _derive_acquisition_cost(vehicle)
         if loser is None:
             sold_price = vehicle.price
         else:
