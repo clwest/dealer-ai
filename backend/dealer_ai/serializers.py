@@ -16,6 +16,10 @@ from .models import (
     VehicleCost,
 )
 from .services.chat_engine import customer_drivetrain_label
+from .services.payment_engine import (
+    render_estimated_payment_line,
+    resolve_store_payment_defaults,
+)
 from .services.vehicle_ledger import category_group_of
 
 
@@ -97,6 +101,14 @@ class VehicleSerializer(serializers.ModelSerializer):
     # flex picks serialize these as null.
     lever_flex_kind = serializers.SerializerMethodField()
     lever_flex_explainer = serializers.SerializerMethodField()
+    # SESSION_234 (finding 31) — per-card estimated-payment line. Uses
+    # the store's payment defaults (APR / term / down %) resolved once
+    # per response and threaded through serializer context so N cards
+    # do not trigger N profile lookups. When the session has captured
+    # the customer's stated down_payment or term_months, the caller
+    # can pre-populate ``_estimated_payment_line`` on the instance to
+    # short-circuit this compute path.
+    estimated_payment_line = serializers.SerializerMethodField()
 
     class Meta:
         model = Vehicle
@@ -132,6 +144,7 @@ class VehicleSerializer(serializers.ModelSerializer):
             "payment_delta",
             "lever_flex_kind",
             "lever_flex_explainer",
+            "estimated_payment_line",
         ]
 
     def get_drivetrain(self, obj):
@@ -151,6 +164,53 @@ class VehicleSerializer(serializers.ModelSerializer):
 
     def get_lever_flex_explainer(self, obj):
         return getattr(obj, "_lever_flex_explainer", None)
+
+    def get_estimated_payment_line(self, obj):
+        # Prefer an instance-attached value when the caller already
+        # composed one (e.g. chat_engine layered the customer's stated
+        # down payment on top).
+        cached = getattr(obj, "_estimated_payment_line", None)
+        if cached is not None:
+            return cached
+        defaults = _payment_defaults_from_context(self.context)
+        return render_estimated_payment_line(obj.price, defaults=defaults)
+
+
+def _payment_defaults_from_context(context: dict) -> dict:
+    """Resolve or memoize the store payment defaults for one response.
+
+    Views that emit many vehicles per response set ``payment_defaults``
+    on the serializer context to avoid re-fetching the profile per
+    card. When absent we look up the profile once and cache it on the
+    context dict so nested serializations still benefit.
+    """
+    cached = context.get("payment_defaults")
+    if cached is not None:
+        return cached
+    profile = _resolve_profile_for_context(context)
+    defaults = resolve_store_payment_defaults(profile)
+    context["payment_defaults"] = defaults
+    return defaults
+
+
+def _resolve_profile_for_context(context: dict):
+    profile = context.get("onboarding_profile")
+    if profile is not None:
+        return profile
+    request = context.get("request")
+    if request is None:
+        return None
+    # Local import — models module already imported at file top, but
+    # keep DealerOnboardingProfile lookup lazy to avoid ordering
+    # concerns during Django app loading.
+    from .services.tenancy import get_current_dealership
+
+    dealership = get_current_dealership(request)
+    return (
+        DealerOnboardingProfile.objects.filter(dealership=dealership)
+        .order_by("-updated_at")
+        .first()
+    )
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):

@@ -41,11 +41,15 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import VehiclePhoto
+from .models import DealerOnboardingProfile, VehiclePhoto
 from .services.chat_engine import (
     CUSTOMER_LOOKUP_NOT_AVAILABLE_COPY,
     customer_lookup_visible_vehicle_by_stock,
     customer_visible_vehicles,
+)
+from .services.payment_engine import (
+    render_estimated_payment_line,
+    resolve_store_payment_defaults,
 )
 from .services.photo_storage import (
     ObjectStorageError,
@@ -125,7 +129,7 @@ def _project_gallery(vehicle, *, limit: int = 20) -> list:
     return projected
 
 
-def _project_showroom_row(vehicle) -> dict:
+def _project_showroom_row(vehicle, *, payment_defaults: dict) -> dict:
     """Public-safe list projection for one retail-eligible vehicle.
 
     Mirrors the shape the deleted ``frontend/src/data/
@@ -134,7 +138,9 @@ def _project_showroom_row(vehicle) -> dict:
     edit is a pure hook-swap rather than a render refactor.
 
     No cost data, no lifecycle stage, no operator notes — only the
-    fields a shopper's browser needs.
+    fields a shopper's browser needs. SESSION_234 (finding 31) adds
+    ``estimated_payment_line`` so the card can display a payment
+    figure that matches the landing-page "payment-aware" copy.
     """
     return {
         "vin": vehicle.vin or "",
@@ -154,7 +160,23 @@ def _project_showroom_row(vehicle) -> dict:
         "image_url": vehicle.image_url or "",
         "vdp_url": vehicle.url or "",
         "display_name": str(vehicle),
+        "estimated_payment_line": render_estimated_payment_line(
+            vehicle.price, defaults=payment_defaults
+        ),
     }
+
+
+def _resolve_payment_defaults(dealership) -> dict:
+    """Load the tenant profile once per request so N cards do not
+    trigger N profile lookups. Falls back to module defaults when no
+    profile exists yet.
+    """
+    profile = (
+        DealerOnboardingProfile.objects.filter(dealership=dealership)
+        .order_by("-updated_at")
+        .first()
+    )
+    return resolve_store_payment_defaults(profile)
 
 
 @api_view(["GET"])
@@ -216,13 +238,18 @@ def showroom_vehicle_list(request):
 
     total = qs.count()
     page = list(qs[offset : offset + limit])
+    payment_defaults = _resolve_payment_defaults(dealership)
 
     return Response(
         {
             "count": total,
             "limit": limit,
             "offset": offset,
-            "results": [_project_showroom_row(v) for v in page],
+            "results": [
+                _project_showroom_row(v, payment_defaults=payment_defaults)
+                for v in page
+            ],
+            "payment_disclaimer": payment_defaults.get("disclaimer", ""),
         }
     )
 
@@ -261,6 +288,7 @@ def showroom_vehicle_detail(request, stock_number: str):
         )
 
     listing = vehicle.listing  # OneToOne — safe by construction
+    payment_defaults = _resolve_payment_defaults(vehicle.dealership)
     return Response(
         {
             "stock_number": vehicle.stock_number,
@@ -286,5 +314,9 @@ def showroom_vehicle_detail(request, stock_number: str):
             "primary_photo": _project_primary_photo(vehicle),
             "gallery": _project_gallery(vehicle),
             "price": vehicle.price,
+            "estimated_payment_line": render_estimated_payment_line(
+                vehicle.price, defaults=payment_defaults
+            ),
+            "payment_disclaimer": payment_defaults.get("disclaimer", ""),
         }
     )

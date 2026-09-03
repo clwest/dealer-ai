@@ -21,6 +21,7 @@ from typing import Literal
 
 DEFAULT_APR = 7.49  # %
 DEFAULT_TERM_MONTHS = 72
+DEFAULT_DOWN_PAYMENT_PCT = 10.0  # %, generic starting assumption for the est-payment line
 DEFAULT_TAX_RATE = 4.5  # %, generic state sales tax baseline; sales confirms real tax
 DEFAULT_FEES = 599.00  # admin/doc fees as a placeholder
 
@@ -101,6 +102,88 @@ def estimate_payment(
         taxes=taxes,
         fees=fees,
     )
+
+
+def resolve_store_payment_defaults(profile) -> dict:
+    """SESSION_234 (finding 31) — resolve APR / term / down% for the
+    per-card est-payment line.
+
+    ``profile`` is a :class:`DealerOnboardingProfile` or ``None``. Any
+    field that is null on the profile falls through to the module
+    constant above so a fresh install still renders a payment line.
+    Returned in a plain dict so serializers can stash it in context
+    without importing the profile model.
+    """
+    apr = float(DEFAULT_APR)
+    term_months = DEFAULT_TERM_MONTHS
+    down_pct = float(DEFAULT_DOWN_PAYMENT_PCT)
+    disclaimer = ""
+    if profile is not None:
+        if profile.default_apr is not None:
+            apr = float(profile.default_apr)
+        if profile.default_term_months:
+            term_months = int(profile.default_term_months)
+        if profile.default_down_payment_pct is not None:
+            down_pct = float(profile.default_down_payment_pct)
+        disclaimer = profile.payment_disclaimer or ""
+    return {
+        "apr": apr,
+        "term_months": term_months,
+        "down_payment_pct": down_pct,
+        "disclaimer": disclaimer,
+    }
+
+
+def render_estimated_payment_line(
+    price,
+    *,
+    defaults: dict,
+    down_payment: float | None = None,
+    term_months: int | None = None,
+) -> dict | None:
+    """Compose the "est. $NNN/mo · $D down · T mo · W.A.C." payload for
+    one card.
+
+    ``defaults`` is the dict returned by
+    :func:`resolve_store_payment_defaults`. ``down_payment`` and
+    ``term_months`` are the customer's stated inputs from the chat
+    session; when either is ``None`` the store default supplies it.
+    Returns ``None`` when the price is missing / non-positive so a
+    zero-price card renders no line rather than "$0/mo".
+    """
+    try:
+        price_f = float(price)
+    except (TypeError, ValueError):
+        return None
+    if price_f <= 0:
+        return None
+
+    apr = defaults.get("apr", float(DEFAULT_APR))
+    term = int(term_months or defaults.get("term_months") or DEFAULT_TERM_MONTHS)
+    if down_payment is None:
+        down_pct = defaults.get("down_payment_pct", DEFAULT_DOWN_PAYMENT_PCT)
+        down = price_f * (float(down_pct) / 100.0)
+    else:
+        down = float(down_payment)
+
+    estimate = estimate_payment(
+        price_f,
+        down_payment=down,
+        apr=apr,
+        term_months=term,
+    )
+    monthly = int(round(estimate.monthly_payment))
+    down_int = int(round(down))
+    label = (
+        f"est. ${monthly:,}/mo · ${down_int:,} down · {term} mo · W.A.C."
+    )
+    return {
+        "label": label,
+        "monthly_payment": monthly,
+        "down_payment": down_int,
+        "term_months": term,
+        "apr": apr,
+    }
 
 
 @dataclass

@@ -59,11 +59,26 @@ class OpenAIProvider(LLMProvider):
             "messages": self.normalize(messages),
         }
         if _is_reasoning_model(self.model):
-            # Reasoning models burn tokens on internal reasoning before
-            # producing content, so a caller-specified 800 for content
-            # often leaves nothing for the actual answer. Double it as
-            # a floor so the visible reply has room to land.
-            params["max_completion_tokens"] = max(max_tokens * 2, 1200)
+            # Reasoning models spend tokens on internal reasoning before
+            # producing content, so a caller-specified budget often
+            # leaves nothing for the visible reply. SESSION_234 (finding
+            # 45): the customer chat kept returning empty content on the
+            # walk's Silverado question because a 1200-token cap was
+            # fully consumed by reasoning at the model's default effort
+            # level — `finish_reason` came back as "length" with 0
+            # content bytes and the template fallback pretended the
+            # model had asked a question. Two changes here:
+            #   1. Raise the floor to 2400 so a large system prompt
+            #      (SYSTEM_PROMPT + INDIE_MODE_HINT + budget block +
+            #      inventory block + history) still leaves room for
+            #      content.
+            #   2. Ask the model for `reasoning_effort=low` via
+            #      extra_body — carried in the request body under the
+            #      OpenAI SDK's schema-transparent extra_body path so
+            #      it works on any SDK version that predates the top-
+            #      level kwarg for chat.completions.create().
+            params["max_completion_tokens"] = max(max_tokens * 2, 2400)
+            params["extra_body"] = {"reasoning_effort": "low"}
         else:
             params["max_tokens"] = max_tokens
             params["temperature"] = temperature
@@ -84,7 +99,8 @@ class OpenAIProvider(LLMProvider):
             "model": params["model"],
             "messages": params["messages"],
             "extra_body": {
-                "max_completion_tokens": max(max_tokens * 2, 1200),
+                "max_completion_tokens": max(max_tokens * 2, 2400),
+                "reasoning_effort": "low",
             },
         }
 
@@ -142,4 +158,27 @@ class OpenAIProvider(LLMProvider):
             raise ProviderUnavailable(f"OpenAI request failed: {exc}") from exc
 
         choice = resp.choices[0]
-        return (choice.message.content or "").strip()
+        # SESSION_234 (finding 45) — log finish_reason + usage on every
+        # call so an empty-content reply can be diagnosed from log
+        # lines rather than guessed at. Reasoning models on gpt-5-mini
+        # report reasoning-token accounting under
+        # ``usage.completion_tokens_details.reasoning_tokens``; when
+        # that plus the visible completion equals the completion cap
+        # and finish_reason is "length" AND content is empty, the cap
+        # was exhausted by reasoning — evidence for the retry / floor
+        # / effort-level knobs above.
+        finish_reason = getattr(choice, "finish_reason", None)
+        content = (choice.message.content or "").strip()
+        usage = getattr(resp, "usage", None)
+        try:
+            usage_dict = usage.model_dump() if usage is not None else None
+        except AttributeError:  # older SDKs return a plain dict already
+            usage_dict = dict(usage) if usage is not None else None
+        logger.info(
+            "OpenAI chat done (model=%s, finish_reason=%s, content_len=%d, usage=%s)",
+            self.model,
+            finish_reason,
+            len(content),
+            usage_dict,
+        )
+        return content

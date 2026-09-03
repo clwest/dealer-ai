@@ -131,6 +131,23 @@ Budget category labels (CRITICAL — there are EXACTLY TWO allowed categories):
   routinely appear in used inventory. Never hide a good option that fits
   the customer's needs and budget.
 
+Use what the customer already told you (CRITICAL — never re-ask stated facts):
+- Every fact the customer has stated — target monthly payment, down
+  payment, credit tier, priority model, body style, cash cap, urgency —
+  is either already in KNOWN CUSTOMER PROFILE, BUDGET ANALYSIS, or
+  visible in the conversation history above. Use those facts. Never ask
+  the customer to repeat one that is already on record.
+- Do NOT open with "could you tell me a bit more about what you're
+  looking for" when the customer's message already named a model,
+  budget, or body style — acknowledge what they said and answer it.
+- When cards are being shown alongside your reply (AVAILABLE INVENTORY
+  is non-empty), acknowledge them ("Both Silverados are on the lot —
+  the 2015 LT is $18,900 and the 2016 LTZ is $19,750"). Do not respond
+  as if no cards were shown.
+- Do not ask "new or used?" when every unit in AVAILABLE INVENTORY is
+  used (independent-lot deployments never carry new). If in doubt about
+  condition, look at the cards — they carry the condition explicitly.
+
 Conversation flow & phrasing (CRITICAL — sound human, not formulaic):
 - Do NOT end every reply with "Would you like…". It gets repetitive fast.
   Reach for a different phrasing each time. Good rotation:
@@ -4219,6 +4236,22 @@ def _classify_candidates(
         delta = payment - target_monthly
         v._estimated_payment = round(float(payment), 2)
         v._payment_delta = round(float(delta), 2)
+        # SESSION_234 (finding 31) — carry the customer's stated
+        # down/term into the per-card est-payment line so the label
+        # matches the numbers the LLM is quoting. Falls back to store
+        # defaults in the serializer when no session budget exists.
+        monthly_int = int(round(payment))
+        down_int = int(round(down_payment))
+        v._estimated_payment_line = {
+            "label": (
+                f"est. ${monthly_int:,}/mo · ${down_int:,} down · "
+                f"{int(term_months)} mo · W.A.C."
+            ),
+            "monthly_payment": monthly_int,
+            "down_payment": down_int,
+            "term_months": int(term_months),
+            "apr": float(est.apr),
+        }
         if payment <= target_monthly:
             v._budget_fit = "fit"
             in_budget.append(v)
@@ -6440,10 +6473,56 @@ class ChatEngine:
             reply_text = CUSTOMER_OUTAGE_REPLY
             provider_unavailable_this_turn = True
         if not reply_text:
-            reply_text = (
-                "I want to make sure I get this right — could you tell me a bit more "
-                "about what you're looking for (size, budget, new vs used)?"
+            # SESSION_234 (finding 45) — the previous fallback here
+            # asked the customer for facts they had just stated
+            # ("size, budget, new vs used"), which is worse than
+            # silence: it makes the model look like it wasn't
+            # listening. This path fires when the provider returned
+            # empty content (usually because a reasoning-model
+            # completion cap was consumed by reasoning before content
+            # landed — see OpenAIProvider.chat for the finish_reason
+            # + usage log). Log it as an incident so it can't hide,
+            # and reply with something that USES the retrieval instead
+            # of re-asking. If matched vehicles came back, name them.
+            # If not, say the search returned nothing and hand off to
+            # an advisor — never re-ask for stated facts.
+            logger.warning(
+                "Empty LLM reply, using retrieval-backed fallback "
+                "(session=%s, matched=%d)",
+                self.session.id,
+                len(matched),
             )
+            if matched:
+                shown_names = [
+                    v.display_name for v in matched[:3] if v.display_name
+                ]
+                if shown_names:
+                    if len(shown_names) == 1:
+                        names_prose = shown_names[0]
+                    elif len(shown_names) == 2:
+                        names_prose = f"{shown_names[0]} and {shown_names[1]}"
+                    else:
+                        names_prose = (
+                            ", ".join(shown_names[:-1])
+                            + f", and {shown_names[-1]}"
+                        )
+                    reply_text = (
+                        f"Here's what's on the lot that looks close: "
+                        f"{names_prose}. Take a look and let me know "
+                        f"which one you'd like to dig into."
+                    )
+                else:
+                    reply_text = (
+                        f"Here are {len(matched)} that look close — "
+                        f"take a look and let me know which one you'd "
+                        f"like to dig into."
+                    )
+            else:
+                reply_text = (
+                    "Nothing on the lot lines up with that exactly right "
+                    "now. Want me to have an advisor reach out with the "
+                    "closest matches?"
+                )
 
         # Post-LLM safety check — catches hallucinated sensitive pricing terms
         # before the reply is persisted or returned to the customer.

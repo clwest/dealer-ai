@@ -18,6 +18,7 @@ import {
   authPostForm,
   authPostJSON,
   authPutJSON,
+  readCookie,
 } from "@/lib/authFetch";
 import { dealershipHeader, setDealershipSlug } from "@/lib/dealershipContext";
 
@@ -67,6 +68,16 @@ export interface Vehicle {
     | "stretch_payment"
     | null;
   lever_flex_explainer?: string | null;
+  // SESSION_234 (finding 31) — per-card est-payment line. Rendered
+  // verbatim on the assistant + showroom cards so the landing-page
+  // "payment-aware" copy agrees with what shows up on the tile.
+  estimated_payment_line?: {
+    label: string;
+    monthly_payment: number;
+    down_payment: number;
+    term_months: number;
+    apr: number;
+  } | null;
 }
 
 export interface ChatMessage {
@@ -118,15 +129,34 @@ export interface LeadResponse extends LeadInput {
 }
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
+  // SESSION_234 (finding 44) — the public chat endpoints are AllowAny
+  // by design and this fetch stays plain (no shared authFetch typed
+  // errors) so a broken operator session can never break a customer
+  // page. But: DRF's SessionAuthentication enforces CSRF the moment
+  // a request carries a session cookie. When a signed-in operator
+  // walks the demo path (sign in → click "Talk to AI"), the browser
+  // sends the sessionid same-origin, SessionAuthentication
+  // authenticates the request, and the POST is rejected with
+  // "CSRF Failed: CSRF token missing." Attach the token from the
+  // cookie /auth/me/ already primes. Anonymous shoppers have no
+  // csrftoken → header omitted → CSRF is not enforced (no session,
+  // nothing to check). Cross-origin attackers can't read the
+  // cookie → header not attached → CSRF still fails as intended.
+  const csrfToken = readCookie("csrftoken");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
     // SESSION_232 — thread ``X-Dealership-Slug`` on public POSTs so
     // ``get_current_dealership`` routes the chat session to the
     // right store instead of the single-tenant default.
-    headers: {
-      "Content-Type": "application/json",
-      ...dealershipHeader(),
-    },
+    ...dealershipHeader(),
+  };
+  if (csrfToken) {
+    headers["X-CSRFToken"] = csrfToken;
+  }
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers,
+    credentials: "same-origin",
     body: JSON.stringify(body),
   });
   if (!res.ok) {

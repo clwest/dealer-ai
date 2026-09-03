@@ -185,11 +185,16 @@ def start_chat(request):
     if initial_message:
         engine = ChatEngine(session=session)
         result = engine.handle_user_message(initial_message)
+        # SESSION_234 (finding 31) — thread ``request`` through so the
+        # vehicle serializer resolves the store's payment defaults for
+        # the est-payment-line render. Defaults are memoized on the
+        # serializer context so N cards trigger one profile fetch.
+        serializer_ctx = {"request": request}
         response_payload["assistant_message"] = ChatMessageSerializer(
-            result.assistant_message
+            result.assistant_message, context=serializer_ctx
         ).data
         response_payload["matched_vehicles"] = VehicleSerializer(
-            result.matched_vehicles, many=True
+            result.matched_vehicles, many=True, context=serializer_ctx
         ).data
 
     return Response(response_payload, status=status.HTTP_201_CREATED)
@@ -211,11 +216,16 @@ def send_message(request):
     engine = ChatEngine(session=session)
     result = engine.handle_user_message(data["message"])
 
+    # SESSION_234 (finding 31) — same context threading as start_chat
+    # above so the est-payment-line resolves the store's defaults.
+    serializer_ctx = {"request": request}
     return Response(
         {
-            "assistant_message": ChatMessageSerializer(result.assistant_message).data,
+            "assistant_message": ChatMessageSerializer(
+                result.assistant_message, context=serializer_ctx
+            ).data,
             "matched_vehicles": VehicleSerializer(
-                result.matched_vehicles, many=True
+                result.matched_vehicles, many=True, context=serializer_ctx
             ).data,
         }
     )

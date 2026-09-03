@@ -47,6 +47,7 @@ export default function PublicShowroomPage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [inventory, setInventory] = useState<ShowroomVehicle[]>([]);
+  const [paymentDisclaimer, setPaymentDisclaimer] = useState<string>("");
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -62,6 +63,7 @@ export default function PublicShowroomPage() {
       .then((response) => {
         if (cancelled || !response) return;
         setInventory(response.results);
+        setPaymentDisclaimer(response.payment_disclaimer ?? "");
         setStatus("ready");
       })
       .catch(() => {
@@ -199,6 +201,11 @@ export default function PublicShowroomPage() {
                     No vehicles match those filters.
                   </div>
                 ) : null}
+                {paymentDisclaimer ? (
+                  <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+                    {paymentDisclaimer}
+                  </p>
+                ) : null}
               </>
             ) : null}
           </div>
@@ -255,8 +262,15 @@ function ShowroomCard({ vehicle }: { vehicle: ShowroomVehicle }) {
               {vehicle.exterior_color ? ` · ${vehicle.exterior_color}` : ""}
             </p>
           </div>
-          <div className="text-right text-base font-bold text-primary">
-            {formatCurrency(priceValue)}
+          <div className="text-right">
+            <div className="text-base font-bold text-primary">
+              {formatCurrency(priceValue)}
+            </div>
+            {vehicle.estimated_payment_line?.label ? (
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {vehicle.estimated_payment_line.label}
+              </div>
+            ) : null}
           </div>
         </div>
 

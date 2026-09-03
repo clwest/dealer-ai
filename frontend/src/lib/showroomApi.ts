@@ -38,6 +38,16 @@ export interface ShowroomVehicle {
   vdp_url: string;
   /** Pre-computed "2024 Ford Escape Titanium" label. */
   display_name: string;
+  /** SESSION_234 (finding 31) — per-card est-payment line resolved
+   * from the store's payment defaults. Null when the row has no
+   * usable price. */
+  estimated_payment_line?: {
+    label: string;
+    monthly_payment: number;
+    down_payment: number;
+    term_months: number;
+    apr: number;
+  } | null;
 }
 
 export interface ShowroomListResponse {
@@ -45,6 +55,9 @@ export interface ShowroomListResponse {
   limit: number;
   offset: number;
   results: ShowroomVehicle[];
+  /** SESSION_234 — the store's payment disclaimer, rendered once
+   * beneath the grid to disclaim every card. */
+  payment_disclaimer?: string;
 }
 
 export interface ShowroomListFilters {

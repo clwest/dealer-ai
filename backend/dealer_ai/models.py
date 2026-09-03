@@ -1069,6 +1069,27 @@ class DealerOnboardingProfile(models.Model):
         max_digits=5, decimal_places=2, null=True, blank=True
     )
 
+    # SESSION_234 (finding 31) — store-level payment defaults for the
+    # per-card est-payment line rendered on the assistant + showroom
+    # cards. Resolved by ``services.payment_engine.estimate_payment``
+    # via the caller: the ChatEngine passes the customer's stated
+    # down/term when available, else falls back to these fields. Kept
+    # nullable so an operator who has not touched the setup form
+    # inherits the historical payment_engine defaults
+    # (``DEFAULT_APR``, ``DEFAULT_TERM_MONTHS``,
+    # ``DEFAULT_DOWN_PAYMENT_PCT``). The Copper Canyon demo defaults
+    # match the BHPH book's weighted 19.03% APR (rounded to 19.0),
+    # 36-month term, and 20% down — a subprime-indie posture that
+    # differs enough from the standard-loan defaults to matter on the
+    # card.
+    default_apr = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    default_term_months = models.PositiveIntegerField(null=True, blank=True)
+    default_down_payment_pct = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+
     # SESSION_228 (recon-budget-and-price-sheet). The recon
     # authorization gate is one of two competitive differentiators;
     # historically approve-every-job (Chris's wholesale process).

@@ -89,6 +89,14 @@ export default function AssistantVehicleCard({ vehicle, onContinue }: Props) {
           ) : null}
         </div>
 
+        {/* SESSION_234 (finding 31) — payment-aware line so the
+           landing-page copy actually appears on the card. */}
+        {vehicle.estimated_payment_line?.label ? (
+          <div className="text-xs text-muted-foreground">
+            {vehicle.estimated_payment_line.label}
+          </div>
+        ) : null}
+
         {/* Spec chips */}
         <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
           {vehicle.mileage > 0 ? (
