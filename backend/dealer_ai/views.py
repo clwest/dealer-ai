@@ -77,7 +77,11 @@ from .services.follow_up import (
     SUPPORTED_TONES as FOLLOW_UP_TONES,
     generate_follow_up_drafts,
 )
-from .services.handoff_service import build_handoff_packet, packet_to_text
+from .services.handoff_service import (
+    build_handoff_packet,
+    build_suggested_message,
+    packet_to_text,
+)
 from .services.lead_service import create_lead_from_session
 from .services.llm.base import MANAGER_OUTAGE_REPLY
 from .services.manager_chat_response import enforce_coaching_shape
@@ -897,7 +901,11 @@ def admin_lead_handoff(request, lead_id):
             {"detail": "Lead not found."}, status=status.HTTP_404_NOT_FOUND
         )
 
-    packet = build_handoff_packet(lead)
+    # SESSION_233.1 — the deterministic packet no longer waits on the
+    # LLM. The modal renders the body from this response and fetches
+    # the drafted first message from ``admin_lead_handoff_message``
+    # separately so the LLM latency does not gate the UI.
+    packet = build_handoff_packet(lead, include_message=False)
 
     if request.data.get("mark_handed_off"):
         if not lead.handed_off:
@@ -905,6 +913,31 @@ def admin_lead_handoff(request, lead_id):
             lead.save(update_fields=["handed_off", "updated_at"])
 
     return Response({**packet, "text": packet_to_text(packet), "handed_off": lead.handed_off})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated & IsSalesManagerOrOwnerAtActiveDealership])
+def admin_lead_handoff_message(request, lead_id):
+    """SESSION_233.1 split — LLM-drafted suggested first message only.
+
+    Returns ``{suggested_message, provider_available}``. On provider
+    outage the message is empty and ``provider_available`` is False so
+    the UI shows "No draft — model unavailable" instead of persisting
+    outage text as message content.
+    """
+    dealership = get_current_dealership(request)
+    try:
+        lead = (
+            CustomerLead.objects.filter(dealership=dealership)
+            .prefetch_related("interested_vehicles")
+            .get(id=lead_id)
+        )
+    except CustomerLead.DoesNotExist:
+        return Response(
+            {"detail": "Lead not found."}, status=status.HTTP_404_NOT_FOUND
+        )
+
+    return Response(build_suggested_message(lead))
 
 
 # ---- Demo reset ------------------------------------------------------------

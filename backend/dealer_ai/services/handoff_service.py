@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from ..models import CustomerLead
 from .dealer_config import get_dealer_name
-from .llm.base import LLMProvider
+from .llm.base import LLMProvider, ProviderUnavailable
 from .llm.factory import get_llm_provider
 
 logger = logging.getLogger(__name__)
@@ -49,13 +49,24 @@ Style:
 def build_handoff_packet(
     lead: CustomerLead,
     *,
+    include_message: bool = True,
     provider: Optional[LLMProvider] = None,
 ) -> Dict[str, Any]:
-    """Assemble the full handoff packet for one lead."""
+    """Assemble the handoff packet for one lead.
+
+    ``include_message`` gates the LLM call for the "suggested first
+    message". Set ``False`` to keep the packet deterministic — the UI
+    then fetches the message separately via
+    :func:`build_suggested_message`. Split at SESSION_233.1 so the
+    modal body renders instantly while the model draft trails.
+    """
     interested = list(lead.interested_vehicles.all())
-    suggested_message = _generate_suggested_message(
-        lead, interested, provider=provider
-    )
+    if include_message:
+        suggested_message = _generate_suggested_message(
+            lead, interested, provider=provider
+        )
+    else:
+        suggested_message = ""
 
     return {
         "lead_id": lead.id,
@@ -162,7 +173,67 @@ def _first_name(full: str) -> str:
     return full.split()[0]
 
 
+def build_suggested_message(
+    lead: CustomerLead,
+    *,
+    provider: Optional[LLMProvider] = None,
+) -> Dict[str, Any]:
+    """Draft the "suggested first message" on demand.
+
+    Returns ``{"suggested_message": str, "provider_available": bool}``.
+    ``provider_available`` is False only when the provider raised
+    :class:`ProviderUnavailable` (SESSION_231 outage classifier) — in
+    that case ``suggested_message`` is empty so the UI can show
+    "No draft — model unavailable" instead of persisting outage text
+    as content. Any other path (model answered, model answered empty,
+    unexpected exception) returns ``provider_available=True`` and a
+    non-empty deterministic message.
+    """
+    interested = list(lead.interested_vehicles.all())
+    try:
+        text = _call_llm_for_message(lead, interested, provider=provider)
+        provider_available = True
+    except ProviderUnavailable as exc:
+        logger.warning("handoff suggested_message provider unavailable: %s", exc)
+        return {"suggested_message": "", "provider_available": False}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("handoff suggested_message LLM call failed: %s", exc)
+        text = ""
+        provider_available = True
+
+    text = (text or "").strip()
+    if not text:
+        text = _deterministic_message(lead, interested)
+    return {"suggested_message": text, "provider_available": provider_available}
+
+
 def _generate_suggested_message(
+    lead: CustomerLead,
+    interested: List,
+    *,
+    provider: Optional[LLMProvider] = None,
+) -> str:
+    """Legacy in-line message generator.
+
+    Preserved so ``build_handoff_packet(include_message=True)`` and any
+    existing caller still get a non-empty string (fallback on outage
+    included, matching pre-SESSION_233.1 behavior). New UI callers go
+    through :func:`build_suggested_message` instead so provider outage
+    is a distinct signal.
+    """
+    try:
+        text = _call_llm_for_message(lead, interested, provider=provider)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("handoff suggested_message LLM call failed: %s", exc)
+        text = ""
+
+    text = (text or "").strip()
+    if text:
+        return text
+    return _deterministic_message(lead, interested)
+
+
+def _call_llm_for_message(
     lead: CustomerLead,
     interested: List,
     *,
@@ -193,24 +264,17 @@ def _generate_suggested_message(
         "Write the message now."
     )
 
-    try:
-        text = provider.chat(
-            [
-                {"role": "system", "content": _render(SUGGESTED_MESSAGE_PROMPT)},
-                {"role": "user", "content": user_payload},
-            ],
-            temperature=0.4,
-            max_tokens=300,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("handoff suggested_message LLM call failed: %s", exc)
-        text = ""
+    return provider.chat(
+        [
+            {"role": "system", "content": _render(SUGGESTED_MESSAGE_PROMPT)},
+            {"role": "user", "content": user_payload},
+        ],
+        temperature=0.4,
+        max_tokens=300,
+    )
 
-    text = (text or "").strip()
-    if text:
-        return text
 
-    # Deterministic fallback so handoffs never block on LLM availability.
+def _deterministic_message(lead: CustomerLead, interested: List) -> str:
     pieces: List[str] = [
         f"Hi {_first_name(lead.name)},",
         f"Thanks for reaching out to {get_dealer_name()} — I saw the notes from our AI concierge.",

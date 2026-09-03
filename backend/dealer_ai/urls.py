@@ -55,6 +55,14 @@ urlpatterns = [
         views.admin_lead_handoff,
         name="admin-lead-handoff",
     ),
+    # SESSION_233.1 — LLM-drafted "suggested first message" split off
+    # from the handoff packet so the modal body renders instantly and
+    # the model draft trails on its own loading state.
+    path(
+        "admin/lead/<int:lead_id>/handoff/message/",
+        views.admin_lead_handoff_message,
+        name="admin-lead-handoff-message",
+    ),
     path(
         "admin/chat-sessions/",
         views.admin_chat_session_list,

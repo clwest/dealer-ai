@@ -143,6 +143,16 @@ class Command(BaseCommand):
             if options["reset"]:
                 self._reset(dealership)
 
+            # SESSION_233.1 rerun-hygiene — the M33.2 spec creates a
+            # DealStructure against the paired CA (Step 8-10). Without
+            # this restore the CA stays "In progress" on a second run
+            # and Step 3's "Incoming" assertion fails. Runs on every
+            # invocation, not only under --reset, so the seed is safe
+            # on a reused DB by construction. Same pattern as
+            # ``seed_journey_fandi_submission_response.
+            # _delete_prior_lender_submissions``.
+            self._restore_rerun_invariants(dealership)
+
             fandi_user = self._provision_fandi_manager(dealership)
             sm_user = self._provision_sales_manager(dealership)
             lead = self._provision_lead(dealership)
@@ -163,6 +173,33 @@ class Command(BaseCommand):
                 f"deal_structures={credit_app.deal_structures.count()})."
             )
         )
+
+    def _restore_rerun_invariants(self, dealership: Dealership) -> None:
+        """Delete DealStructures the M33.2 spec created on prior runs.
+
+        Scoped to the Structure Sam fixture chain (dealership → lead
+        name → writeup → CA → DS) so no other fixture's rows are
+        touched. Preserves the writeup + CA — the seed only needs to
+        restore the "no DealStructure yet" pre-flight state; the
+        writeup + CA are still valid for the next run.
+        """
+        paired_ca_pks = list(
+            CreditApplication.objects.filter(
+                dealership=dealership,
+                deal_writeup__lead__name=FIXTURE_LEAD_NAME,
+            ).values_list("pk", flat=True)
+        )
+        if not paired_ca_pks:
+            return
+        deleted, _ = DealStructure.objects.filter(
+            dealership=dealership,
+            credit_application__pk__in=paired_ca_pks,
+        ).delete()
+        if deleted:
+            self.stdout.write(
+                f"rerun-hygiene: deleted {deleted} prior "
+                f"DealStructure row(s) on Structure Sam CA."
+            )
 
     def _reset(self, dealership: Dealership) -> None:
         # Order: delete DealStructures against the paired CA first

@@ -725,6 +725,24 @@ export function buildLeadHandoff(
   });
 }
 
+// SESSION_233.1 — LLM-drafted "suggested first message" fetched on its
+// own so the modal body can render while the model draft trails.
+// ``provider_available: false`` means the LLM raised
+// ``ProviderUnavailable`` (SESSION_231 outage classifier) — the UI
+// shows "No draft — model unavailable" instead of persisting outage
+// text as message content.
+export interface HandoffSuggestedMessage {
+  suggested_message: string;
+  provider_available: boolean;
+}
+
+export function fetchLeadHandoffMessage(leadId: number) {
+  return authPostJSON<HandoffSuggestedMessage>(
+    `/admin/lead/${leadId}/handoff/message/`,
+    {},
+  );
+}
+
 export function resetDemo(
   opts: { reloadDemoVehicles?: boolean; deleteImportedVehicles?: boolean } = {},
 ) {

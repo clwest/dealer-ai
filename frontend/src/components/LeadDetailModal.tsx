@@ -18,7 +18,9 @@ import {
   buildLeadHandoff,
   fetchAdminLeads,
   fetchLeadDetail,
+  fetchLeadHandoffMessage,
   type HandoffPacket,
+  type HandoffSuggestedMessage,
   type LeadDetailResponse,
   type SalespersonAssignment,
 } from "@/lib/api";
@@ -78,6 +80,15 @@ export default function LeadDetailModal({
   const [error, setError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   const [copied, setCopied] = useState<"text" | "message" | null>(null);
+  // SESSION_233.1 — the drafted "suggested first message" trails on a
+  // separate fetch so the modal body renders instantly. ``null`` means
+  // the request is still in flight; ``providerAvailable=false`` means
+  // the LLM reported an outage and the UI shows "No draft — model
+  // unavailable" rather than persisting outage text as content.
+  const [suggested, setSuggested] = useState<HandoffSuggestedMessage | null>(
+    null,
+  );
+  const [messageLoading, setMessageLoading] = useState(false);
   // Manager Phase 4: live assignment state. Sourced from /admin/leads/?id=
   // because the existing /admin/lead/<id>/ payload predates the
   // assigned_to field on AdminLead and we want to avoid changing its
@@ -98,6 +109,8 @@ export default function LeadDetailModal({
     setError(null);
     setPacket(null);
     setDetail(null);
+    setSuggested(null);
+    setMessageLoading(true);
 
     // Pull the assignment from the admin list payload (which now includes
     // assigned_to as of Phase 4) so the dropdown initializes correctly.
@@ -112,6 +125,27 @@ export default function LeadDetailModal({
       .catch(() => {
         // Non-fatal — leave assignment as null/whatever it was.
       });
+
+    // SESSION_233.1 — kick off the LLM-drafted message in parallel with
+    // the deterministic body fetches. Its resolution never gates the
+    // body render; it has its own honest empty-state.
+    fetchLeadHandoffMessage(leadId)
+      .then((msg) => {
+        if (cancelled) return;
+        setSuggested(msg);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("LeadDetailModal: suggested message fetch failed", {
+          leadId,
+          err,
+        });
+        setSuggested({ suggested_message: "", provider_available: false });
+      })
+      .finally(() => {
+        if (!cancelled) setMessageLoading(false);
+      });
+
     Promise.all([fetchLeadDetail(leadId), buildLeadHandoff(leadId)])
       .then(([d, p]) => {
         if (cancelled) return;
@@ -568,30 +602,64 @@ export default function LeadDetailModal({
                   </div>
                 </section>
 
-                {/* Suggested message */}
+                {/* Suggested message — SESSION_233.1 split. The draft
+                    trails on its own fetch; the body above never waits
+                    for the LLM. Empty state distinguishes "still
+                    drafting" (provider working, no reply yet), "no
+                    draft — model unavailable" (ProviderUnavailable per
+                    SESSION_231), and the arrived-text case. The Copy
+                    button is hidden until we actually have a message
+                    to copy, so it can never carry the outage banner as
+                    its content. */}
                 <section>
                   <div className="mb-2 flex items-center justify-between">
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Suggested first message
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        copyToClipboard(packet.suggested_message, "message")
-                      }
-                      className="btn-ghost h-8 px-2 text-xs"
+                    {suggested?.suggested_message ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyToClipboard(
+                            suggested.suggested_message,
+                            "message",
+                          )
+                        }
+                        className="btn-ghost h-8 px-2 text-xs"
+                        data-testid="lead-handoff-copy-message"
+                      >
+                        {copied === "message" ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <Clipboard className="h-3.5 w-3.5" />
+                        )}
+                        {copied === "message" ? "Copied" : "Copy message"}
+                      </button>
+                    ) : null}
+                  </div>
+                  {suggested?.suggested_message ? (
+                    <div
+                      className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-sm leading-relaxed text-brand-ink"
+                      data-testid="lead-handoff-suggested-message"
                     >
-                      {copied === "message" ? (
-                        <Check className="h-3.5 w-3.5" />
-                      ) : (
-                        <Clipboard className="h-3.5 w-3.5" />
-                      )}
-                      {copied === "message" ? "Copied" : "Copy message"}
-                    </button>
-                  </div>
-                  <div className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-sm leading-relaxed text-brand-ink">
-                    {packet.suggested_message}
-                  </div>
+                      {suggested.suggested_message}
+                    </div>
+                  ) : messageLoading || suggested === null ? (
+                    <div
+                      className="flex items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500"
+                      data-testid="lead-handoff-message-loading"
+                    >
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Drafting a first message…
+                    </div>
+                  ) : (
+                    <div
+                      className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                      data-testid="lead-handoff-message-unavailable"
+                    >
+                      No draft — model unavailable. Try again in a moment.
+                    </div>
+                  )}
                 </section>
 
                 {/* Chat history */}
@@ -636,7 +704,18 @@ export default function LeadDetailModal({
               <aside className="space-y-3">
                 <button
                   type="button"
-                  onClick={() => copyToClipboard(packet.text, "text")}
+                  onClick={() => {
+                    // If the drafted message has arrived, append it to
+                    // the deterministic text so the clipboard payload
+                    // matches what the operator sees on-screen. When
+                    // the model is unavailable the text stays as-is;
+                    // an outage banner is never persisted as content.
+                    const message = suggested?.suggested_message?.trim() ?? "";
+                    const full = message
+                      ? `${packet.text}\n\nSuggested first message:\n${message}`
+                      : packet.text;
+                    copyToClipboard(full, "text");
+                  }}
                   className="btn-primary w-full justify-center"
                 >
                   {copied === "text" ? (

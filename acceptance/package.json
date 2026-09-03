@@ -5,7 +5,9 @@
   "description": "M20 operational acceptance contract — Playwright suites executing real dealership workflows against shipped M1–M19 UI on deterministic seeded state.",
   "type": "module",
   "scripts": {
+    "pretest": "node ./reset-acceptance-db.mjs",
     "test": "playwright test",
+    "reset-db": "node ./reset-acceptance-db.mjs",
     "test:pilot-critical": "playwright test --grep @pilot-critical",
     "codegen": "playwright codegen http://127.0.0.1:5173",
     "report": "playwright show-report"

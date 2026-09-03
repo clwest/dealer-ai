@@ -11,8 +11,10 @@ from dealer_ai.models import ChatMessage, ChatSession, CustomerLead, Vehicle
 from dealer_ai.services import handoff_service
 from dealer_ai.services.handoff_service import (
     build_handoff_packet,
+    build_suggested_message,
     packet_to_text,
 )
+from dealer_ai.services.llm.base import ProviderUnavailable
 
 from ._auth_helpers import sales_manager_client_at_default
 from ._mocks import MockLLMProvider
@@ -221,7 +223,11 @@ class AdminLeadHandoffEndpointTests(TestCase):
     def tearDown(self):
         handoff_service.get_llm_provider = self._orig
 
-    def test_returns_full_packet_and_text(self):
+    def test_returns_deterministic_packet_without_llm_call(self):
+        # SESSION_233.1 — the base endpoint no longer calls the LLM.
+        # ``suggested_message`` is intentionally empty here; the modal
+        # fetches it separately via /handoff/message/ so the body
+        # renders before the model draft arrives.
         v = _make_vehicle()
         lead = _make_lead_with_session()
         lead.interested_vehicles.add(v)
@@ -231,10 +237,15 @@ class AdminLeadHandoffEndpointTests(TestCase):
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertIn("suggested_message", data)
-        self.assertIn("Hi Chris", data["suggested_message"])
+        self.assertEqual(data["suggested_message"], "")
         self.assertIn("text", data)
         self.assertIn("Vehicles of interest", data["text"])
+        # The deterministic text also drops the "Suggested first
+        # message" block when no message is present.
+        self.assertNotIn("Suggested first message", data["text"])
         self.assertFalse(data["handed_off"])
+        # No LLM call reached the mock.
+        self.assertEqual(len(self._mock.calls), 0)
 
     def test_mark_handed_off_flag_flips(self):
         lead = _make_lead_with_session()
@@ -259,6 +270,88 @@ class AdminLeadHandoffEndpointTests(TestCase):
         url = reverse("dealer_ai:admin-lead-handoff", args=[999999])
         res = self.client.post(url, data={}, content_type="application/json")
         self.assertEqual(res.status_code, 404)
+
+
+# ---- /admin/lead/<id>/handoff/message/ (SESSION_233.1) ---------------------
+
+
+class AdminLeadHandoffMessageEndpointTests(TestCase):
+    def setUp(self):
+        self.client = sales_manager_client_at_default()
+        self._orig = handoff_service.get_llm_provider
+
+    def tearDown(self):
+        handoff_service.get_llm_provider = self._orig
+
+    def _patch_provider(self, provider):
+        handoff_service.get_llm_provider = lambda: provider
+
+    def test_returns_llm_drafted_message(self):
+        provider = MockLLMProvider(replies=["Hi Chris, ready when you are."])
+        self._patch_provider(provider)
+        lead = _make_lead_with_session()
+
+        url = reverse("dealer_ai:admin-lead-handoff-message", args=[lead.id])
+        res = self.client.post(url, data={}, content_type="application/json")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["suggested_message"], "Hi Chris, ready when you are.")
+        self.assertTrue(data["provider_available"])
+        self.assertEqual(len(provider.calls), 1)
+
+    def test_empty_reply_falls_back_deterministically(self):
+        provider = MockLLMProvider(replies=[""])
+        self._patch_provider(provider)
+        lead = _make_lead_with_session()
+
+        url = reverse("dealer_ai:admin-lead-handoff-message", args=[lead.id])
+        res = self.client.post(url, data={}, content_type="application/json")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data["provider_available"])
+        # A working provider that answers empty still gets a
+        # deterministic greeting so the operator has something to copy.
+        self.assertIn("Hi Chris", data["suggested_message"])
+
+    def test_provider_unavailable_yields_empty_message(self):
+        class _Outage:
+            def chat(self, *args, **kwargs):
+                raise ProviderUnavailable("simulated outage")
+
+        self._patch_provider(_Outage())
+        lead = _make_lead_with_session()
+
+        url = reverse("dealer_ai:admin-lead-handoff-message", args=[lead.id])
+        res = self.client.post(url, data={}, content_type="application/json")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["suggested_message"], "")
+        self.assertFalse(data["provider_available"])
+
+    def test_404_for_unknown_lead(self):
+        url = reverse("dealer_ai:admin-lead-handoff-message", args=[999999])
+        res = self.client.post(url, data={}, content_type="application/json")
+        self.assertEqual(res.status_code, 404)
+
+
+class BuildSuggestedMessageServiceTests(TestCase):
+    def test_returns_provider_available_true_on_success(self):
+        lead = _make_lead_with_session()
+        provider = MockLLMProvider(replies=["A drafted greeting."])
+        result = build_suggested_message(lead, provider=provider)
+        self.assertEqual(result["suggested_message"], "A drafted greeting.")
+        self.assertTrue(result["provider_available"])
+
+    def test_returns_provider_available_false_on_outage(self):
+        lead = _make_lead_with_session()
+
+        class _Outage:
+            def chat(self, *args, **kwargs):
+                raise ProviderUnavailable("outage")
+
+        result = build_suggested_message(lead, provider=_Outage())
+        self.assertEqual(result["suggested_message"], "")
+        self.assertFalse(result["provider_available"])
 
 
 # ---- /demo/reset/ ----------------------------------------------------------

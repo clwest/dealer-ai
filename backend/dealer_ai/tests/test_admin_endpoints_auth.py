@@ -281,6 +281,24 @@ class AdminLeadHandoffAuth(AdminEndpointAuthMatrixBase, TestCase):
             self._lead_created = True
 
 
+class AdminLeadHandoffMessageAuth(AdminEndpointAuthMatrixBase, TestCase):
+    # SESSION_233.1 — same permission class as the base handoff view;
+    # the LLM-drafted message must not leak across tenants either.
+    method = "POST"
+    url_name = "admin-lead-handoff-message"
+    payload: dict = {}
+
+    def setUp(self):
+        self._lead_created = False
+
+    def setup_tenants(self):
+        super().setup_tenants()
+        if not self._lead_created:
+            lead = _lead(self.dealership_a)
+            self.url_args = (lead.pk,)
+            self._lead_created = True
+
+
 class AdminLeadAssignAuth(AdminEndpointAuthMatrixBase, TestCase):
     method = "POST"
     url_name = "admin-lead-assign"
