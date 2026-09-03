@@ -4,16 +4,14 @@ django-cors-headers==4.3.1
 psycopg2-binary==2.9.9
 python-dotenv==1.0.1
 requests==2.32.3
-openai==1.30.5
-# Transitive-dep pin — ``openai==1.30.5`` passes the ``proxies`` kwarg
-# to ``httpx.Client.__init__``, which ``httpx>=0.28`` removed.
-# Without this pin, ``pip install -r requirements.txt`` resolves
-# ``httpx==0.28.x`` transitively (openai's own bound is
-# ``httpx<1,>=0.23.0``) and every OpenAI-client instantiation raises
-# ``TypeError: got an unexpected keyword argument 'proxies'``. Added
-# at SESSION_059 alongside the ``django-storages`` addition — the
-# fresh resolve is what surfaced the incompatibility.
-httpx<0.28
+# SESSION_233.2 (2026-09-03): bumped from 1.30.5. The old pin predated the
+# reasoning-model request shape (max_completion_tokens); every gpt-5-mini
+# call paid a retry through extra_body until this moved. dealer_ai.W001
+# is the check that fires if this ever slides back.
+openai>=1.45,<2
+# httpx<0.28 pin from SESSION_059 dropped with it: it only existed because
+# openai 1.30.5 passed the removed ``proxies`` kwarg. Newer openai does not.
+httpx>=0.27
 django-storages[s3]==1.14.6
 # Milestone 7 · Increment 1 (SESSION_088) — async infrastructure. VCP
 # Phase 6 mandate: "no Celery earlier" — M7 is the first milestone with
