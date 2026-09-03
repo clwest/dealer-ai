@@ -139,8 +139,32 @@ test.describe("Sales operator can record a phone customer + start a 24hr cadence
     ).toBeVisible({ timeout: 10_000 });
 
     // ---------------------------------------------------------------
-    // Step 7 — business-outcome assertion via admin API.
+    // Step 7 — business-outcome assertion via admin API. Poll first
+    // (mirrors daily_startup.spec.ts:167) so the eventual-consistency
+    // window between the PATCH commit and a concurrent GET on the
+    // Django dev server's SQLite connection pool does not race the
+    // assertion; then re-assert via expectLeadAssignedTo for the
+    // full-shape check.
     // ---------------------------------------------------------------
+    await expect
+      .poll(
+        async () => {
+          const response = await request.get(
+            "/api/dealer-ai/admin/leads/?limit=100",
+          );
+          const body = await response.json();
+          const results = Array.isArray(body) ? body : body.results ?? [];
+          const found = results.find(
+            (l: { id: number }) => l.id === newLeadId,
+          );
+          return found?.assigned_to?.name ?? null;
+        },
+        {
+          message: `lead id=${newLeadId} did not become assigned to ${ADVISOR_NAME} within poll window`,
+          timeout: 10_000,
+        },
+      )
+      .toBe(ADVISOR_NAME);
     const lead = await expectLeadAssignedTo(request, newLeadId, ADVISOR_NAME);
     expect(
       lead.channel,
