@@ -14,7 +14,15 @@
 //   option if the cost is higher than expected".
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, Inbox, Loader2, Truck, UnlockKeyhole } from "lucide-react";
+import {
+  Ban,
+  ChevronDown,
+  ChevronRight,
+  Inbox,
+  Loader2,
+  Truck,
+  UnlockKeyhole,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -34,6 +42,9 @@ import {
   fetchNeedsAuthorizationQueue,
   sendVehicleToWholesale,
   type NeedsAuthorizationQueueRow,
+  type ReconList,
+  type ReconListFindingItem,
+  type ReconListWorkOrderItem,
 } from "@/lib/api";
 
 const WRITE_ROLES = ["recon_manager", "sales_manager", "dealer_owner"];
@@ -250,6 +261,7 @@ function QueueRow({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        <ReconListSection recon={row.recon_list} />
         {canEdit && action == null && (
           <div className="flex flex-wrap gap-2">
             <Button
@@ -335,4 +347,198 @@ function QueueRow({
       </CardContent>
     </Card>
   );
+}
+
+// SESSION_230 finding 12 — the whole recon list on this car,
+// bucketed, collapsed by default. Chris's objection on 2026-09-02
+// after the first real queue use: "theres no breakdown of
+// everything that is on the list it just says that its going to be
+// over budget." The one-line summary is always visible so the
+// manager sees committed vs pending totals before deciding whether
+// to expand and read jobs one by one.
+function ReconListSection({ recon }: { recon: ReconList }) {
+  const [open, setOpen] = useState(false);
+  const committedCents = sumMoneyCents([
+    recon.spent.total,
+    recon.committed.total,
+    recon.this_wo.total,
+    recon.other_queued.total,
+  ]);
+  const pendingCents = sumMoneyCents([
+    recon.decided_pending.total,
+    recon.proposed.total,
+    recon.undecided.total,
+  ]);
+  const pendingItemCount =
+    recon.decided_pending.items.length +
+    recon.proposed.items.length +
+    recon.undecided.items.length;
+  const totalItems =
+    recon.spent.items.length +
+    recon.committed.items.length +
+    recon.this_wo.items.length +
+    recon.other_queued.items.length +
+    pendingItemCount +
+    recon.declined.items.length;
+  return (
+    <div className="rounded border bg-muted/30 p-3 text-xs">
+      <button
+        type="button"
+        className="flex w-full items-center gap-1 text-left text-xs font-medium"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? (
+          <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ChevronRight className="h-3 w-3" />
+        )}
+        {totalItems} jobs on this car:{" "}
+        <span className="font-semibold">
+          {formatMoney(centsToString(committedCents))} committed
+        </span>
+        {pendingItemCount > 0 && (
+          <>
+            ,{" "}
+            <span className="font-semibold text-muted-foreground">
+              {formatMoney(centsToString(pendingCents))} pending across{" "}
+              {pendingItemCount}{" "}
+              {pendingItemCount === 1 ? "finding" : "findings"}
+            </span>
+          </>
+        )}
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <WorkOrderBucket
+            label="Spent (completed)"
+            bucket={recon.spent}
+          />
+          <WorkOrderBucket
+            label="Committed (approved / in progress)"
+            bucket={recon.committed}
+          />
+          <WorkOrderBucket
+            label="This WO"
+            bucket={recon.this_wo}
+          />
+          <WorkOrderBucket
+            label="Other queued drafts on this car"
+            bucket={recon.other_queued}
+          />
+          <FindingBucket
+            label="Must-do, no WO yet"
+            note="inspector estimate, not committed"
+            bucket={recon.decided_pending}
+          />
+          <FindingBucket
+            label="Should-do (proposed)"
+            note="inspector estimate, not committed"
+            bucket={recon.proposed}
+          />
+          <FindingBucket
+            label="Undecided"
+            note="inspector estimate, not committed"
+            bucket={recon.undecided}
+          />
+          <FindingBucket
+            label="Declined (won't-do)"
+            note="declined by manager — shown for context, not summed"
+            bucket={recon.declined}
+            muted
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkOrderBucket({
+  label,
+  bucket,
+}: {
+  label: string;
+  bucket: { total: string; items: ReconListWorkOrderItem[] };
+}) {
+  if (bucket.items.length === 0) return null;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="font-medium">{label}</span>
+        <span>{formatMoney(bucket.total)}</span>
+      </div>
+      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        {bucket.items.map((it) => (
+          <li key={it.work_order_id} className="flex justify-between gap-2">
+            <span>
+              WO #{it.work_order_id} · {it.category} ·{" "}
+              <span className="italic">{it.work_order_status}</span>
+            </span>
+            <span>{formatMoney(it.money)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FindingBucket({
+  label,
+  note,
+  bucket,
+  muted,
+}: {
+  label: string;
+  note: string;
+  bucket: { total: string; items: ReconListFindingItem[] };
+  muted?: boolean;
+}) {
+  if (bucket.items.length === 0) return null;
+  return (
+    <div className={muted ? "opacity-60" : undefined}>
+      <div className="flex items-baseline justify-between">
+        <span className="font-medium">{label}</span>
+        <span>{muted ? "" : formatMoney(bucket.total)}</span>
+      </div>
+      <div className="text-[11px] italic text-muted-foreground">
+        {note}
+      </div>
+      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        {bucket.items.map((it) => (
+          <li key={it.finding_id} className="flex justify-between gap-2">
+            <span>
+              {it.category} · {it.severity} · {it.description}
+            </span>
+            <span>
+              {it.estimated_cost
+                ? formatMoney(it.estimated_cost)
+                : "—"}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Add money strings ("1234.56") without hitting Number's rounding.
+// formatMoney does display formatting; here we just need to sum a
+// handful of decimal strings.
+function sumMoneyCents(values: string[]): bigint {
+  let cents = 0n;
+  for (const v of values) {
+    const [whole = "0", frac = "00"] = v.split(".");
+    const padded = (frac + "00").slice(0, 2);
+    const sign = whole.startsWith("-") ? -1n : 1n;
+    const absWhole = whole.replace(/^-/, "");
+    cents += sign * (BigInt(absWhole) * 100n + BigInt(padded));
+  }
+  return cents;
+}
+
+function centsToString(cents: bigint): string {
+  const sign = cents < 0n ? "-" : "";
+  const abs = cents < 0n ? -cents : cents;
+  const whole = abs / 100n;
+  const frac = (abs % 100n).toString().padStart(2, "0");
+  return `${sign}${whole.toString()}.${frac}`;
 }

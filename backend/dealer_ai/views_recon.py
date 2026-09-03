@@ -63,6 +63,9 @@ from .models import (
     WorkOrder,
     WorkOrderPart,
     RECON_DECISION_TIER_CHOICES,
+    RECON_DECISION_TIER_MUST_DO,
+    RECON_DECISION_TIER_SHOULD_DO,
+    RECON_DECISION_TIER_WONT_DO,
     ReconDecision,
 )
 from .permissions import (
@@ -1716,6 +1719,250 @@ def admin_rate_card_detail(request, item_id):
 # ---- Needs-authorization queue --------------------------------------------
 
 
+_CENTS = Decimal("0.01")
+_ZERO_MONEY = Decimal("0.00")
+
+
+def _q(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(_CENTS)
+
+
+def _build_recon_snapshot(
+    this_wo: WorkOrder, *, dealership
+) -> dict:
+    """Fetch every WO on the vehicle exactly once and return the
+    values the queue card needs. Bundling this here means the queue
+    view does not repeat the WO scan through both ``overage_for``
+    and ``recon_spend_for``.
+
+    Returned dict:
+      - ``recon_list``: the bucketed breakdown (see
+        :func:`_project_recon_list`).
+      - ``prior_spend``: the same number ``recon_spend_for(..., exclude_wo=this_wo)``
+        would return, computed from the same WO scan.
+      - ``this_wo_estimate``: ``wo_estimate_total(this_wo)``.
+
+    Reconciliation is asserted inside :func:`_project_recon_list`.
+    """
+    vehicle = this_wo.vehicle
+    wos = list(
+        WorkOrder.objects.filter(
+            vehicle=vehicle, dealership=dealership
+        )
+        .prefetch_related("parts", "finding_links")
+    )
+    prior_spend = _ZERO_MONEY
+    this_wo_estimate = _ZERO_MONEY
+    for wo in wos:
+        if wo.status == WORK_ORDER_STATUS_CANCELLED:
+            continue
+        if wo.pk == this_wo.pk:
+            this_wo_estimate = recon_budget_service.wo_estimate_total(wo)
+            continue
+        if wo.status == WORK_ORDER_STATUS_COMPLETED:
+            prior_spend += recon_budget_service.wo_actual_total(wo)
+        else:
+            prior_spend += recon_budget_service.wo_estimate_total(wo)
+    prior_spend = _q(prior_spend)
+    this_wo_estimate = _q(this_wo_estimate)
+    recon_list = _project_recon_list(
+        this_wo,
+        wos=wos,
+        dealership=dealership,
+        prior_spend=prior_spend,
+        this_wo_estimate=this_wo_estimate,
+    )
+    return {
+        "recon_list": recon_list,
+        "prior_spend": prior_spend,
+        "this_wo_estimate": this_wo_estimate,
+    }
+
+
+def _project_recon_list(
+    this_wo: WorkOrder,
+    *,
+    wos: list,
+    dealership,
+    prior_spend: Decimal,
+    this_wo_estimate: Decimal,
+) -> dict:
+    """SESSION_230 finding 12 — the breakdown behind the money line.
+
+    Chris authorized $770 over budget on 2026-09-02 and said the
+    card should not be asking him to approve an overage without
+    showing him what the cap is being spent on. This assembles the
+    car's whole recon posture — every live/completed WO on the car,
+    and every finding that has not been folded into a WO — bucketed
+    so the front-end can render committed money separately from
+    inspector estimates.
+
+    Buckets:
+      - ``spent``          completed WOs (actual)
+      - ``committed``      approved + in_progress WOs (estimate)
+      - ``this_wo``        the WO under review (estimate)
+      - ``other_queued``   other draft WOs on the car (estimate)
+      - ``decided_pending`` must-do findings not yet in a live WO
+      - ``proposed``       should-do findings not yet in a live WO
+      - ``undecided``      findings with no ReconDecision
+      - ``declined``       won't-do findings (displayed, not summed)
+
+    Reconciliation invariant, asserted before return:
+        spent + committed + this_wo + other_queued
+            == prior_spend + this_wo_estimate
+
+    The pending buckets are *inspector estimates* (RECON §2.6 —
+    ``ConditionFinding.estimated_cost`` is documentation only and
+    never posts to the ledger). They are surfaced so a manager sees
+    what else is waiting on the car, but they do not enter the
+    overage math and the card must render them under a
+    ``pending`` label so they cannot be mistaken for committed cash.
+    """
+    vehicle = this_wo.vehicle
+
+    spent_items: list[dict] = []
+    committed_items: list[dict] = []
+    other_queued_items: list[dict] = []
+    this_wo_items: list[dict] = []
+    spent_total = _ZERO_MONEY
+    committed_total = _ZERO_MONEY
+    other_queued_total = _ZERO_MONEY
+
+    # Finding IDs already visible through a live/completed WO. We
+    # skip these in the finding buckets so a must-do finding that
+    # already has a draft WO doesn't get counted twice on screen.
+    tracked_finding_ids: set[int] = set()
+
+    def _wo_item(wo: WorkOrder, money: Decimal) -> dict:
+        return {
+            "kind": "work_order",
+            "work_order_id": wo.pk,
+            "work_order_status": wo.status,
+            "category": wo.category,
+            "money": str(_q(money)),
+        }
+
+    for wo in wos:
+        if wo.status == WORK_ORDER_STATUS_CANCELLED:
+            continue
+        for link in wo.finding_links.all():
+            tracked_finding_ids.add(link.finding_id)
+        if wo.status == WORK_ORDER_STATUS_COMPLETED:
+            money = recon_budget_service.wo_actual_total(wo)
+            spent_items.append(_wo_item(wo, money))
+            spent_total += money
+        elif wo.status in (
+            WORK_ORDER_STATUS_APPROVED,
+            WORK_ORDER_STATUS_IN_PROGRESS,
+        ):
+            money = recon_budget_service.wo_estimate_total(wo)
+            committed_items.append(_wo_item(wo, money))
+            committed_total += money
+        elif wo.status == WORK_ORDER_STATUS_DRAFT:
+            money = recon_budget_service.wo_estimate_total(wo)
+            if wo.pk == this_wo.pk:
+                this_wo_items.append(_wo_item(wo, money))
+            else:
+                other_queued_items.append(_wo_item(wo, money))
+                other_queued_total += money
+
+    # Reconciliation — two ways of counting the same money must
+    # agree. If they don't, the card would render a lie, so raise
+    # rather than serve it. Amounts compared quantized to cents.
+    lhs = _q(spent_total + committed_total + other_queued_total)
+    rhs = _q(Decimal(prior_spend))
+    if lhs != rhs:
+        raise AssertionError(
+            f"recon_list reconciliation failed on WO #{this_wo.pk} "
+            f"({vehicle.stock_number}): buckets sum {lhs} != "
+            f"prior_spend {rhs}."
+        )
+
+    findings = list(
+        ConditionFinding.objects.filter(
+            report__vehicle=vehicle, dealership=dealership
+        )
+        .select_related("recon_decision")
+    )
+    decided_pending_items: list[dict] = []
+    proposed_items: list[dict] = []
+    undecided_items: list[dict] = []
+    declined_items: list[dict] = []
+    decided_pending_total = _ZERO_MONEY
+    proposed_total = _ZERO_MONEY
+    undecided_total = _ZERO_MONEY
+    declined_total = _ZERO_MONEY
+
+    for finding in findings:
+        if finding.pk in tracked_finding_ids:
+            continue
+        est = (
+            Decimal(finding.estimated_cost)
+            if finding.estimated_cost is not None
+            else _ZERO_MONEY
+        )
+        item = {
+            "kind": "finding",
+            "finding_id": finding.pk,
+            "description": finding.description,
+            "category": finding.category,
+            "severity": finding.severity,
+            "estimated_cost": (
+                str(finding.estimated_cost)
+                if finding.estimated_cost is not None
+                else None
+            ),
+        }
+        decision = getattr(finding, "recon_decision", None)
+        if decision is None:
+            undecided_items.append(item)
+            undecided_total += est
+        elif decision.tier == RECON_DECISION_TIER_MUST_DO:
+            decided_pending_items.append(item)
+            decided_pending_total += est
+        elif decision.tier == RECON_DECISION_TIER_SHOULD_DO:
+            proposed_items.append(item)
+            proposed_total += est
+        elif decision.tier == RECON_DECISION_TIER_WONT_DO:
+            declined_items.append(item)
+            declined_total += est
+
+    return {
+        "spent": {
+            "total": str(_q(spent_total)),
+            "items": spent_items,
+        },
+        "committed": {
+            "total": str(_q(committed_total)),
+            "items": committed_items,
+        },
+        "this_wo": {
+            "total": str(_q(this_wo_estimate)),
+            "items": this_wo_items,
+        },
+        "other_queued": {
+            "total": str(_q(other_queued_total)),
+            "items": other_queued_items,
+        },
+        "decided_pending": {
+            "total": str(_q(decided_pending_total)),
+            "items": decided_pending_items,
+        },
+        "proposed": {
+            "total": str(_q(proposed_total)),
+            "items": proposed_items,
+        },
+        "undecided": {
+            "total": str(_q(undecided_total)),
+            "items": undecided_items,
+        },
+        "declined": {
+            "total": str(_q(declined_total)),
+            "items": declined_items,
+        },
+    }
+
+
 @api_view(["GET"])
 @permission_classes(_M46_PERMS)
 def admin_recon_needs_authorization_queue(request):
@@ -1727,20 +1974,26 @@ def admin_recon_needs_authorization_queue(request):
     (already committed on the car) and vehicle year/make/model +
     acquisition_total + asking_price so a manager can answer "is
     this car worth $1,670?" without a second round trip.
+
+    SESSION_230 finding 12 — each row now carries ``recon_list``:
+    the car's whole recon posture (committed + inspector-estimate
+    pending) bucketed for display. See :func:`_project_recon_list`.
     """
     dealership = get_current_dealership(request)
     queue = recon_budget_service.needs_authorization_queue(dealership)
     payload = []
     for wo in queue:
-        overage = recon_budget_service.overage_for(
-            wo, dealership=dealership
-        )
+        snapshot = _build_recon_snapshot(wo, dealership=dealership)
+        prior_spend = snapshot["prior_spend"]
+        this_wo_estimate = snapshot["this_wo_estimate"]
         budget = recon_budget_service.recon_budget_for(
             wo.vehicle, dealership=dealership
         )
-        prior_spend = recon_budget_service.recon_spend_for(
-            wo.vehicle, dealership=dealership, exclude_wo=wo
-        )
+        if budget is None:
+            overage = _ZERO_MONEY
+        else:
+            raw = (prior_spend + this_wo_estimate) - budget
+            overage = _q(raw) if raw > 0 else _ZERO_MONEY
         # SESSION_229 Part 6b — the queue queryset select_related's
         # ``vehicle__acquisition`` so this touches the prefetched
         # row rather than triggering a per-vehicle query.
@@ -1760,6 +2013,7 @@ def admin_recon_needs_authorization_queue(request):
                     "acquisition_total": str(acquisition_total),
                     "asking_price": str(wo.vehicle.price),
                 },
+                "recon_list": snapshot["recon_list"],
             }
         )
     return Response({"queue": payload})

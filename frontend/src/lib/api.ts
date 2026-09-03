@@ -1576,6 +1576,42 @@ export interface ReconRateCardItem {
   updated_at: string;
 }
 
+// SESSION_230 finding 12 — the per-car recon breakdown that shows
+// under the money block on each queue row. WO buckets carry
+// committed cash; finding buckets carry inspector estimates only
+// (RECON §2.6 — ConditionFinding.estimated_cost never posts to the
+// ledger) and are surfaced so a manager sees what else is waiting
+// on the car when he decides whether to authorize an overage.
+export interface ReconListWorkOrderItem {
+  kind: "work_order";
+  work_order_id: number;
+  work_order_status: string;
+  category: string;
+  money: string;
+}
+export interface ReconListFindingItem {
+  kind: "finding";
+  finding_id: number;
+  description: string;
+  category: string;
+  severity: string;
+  estimated_cost: string | null;
+}
+export interface ReconListBucket<Item> {
+  total: string;
+  items: Item[];
+}
+export interface ReconList {
+  spent: ReconListBucket<ReconListWorkOrderItem>;
+  committed: ReconListBucket<ReconListWorkOrderItem>;
+  this_wo: ReconListBucket<ReconListWorkOrderItem>;
+  other_queued: ReconListBucket<ReconListWorkOrderItem>;
+  decided_pending: ReconListBucket<ReconListFindingItem>;
+  proposed: ReconListBucket<ReconListFindingItem>;
+  undecided: ReconListBucket<ReconListFindingItem>;
+  declined: ReconListBucket<ReconListFindingItem>;
+}
+
 export interface NeedsAuthorizationQueueRow {
   work_order: WorkOrder;
   overage: string;
@@ -1597,6 +1633,9 @@ export interface NeedsAuthorizationQueueRow {
     acquisition_total: string;
     asking_price: string;
   };
+  // SESSION_230 finding 12 — the whole recon list on the car,
+  // bucketed. See ReconList.
+  recon_list: ReconList;
 }
 
 export interface ReconDecision {
