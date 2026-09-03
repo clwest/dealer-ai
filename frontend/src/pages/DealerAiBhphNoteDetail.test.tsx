@@ -52,6 +52,9 @@ describe("DealerAiBhphNoteDetail", () => {
       bhph_note: {
         id: 42,
         sale_id: 100,
+        borrower_name: "",
+        vehicle_display: "",
+        stock_number: "",
         dealership_id: 1,
         principal_financed: "8000.00",
         apr: "21.90",

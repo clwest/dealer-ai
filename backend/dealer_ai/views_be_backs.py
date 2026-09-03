@@ -90,9 +90,12 @@ class BeBackNoShowRequestSerializer(serializers.Serializer):
 
 
 def _project_be_back(be_back: BeBack) -> dict:
+    lead = getattr(be_back, "lead", None)
     return {
         "id": be_back.pk,
         "lead_id": be_back.lead_id,
+        "lead_name": lead.name if lead is not None else "",
+        "lead_phone": lead.phone if lead is not None else "",
         "dealership_id": be_back.dealership_id,
         "promised_at": be_back.promised_at.isoformat(),
         "promised_reason": be_back.promised_reason,
@@ -127,7 +130,9 @@ def admin_be_back_list(request):
     matches Meta (``-promised_at``).
     """
     dealership = get_current_dealership(request)
-    qs = BeBack.objects.filter(dealership=dealership)
+    # SESSION_236 — select_related so `_project_be_back` can read
+    # lead.name + lead.phone without a per-row query.
+    qs = BeBack.objects.filter(dealership=dealership).select_related("lead")
 
     raw_state = (request.query_params.get("state") or "").strip()
     if raw_state in _VALID_BE_BACK_STATES:

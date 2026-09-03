@@ -147,7 +147,12 @@ export async function createWebhookLead(
 export interface TestDriveProjection {
   id: number;
   lead_id: number;
+  // SESSION_236 — the drive-log rows carry names now so the operator
+  // does not have to memorise ids. `""` when the FK target has
+  // vanished; the frontend falls back to `#${id}` for display.
+  lead_name: string;
   vehicle_id: number;
+  vehicle_display: string;
   dealership_id: number;
   driven_by_user_id: number | null;
   driven_at: string;
@@ -291,6 +296,13 @@ export interface CadenceProjection {
 export interface FollowUpTaskProjection {
   id: number;
   cadence_id: number;
+  // SESSION_236 — lead_id + names + a best-effort vehicle_display
+  // (the freshest ``interested_vehicles`` entry) so the queue row
+  // can render a person and a car instead of "#12 · #7".
+  lead_id: number | null;
+  lead_name: string;
+  lead_phone: string;
+  vehicle_display: string;
   dealership_id: number;
   due_at: string;
   state: FollowUpTaskState;
@@ -389,6 +401,9 @@ export async function skipTask(
 export interface BeBackProjection {
   id: number;
   lead_id: number;
+  // SESSION_236 — the queue lists a person, not just an id.
+  lead_name: string;
+  lead_phone: string;
   dealership_id: number;
   promised_at: string;
   promised_reason: BeBackReason;

@@ -39,6 +39,7 @@ from ..models import (
     WorkOrder,
 )
 from . import recon as recon_service
+from .money_format import fmt_money
 
 _ZERO = Decimal("0.00")
 _CENTS = Decimal("0.01")
@@ -345,7 +346,7 @@ def authorize_or_queue(
         if new_total <= budget:
             note_prefix = (
                 f"auto-authorized: under store recon budget "
-                f"(${new_total} of ${budget}). "
+                f"({fmt_money(new_total)} of {fmt_money(budget)}). "
             )
             wo.notes = (note_prefix + (wo.notes or "")).strip()
             wo.save(update_fields=["notes", "updated_at"])
@@ -360,7 +361,7 @@ def authorize_or_queue(
         # the auto-authorized "$X of $Y" line.
         over = new_total - budget
         queue_prefix = (
-            f"needs authorization: ${over} over the ${budget} cap. "
+            f"needs authorization: {fmt_money(over)} over the {fmt_money(budget)} cap. "
         )
         if not (wo.notes or "").startswith("needs authorization:"):
             wo.notes = (queue_prefix + (wo.notes or "")).strip()

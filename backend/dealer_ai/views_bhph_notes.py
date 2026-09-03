@@ -78,9 +78,24 @@ class BhphNoteCreateRequestSerializer(serializers.Serializer):
 
 
 def _project_bhph_note(note: BhphNote) -> dict:
+    # SESSION_236 — the portfolio list rows are useless with only
+    # ``sale_id``. Pull borrower name (from Sale.buyer, i.e. the
+    # M9 CustomerLead reference), the vehicle_display, and the
+    # stock_number so the portfolio can identify each note without
+    # opening the detail page.
+    sale = getattr(note, "sale", None)
+    buyer = getattr(sale, "buyer", None) if sale is not None else None
+    vehicle = getattr(sale, "vehicle", None) if sale is not None else None
     return {
         "id": note.pk,
         "sale_id": note.sale_id,
+        "borrower_name": buyer.name if buyer is not None else "",
+        "vehicle_display": (
+            vehicle.vehicle_display if vehicle is not None else ""
+        ),
+        "stock_number": (
+            (vehicle.stock_number or "") if vehicle is not None else ""
+        ),
         "dealership_id": note.dealership_id,
         "principal_financed": str(note.principal_financed),
         "apr": str(note.apr),
@@ -112,7 +127,13 @@ def admin_bhph_note_list(request):
     matches Meta (``-created_at``).
     """
     dealership = get_current_dealership(request)
-    qs = BhphNote.objects.filter(dealership=dealership)
+    # SESSION_236 — select_related sale/buyer/vehicle so the
+    # per-row projection can read borrower_name + vehicle_display
+    # + stock_number without N+1.
+    qs = (
+        BhphNote.objects.filter(dealership=dealership)
+        .select_related("sale", "sale__buyer", "sale__vehicle")
+    )
     rows = list(qs[:100])
     return Response(
         {

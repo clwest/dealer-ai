@@ -79,10 +79,14 @@ class TestDriveCreateRequestSerializer(serializers.Serializer):
 
 
 def _project_test_drive(drive: TestDrive) -> dict:
+    lead = getattr(drive, "lead", None)
+    vehicle = getattr(drive, "vehicle", None)
     return {
         "id": drive.pk,
         "lead_id": drive.lead_id,
+        "lead_name": lead.name if lead is not None else "",
         "vehicle_id": drive.vehicle_id,
+        "vehicle_display": vehicle.vehicle_display if vehicle is not None else "",
         "dealership_id": drive.dealership_id,
         "driven_by_user_id": drive.driven_by_user_id,
         "driven_at": drive.driven_at.isoformat(),
@@ -113,7 +117,11 @@ def admin_test_drive_list(request):
     matches Meta (``-driven_at``).
     """
     dealership = get_current_dealership(request)
-    qs = TestDrive.objects.filter(dealership=dealership)
+    # SESSION_236 — select_related so `_project_test_drive` can read
+    # lead.name + vehicle.vehicle_display without a per-row query.
+    qs = TestDrive.objects.filter(dealership=dealership).select_related(
+        "lead", "vehicle"
+    )
 
     raw_lead = request.query_params.get("lead_id")
     if raw_lead:

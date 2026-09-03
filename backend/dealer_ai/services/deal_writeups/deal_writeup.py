@@ -56,6 +56,7 @@ from ...models import (
     Vehicle,
 )
 from ..f_and_i import record_credit_application
+from ..money_format import fmt_apr, fmt_money
 
 
 User = get_user_model()
@@ -166,19 +167,19 @@ def _format_handoff_notes(writeup: DealWriteup) -> str:
     """
     lines = [f"Deal write-up #{writeup.pk} handoff:"]
     if writeup.vehicle_price is not None:
-        lines.append(f"- Vehicle price: ${writeup.vehicle_price}")
+        lines.append(f"- Vehicle price: {fmt_money(writeup.vehicle_price)}")
     if writeup.trade_allowance is not None:
-        lines.append(f"- Trade allowance: ${writeup.trade_allowance}")
+        lines.append(f"- Trade allowance: {fmt_money(writeup.trade_allowance)}")
     if writeup.down_payment is not None:
-        lines.append(f"- Down payment: ${writeup.down_payment}")
+        lines.append(f"- Down payment: {fmt_money(writeup.down_payment)}")
     if writeup.monthly_payment_target is not None:
         lines.append(
-            f"- Monthly payment target: ${writeup.monthly_payment_target}/mo"
+            f"- Monthly payment target: {fmt_money(writeup.monthly_payment_target)}/mo"
         )
     if writeup.term_months_target is not None:
         lines.append(f"- Term target: {writeup.term_months_target} months")
     if writeup.apr_target is not None:
-        lines.append(f"- APR target: {writeup.apr_target}%")
+        lines.append(f"- APR target: {fmt_apr(writeup.apr_target)}")
     if writeup.notes:
         lines.append("")
         lines.append(f"Writeup notes: {writeup.notes}")

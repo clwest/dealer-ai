@@ -210,10 +210,13 @@ class HandOffToFandiTests(TestCase):
         self._approve()
         _, credit_app = hand_off_to_fandi(writeup=self.writeup)
         self.assertIn("Vehicle price", credit_app.notes)
-        self.assertIn("$28500", credit_app.notes)
+        # SESSION_236 — money goes through fmt_money and APR through
+        # fmt_apr; a bare "$28500" here would mean the composer
+        # regressed to raw Decimal interpolation.
+        self.assertIn("$28,500.00", credit_app.notes)
         self.assertIn("Monthly payment target", credit_app.notes)
         self.assertIn("72 months", credit_app.notes)
-        self.assertIn("7.49", credit_app.notes)
+        self.assertIn("7.49%", credit_app.notes)
 
     def test_handoff_refuses_unapproved(self) -> None:
         with self.assertRaises(WriteupNotApprovedError):

@@ -22,7 +22,9 @@ function makeDrive(overrides: Partial<TestDriveProjection> = {}): TestDriveProje
   return {
     id: 1,
     lead_id: 10,
+    lead_name: "",
     vehicle_id: 100,
+    vehicle_display: "",
     dealership_id: 1,
     driven_by_user_id: 5,
     driven_at: "2026-08-01T14:00:00Z",

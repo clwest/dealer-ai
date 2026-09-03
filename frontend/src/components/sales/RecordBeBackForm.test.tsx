@@ -23,6 +23,8 @@ function makeBeBack(
   return {
     id: 1,
     lead_id: 42,
+    lead_name: "",
+    lead_phone: "",
     dealership_id: 1,
     promised_at: "2026-08-04T14:00:00Z",
     promised_reason: "test_drive",

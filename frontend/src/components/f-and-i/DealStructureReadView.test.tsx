@@ -48,16 +48,17 @@ describe("DealStructureReadView", () => {
     );
     expect(screen.getByTestId("deal-structure-read-vehicle-stock"))
       .toHaveTextContent("FANDI-STRUCT-1");
+    // SESSION_236 — money through formatMoney; APR at two decimals.
     expect(screen.getByTestId("deal-structure-read-sale-price"))
-      .toHaveTextContent("38750.00");
+      .toHaveTextContent("$38,750.00");
     expect(screen.getByTestId("deal-structure-read-amount-financed"))
-      .toHaveTextContent("34499.00");
+      .toHaveTextContent("$34,499.00");
     expect(screen.getByTestId("deal-structure-read-apr"))
-      .toHaveTextContent("7.4900%");
+      .toHaveTextContent("7.49%");
     expect(screen.getByTestId("deal-structure-read-term-months"))
       .toHaveTextContent("66 mo");
     expect(screen.getByTestId("deal-structure-read-monthly-payment"))
-      .toHaveTextContent("600.00");
+      .toHaveTextContent("$600.00");
     expect(screen.getByTestId("deal-structure-read-ltv"))
       .toHaveTextContent("89.03%");
   });

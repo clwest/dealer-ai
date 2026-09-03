@@ -93,10 +93,11 @@ test.describe("fandi-intake-receipt", () => {
     // -----------------------------------------------------------------
     const terms = irisRow.locator('[data-testid="incoming-terms-summary"]');
     await expect(terms).toBeVisible();
-    await expect(terms.getByText("42500.00", { exact: true })).toBeVisible();
-    await expect(terms.getByText("7500.00", { exact: true })).toBeVisible();
-    await expect(terms.getByText("3000.00", { exact: true })).toBeVisible();
-    await expect(terms.getByText("585.00", { exact: true })).toBeVisible();
+    // SESSION_236 — money in TermsCell goes through formatMoney.
+    await expect(terms.getByText("$42,500.00", { exact: true })).toBeVisible();
+    await expect(terms.getByText("$7,500.00", { exact: true })).toBeVisible();
+    await expect(terms.getByText("$3,000.00", { exact: true })).toBeVisible();
+    await expect(terms.getByText("$585.00", { exact: true })).toBeVisible();
     await expect(terms.getByText("60 mo", { exact: true })).toBeVisible();
     await expect(terms.getByText("6.99%", { exact: true })).toBeVisible();
 
@@ -112,8 +113,11 @@ test.describe("fandi-intake-receipt", () => {
     // Step 8 — assert attribution (written-up-by + approved-by user
     // IDs — the seed provisions the sales-manager persona for both).
     // -----------------------------------------------------------------
-    await expect(irisRow.getByText(/Written up by #\d+/)).toBeVisible();
-    await expect(irisRow.getByText(/Approved by #\d+/)).toBeVisible();
+    // SESSION_236 — attribution now renders the user's display name
+    // (first+last / username / email / `#id` fallback). Assert on the
+    // literal prefix; the value can be a name or an id.
+    await expect(irisRow.getByText(/Written up by \S+/)).toBeVisible();
+    await expect(irisRow.getByText(/Approved by \S+/)).toBeVisible();
 
     // -----------------------------------------------------------------
     // Step 9 — assert M11.3 handoff notes prefix in the notes
@@ -127,7 +131,9 @@ test.describe("fandi-intake-receipt", () => {
     // The <details> starts collapsed but the notes content is present
     // in the DOM. Assert the notes text contains the handoff prefix.
     await expect(notesElement).toContainText(/Deal write-up #\d+ handoff:/);
-    await expect(notesElement).toContainText("Vehicle price: $42500.00");
+    // SESSION_236 — the composed handoff note goes through
+    // fmt_money, so the recorded string is `$42,500.00`, not `$42500.00`.
+    await expect(notesElement).toContainText("Vehicle price: $42,500.00");
 
     // -----------------------------------------------------------------
     // Step 10 — non-navigational-row assertion per D8-revised.

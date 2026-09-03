@@ -223,21 +223,23 @@ test.describe("fandi-intake-activation", () => {
     await expect(
       readView.getByTestId("deal-structure-read-vehicle-stock"),
     ).toHaveText(FIXTURE_VEHICLE_STOCK);
+    // SESSION_236 — money in the read view now goes through
+    // formatMoney (`$` + thousands separator + two decimals).
     await expect(
       readView.getByTestId("deal-structure-read-sale-price"),
-    ).toHaveText("38750.00");
+    ).toHaveText("$38,750.00");
     await expect(
       readView.getByTestId("deal-structure-read-amount-financed"),
-    ).toHaveText("33750.00");
+    ).toHaveText("$33,750.00");
     await expect(
       readView.getByTestId("deal-structure-read-taxes"),
-    ).toHaveText("2531.25");
+    ).toHaveText("$2,531.25");
     await expect(
       readView.getByTestId("deal-structure-read-fees"),
-    ).toHaveText("799.00");
+    ).toHaveText("$799.00");
     await expect(
       readView.getByTestId("deal-structure-read-trade-payoff"),
-    ).toHaveText("0.00");
+    ).toHaveText("$0.00");
     await expect(
       readView.getByTestId("deal-structure-read-term-months"),
     ).toHaveText("66 mo");

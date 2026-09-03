@@ -27,6 +27,7 @@ import {
   getDealStructure,
   type DealStructureProjection,
 } from "@/lib/fAndIApi";
+import { formatMoney } from "@/lib/utils";
 
 export interface DealStructureReadViewProps {
   dealStructureId: number;
@@ -37,7 +38,17 @@ export interface DealStructureReadViewProps {
 
 function nullSafeRatio(value: string | null): string {
   if (value === null) return "Not computable — requires income";
-  return `${value}%`;
+  // SESSION_236 — always render ratios/APR at two decimals; the walk
+  // called out `14.9000%` on this card.
+  const num = Number(value);
+  if (Number.isNaN(num)) return `${value}%`;
+  return `${num.toFixed(2)}%`;
+}
+
+function fmtApr(value: string): string {
+  const num = Number(value);
+  if (Number.isNaN(num)) return `${value}%`;
+  return `${num.toFixed(2)}%`;
 }
 
 function humanizeError(err: unknown): string {
@@ -161,7 +172,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-sale-price"
                   className="font-medium"
                 >
-                  {structure.sale_price}
+                  {formatMoney(structure.sale_price)}
                 </dd>
               </div>
               <div>
@@ -172,7 +183,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-down-payment"
                   className="font-medium"
                 >
-                  {structure.down_payment}
+                  {formatMoney(structure.down_payment)}
                 </dd>
               </div>
               <div>
@@ -183,7 +194,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-trade-allowance"
                   className="font-medium"
                 >
-                  {structure.trade_allowance}
+                  {formatMoney(structure.trade_allowance)}
                 </dd>
               </div>
               <div>
@@ -194,7 +205,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-trade-payoff"
                   className="font-medium"
                 >
-                  {structure.trade_payoff}
+                  {formatMoney(structure.trade_payoff)}
                 </dd>
               </div>
               <div>
@@ -203,7 +214,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-taxes"
                   className="font-medium"
                 >
-                  {structure.taxes}
+                  {formatMoney(structure.taxes)}
                 </dd>
               </div>
               <div>
@@ -212,7 +223,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-fees"
                   className="font-medium"
                 >
-                  {structure.fees}
+                  {formatMoney(structure.fees)}
                 </dd>
               </div>
               <div>
@@ -223,7 +234,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-amount-financed"
                   className="font-medium"
                 >
-                  {structure.amount_financed}
+                  {formatMoney(structure.amount_financed)}
                 </dd>
               </div>
               <div>
@@ -234,7 +245,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-apr"
                   className="font-medium"
                 >
-                  {structure.apr}%
+                  {fmtApr(structure.apr)}
                 </dd>
               </div>
               <div>
@@ -256,7 +267,7 @@ export function DealStructureReadView({
                   data-testid="deal-structure-read-monthly-payment"
                   className="font-medium"
                 >
-                  {structure.monthly_payment}
+                  {formatMoney(structure.monthly_payment)}
                 </dd>
               </div>
             </dl>

@@ -253,7 +253,11 @@ export interface CreditApplicationTerms {
 export interface CreditApplicationWriteupContext {
   deal_writeup_id: number;
   written_up_by_user_id: number | null;
+  // SESSION_236 — display name replaces `#12` on the intake row.
+  // Empty string when the user has no first/last/username/email.
+  written_up_by_name: string;
   sales_manager_approved_by_user_id: number | null;
+  sales_manager_approved_by_name: string;
   handed_off_to_fandi_at: string | null;
   lead: CreditApplicationLead;
   vehicle: CreditApplicationVehicle;

@@ -87,6 +87,32 @@ _M101_PERMS = [
 ]
 
 
+def _user_display_name(user) -> str:
+    """SESSION_236 — the intake row's ``written_up_by`` /
+    ``sales_manager_approved_by`` used to render as ``#12`` because
+    the projection only carried the pk. Give the frontend a
+    display-ready string: prefer ``first + last`` when present,
+    fall back to ``get_full_name()``, then ``username``, then
+    ``email``, then empty string. Never raises for None so the
+    projection can call it unconditionally.
+    """
+    if user is None:
+        return ""
+    first = (getattr(user, "first_name", "") or "").strip()
+    last = (getattr(user, "last_name", "") or "").strip()
+    if first or last:
+        return f"{first} {last}".strip()
+    getter = getattr(user, "get_full_name", None)
+    if callable(getter):
+        full = (getter() or "").strip()
+        if full:
+            return full
+    username = (getattr(user, "username", "") or "").strip()
+    if username:
+        return username
+    return (getattr(user, "email", "") or "").strip()
+
+
 def _lookup_lead_or_404(dealership, lead_id):
     try:
         return CustomerLead.objects.filter(dealership=dealership).get(
@@ -254,8 +280,18 @@ def _project_writeup_context(app: CreditApplication) -> dict:
     return {
         "deal_writeup_id": writeup.pk,
         "written_up_by_user_id": writeup.written_up_by_user_id,
+        # SESSION_236 — replace the "#12" attribution on the intake
+        # card with an actual person; falls back to the user's email
+        # or their ``username`` so a display-name-less user still
+        # renders as something a human recognises.
+        "written_up_by_name": _user_display_name(
+            getattr(writeup, "written_up_by_user", None)
+        ),
         "sales_manager_approved_by_user_id": (
             writeup.sales_manager_approved_by_user_id
+        ),
+        "sales_manager_approved_by_name": _user_display_name(
+            getattr(writeup, "sales_manager_approved_by_user", None)
         ),
         "handed_off_to_fandi_at": (
             writeup.handed_off_to_fandi_at.isoformat()

@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { listTestDrives, type TestDriveProjection } from "@/lib/salesApi";
+import { formatDateTime, plural } from "@/lib/text";
 
 export default function DealerAiSalesTestDrives() {
   const [drives, setDrives] = useState<TestDriveProjection[]>([]);
@@ -71,7 +72,7 @@ export default function DealerAiSalesTestDrives() {
       {loadState === "ready" && drives.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>{drives.length} drives</CardTitle>
+            <CardTitle>{plural(drives.length, "drive")}</CardTitle>
             <CardDescription>Most recent first.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -90,10 +91,14 @@ export default function DealerAiSalesTestDrives() {
                 {drives.map((drive) => (
                   <tr key={drive.id} className="border-b last:border-0">
                     <td className="py-2">
-                      {new Date(drive.driven_at).toLocaleString()}
+                      {formatDateTime(drive.driven_at)}
                     </td>
-                    <td className="py-2">#{drive.lead_id}</td>
-                    <td className="py-2">#{drive.vehicle_id}</td>
+                    <td className="py-2">
+                      {drive.lead_name || `#${drive.lead_id}`}
+                    </td>
+                    <td className="py-2">
+                      {drive.vehicle_display || `#${drive.vehicle_id}`}
+                    </td>
                     <td className="py-2">
                       {drive.duration_minutes
                         ? `${drive.duration_minutes} min`

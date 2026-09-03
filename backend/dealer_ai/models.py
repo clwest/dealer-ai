@@ -289,6 +289,18 @@ class Vehicle(models.Model):
         parts = [str(self.year), self.make, self.model, self.trim]
         return " ".join(p for p in parts if p)
 
+    # SESSION_236 (TASK_names-and-money) — one place composes
+    # "year make model · #stock" so every operator screen renders the
+    # same string when it names a car. Prefer this over recomposing
+    # `display_name` + `stock_number` at each callsite.
+    @property
+    def vehicle_display(self) -> str:
+        name = self.display_name
+        stock = (self.stock_number or "").strip()
+        if not stock:
+            return name
+        return f"{name} · #{stock}" if name else f"#{stock}"
+
     # ---- Milestone 2 · Increment 3 — Vehicle-as-read-model -------------
     #
     # The following properties are the *read model* for the Vehicle

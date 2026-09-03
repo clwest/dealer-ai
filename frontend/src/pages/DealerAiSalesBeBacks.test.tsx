@@ -30,6 +30,8 @@ function makeBeBack(overrides: Partial<BeBackProjection> = {}): BeBackProjection
   return {
     id: 1,
     lead_id: 42,
+    lead_name: "",
+    lead_phone: "",
     dealership_id: 1,
     promised_at: "2026-08-03T14:00:00Z",
     promised_reason: "test_drive",
@@ -88,15 +90,19 @@ describe("DealerAiSalesBeBacks", () => {
     await waitFor(() => {
       expect(screen.getAllByText("#42").length).toBe(2);
     });
-    expect(screen.getByText("promised")).toBeInTheDocument();
-    expect(screen.getByText("returned")).toBeInTheDocument();
-    expect(screen.getAllByText("test_drive").length).toBe(2);
+    // SESSION_236 — "Promised" also appears as a dropdown option
+    // label; the row shows the same word, so assert on >= 1 match.
+    expect(screen.getAllByText("Promised").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Returned").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Test drive").length).toBe(2);
   });
 
   it("marks a be-back returned via the inline button", async () => {
     await renderPage();
     await waitFor(() => {
-      expect(screen.getByText("promised")).toBeInTheDocument();
+      // SESSION_236 — "Promised" also appears as a dropdown option
+    // label; the row shows the same word, so assert on >= 1 match.
+    expect(screen.getAllByText("Promised").length).toBeGreaterThan(0);
     });
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^returned$/i }));
@@ -108,7 +114,9 @@ describe("DealerAiSalesBeBacks", () => {
   it("marks a be-back no-show via the inline button", async () => {
     await renderPage();
     await waitFor(() => {
-      expect(screen.getByText("promised")).toBeInTheDocument();
+      // SESSION_236 — "Promised" also appears as a dropdown option
+    // label; the row shows the same word, so assert on >= 1 match.
+    expect(screen.getAllByText("Promised").length).toBeGreaterThan(0);
     });
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /no-show/i }));

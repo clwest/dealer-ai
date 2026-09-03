@@ -46,7 +46,9 @@ function fixtureHandoffCA(
     writeup_context: {
       deal_writeup_id: 42,
       written_up_by_user_id: 5,
+      written_up_by_name: "",
       sales_manager_approved_by_user_id: 5,
+      sales_manager_approved_by_name: "",
       handed_off_to_fandi_at: "2026-08-04T12:00:00Z",
       lead: {
         id: 100,
@@ -188,8 +190,9 @@ describe("DealerFandIIncoming — hand-off row rendering (D8-revised inline fiel
     expect(
       within(row).getByTestId("incoming-terms-summary"),
     ).toBeInTheDocument();
-    expect(within(row).getByText("42500.00")).toBeInTheDocument();
-    expect(within(row).getByText("585.00")).toBeInTheDocument();
+    // SESSION_236 — money now goes through formatMoney and APR at two decimals.
+    expect(within(row).getByText("$42,500.00")).toBeInTheDocument();
+    expect(within(row).getByText("$585.00")).toBeInTheDocument();
     expect(within(row).getByText("60 mo")).toBeInTheDocument();
     expect(within(row).getByText("6.99%")).toBeInTheDocument();
   });

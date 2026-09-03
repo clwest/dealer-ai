@@ -33,8 +33,17 @@ import {
   type FollowUpTaskProjection,
   type FollowUpTaskState,
 } from "@/lib/salesApi";
+import { formatDateTime, plural } from "@/lib/text";
 
 type StateFilter = "" | FollowUpTaskState;
+
+// SESSION_236 — pending / completed / skipped are stored raw on the
+// row; render the same labels the operator sees elsewhere.
+const TASK_STATE_LABELS: Record<FollowUpTaskState, string> = {
+  pending: "Pending",
+  completed: "Completed",
+  skipped: "Skipped",
+};
 
 const STATE_OPTIONS: Array<{ value: StateFilter; label: string }> = [
   { value: "", label: "Any state" },
@@ -173,13 +182,15 @@ export default function DealerAiSalesFollowUps() {
       {loadState === "ready" && tasks.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>{tasks.length} tasks</CardTitle>
+            <CardTitle>{plural(tasks.length, "task")}</CardTitle>
           </CardHeader>
           <CardContent>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="pb-2">Due at</th>
+                  <th className="pb-2">Lead</th>
+                  <th className="pb-2">Vehicle</th>
                   <th className="pb-2">Cadence</th>
                   <th className="pb-2">State</th>
                   <th className="pb-2 text-right">Actions</th>
@@ -189,10 +200,28 @@ export default function DealerAiSalesFollowUps() {
                 {tasks.map((task) => (
                   <tr key={task.id} className="border-b last:border-0">
                     <td className="py-2">
-                      {new Date(task.due_at).toLocaleString()}
+                      {formatDateTime(task.due_at)}
+                    </td>
+                    <td className="py-2">
+                      <div className="font-medium">
+                        {task.lead_name ||
+                          (task.lead_id !== null
+                            ? `#${task.lead_id}`
+                            : "—")}
+                      </div>
+                      {task.lead_phone && (
+                        <div className="text-xs text-muted-foreground">
+                          {task.lead_phone}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 text-muted-foreground">
+                      {task.vehicle_display || "—"}
                     </td>
                     <td className="py-2">#{task.cadence_id}</td>
-                    <td className="py-2">{task.state}</td>
+                    <td className="py-2">
+                      {TASK_STATE_LABELS[task.state] ?? task.state}
+                    </td>
                     <td className="py-2 text-right">
                       {task.state === "pending" ? (
                         <span className="flex justify-end gap-2">

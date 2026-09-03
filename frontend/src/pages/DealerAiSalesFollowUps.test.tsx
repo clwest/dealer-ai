@@ -30,6 +30,10 @@ function makeTask(overrides: Partial<FollowUpTaskProjection> = {}): FollowUpTask
   return {
     id: 1,
     cadence_id: 42,
+    lead_id: null,
+    lead_name: "",
+    lead_phone: "",
+    vehicle_display: "",
     dealership_id: 1,
     due_at: "2026-08-02T15:00:00Z",
     state: "pending",

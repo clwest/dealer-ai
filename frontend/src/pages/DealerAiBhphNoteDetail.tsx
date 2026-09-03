@@ -63,6 +63,33 @@ function formatMoney(raw: string): string {
   });
 }
 
+// SESSION_236 — the walk called out ``14.9000%`` on the proposed-
+// structure card. Two decimals for every APR everywhere.
+function formatApr(raw: string): string {
+  const value = Number(raw);
+  if (Number.isNaN(value)) return `${raw}%`;
+  return `${value.toFixed(2)}%`;
+}
+
+function formatDateOnly(raw: string): string {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatDateTime(raw: string): string {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 
 function mergeById<T extends { id: number }>(prev: T[], next: T): T[] {
   const idx = prev.findIndex((row) => row.id === next.id);
@@ -140,9 +167,14 @@ export default function DealerAiBhphNoteDetail() {
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">
           BHPH Note #{note.id}
+          {note.borrower_name ? ` · ${note.borrower_name}` : ""}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {formatMoney(note.principal_financed)} @ {note.apr}% ·{" "}
+          {note.vehicle_display ||
+            (note.stock_number ? `Stock #${note.stock_number}` : "")}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {formatMoney(note.principal_financed)} @ {formatApr(note.apr)} ·{" "}
           {note.term_weeks} weeks · {note.payment_frequency}
         </p>
       </header>
@@ -196,9 +228,9 @@ export default function DealerAiBhphNoteDetail() {
                   className="py-1"
                   data-testid={`payment-row-${p.id}`}
                 >
-                  {p.paid_at} · {formatMoney(p.amount)} · {p.method} ·
-                  int {formatMoney(p.applied_to_interest)} · prin{" "}
-                  {formatMoney(p.applied_to_principal)}
+                  {formatDateOnly(p.paid_at)} · {formatMoney(p.amount)} ·{" "}
+                  {p.method} · int {formatMoney(p.applied_to_interest)} ·{" "}
+                  prin {formatMoney(p.applied_to_principal)}
                 </li>
               ))}
             </ul>
@@ -230,7 +262,8 @@ export default function DealerAiBhphNoteDetail() {
                   data-testid={`promise-row-${p.id}`}
                 >
                   <span>
-                    {p.promised_at} · {formatMoney(p.promised_amount)} ·{" "}
+                    {formatDateOnly(p.promised_at)} ·{" "}
+                    {formatMoney(p.promised_amount)} ·{" "}
                     {p.promised_reason} ·{" "}
                     <strong data-testid={`promise-state-${p.id}`}>
                       {p.state}
@@ -281,7 +314,8 @@ export default function DealerAiBhphNoteDetail() {
                   className="py-1"
                   data-testid={`contact-row-${c.id}`}
                 >
-                  {c.contacted_at} · {c.channel} · {c.outcome}
+                  {formatDateTime(c.contacted_at)} · {c.channel} ·{" "}
+                  {c.outcome}
                 </li>
               ))}
             </ul>
@@ -313,7 +347,7 @@ export default function DealerAiBhphNoteDetail() {
                   data-testid={`repo-row-${r.id}`}
                 >
                   <span>
-                    {r.ordered_at} · {r.agent_name} ·{" "}
+                    {formatDateTime(r.ordered_at)} · {r.agent_name} ·{" "}
                     <strong data-testid={`repo-state-${r.id}`}>
                       {r.state}
                     </strong>

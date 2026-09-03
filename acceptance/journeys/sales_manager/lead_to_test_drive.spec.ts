@@ -291,9 +291,13 @@ test.describe("Sales operator can schedule a test drive from LeadDetailModal", (
       page.getByText("Very positive — asked about financing.").first(),
       "newly-recorded drive should appear on DealerAiSalesTestDrives (M11.6 list surface, unchanged by M25.2)",
     ).toBeVisible({ timeout: 10_000 });
+    // SESSION_236 — Lead column now renders lead_name (falling back
+    // to `#${lead_id}` only when the name is empty). Assert on the
+    // customer name so we prove the projection carries the name, not
+    // just that the id string still leaks somewhere.
     await expect(
-      page.getByText(`#${newLeadId}`).first(),
-      `lead id text #${newLeadId} should render in the drive row's Lead column`,
+      page.getByText(CUSTOMER_NAME).first(),
+      `customer name "${CUSTOMER_NAME}" should render in the drive row's Lead column`,
     ).toBeVisible({ timeout: 5_000 });
   });
 });

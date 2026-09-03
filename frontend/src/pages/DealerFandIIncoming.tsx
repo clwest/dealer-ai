@@ -67,6 +67,7 @@ import {
   type CreditApplicationProjection,
   type LenderSubmissionProjection,
 } from "@/lib/fAndIApi";
+import { formatMoney } from "@/lib/utils";
 
 const INTAKE_OPTIONS: Array<{ value: "all" | "intake"; label: string }> = [
   { value: "intake", label: "Pre-contract only (default)" },
@@ -88,18 +89,33 @@ function TermsCell({
       </span>
     );
   }
+  // SESSION_236 — every money value on the four-square goes through
+  // the shared formatter (see TASK_names-and-money.md, part 2). APR
+  // renders as `14.90%`, never `14.9000%`.
+  const aprTarget = ctx.terms.apr_target;
+  const aprNum = aprTarget !== null ? Number(aprTarget) : NaN;
   const cells: Array<[string, string | null]> = [
-    ["Vehicle", ctx.terms.vehicle_price],
-    ["Trade", ctx.terms.trade_allowance],
-    ["Down", ctx.terms.down_payment],
-    ["Mo. payment", ctx.terms.monthly_payment_target],
+    ["Vehicle", ctx.terms.vehicle_price ? formatMoney(ctx.terms.vehicle_price) : null],
+    ["Trade", ctx.terms.trade_allowance ? formatMoney(ctx.terms.trade_allowance) : null],
+    ["Down", ctx.terms.down_payment ? formatMoney(ctx.terms.down_payment) : null],
+    [
+      "Mo. payment",
+      ctx.terms.monthly_payment_target
+        ? formatMoney(ctx.terms.monthly_payment_target)
+        : null,
+    ],
     [
       "Term",
       ctx.terms.term_months_target != null
         ? `${ctx.terms.term_months_target} mo`
         : null,
     ],
-    ["APR", ctx.terms.apr_target != null ? `${ctx.terms.apr_target}%` : null],
+    [
+      "APR",
+      aprTarget !== null
+        ? (Number.isNaN(aprNum) ? `${aprTarget}%` : `${aprNum.toFixed(2)}%`)
+        : null,
+    ],
   ];
   const populated = cells.filter(([, v]) => v !== null && v !== "");
   if (populated.length === 0) {
@@ -572,9 +588,16 @@ export default function DealerFandIIncoming() {
                       ) : null}
                       {ctx ? (
                         <div className="mt-1 text-[11px] text-muted-foreground">
-                          Written up by #{ctx.written_up_by_user_id ?? "—"} ·
-                          Approved by #
-                          {ctx.sales_manager_approved_by_user_id ?? "—"}
+                          Written up by{" "}
+                          {ctx.written_up_by_name ||
+                            (ctx.written_up_by_user_id !== null
+                              ? `#${ctx.written_up_by_user_id}`
+                              : "—")}{" "}
+                          · Approved by{" "}
+                          {ctx.sales_manager_approved_by_name ||
+                            (ctx.sales_manager_approved_by_user_id !== null
+                              ? `#${ctx.sales_manager_approved_by_user_id}`
+                              : "—")}
                         </div>
                       ) : null}
                       {ca.notes ? (

@@ -94,6 +94,13 @@ export type BhphPaymentFrequency = "weekly" | "biweekly" | "semi_monthly";
 export interface BhphNoteProjection {
   id: number;
   sale_id: number;
+  // SESSION_236 — borrower_name comes from Sale.buyer.name;
+  // vehicle_display / stock_number from Sale.vehicle. Empty strings
+  // when the sale is orphaned (SET_NULL on the buyer FK, cascade
+  // would zap the whole note).
+  borrower_name: string;
+  vehicle_display: string;
+  stock_number: string;
   dealership_id: number;
   principal_financed: string;
   apr: string;

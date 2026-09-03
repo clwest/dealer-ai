@@ -119,8 +119,12 @@ def get_bhph_note(
     Returns ``None`` when the pk doesn't exist or belongs to another
     tenant (fail-closed — the endpoint layer maps to 404).
     """
+    # SESSION_236 — select_related so the endpoint projection can
+    # render borrower_name + vehicle_display without extra queries.
     try:
-        return BhphNote.objects.get(pk=pk, dealership=dealership)
+        return BhphNote.objects.select_related(
+            "sale", "sale__buyer", "sale__vehicle"
+        ).get(pk=pk, dealership=dealership)
     except BhphNote.DoesNotExist:
         return None
 

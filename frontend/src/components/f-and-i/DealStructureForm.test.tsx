@@ -32,7 +32,9 @@ function fixtureCtx(
   return {
     deal_writeup_id: 42,
     written_up_by_user_id: 5,
+    written_up_by_name: "",
     sales_manager_approved_by_user_id: 5,
+    sales_manager_approved_by_name: "",
     handed_off_to_fandi_at: "2026-08-04T12:00:00Z",
     lead: {
       id: 100,

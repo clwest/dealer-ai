@@ -413,7 +413,17 @@ def list_credit_applications(
     ).order_by("-submitted_at", "-created_at", "-pk")
     qs = (
         CreditApplication.objects.filter(dealership=dealership)
-        .select_related("lead", "sale", "deal_writeup")
+        .select_related(
+            "lead",
+            "sale",
+            "deal_writeup",
+            # SESSION_236 — the intake row wants the written-up-by and
+            # approved-by *names*, not just the user ids.
+            "deal_writeup__written_up_by_user",
+            "deal_writeup__sales_manager_approved_by_user",
+            "deal_writeup__vehicle",
+            "deal_writeup__lead",
+        )
         .annotate(
             has_deal_structure=Exists(tenant_deal_structures),
             latest_deal_structure_id=Subquery(

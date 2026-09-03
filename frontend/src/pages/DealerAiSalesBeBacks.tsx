@@ -32,8 +32,10 @@ import {
   markBeBackNoShow,
   markBeBackReturned,
   type BeBackProjection,
+  type BeBackReason,
   type BeBackState,
 } from "@/lib/salesApi";
+import { formatDateTime, plural } from "@/lib/text";
 
 type StateFilter = "" | BeBackState;
 
@@ -43,6 +45,21 @@ const STATE_OPTIONS: Array<{ value: StateFilter; label: string }> = [
   { value: "returned", label: "Returned" },
   { value: "no_show", label: "No-show" },
 ];
+
+// SESSION_236 — enums no longer render raw; the operator sees
+// "No-show" instead of `no_show`. See TASK_names-and-money.md part 3.
+const BE_BACK_STATE_LABELS: Record<BeBackState, string> = {
+  promised: "Promised",
+  returned: "Returned",
+  no_show: "No-show",
+};
+
+const BE_BACK_REASON_LABELS: Record<BeBackReason, string> = {
+  test_drive: "Test drive",
+  bring_co_signer: "Bring co-signer",
+  bring_trade_in: "Bring trade-in",
+  other: "Other",
+};
 
 export default function DealerAiSalesBeBacks() {
   const [beBacks, setBeBacks] = useState<BeBackProjection[]>([]);
@@ -160,7 +177,7 @@ export default function DealerAiSalesBeBacks() {
       {loadState === "ready" && beBacks.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>{beBacks.length} be-backs</CardTitle>
+            <CardTitle>{plural(beBacks.length, "be-back")}</CardTitle>
           </CardHeader>
           <CardContent>
             <table className="w-full text-sm">
@@ -177,15 +194,29 @@ export default function DealerAiSalesBeBacks() {
               <tbody>
                 {beBacks.map((bb) => (
                   <tr key={bb.id} className="border-b last:border-0">
-                    <td className="py-2">#{bb.lead_id}</td>
                     <td className="py-2">
-                      {new Date(bb.promised_at).toLocaleString()}
+                      <div className="font-medium">
+                        {bb.lead_name || `#${bb.lead_id}`}
+                      </div>
+                      {bb.lead_phone && (
+                        <div className="text-xs text-muted-foreground">
+                          {bb.lead_phone}
+                        </div>
+                      )}
                     </td>
-                    <td className="py-2">{bb.promised_reason}</td>
-                    <td className="py-2">{bb.state}</td>
+                    <td className="py-2">
+                      {formatDateTime(bb.promised_at)}
+                    </td>
+                    <td className="py-2">
+                      {BE_BACK_REASON_LABELS[bb.promised_reason] ??
+                        bb.promised_reason}
+                    </td>
+                    <td className="py-2">
+                      {BE_BACK_STATE_LABELS[bb.state] ?? bb.state}
+                    </td>
                     <td className="py-2 text-muted-foreground">
                       {bb.actual_return_at
-                        ? new Date(bb.actual_return_at).toLocaleString()
+                        ? formatDateTime(bb.actual_return_at)
                         : "—"}
                     </td>
                     <td className="py-2 text-right">

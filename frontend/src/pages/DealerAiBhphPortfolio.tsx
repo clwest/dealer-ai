@@ -37,6 +37,7 @@ import {
   type BhphAnalyticsSummary,
   type BhphNoteProjection,
 } from "@/lib/bhphApi";
+import { plural } from "@/lib/text";
 
 
 const BUCKET_LABELS: Record<string, string> = {
@@ -80,7 +81,11 @@ function formatDaysPastDue(raw: string | null): string {
 
 function formatApr(raw: string | null): string {
   if (raw === null) return "—";
-  return `${raw}%`;
+  // SESSION_236 — the walk called out `14.9000%` on the proposed-
+  // structure card. Force two decimals for every APR we render.
+  const value = Number(raw);
+  if (Number.isNaN(value)) return `${raw}%`;
+  return `${value.toFixed(2)}%`;
 }
 
 
@@ -202,7 +207,7 @@ export default function DealerAiBhphPortfolio() {
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <CardTitle>Notes ({notes.length})</CardTitle>
+                    <CardTitle>{plural(notes.length, "note")}</CardTitle>
                     <CardDescription>
                       Up to 100 most recently originated notes.
                     </CardDescription>
@@ -227,7 +232,8 @@ export default function DealerAiBhphPortfolio() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left">
-                        <th className="py-2">ID</th>
+                        <th className="py-2">Note</th>
+                        <th className="py-2">Borrower · Vehicle</th>
                         <th className="py-2">Principal</th>
                         <th className="py-2">APR</th>
                         <th className="py-2">Cadence</th>
@@ -239,11 +245,22 @@ export default function DealerAiBhphPortfolio() {
                     <tbody>
                       {notes.map((note) => (
                         <tr key={note.id} className="border-b border-border">
-                          <td className="py-2">{note.id}</td>
+                          <td className="py-2">#{note.id}</td>
+                          <td className="py-2">
+                            <div className="font-medium">
+                              {note.borrower_name || "—"}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {note.vehicle_display ||
+                                (note.stock_number
+                                  ? `#${note.stock_number}`
+                                  : `sale #${note.sale_id}`)}
+                            </div>
+                          </td>
                           <td className="py-2">
                             {formatMoney(note.principal_financed)}
                           </td>
-                          <td className="py-2">{note.apr}%</td>
+                          <td className="py-2">{formatApr(note.apr)}</td>
                           <td className="py-2">{note.payment_frequency}</td>
                           <td className="py-2">
                             {BUCKET_LABELS[note.current_bucket] ?? note.current_bucket}

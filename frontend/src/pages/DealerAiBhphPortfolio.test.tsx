@@ -58,6 +58,9 @@ function makeNote(
   return {
     id: 1,
     sale_id: 100,
+    borrower_name: "",
+    vehicle_display: "",
+    stock_number: "",
     dealership_id: 1,
     principal_financed: "8000.00",
     apr: "21.90",
@@ -146,7 +149,7 @@ describe("DealerAiBhphPortfolio", () => {
 
   it("renders a row per note", async () => {
     await renderPage();
-    expect(screen.getByText("Notes (2)")).toBeInTheDocument();
+    expect(screen.getByText("2 notes")).toBeInTheDocument();
     const viewLinks = screen.getAllByRole("link", { name: /view/i });
     expect(viewLinks).toHaveLength(2);
   });

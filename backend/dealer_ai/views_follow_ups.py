@@ -106,9 +106,28 @@ def _project_cadence(cadence: FollowUpCadence) -> dict:
 
 
 def _project_task(task: FollowUpTask) -> dict:
+    # SESSION_236 — the follow-up queue is the operator's daily
+    # work-list, so the row needs a person's name and a car, not
+    # "#12 · #7". Requires the caller to `select_related` on
+    # cadence + cadence__lead; the vehicle_display is derived from
+    # the lead's most-recent interested_vehicles entry (the sales
+    # follow-up conversation is per-lead, not per-car, so the
+    # freshest interest is the best answer we can give without
+    # widening the schema — flagged, not stored).
+    cadence = getattr(task, "cadence", None)
+    lead = getattr(cadence, "lead", None) if cadence is not None else None
+    vehicle_display = ""
+    if lead is not None:
+        first = lead.interested_vehicles.order_by("-id").first()
+        if first is not None:
+            vehicle_display = first.vehicle_display
     return {
         "id": task.pk,
         "cadence_id": task.cadence_id,
+        "lead_id": lead.pk if lead is not None else None,
+        "lead_name": lead.name if lead is not None else "",
+        "lead_phone": lead.phone if lead is not None else "",
+        "vehicle_display": vehicle_display,
         "dealership_id": task.dealership_id,
         "due_at": task.due_at.isoformat(),
         "state": task.state,
@@ -241,8 +260,10 @@ def admin_follow_up_task_list(request):
     - ``limit`` — cap results (default 50, max 200).
     """
     dealership = get_current_dealership(request)
+    # SESSION_236 — pull cadence__lead so `_project_task` can render
+    # the lead's name and phone without a per-row query.
     qs = FollowUpTask.objects.filter(dealership=dealership).select_related(
-        "cadence"
+        "cadence", "cadence__lead"
     )
 
     state = (request.query_params.get("state") or "").strip()

@@ -27,6 +27,9 @@ function makeNote(
   return {
     id: 1,
     sale_id: 42,
+    borrower_name: "",
+    vehicle_display: "",
+    stock_number: "",
     dealership_id: 1,
     principal_financed: "5000.00",
     apr: "18.50",
