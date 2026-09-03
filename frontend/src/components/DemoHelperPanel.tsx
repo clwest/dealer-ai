@@ -19,18 +19,18 @@ interface Props {
 
 export const DEMO_PROMPTS: { label: string; prompt: string }[] = [
   {
-    label: "Budget mismatch — $500/mo on a $78k truck",
+    label: "Budget mismatch — $500/mo on a $30k truck",
     prompt:
-      "I want a new F-150 Lariat but I'm targeting $500/month with no money down. What can you do?",
+      "I want a used truck but I'm targeting $500/month with no money down. What can you do?",
   },
   {
-    label: "Used SUV under $30k",
-    prompt: "I need a used SUV under $30k for my family.",
+    label: "Used SUV under $18k",
+    prompt: "I need a used SUV under $18k for my family.",
   },
   {
     label: "Trade-in + fair credit",
     prompt:
-      "I have a 2018 Escape to trade in for a used truck. My credit is fair. What are my options?",
+      "I have an SUV to trade in for a used truck. My credit is fair. What are my options?",
   },
   {
     label: "Family + camper towing",
@@ -39,7 +39,7 @@ export const DEMO_PROMPTS: { label: string; prompt: string }[] = [
   },
   {
     label: "Service / oil change",
-    prompt: "Do you have affordable service or oil change options for a 2019 F-150?",
+    prompt: "Do you have affordable service or oil change options for a used truck?",
   },
 ];
 

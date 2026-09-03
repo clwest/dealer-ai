@@ -31,31 +31,33 @@ const TRUST_POINTS = [
   { label: "No pressure", icon: Sparkles },
 ];
 
-const INTENT_CHIPS = [
-  "Truck under $30k",
+const FALLBACK_INTENT_CHIPS = [
   "Family SUV",
-  "$400/mo sedan",
-  "F-150 with tow package",
+  "Good on gas under $12k",
   "Trade-in value",
 ];
 
 export default function Hero() {
   const brand = useBrand();
   const [heroVehicle, setHeroVehicle] = useState<ShowroomVehicle | null>(null);
+  const [chips, setChips] = useState<string[]>(FALLBACK_INTENT_CHIPS);
 
   useEffect(() => {
     let cancelled = false;
-    // Pull one vehicle just past the first-three teaser slots (offset
-    // 5) so the hero and the DealershipHomePage InventoryTeaser row
-    // don't feature the same vehicle. Failure = no hero card, which
-    // is fine: the section still reads as a hero pitch.
-    listShowroomVehicles({ limit: 1, offset: 5 })
-      .then((response) => {
+    // Pull a broad enough sample to derive both the featured vehicle
+    // and store-shaped chips. offset=5 keeps the featured slot from
+    // colliding with the DealershipHomePage InventoryTeaser row.
+    Promise.all([
+      listShowroomVehicles({ limit: 1, offset: 5 }),
+      listShowroomVehicles({ limit: 50, offset: 0 }),
+    ])
+      .then(([featuredResp, sampleResp]) => {
         if (cancelled) return;
-        setHeroVehicle(response.results[0] ?? null);
+        setHeroVehicle(featuredResp.results[0] ?? null);
+        setChips(deriveIntentChips(sampleResp.results));
       })
       .catch(() => {
-        /* silent — hero degrades to no-vehicle mode. */
+        /* silent — hero degrades to no-vehicle mode + fallback chips. */
       });
     return () => {
       cancelled = true;
@@ -126,7 +128,7 @@ export default function Hero() {
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            {INTENT_CHIPS.map((chip) => (
+            {chips.map((chip) => (
               <Link
                 key={chip}
                 to={`/assistant?prompt=${encodeURIComponent(chip)}`}
@@ -154,6 +156,40 @@ export default function Hero() {
       </div>
     </section>
   );
+}
+
+function roundUpTo(value: number, step: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.ceil(value / step) * step;
+}
+
+function formatUnderPrice(maxPrice: number): string {
+  const rounded = roundUpTo(maxPrice, 1000);
+  return `$${(rounded / 1000).toFixed(0)}k`;
+}
+
+function deriveIntentChips(sample: ShowroomVehicle[]): string[] {
+  if (sample.length === 0) return FALLBACK_INTENT_CHIPS;
+  const priceOf = (v: ShowroomVehicle) => Number.parseFloat(v.price) || 0;
+  const trucks = sample.filter((v) => v.body_style === "truck");
+  const cars = sample.filter(
+    (v) => v.body_style === "car" || v.body_style === "ev",
+  );
+  const suvs = sample.filter((v) => v.body_style === "suv");
+  const chips: string[] = [];
+  if (trucks.length > 0) {
+    const cap = Math.max(...trucks.map(priceOf));
+    chips.push(`Truck under ${formatUnderPrice(cap)}`);
+  }
+  if (suvs.length > 0) {
+    chips.push("Family SUV");
+  }
+  if (cars.length > 0) {
+    const cap = Math.max(...cars.map(priceOf));
+    chips.push(`Good on gas under ${formatUnderPrice(cap)}`);
+  }
+  chips.push("Trade-in value");
+  return chips.length > 0 ? chips : FALLBACK_INTENT_CHIPS;
 }
 
 function HeroVisual({
@@ -189,29 +225,38 @@ function HeroVisual({
         <div className="space-y-3 px-4 py-5">
           <ChatRow
             who="user"
-            text="I need a truck under $400/mo with good gas mileage."
-          />
-          <ChatRow
-            who="ai"
-            text="Got it. With $2,500 down at 72mo, here are 3 trucks that match — a Maverick Hybrid lands you at $341/mo on the lot today."
+            text="I want something reliable under my budget."
           />
           {featured ? (
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-white/50">
-                Match · in budget
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-white">
-                {featured.display_name}
-              </div>
-              <div className="mt-1 flex items-center justify-between text-xs text-white/70">
-                <span>Stock #{featured.stock_number}</span>
-                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+            <>
+              <ChatRow
+                who="ai"
+                text={`Take a look at this one on the lot today — ${featured.display_name} at ${formatFeaturedPrice(
+                  featured.price,
+                )}.`}
+              />
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-white/50">
                   From the lot
-                </span>
+                </div>
+                <div className="mt-0.5 text-sm font-semibold text-white">
+                  {featured.display_name}
+                </div>
+                <div className="mt-1 flex items-center justify-between text-xs text-white/70">
+                  <span>Stock #{featured.stock_number}</span>
+                  <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                    {formatFeaturedPrice(featured.price)}
+                  </span>
+                </div>
               </div>
-            </div>
-          ) : null}
-          <ChatRow who="user" text="What about with my 2018 Ranger as a trade?" />
+            </>
+          ) : (
+            <ChatRow
+              who="ai"
+              text="Tell me a monthly payment or a body style and I'll pull matches from what's on the lot right now."
+            />
+          )}
+          <ChatRow who="user" text="Can I bring my trade-in?" />
           <div className="flex justify-start">
             <div className="rounded-2xl rounded-bl-sm bg-white/10 px-3 py-2 text-xs text-white/80">
               <span className="inline-flex items-center gap-1">
@@ -225,6 +270,12 @@ function HeroVisual({
       </div>
     </div>
   );
+}
+
+function formatFeaturedPrice(raw: string): string {
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return `$${Math.round(value).toLocaleString()}`;
 }
 
 function ChatRow({ who, text }: { who: "user" | "ai"; text: string }) {

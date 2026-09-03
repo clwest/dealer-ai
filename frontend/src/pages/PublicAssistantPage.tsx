@@ -20,7 +20,7 @@ const DEFAULT_STARTERS = [
   "I need a 4WD truck around $500/mo with $3k down",
   "I have cash and want good gas mileage",
   "I need a family SUV with good gas mileage",
-  "Which vehicle would you show first?",
+  "Which vehicle on the lot would you show me first?",
 ];
 
 const INTENT_PROMPTS: Record<string, string> = {

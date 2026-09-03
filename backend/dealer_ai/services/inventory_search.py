@@ -3,6 +3,13 @@
 PGVector semantic search will replace the scoring step in V2. The
 public surface (`search_vehicles`) stays the same so the chat engine
 doesn't need to change.
+
+SESSION_232 — TASK_chat-vocabulary-from-inventory + TASK_de-ford-the-kit:
+the vocabulary the parser uses for make/model/body_style/drivetrain
+comes from the dealership's own visible inventory, not a hardcoded
+Ford-franchise map. Generic body-style / condition / drivetrain tokens
+stay in :data:`GENERIC_TOKEN_SIGNALS` — a store with zero EVs still
+gets "electric" parsed correctly (to the honest empty result).
 """
 
 from __future__ import annotations
@@ -10,39 +17,53 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
+from django.core.cache import cache
 from django.db.models import Q
 
 from ..models import Vehicle
 
 
-# Hint vocabulary mapped to model/body-style/feature signals.
-KEYWORD_SIGNALS = {
+# Generic tokens that never depend on a specific store's inventory.
+# Split off from the old KEYWORD_SIGNALS so nobody re-adds a model
+# name here — the name is intentionally not "KEYWORD" anything.
+GENERIC_TOKEN_SIGNALS: Dict[str, Dict[str, str]] = {
     "truck": {"body_style": "truck"},
     "trucks": {"body_style": "truck"},
     "pickup": {"body_style": "truck"},
-    "f-150": {"model_iexact": "F-150"},
-    "f150": {"model_iexact": "F-150"},
-    "ranger": {"model_iexact": "Ranger"},
-    "maverick": {"model_iexact": "Maverick"},
     "suv": {"body_style": "suv"},
-    "explorer": {"model_iexact": "Explorer"},
-    "escape": {"model_iexact": "Escape"},
-    "bronco": {"model_icontains": "Bronco"},
     "ev": {"body_style": "ev"},
     "electric": {"body_style": "ev"},
-    "mach-e": {"model_icontains": "Mach-E"},
-    "mache": {"model_icontains": "Mach-E"},
-    "mustang": {"model_icontains": "Mustang"},
+    "van": {"body_style": "van"},
+    "minivan": {"body_style": "van"},
+    "sedan": {"body_style": "car"},
+    "car": {"body_style": "car"},
     "used": {"condition": "used"},
     "pre-owned": {"condition": "used"},
     "preowned": {"condition": "used"},
     "new": {"condition": "new"},
     "certified": {"condition": "certified"},
+    "cpo": {"condition": "certified"},
     "4x4": {"drivetrain_icontains": "4"},
-    "awd": {"drivetrain_icontains": "AWD"},
     "4wd": {"drivetrain_icontains": "4"},
+    "awd": {"drivetrain_icontains": "AWD"},
+}
+
+
+# Small, brand-agnostic aliases a shopper is likely to type. The only
+# hardcoded proper-noun table in the module — no franchise vocabulary
+# lives here.
+_MAKE_ALIASES: Dict[str, str] = {
+    "chevy": "chevrolet",
+    "vw": "volkswagen",
+    "benz": "mercedes-benz",
+    "mercedes": "mercedes-benz",
+    "ram": "ram",
+    "dodge": "dodge",
+    "gmc": "gmc",
+    "mb": "mercedes-benz",
+    "bmw": "bmw",
 }
 
 
@@ -68,22 +89,113 @@ YEAR_PATTERN = re.compile(r"(20\d{2})\s*(?:or newer|\+)?", re.IGNORECASE)
 
 
 def _singular(token: str) -> str:
-    """Cheap plural strip — 'trucks' → 'truck', 'F-150s' → 'F-150', etc."""
+    """Cheap plural strip — 'trucks' → 'truck', 'silverados' → 'silverado'."""
     if len(token) > 3 and token.endswith("s") and not token.endswith("ss"):
         return token[:-1]
     return token
 
 
-def parse_filters(query: str) -> SearchFilters:
+def _normalise_model_token(token: str) -> str:
+    """Fold spaces / hyphens / cases so 'f150', 'f-150', 'f 150' collapse
+    to the same key; likewise 'cr-v'/'crv'/'cr v' → 'crv'."""
+    return re.sub(r"[\s\-]+", "", token.strip().lower())
+
+
+_VOCAB_CACHE_TTL_SECONDS = 300  # 5 minutes — the lot changes a few times a day.
+
+
+def inventory_vocabulary(dealership) -> Dict[str, Dict[str, str]]:
+    """Return a token → signal map built from ``dealership``'s
+    customer-visible vehicles.
+
+    - Every distinct ``make`` becomes a make-filter token, plus its
+      generic short forms in :data:`_MAKE_ALIASES`.
+    - Every distinct ``model`` becomes a ``model_iexact`` token, keyed
+      by :func:`_normalise_model_token` so "f-150", "f150", "F 150" all
+      hit the same row.
+    - Every distinct ``body_style`` and ``drivetrain`` value adds a
+      structural filter.
+
+    Cached per dealership for :data:`_VOCAB_CACHE_TTL_SECONDS`. The
+    cache key includes the dealership pk so multi-tenant queries never
+    see another store's vocabulary.
+    """
+    from .chat_engine import customer_visible_vehicles
+
+    cache_key = f"inventory_vocab:v1:{dealership.pk}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    vocab: Dict[str, Dict[str, str]] = {}
+
+    qs = customer_visible_vehicles().filter(dealership=dealership)
+    makes = {(m or "").strip() for m in qs.values_list("make", flat=True) if m}
+    models = {(m or "").strip() for m in qs.values_list("model", flat=True) if m}
+    body_styles = {
+        (b or "").strip()
+        for b in qs.values_list("body_style", flat=True)
+        if b
+    }
+    drivetrains = {
+        (d or "").strip()
+        for d in qs.values_list("drivetrain", flat=True)
+        if d
+    }
+
+    for make in makes:
+        key = make.lower()
+        vocab[key] = {"make": make}
+    for alias, canonical in _MAKE_ALIASES.items():
+        for make in makes:
+            if make.lower() == canonical:
+                vocab[alias] = {"make": make}
+                break
+
+    for model_value in models:
+        key = _normalise_model_token(model_value)
+        if key:
+            vocab[key] = {"model_iexact": model_value}
+
+    for body in body_styles:
+        vocab[body.lower()] = {"body_style": body}
+
+    for drivetrain in drivetrains:
+        vocab[drivetrain.lower()] = {"drivetrain_icontains": drivetrain}
+
+    cache.set(cache_key, vocab, timeout=_VOCAB_CACHE_TTL_SECONDS)
+    return vocab
+
+
+def invalidate_inventory_vocabulary(dealership_pk: int) -> None:
+    """Clear the per-dealership vocabulary cache — called from a
+    ``post_save`` signal so a newly imported Silverado is searchable
+    on the next turn instead of five minutes later."""
+    cache.delete(f"inventory_vocab:v1:{dealership_pk}")
+
+
+def _resolve_dealership(dealership=None):
+    if dealership is not None:
+        return dealership
+    from .tenancy import get_default_dealership
+
+    return get_default_dealership()
+
+
+def parse_filters(query: str, dealership=None) -> SearchFilters:
+    dealership = _resolve_dealership(dealership)
+    vocab = inventory_vocabulary(dealership)
+
     q = query.lower()
     raw_keywords = re.findall(r"[a-zA-Z0-9\-]+", q)
     # Keep both forms so structural lookups can hit the plural OR singular.
     keywords = list({k for kw in raw_keywords for k in (kw, _singular(kw))})
+    normalised_keywords = {_normalise_model_token(k) for k in keywords}
 
     filters = SearchFilters(keywords=keywords)
 
-    for token in keywords:
-        signal = KEYWORD_SIGNALS.get(token)
+    for token in list(keywords) + list(normalised_keywords):
+        signal = GENERIC_TOKEN_SIGNALS.get(token) or vocab.get(token)
         if not signal:
             continue
         if "body_style" in signal:
@@ -96,6 +208,8 @@ def parse_filters(query: str) -> SearchFilters:
             filters.model_contains = signal["model_icontains"]
         if "drivetrain_icontains" in signal:
             filters.drivetrain_contains = signal["drivetrain_icontains"]
+        if "make" in signal:
+            filters.make = signal["make"]
 
     for pattern in PRICE_PATTERNS:
         m = pattern.search(query)
@@ -120,12 +234,14 @@ def parse_filters(query: str) -> SearchFilters:
     return filters
 
 
-def _build_queryset(filters: SearchFilters):
+def _build_queryset(filters: SearchFilters, dealership=None):
     # Item 13 — exclude debug / test vehicles from customer-facing
     # search. Sourced from chat_engine.customer_visible_vehicles()
     # so the filter pattern stays in one place.
     from .chat_engine import customer_visible_vehicles
     qs = customer_visible_vehicles()
+    if dealership is not None:
+        qs = qs.filter(dealership=dealership)
 
     if filters.body_style:
         qs = qs.filter(body_style=filters.body_style)
@@ -167,6 +283,7 @@ def search_vehicles(
     limit: int = 5,
     max_price: Optional[float] = None,
     make: Optional[str] = None,
+    dealership=None,
 ) -> List[Vehicle]:
     """Return up to `limit` vehicles best matching the natural-language query.
 
@@ -181,9 +298,15 @@ def search_vehicles(
     brands. When ``DealerProfile.primary_make`` is set (franchise
     config), that brand's vehicles rank first; independent-dealer
     default has no OEM ranking bias.
+
+    ``dealership`` is resolved via :func:`_resolve_dealership` when the
+    caller omits it — the single-tenant default keeps the public
+    signature stable while the vocabulary and queryset stay
+    tenant-scoped.
     """
     from .dealer_config import get_dealer_profile
 
+    dealership = _resolve_dealership(dealership)
     primary_make_lc = (get_dealer_profile().primary_make or "").strip().lower()
 
     # Primary-make-first ordering (dealership preference). Postgres and
@@ -210,7 +333,7 @@ def search_vehicles(
     if not query or not query.strip():
         # Item 13 — exclude debug / test vehicles.
         from .chat_engine import customer_visible_vehicles
-        qs = customer_visible_vehicles()
+        qs = customer_visible_vehicles().filter(dealership=dealership)
         if max_price is not None:
             qs = qs.filter(price__lte=Decimal(str(max_price)))
         if make:
@@ -218,7 +341,7 @@ def search_vehicles(
         candidates = list(qs.order_by("-year", "price")[: limit * 4])
         return _final_order(candidates)[:limit]
 
-    filters = parse_filters(query)
+    filters = parse_filters(query, dealership=dealership)
     if max_price is not None:
         filters.max_price = (
             min(filters.max_price, max_price)
@@ -228,7 +351,7 @@ def search_vehicles(
     if make:
         filters.make = make
 
-    qs = _build_queryset(filters)
+    qs = _build_queryset(filters, dealership=dealership)
     results = list(qs.order_by("-year", "price")[: limit * 2])
 
     if not results:
@@ -246,7 +369,10 @@ def search_vehicles(
             min_year=filters.min_year,
             make=filters.make,
         )
-        results = list(_build_queryset(loose).order_by("-year", "price")[:limit])
+        results = list(
+            _build_queryset(loose, dealership=dealership)
+            .order_by("-year", "price")[:limit]
+        )
 
     reranked = _rerank(results, filters.keywords)
     return _final_order(reranked)[:limit]

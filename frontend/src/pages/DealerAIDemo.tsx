@@ -251,7 +251,7 @@ export default function DealerAIDemo() {
               className="input flex-1"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about an F-150, payments, comparisons…"
+              placeholder="Ask about a vehicle, payments, comparisons…"
               disabled={sending || starting}
             />
             <button

@@ -20,6 +20,8 @@ export interface ShowroomVehicle {
   model: string;
   trim: string;
   condition: ShowroomCondition | string;
+  /** "truck" | "suv" | "car" | "ev" | "van". */
+  body_style: string;
   drivetrain: string;
   fuel_type: string;
   exterior_color: string;

@@ -101,6 +101,11 @@ from ..synthetic_data import (
     synthetic_phone,
     synthetic_vin,
 )
+from ..vehicle_presentation import (
+    derive_drivetrain,
+    derive_exterior_color,
+    derive_image_url,
+)
 from ..synthetic_names import SYNTHETIC_NAMES
 from .base import ArchetypeBuilder
 
@@ -389,6 +394,14 @@ def _seed_inventory(
             mileage=int(spec["mileage"]),
             price=Decimal(spec["price"]),
             fuel_type="Gasoline",
+            drivetrain=derive_drivetrain(
+                stock=stock,
+                trim=spec["trim"],
+                model=spec["model"],
+                body_style=spec["body"],
+            ),
+            exterior_color=derive_exterior_color(stock=stock),
+            image_url=derive_image_url(body_style=spec["body"]),
             source=f"demo-{_ARCHETYPE}",
             imported_at=now,
         )

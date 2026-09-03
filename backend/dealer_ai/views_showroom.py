@@ -143,6 +143,7 @@ def _project_showroom_row(vehicle) -> dict:
         "model": vehicle.model,
         "trim": vehicle.trim or "",
         "condition": vehicle.condition,
+        "body_style": vehicle.body_style,
         "drivetrain": vehicle.drivetrain or "",
         "fuel_type": vehicle.fuel_type or "",
         "exterior_color": vehicle.exterior_color or "",

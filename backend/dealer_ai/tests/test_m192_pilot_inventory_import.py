@@ -475,7 +475,10 @@ class CsvEdgeCaseTests(TestCase):
             csv_source=StringIO(csv_text),
         )
         v = Vehicle.objects.get(stock_number="DEF-1")
-        self.assertEqual(v.make, "Ford")  # M6.3 default
+        # SESSION_232 — TASK_de-ford-the-kit: the M6.3 Ford fallback
+        # was removed. Blank ``make`` stays blank rather than
+        # mis-branding rows the CSV intentionally left empty.
+        self.assertEqual(v.make, "")
         self.assertEqual(v.fuel_type, "Gasoline")
         self.assertEqual(v.body_style, "suv")
         self.assertEqual(v.condition, "used")

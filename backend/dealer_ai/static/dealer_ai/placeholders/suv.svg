@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-label="SUV photo placeholder">
+  <rect width="480" height="300" fill="#e5e7eb"/>
+  <rect y="228" width="480" height="6" fill="#9ca3af"/>
+  <g fill="#4b5563">
+    <path d="M50 220 L80 150 L160 132 L310 132 L370 168 L420 190 L430 220 Z"/>
+    <path d="M90 152 L155 152 L165 138 L215 138 Z" fill="#9ca3af"/>
+    <path d="M225 138 L295 138 L315 156 L165 156 Z" fill="#9ca3af"/>
+    <path d="M305 156 L360 168 L360 188 L305 188 Z" fill="#9ca3af"/>
+  </g>
+  <circle cx="130" cy="228" r="30" fill="#111827"/>
+  <circle cx="130" cy="228" r="12" fill="#6b7280"/>
+  <circle cx="360" cy="228" r="30" fill="#111827"/>
+  <circle cx="360" cy="228" r="12" fill="#6b7280"/>
+  <text x="240" y="280" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#6b7280">photo coming soon</text>
+</svg>

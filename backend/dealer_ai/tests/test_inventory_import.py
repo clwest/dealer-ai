@@ -45,7 +45,11 @@ class ParseRowTests(TestCase):
         self.assertEqual(cleaned["year"], 2024)
         self.assertEqual(cleaned["model"], "F-150")
         self.assertEqual(cleaned["price"], Decimal("55000"))
-        self.assertEqual(cleaned["make"], "Ford")  # default
+        # SESSION_232 — TASK_de-ford-the-kit: import no longer falls back
+        # to "Ford" for a blank make column. Multi-tenant callers own the
+        # make; leaving it blank surfaces the CSV problem instead of
+        # silently mis-branding rows.
+        self.assertEqual(cleaned["make"], "")
         self.assertEqual(cleaned["fuel_type"], "Gasoline")  # default
         self.assertEqual(cleaned["body_style"], "suv")  # default
 

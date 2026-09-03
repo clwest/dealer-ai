@@ -27,14 +27,14 @@ import { formatCurrency } from "@/lib/utils";
 
 type FilterKey = "all" | ShowroomCondition | "hybrid" | "awd";
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "new", label: "New" },
-  { key: "used", label: "Used" },
-  { key: "certified", label: "Certified" },
-  { key: "hybrid", label: "Hybrid" },
-  { key: "awd", label: "AWD / 4WD" },
-];
+const FILTER_LABELS: Record<FilterKey, string> = {
+  all: "All",
+  new: "New",
+  used: "Used",
+  certified: "Certified",
+  hybrid: "Hybrid",
+  awd: "AWD / 4WD",
+};
 
 const CONDITION_LABEL: Record<string, string> = {
   new: "New",
@@ -93,6 +93,20 @@ export default function PublicShowroomPage() {
     });
   }, [filter, inventory, query]);
 
+  const availableFilters = useMemo<FilterKey[]>(() => {
+    if (inventory.length === 0) return ["all"];
+    const conditions = new Set(inventory.map((v) => String(v.condition).toLowerCase()));
+    const hasHybrid = inventory.some((v) => v.fuel_type.toLowerCase().includes("hybrid"));
+    const hasAwd = inventory.some((v) => /awd|4wd|4×4|4x4/i.test(v.drivetrain));
+    const order: FilterKey[] = ["all", "new", "used", "certified", "hybrid", "awd"];
+    return order.filter((key) => {
+      if (key === "all") return true;
+      if (key === "hybrid") return hasHybrid;
+      if (key === "awd") return hasAwd;
+      return conditions.has(key);
+    });
+  }, [inventory]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteNav />
@@ -124,21 +138,21 @@ export default function PublicShowroomPage() {
                   />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {FILTERS.map((item) => (
+                  {availableFilters.map((key) => (
                     <button
-                      key={item.key}
+                      key={key}
                       type="button"
-                      onClick={() => setFilter(item.key)}
+                      onClick={() => setFilter(key)}
                       className={
-                        item.key === filter
+                        key === filter
                           ? "inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground"
                           : "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
                       }
                     >
-                      {item.key === "all" ? (
+                      {key === "all" ? (
                         <SlidersHorizontal className="h-3.5 w-3.5" />
                       ) : null}
-                      {item.label}
+                      {FILTER_LABELS[key]}
                     </button>
                   ))}
                 </div>
@@ -271,10 +285,7 @@ function ShowroomCard({ vehicle }: { vehicle: ShowroomVehicle }) {
               </a>
             </Button>
           ) : (
-            <span className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground">
-              <ExternalLink className="h-3.5 w-3.5" />
-              No VDP yet
-            </span>
+            <span aria-hidden />
           )}
           <Button asChild size="sm" className="gap-1.5">
             <Link

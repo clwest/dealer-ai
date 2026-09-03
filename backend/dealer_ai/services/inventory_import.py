@@ -214,7 +214,7 @@ def parse_row(raw: Dict[str, Any], *, line: int) -> Tuple[Optional[Dict[str, Any
     mileage = _parse_int(raw.get("mileage")) or 0
     cleaned["mileage"] = max(0, mileage)
 
-    cleaned["make"] = _clean(raw.get("make")) or "Ford"
+    cleaned["make"] = _clean(raw.get("make"))
     cleaned["trim"] = _clean(raw.get("trim"))
     cleaned["body_style"] = _normalize_body_style(raw.get("body_style")) or "suv"
     cleaned["condition"] = _normalize_condition(raw.get("condition"))

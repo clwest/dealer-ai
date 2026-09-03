@@ -5812,7 +5812,9 @@ class ChatEngine:
             # the malicious / sensitive text. Inventory search still runs on
             # the raw text since it's a deterministic ORM query, so the
             # customer still gets useful matches alongside the refusal.
-            matched = search_vehicles(user_text, limit=5)
+            matched = search_vehicles(
+                user_text, limit=5, dealership=self.session.dealership
+            )
             assistant_msg = ChatMessage.objects.create(
                 session=self.session,
                 role="assistant",
@@ -5835,7 +5837,9 @@ class ChatEngine:
         # Rate-inquiry short-circuit: questions like "what APR do I qualify
         # for" must not reach the LLM — return the compliant canned response.
         if detect_rate_inquiry(user_text):
-            matched = search_vehicles(user_text, limit=5)
+            matched = search_vehicles(
+                user_text, limit=5, dealership=self.session.dealership
+            )
             assistant_msg = ChatMessage.objects.create(
                 session=self.session,
                 role="assistant",
@@ -5859,7 +5863,9 @@ class ChatEngine:
         # has been observed hallucinating numbers for these — refuse before
         # any model call so no fabricated figure reaches the customer.
         if detect_external_value_inquiry(user_text):
-            matched = search_vehicles(user_text, limit=5)
+            matched = search_vehicles(
+                user_text, limit=5, dealership=self.session.dealership
+            )
             assistant_msg = ChatMessage.objects.create(
                 session=self.session,
                 role="assistant",
@@ -6323,6 +6329,7 @@ class ChatEngine:
                     limit=5,
                     make=locked_make,
                     max_price=profile_max_price,
+                    dealership=self.session.dealership,
                 )
 
             inventory_block = _format_vehicle_block(matched, budget_mode=budget_mode)

@@ -130,6 +130,11 @@ from dealer_ai.services.demo_store.registry import (
     reset_demo_store,
 )
 from dealer_ai.services.demo_store.synthetic_data import synthetic_email
+from dealer_ai.services.demo_store.vehicle_presentation import (
+    derive_drivetrain,
+    derive_exterior_color,
+    derive_image_url,
+)
 from dealer_ai.services.inventory_import import import_rows
 from dealer_ai.services.f_and_i.contract import record_contract, sign_contract
 from dealer_ai.services.f_and_i.credit_application import (
@@ -2306,8 +2311,15 @@ def _synthesise_expansion_rows(
                     "mileage": str(mileage),
                     "body_style": tpl["body_style"],
                     "fuel_type": "Gasoline",
+                    "drivetrain": derive_drivetrain(
+                        stock=stock,
+                        trim=tpl["trim"],
+                        model=tpl["model"],
+                        body_style=tpl["body_style"],
+                    ),
+                    "exterior_color": derive_exterior_color(stock=stock),
                     "url": "",
-                    "image_url": "",
+                    "image_url": derive_image_url(body_style=tpl["body_style"]),
                     "features": "",
                 },
             )

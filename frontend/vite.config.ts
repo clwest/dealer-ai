@@ -60,6 +60,10 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true,
         },
+        "/static": {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
       },
     },
     // Mirror the dev-server proxy on the preview server so the built
@@ -71,6 +75,10 @@ export default defineConfig(({ mode }) => {
       port: 4173,
       proxy: {
         "/api": {
+          target: proxyTarget,
+          changeOrigin: true,
+        },
+        "/static": {
           target: proxyTarget,
           changeOrigin: true,
         },

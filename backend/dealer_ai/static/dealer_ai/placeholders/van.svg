@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-label="Van photo placeholder">
+  <rect width="480" height="300" fill="#e5e7eb"/>
+  <rect y="228" width="480" height="6" fill="#9ca3af"/>
+  <g fill="#4b5563">
+    <path d="M50 220 L80 140 L110 122 L390 122 L420 156 L430 220 Z"/>
+    <path d="M100 140 L155 140 L165 128 L200 128 Z" fill="#9ca3af"/>
+    <path d="M215 128 L280 128 L295 148 L165 148 Z" fill="#9ca3af"/>
+    <path d="M305 128 L370 128 L400 148 L305 148 Z" fill="#9ca3af"/>
+  </g>
+  <circle cx="130" cy="228" r="30" fill="#111827"/>
+  <circle cx="130" cy="228" r="12" fill="#6b7280"/>
+  <circle cx="365" cy="228" r="30" fill="#111827"/>
+  <circle cx="365" cy="228" r="12" fill="#6b7280"/>
+  <text x="240" y="280" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#6b7280">photo coming soon</text>
+</svg>

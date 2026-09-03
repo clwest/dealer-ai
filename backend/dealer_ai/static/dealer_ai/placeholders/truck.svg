@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" role="img" aria-label="Truck photo placeholder">
+  <rect width="480" height="300" fill="#e5e7eb"/>
+  <rect y="228" width="480" height="6" fill="#9ca3af"/>
+  <g fill="#4b5563">
+    <path d="M40 220 L60 172 L160 142 L240 142 L250 178 L440 178 L440 220 Z"/>
+    <path d="M75 172 L155 172 L165 154 L215 154 Z" fill="#9ca3af"/>
+    <path d="M225 154 L245 154 L245 172 L165 172 Z" fill="#9ca3af"/>
+    <rect x="250" y="184" width="180" height="34" fill="#6b7280"/>
+  </g>
+  <circle cx="120" cy="228" r="30" fill="#111827"/>
+  <circle cx="120" cy="228" r="12" fill="#6b7280"/>
+  <circle cx="370" cy="228" r="30" fill="#111827"/>
+  <circle cx="370" cy="228" r="12" fill="#6b7280"/>
+  <text x="240" y="280" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#6b7280">photo coming soon</text>
+</svg>

@@ -16,11 +16,11 @@ import { Button } from "@/components/ui/button";
 import { useBrand } from "@/lib/brand";
 
 const HOMEPAGE_STARTERS = [
-  "I need a truck under $30k",
+  "I need a truck around my budget",
   "Family SUV with good gas mileage",
   "I have $400/mo and want a sedan",
-  "F-150 with tow package",
-  "What's my 2018 Ranger worth on trade?",
+  "Good on gas for a daily commute",
+  "What's my trade worth toward one of these?",
 ];
 
 export default function AssistantBand() {
