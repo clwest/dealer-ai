@@ -138,7 +138,14 @@ class VerbAsOfDefaultsToToday(TestCase):
         _seed_acquisition(vehicle, self.default, thirty_days_ago)
 
     def test_as_of_none_uses_today(self):
-        today = timezone.now().date()
+        # SESSION_240 — the verb's default ``as_of`` is now the
+        # STORE's calendar day (``store_today``), which for the
+        # default America/Chicago dealership is Chicago's date. Old
+        # ``timezone.now().date()`` returned the UTC-truncated date,
+        # which could differ by a day for UTC-morning runs.
+        from dealer_ai.services.store_time import store_today
+
+        today = store_today(self.default)
         summary = accrue_daily_interest(self.default)
         self.assertEqual(summary.as_of, today)
 

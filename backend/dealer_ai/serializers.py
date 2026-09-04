@@ -509,6 +509,11 @@ ONBOARDING_DEFAULTS: dict = {
     # the payment_engine constants (4.5% / $599).
     "sales_tax_rate_pct": None,
     "doc_fees": None,
+    # SESSION_240 — the store's IANA time zone lives on the Dealership
+    # row; expose the project default so the onboarding page's initial
+    # render has a sensible selection even for a store that never
+    # saved a profile.
+    "dealership_timezone": "America/Chicago",
 }
 
 
@@ -554,12 +559,43 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
     dealership_slug = serializers.CharField(
         source="dealership.slug", read_only=True
     )
+    # SESSION_240 (walk finding 28) — the store's IANA time zone lives
+    # on the Dealership row (one clock per store; every business-day
+    # decision consumes it). Exposed on the profile serializer so the
+    # onboarding page can edit it alongside the store address.
+    #
+    # Deliberately NOT ``source="dealership.timezone"``: the view calls
+    # ``serializer.save(dealership=<instance>)`` for new-profile
+    # creation, and DRF's ``save()`` merges kwargs into
+    # ``validated_data`` — a nested-source field would produce
+    # ``validated_data["dealership"] = {"timezone": "..."}`` and then
+    # get clobbered by the kwarg to ``<Dealership instance>``, losing
+    # the timezone. Plain field + explicit persist in ``create()`` /
+    # ``update()`` sidesteps that.
+    dealership_timezone = serializers.CharField(
+        required=False, allow_blank=True
+    )
+    dealership_local_now = serializers.SerializerMethodField()
     readiness = serializers.SerializerMethodField()
+
+    def to_representation(self, instance):
+        # SESSION_240 — echo the related Dealership's zone on GET even
+        # though the field is not source-nested. Kept as a
+        # ``to_representation`` override rather than a
+        # ``SerializerMethodField`` so the field name stays writable
+        # on PATCH / PUT.
+        data = super().to_representation(instance)
+        data["dealership_timezone"] = (
+            instance.dealership.timezone or "America/Chicago"
+        )
+        return data
 
     class Meta:
         model = DealerOnboardingProfile
         fields = [
             "dealership_slug",
+            "dealership_timezone",
+            "dealership_local_now",
             "readiness",
             "dealership_name",
             "store_location",
@@ -702,6 +738,57 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
                 f"Got: {value!r}."
             )
         return upper
+
+    def validate_dealership_timezone(self, value):
+        # SESSION_240 — reject anything that isn't a real IANA zone
+        # name. The frontend's picker only offers a curated shortlist,
+        # but the API accepts any zoneinfo name so an operator on a
+        # coast we haven't listed can still set the right one.
+        from zoneinfo import available_timezones
+
+        if value in (None, ""):
+            return ""
+        candidate = value.strip()
+        if candidate not in available_timezones():
+            raise serializers.ValidationError(
+                f"Time zone must be a known IANA name "
+                f"(e.g., America/Phoenix). Got: {value!r}."
+            )
+        return candidate
+
+    def get_dealership_local_now(self, obj) -> str:
+        # SESSION_240 — the onboarding page renders this as
+        # "It is 3:12 PM at the store right now" beside the timezone
+        # picker, so an operator sees proof the zone they picked is
+        # the one the platform will use.
+        from .services.store_time import store_now
+
+        return store_now(obj.dealership).isoformat()
+
+    def update(self, instance, validated_data):
+        # SESSION_240 — persist ``dealership_timezone`` back to the
+        # related Dealership before ModelSerializer touches the
+        # profile's own fields. Pop first so ModelSerializer never
+        # sees an attribute that doesn't exist on the profile model.
+        new_tz = validated_data.pop("dealership_timezone", None)
+        if new_tz and new_tz != instance.dealership.timezone:
+            instance.dealership.timezone = new_tz
+            instance.dealership.save(update_fields=["timezone"])
+        return super().update(instance, validated_data)
+
+    def create(self, validated_data):
+        # SESSION_240 — same as ``update`` for new-profile creation.
+        # The view passes ``dealership=<Dealership instance>`` as a
+        # kwarg to ``save()``; DRF merges it into validated_data
+        # ahead of this call, so ``validated_data["dealership"]`` is
+        # already the instance we want. We just need to pop the
+        # standalone timezone field and apply it after.
+        new_tz = validated_data.pop("dealership_timezone", None)
+        instance = super().create(validated_data)
+        if new_tz and new_tz != instance.dealership.timezone:
+            instance.dealership.timezone = new_tz
+            instance.dealership.save(update_fields=["timezone"])
+        return instance
 
     def get_readiness(self, obj) -> dict:
         return compute_readiness(obj.dealership, profile=obj)

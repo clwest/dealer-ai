@@ -381,7 +381,12 @@ def inventory_turn(
     dedicated "sold-without-frontline-event" data-quality report
     can land later if operator evidence surfaces need.
     """
-    today = timezone.now().date()
+    # SESSION_240 (walk finding 28) — days-to-sale is a business-day
+    # measure in the store's calendar. Compute the window boundary in
+    # the store's zone so ``today`` and ``sale_date`` agree.
+    from ..store_time import store_today
+
+    today = store_today(dealership)
     since = today - dt.timedelta(days=window_days)
 
     sale_qs = Sale.objects.filter(

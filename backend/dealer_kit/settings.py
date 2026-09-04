@@ -454,24 +454,28 @@ CELERY_BEAT_SCHEDULE: dict = {
         # No positional args; the orchestrator takes no kwargs.
         "kwargs": {},
     },
-    "be-back-no-show-detector-daily-07-00": {
+    "be-back-no-show-detector-hourly": {
         "task": (
             "dealer_ai.services.be_backs.tasks"
             ".detect_no_show_be_backs_for_all_tenants"
         ),
-        # 07:00 project-time daily — one hour after the M11.4
-        # follow-up surfacer. Continues the non-overlapping window
-        # pattern (M7.2 at 02:00, M7.3 at 03:00, M7.4 at 04:00,
-        # M7.5 at 05:00, M11.4 at 06:00, M11.5 at 07:00). Distinct
-        # from the M11.4 surfacer in one key way — this task
-        # *does* transition state (per SESSION_118 §0.a M11.5
-        # decision §5.g.3 Option B). The M11.4 surfacer is read-
-        # only because task completion is operator-intent; the M11.5
-        # detector auto-transitions promised → no_show because the
-        # promise is the customer's, not the operator's, and the
-        # detector only reflects an already-elapsed grace period.
-        "schedule": crontab(hour=7, minute=0),
-        # No positional args; the orchestrator takes no kwargs.
+        # SESSION_240 (walk finding 28) — the M11.5 no-show detector
+        # used to fire once at 07:00 America/Chicago, which meant a
+        # Yuma store had its "07:00" trigger at 05:00 Phoenix and a
+        # Miami store lost an hour after DST rolled. Beat cannot
+        # express a per-tenant local hour in one ``crontab`` cleanly,
+        # so this entry fires the orchestrator every hour on the
+        # minute; the orchestrator gates each dealership on
+        # :func:`store_time.store_local_hour` so a store is only
+        # dispatched when ITS clock reads ``target_local_hour``
+        # (default 07). Each store therefore gets exactly one
+        # dispatch a day, at 07:00 local — Phoenix at 07:00 Phoenix,
+        # Chicago at 07:00 Chicago.
+        "schedule": crontab(minute=0),
+        # ``target_local_hour`` defaults to 7 inside the orchestrator;
+        # kept out of the beat entry so a future operator can flip it
+        # per-window without editing the module. See
+        # ``services.be_backs.tasks.detect_no_show_be_backs_for_all_tenants``.
         "kwargs": {},
     },
     "bhph-delinquency-detector-daily-08-00": {

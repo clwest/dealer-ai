@@ -1177,10 +1177,20 @@ def onboarding_profile(request):
             # so the overview page renders the same shape whether or
             # not the owner has ever saved the onboarding form. Uses
             # the same computed values a saved profile would.
+            from .services.store_time import store_now
+
             return Response(
                 {
                     **ONBOARDING_DEFAULTS,
                     "dealership_slug": dealership.slug,
+                    # SESSION_240 — even the no-profile shape carries
+                    # the store's timezone and its local ``now`` so
+                    # the onboarding page's live "It is 3:12 PM at
+                    # the store right now" reads correctly on first
+                    # paint.
+                    "dealership_timezone": dealership.timezone
+                    or "America/Chicago",
+                    "dealership_local_now": store_now(dealership).isoformat(),
                     "readiness": compute_readiness(dealership, profile=None),
                 }
             )

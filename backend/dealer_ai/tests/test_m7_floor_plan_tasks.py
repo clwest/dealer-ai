@@ -166,7 +166,14 @@ class PerTenantTaskAcceptsAsOfIso(TestCase):
         self.assertEqual(result["as_of"], as_of.isoformat())
 
     def test_as_of_iso_none_defaults_to_today(self):
-        today = timezone.now().date()
+        # SESSION_240 — the verb defaults ``as_of`` to
+        # ``store_today(dealership)`` now, so the expected date is
+        # the STORE's calendar day, not the UTC-truncated date the
+        # old ``timezone.now().date()`` produced. For the default
+        # America/Chicago dealership this matches Chicago's date.
+        from dealer_ai.services.store_time import store_today
+
+        today = store_today(self.default)
         result = accrue_daily_interest_for_tenant.apply(
             kwargs={"dealership_id": self.default.pk}
         ).get()

@@ -102,18 +102,47 @@ def detect_no_show_be_backs_for_tenant(
 
 
 @instrumented_task(name=DETECT_FOR_ALL_TENANTS_TASK_NAME)
-def detect_no_show_be_backs_for_all_tenants() -> dict:
-    """Enqueue per-tenant no-show detection for every :class:`Dealership`."""
-    from ...models import Dealership
+def detect_no_show_be_backs_for_all_tenants(
+    *, target_local_hour: int = 7
+) -> dict:
+    """Enqueue per-tenant no-show detection for every :class:`Dealership`
+    whose local clock currently reads ``target_local_hour``.
 
-    dealership_ids = list(
-        Dealership.objects.values_list("pk", flat=True).order_by("pk")
-    )
-    for pk in dealership_ids:
-        detect_no_show_be_backs_for_tenant.delay(dealership_id=pk)
+    SESSION_240 (walk finding 28) — the M11.5 detector must fire at
+    07:00 **local at the store**, not at 07:00 America/Chicago. Celery
+    Beat cannot express a per-tenant local hour in one ``crontab``,
+    so the beat schedule fires this orchestrator once an hour and the
+    orchestrator gates each tenant on ``store_time.store_local_hour``.
+    A Yuma store whose clock reads 07:00 Phoenix gets dispatched
+    exactly once per day, at the hour when Chicago reads 09:00.
+
+    ``target_local_hour`` is a kwarg so tests can pass any hour and
+    so an operator can point an ad-hoc Beat entry at, say, 08:00 for
+    a specific window without editing the module.
+    """
+    from ...models import Dealership
+    from ..store_time import store_local_hour
+
+    dispatched_ids: list[int] = []
+    skipped_ids: list[int] = []
+    for dealership in Dealership.objects.order_by("pk"):
+        if store_local_hour(dealership) == target_local_hour:
+            detect_no_show_be_backs_for_tenant.delay(
+                dealership_id=dealership.pk
+            )
+            dispatched_ids.append(dealership.pk)
+        else:
+            skipped_ids.append(dealership.pk)
 
     _LOGGER.info(
-        "be_backs.no_show_detector.orchestrator dispatched tenants=%d",
-        len(dealership_ids),
+        "be_backs.no_show_detector.orchestrator "
+        "dispatched=%d skipped=%d target_local_hour=%d",
+        len(dispatched_ids),
+        len(skipped_ids),
+        target_local_hour,
     )
-    return {"dispatched_tenant_count": len(dealership_ids)}
+    return {
+        "dispatched_tenant_count": len(dispatched_ids),
+        "skipped_tenant_count": len(skipped_ids),
+        "target_local_hour": target_local_hour,
+    }

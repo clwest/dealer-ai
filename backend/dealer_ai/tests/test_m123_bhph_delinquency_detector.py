@@ -84,16 +84,23 @@ def _make_note(
 
 
 def _patch_today(target: dt.date):
-    """Freeze ``timezone.now()`` inside the detector task to noon on ``target``.
+    """Freeze the detector's "now" to noon on ``target``.
 
-    Patches the ``timezone.now`` attribute on the shared
-    ``django.utils.timezone`` module. Returning a real aware
-    ``datetime`` keeps ``auto_now`` DateTimeField writes valid
-    while the patch is active.
+    SESSION_240 — the detector now resolves "today" via
+    :func:`services.store_time.store_today` rather than reading
+    ``timezone.now()`` directly, so the patch has to land inside the
+    helper module. Returning a UTC-aware ``datetime`` keeps
+    ``auto_now`` DateTimeField writes valid while the patch is
+    active, and the helper converts it to the store's zone before
+    truncating to a date — with the test's default Chicago-zone
+    dealership that produces the same calendar day the caller asked
+    for.
     """
-    aware = timezone.make_aware(dt.datetime.combine(target, dt.time(12, 0)))
+    aware = dt.datetime.combine(
+        target, dt.time(12, 0), tzinfo=dt.timezone.utc
+    )
     return patch(
-        "dealer_ai.services.bhph_delinquency.tasks.timezone.now",
+        "dealer_ai.services.store_time.timezone.now",
         return_value=aware,
     )
 

@@ -823,6 +823,17 @@ export interface OnboardingProfilePayload {
    *  from the branding endpoint; the backend routes anonymous
    *  callers on multi-store installs by this. */
   dealership_slug?: string;
+  /** SESSION_240 (walk finding 28) — the store's IANA time zone
+   *  (e.g. ``"America/Phoenix"``). Editable on the onboarding page;
+   *  every business-day decision on the backend and every
+   *  operator-screen date on the frontend renders in this zone via
+   *  ``formatInStoreZone``. */
+  dealership_timezone?: string;
+  /** SESSION_240 — the store's ``now`` as an ISO 8601 string with
+   *  offset (e.g. ``"2026-09-03T15:12:00-07:00"``). Present on GET;
+   *  the onboarding page renders it beside the timezone picker as
+   *  proof the zone is the one the platform will use. */
+  dealership_local_now?: string;
   /** SESSION_235 — see OnboardingReadinessPayload above. Present on
    *  every GET response (including the no-profile shape). */
   readiness?: OnboardingReadinessPayload;

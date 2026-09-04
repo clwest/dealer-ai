@@ -106,7 +106,14 @@ def gross_profit_trend(
     — the M9.1 verb denormalized at write time precisely so
     aggregations stay single-query.
     """
-    today = timezone.now().date()
+    # SESSION_240 (walk finding 28) — the trend line's "today" is the
+    # store's local calendar day. Sales are grouped by ``sale_date``
+    # which is a naive :class:`date` set at write time; the window
+    # boundary must be the same clock so a Yuma lot's "today" and its
+    # server's "today" agree.
+    from ..store_time import store_today
+
+    today = store_today(dealership)
     since = today - dt.timedelta(days=window_days)
 
     qs = (

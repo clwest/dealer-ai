@@ -30,9 +30,9 @@ from decimal import Decimal
 from typing import Any
 
 from django.db.models import Count, Sum
-from django.utils import timezone
 
 from ..jobs import instrumented_task
+from ..store_time import store_today
 
 
 _LOGGER = logging.getLogger("dealer_ai.bhph_delinquency.tasks")
@@ -68,7 +68,12 @@ def detect_delinquencies_for_dealership(
     )
 
     dealership = Dealership.objects.get(pk=dealership_id)
-    today = timezone.now().date()
+    # SESSION_240 (walk finding 28) — a BHPH note's day-count is a
+    # business-day decision. Compare the note's next-expected due date
+    # against the STORE's local "today", not Chicago's. A Yuma store
+    # that runs this job at 08:00 Phoenix should see notes aged from
+    # the Phoenix calendar day, not from Chicago's.
+    today = store_today(dealership)
 
     bucket_histogram: dict[str, int] = defaultdict(int)
     transitioned_count = 0

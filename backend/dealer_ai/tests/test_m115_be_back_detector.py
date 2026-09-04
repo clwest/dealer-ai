@@ -122,10 +122,22 @@ class DetectorOrchestratorTests(TestCase):
             )
 
     def test_orchestrator_dispatches_per_tenant(self) -> None:
+        # SESSION_240 — the orchestrator now dispatches only tenants
+        # whose local clock reads ``target_local_hour`` (default 7).
+        # Both stores here take the ``Dealership.timezone`` default
+        # ("America/Chicago"), and this test does not care about
+        # per-store zone dispatch, only that a firing at the target
+        # hour reaches every store — so pass the tenants' current
+        # local hour as the target so the guard passes for both.
+        from dealer_ai.services.store_time import store_local_hour
+
+        current_hour = store_local_hour(self.d1)
         # CELERY_TASK_ALWAYS_EAGER=True makes each dispatched task
         # run synchronously. Verify both our stale be-backs got
         # transitioned after the orchestrator run.
-        result = detect_no_show_be_backs_for_all_tenants()
+        result = detect_no_show_be_backs_for_all_tenants(
+            target_local_hour=current_hour
+        )
         self.assertGreaterEqual(result["dispatched_tenant_count"], 2)
         for d in (self.d1, self.d2):
             transitioned = BeBack.objects.filter(

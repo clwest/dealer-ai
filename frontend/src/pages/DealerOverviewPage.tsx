@@ -46,6 +46,11 @@ import {
   type OnboardingProfilePayload,
 } from "@/lib/api";
 import { categoryLabel, flagDisplayName } from "@/lib/flagLabels";
+import {
+  formatDateInStoreZone,
+  formatDateTimeInStoreZone,
+  storeNowLabel,
+} from "@/lib/storeTime";
 
 interface AttentionItem {
   id: string;
@@ -100,7 +105,11 @@ export default function DealerOverviewPage() {
           Your AI sales assistant at a glance.
           {loadedAt ? (
             <span className="ml-1 text-xs text-muted-foreground/70">
-              · refreshed {formatClock(loadedAt)}
+              {/* SESSION_240 (walk finding 28) — the overview clock
+                  renders in the store's zone, not the browser's, so
+                  a Yuma operator on a Chicago laptop sees Yuma time. */}
+              · refreshed{" "}
+              {storeNowLabel(profile?.dealership_timezone, loadedAt)}
             </span>
           ) : null}
         </p>
@@ -109,7 +118,10 @@ export default function DealerOverviewPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <AssistantStatusCard profile={profile} />
         <CoachingSummaryCard audit={audit} />
-        <RecentActivityCard events={audit?.recent_events ?? null} />
+        <RecentActivityCard
+          events={audit?.recent_events ?? null}
+          timezone={profile?.dealership_timezone}
+        />
         <TodaysLeadsCard leads={leads} />
         <AttentionItemsCard items={attentionItems} loaded={profile !== null} />
       </div>
@@ -147,7 +159,13 @@ function AssistantStatusCard({
           label="Banned phrases"
           value={bannedCount === null ? "—" : String(bannedCount)}
         />
-        <Stat label="Last updated" value={formatTimestamp(updatedAt)} />
+        <Stat
+          label="Last updated"
+          value={formatDateTimeInStoreZone(
+            updatedAt,
+            profile?.dealership_timezone,
+          )}
+        />
         <Stat label="Status" value="Active" />
       </CardContent>
     </Card>
@@ -228,9 +246,18 @@ function coachingWindowLabel(audit: AuditEventsResponse | null): string {
 
 function RecentActivityCard({
   events,
+  timezone,
 }: {
   events: AuditEvent[] | null;
+  timezone?: string;
 }) {
+  // SESSION_240 — the trailing "just now / 3 min ago" is a wall-clock
+  // difference (safe in any zone) but if the event is older than a
+  // week we fall through to a short date, and that date must render
+  // in the store's zone rather than the browser's. ``formatRelative``
+  // handles both branches internally.
+  const formatWithZone = (iso: string | null | undefined) =>
+    formatRelative(iso, timezone);
   return (
     <Card>
       <CardHeader>
@@ -265,7 +292,7 @@ function RecentActivityCard({
                   ) : null}
                 </div>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {formatRelative(e.created_at)}
+                  {formatWithZone(e.created_at)}
                 </span>
               </li>
             ))}
@@ -574,26 +601,10 @@ function formatCount(n: number | null | undefined): string {
   return n.toLocaleString();
 }
 
-function formatTimestamp(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatClock(d: Date): string {
-  return d.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatRelative(iso: string | null | undefined): string {
+function formatRelative(
+  iso: string | null | undefined,
+  timezone?: string | null,
+): string {
   if (!iso) return "—";
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return "—";
@@ -606,8 +617,9 @@ function formatRelative(iso: string | null | undefined): string {
   if (hr < 24) return `${hr} hr ago`;
   const day = Math.round(hr / 24);
   if (day < 7) return `${day} day${day === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+  // SESSION_240 — anything older than a week renders as a plain
+  // month-day, and the calendar day it collapses to must be the
+  // store's, not the browser's. Fall through to the single
+  // ``formatDateInStoreZone`` helper.
+  return formatDateInStoreZone(iso, timezone).replace(/, \d{4}$/, "");
 }

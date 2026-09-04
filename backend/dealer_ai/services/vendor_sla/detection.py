@@ -170,11 +170,13 @@ def detect_sla_breaches(
     other side effects.
     """
     if as_of is None:
-        # Deferred import — keep the module-import graph free of
-        # ``django.utils.timezone`` until actually needed.
-        from django.utils import timezone
+        # SESSION_240 (walk finding 28) — an SLA breach is defined in
+        # calendar-days against the store's clock. A Denver vendor for
+        # a Yuma lot has "gone one day past ETA" when the Phoenix
+        # calendar has rolled past ETA, not when Chicago has.
+        from ..store_time import store_today
 
-        as_of = timezone.now().date()
+        as_of = store_today(dealership)
 
     report = SlaBreachReport(
         dealership_slug=dealership.slug,

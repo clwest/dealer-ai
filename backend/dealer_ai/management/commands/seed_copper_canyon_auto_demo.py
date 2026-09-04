@@ -493,6 +493,12 @@ def _provision_store(stdout) -> Dealership:
     if existing.name != STORE_NAME:
         existing.name = STORE_NAME
         existing.save(update_fields=["name"])
+    # SESSION_240 — Copper Canyon Auto is in Yuma, Arizona, which
+    # doesn't observe DST. Reset the zone on every re-run in case an
+    # operator poked it in the UI between seeds.
+    if existing.timezone != "America/Phoenix":
+        existing.timezone = "America/Phoenix"
+        existing.save(update_fields=["timezone"])
     stdout.write(
         f"reset existing demo store pk={existing.pk} slug={STORE_SLUG!r} "
         f"name={STORE_NAME!r}."
@@ -3925,16 +3931,21 @@ def _seed_sla_stale_wo(
         approved_by=owner,
         authorized_cost=Decimal("850.00"),
     )
-    # Backdate approved_at to 8 days ago so the WO is over the 7-day
-    # SLA threshold. Also backdate created_at so the aging read is
-    # consistent (created before approved, per M4 invariants).
-    approved_eight_days = now - dt.timedelta(days=8)
+    # Backdate approved_at to 9 days ago so the WO is over the 7-day
+    # SLA threshold with room to spare. SESSION_240 — vendor_sla now
+    # compares against the STORE's calendar day, which can trail the
+    # UTC date by one for a lot in a western zone (Copper Canyon =
+    # America/Phoenix). Eight days minus the one-day drift used to
+    # sit exactly at threshold and slip through. Nine days survives.
+    # Also backdate created_at so the aging read is consistent
+    # (created before approved, per M4 invariants).
+    approved_nine_days = now - dt.timedelta(days=9)
     WorkOrder.objects.filter(pk=wo.pk).update(
-        created_at=approved_eight_days - dt.timedelta(hours=2),
-        approved_at=approved_eight_days,
+        created_at=approved_nine_days - dt.timedelta(hours=2),
+        approved_at=approved_nine_days,
     )
     stdout.write(
-        f"seeded SLA-stale outsourced WO pk={wo.pk} approved 8 days ago."
+        f"seeded SLA-stale outsourced WO pk={wo.pk} approved 9 days ago."
     )
     return wo.pk
 

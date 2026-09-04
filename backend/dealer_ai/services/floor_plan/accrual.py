@@ -171,12 +171,14 @@ def accrue_daily_interest(
     run. Dry-run mode skips the atomic block because no writes happen.
     """
     if as_of is None:
-        # Deferred import so this module's import graph stays free of
-        # ``django.utils.timezone`` — the timezone lookup is only
-        # needed when the caller doesn't supply an explicit date.
-        from django.utils import timezone
+        # SESSION_240 (walk finding 28) — floor-plan interest accrual
+        # closes a calendar day, and each store closes on its own
+        # calendar. A Yuma lot running the job at 02:00 Phoenix should
+        # accrue through the Phoenix date, not through Chicago's
+        # already-rolled tomorrow.
+        from ..store_time import store_today
 
-        as_of = timezone.now().date()
+        as_of = store_today(dealership)
 
     apr = get_floor_plan_apr(dealership)
     summary = AccrualSummary(

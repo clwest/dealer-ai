@@ -3,12 +3,63 @@ from datetime import date
 from decimal import Decimal
 from functools import cached_property
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
+
+
+# SESSION_240 (walk finding 28) — one-zone US states resolve outright
+# from the state code; multi-zone states (Texas, Florida, ...) need an
+# explicit choice and the operator sees a note on screen. Kept next to
+# US_STATE_CHOICES because the two are read together by
+# services.store_time.suggest_timezone_for_state.
+_STATE_TIMEZONE_DEFAULTS: dict[str, str] = {
+    "AL": "America/Chicago",
+    "AK": "America/Anchorage",
+    "AZ": "America/Phoenix",
+    "AR": "America/Chicago",
+    "CA": "America/Los_Angeles",
+    "CO": "America/Denver",
+    "CT": "America/New_York",
+    "DE": "America/New_York",
+    "DC": "America/New_York",
+    "GA": "America/New_York",
+    "HI": "Pacific/Honolulu",
+    "IA": "America/Chicago",
+    "IL": "America/Chicago",
+    "LA": "America/Chicago",
+    "ME": "America/New_York",
+    "MD": "America/New_York",
+    "MA": "America/New_York",
+    "MN": "America/Chicago",
+    "MS": "America/Chicago",
+    "MO": "America/Chicago",
+    "MT": "America/Denver",
+    "NV": "America/Los_Angeles",
+    "NH": "America/New_York",
+    "NJ": "America/New_York",
+    "NM": "America/Denver",
+    "NY": "America/New_York",
+    "NC": "America/New_York",
+    "OH": "America/New_York",
+    "OK": "America/Chicago",
+    "PA": "America/New_York",
+    "RI": "America/New_York",
+    "SC": "America/New_York",
+    "UT": "America/Denver",
+    "VT": "America/New_York",
+    "VA": "America/New_York",
+    "WA": "America/Los_Angeles",
+    "WV": "America/New_York",
+    "WI": "America/Chicago",
+    "WY": "America/Denver",
+}
+
+
 
 
 # Milestone 1 · Increment 4A — role vocabulary. Kept as a module-level
@@ -240,11 +291,70 @@ class Dealership(models.Model):
     outbound_enabled = models.BooleanField(default=False)
     terminated_at = models.DateTimeField(null=True, blank=True)
     termination_reason = models.TextField(blank=True, default="")
+    # SESSION_240 (walk finding 28) — every store keeps its own clock.
+    # An IANA zone name (e.g. "America/Phoenix"). Existing rows default
+    # to project TIME_ZONE ("America/Chicago") via the 0063 migration;
+    # the onboarding page lets the operator change it and shows a live
+    # local-time preview. Validated at ``full_clean()`` and at write
+    # time against ``zoneinfo.available_timezones()`` so an unknown
+    # string can never end up in the column. Used by
+    # ``services.store_time.store_now / store_today / store_localize``
+    # for every business-day decision (ledger dates, aging, be-back
+    # detection, BHPH delinquency day-counts, follow-up cadences).
+    timezone = models.CharField(
+        max_length=64,
+        default="America/Chicago",
+        help_text=(
+            "IANA time zone name (e.g. America/Phoenix). All business-"
+            "day decisions for this store use this zone."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
+
+    def clean(self):
+        super().clean()
+        if self.timezone and self.timezone not in available_timezones():
+            raise ValidationError(
+                {
+                    "timezone": (
+                        f"{self.timezone!r} is not a known IANA time "
+                        "zone."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        # SESSION_240 — enforce zoneinfo validity at every write. The
+        # onboarding serializer validates too, but this closes the
+        # backdoor a raw ``Dealership.objects.create(timezone="Nowhere")``
+        # would otherwise leave open.
+        if self.timezone and self.timezone not in available_timezones():
+            raise ValidationError(
+                {
+                    "timezone": (
+                        f"{self.timezone!r} is not a known IANA time "
+                        "zone."
+                    )
+                }
+            )
+        super().save(*args, **kwargs)
+
+    def zoneinfo(self) -> ZoneInfo:
+        """Return the store's :class:`zoneinfo.ZoneInfo`.
+
+        Falls back to project ``TIME_ZONE`` if the row somehow carries
+        an unknown value — the ``save()`` guard above should keep this
+        branch cold, but the fallback keeps a legacy row from crashing
+        a request handler.
+        """
+        try:
+            return ZoneInfo(self.timezone or settings.TIME_ZONE)
+        except ZoneInfoNotFoundError:
+            return ZoneInfo(settings.TIME_ZONE)
 
     def __str__(self) -> str:
         return self.name

@@ -55,6 +55,12 @@ interface DealershipProfile {
   /** SESSION_021 — hosted logo URL. Empty string keeps the static
    *  fallback (`DEFAULT_DEALER.logoPath`) in play via useBrand(). */
   logoUrl: string;
+  /** SESSION_240 (walk finding 28) — the store's IANA time zone.
+   *  Backed by ``Dealership.timezone``; consumed by every business-
+   *  day decision (ledger, aging, be-back detector, BHPH day-counts)
+   *  and by the store-zone formatter that renders dates on the
+   *  operator screens. Empty on first load only. */
+  timezone: string;
 }
 
 interface ManagerPreferences {
@@ -199,6 +205,7 @@ const EMPTY_STATE: OnboardingState = {
     salesPhone: "",
     website: "",
     logoUrl: "",
+    timezone: "America/Chicago",
   },
   manager: {
     salesTone: "",
@@ -262,6 +269,7 @@ function fromApi(payload: OnboardingProfilePayload): OnboardingState {
       salesPhone: payload.sales_phone,
       website: payload.website,
       logoUrl: payload.logo_url ?? "",
+      timezone: payload.dealership_timezone ?? "America/Chicago",
     },
     manager: {
       salesTone: payload.sales_tone,
@@ -339,6 +347,7 @@ function toApi(state: OnboardingState): OnboardingProfilePayload {
     city: state.dealership.city,
     state: state.dealership.state,
     postal_code: state.dealership.postalCode,
+    dealership_timezone: state.dealership.timezone,
     main_brands: state.dealership.brands,
     sales_phone: state.dealership.salesPhone,
     website: state.dealership.website,
@@ -682,6 +691,19 @@ export default function DealerOnboardingPage() {
             value={dealership.postalCode}
             onChange={(v) => setDealership({ ...dealership, postalCode: v })}
             placeholder="85364"
+          />
+          {/* SESSION_240 (walk finding 28) — time zone picker + live
+              local time. Dropdown lists a short common-US set; a
+              store on a coast we haven't listed can still save any
+              IANA name via the API. The clock beside it re-renders
+              once a minute so the operator sees proof the zone they
+              picked matches the store's wall clock. */}
+          <TimezoneField
+            value={dealership.timezone}
+            state={dealership.state}
+            onChange={(v) =>
+              setDealership({ ...dealership, timezone: v })
+            }
           />
           <Field
             label="Main brands carried"
@@ -1700,6 +1722,99 @@ function SelectField({ label, value, onChange, options }: SelectFieldProps) {
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+// SESSION_240 (walk finding 28) — IANA time-zone picker with live
+// local time. Common US zones are the visible options; a store on a
+// coast we haven't listed can still save any IANA name via the API.
+// The clock beside the picker re-renders once a minute so an operator
+// sees proof that the zone they chose matches their wall clock.
+const TIMEZONE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "America/New_York", label: "Eastern (New York)" },
+  { value: "America/Chicago", label: "Central (Chicago)" },
+  { value: "America/Denver", label: "Mountain (Denver)" },
+  { value: "America/Phoenix", label: "Mountain / Arizona (Phoenix)" },
+  { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
+  { value: "America/Anchorage", label: "Alaska" },
+  { value: "Pacific/Honolulu", label: "Hawaii" },
+  {
+    value: "America/Indiana/Indianapolis",
+    label: "Eastern / Indiana (Indianapolis)",
+  },
+  { value: "America/Detroit", label: "Eastern / Michigan (Detroit)" },
+];
+
+// Multi-zone states — the onboarding page says so on screen when the
+// selected state spans zones so the operator knows the picker is not
+// a lookup that guessed one for them. Matches the "None" returns in
+// backend services.store_time.suggest_timezone_for_state.
+const MULTI_ZONE_STATES = new Set([
+  "FL",
+  "IN",
+  "KY",
+  "MI",
+  "ND",
+  "SD",
+  "TN",
+  "TX",
+]);
+
+function TimezoneField({
+  value,
+  state,
+  onChange,
+}: {
+  value: string;
+  state: string;
+  onChange: (v: string) => void;
+}) {
+  // Re-render every minute so "It is 3:12 PM at the store right now"
+  // stays honest without a WebSocket. A single interval per field
+  // is cheap; the parent re-render cost is bounded to this label.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const zoneLabel = value
+    ? new Intl.DateTimeFormat("en-US", {
+        timeZone: value,
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(now)
+    : "—";
+
+  const isMultiZoneState = state ? MULTI_ZONE_STATES.has(state) : false;
+  // Show the picked zone verbatim in the dropdown even if it isn't
+  // in the shortlist — otherwise a store on a coast we haven't listed
+  // would see its saved value get reset to Chicago on first render.
+  const options = TIMEZONE_OPTIONS.some((opt) => opt.value === value)
+    ? TIMEZONE_OPTIONS
+    : [...TIMEZONE_OPTIONS, { value, label: value }];
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-semibold text-slate-600">Time zone</span>
+      <select
+        className="input appearance-none bg-white"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      <span className="text-[11px] text-slate-500">
+        It is <strong>{zoneLabel}</strong> at the store right now.
+        {isMultiZoneState
+          ? " Your state has more than one zone — pick the one your store keeps."
+          : null}
+      </span>
     </label>
   );
 }

@@ -383,7 +383,11 @@ def buyer_estimate_accuracy(
     the single-buyer shape (0 or 1 rows). Recorded in
     ``MILESTONE_9_PLANNING.md`` §0.a SESSION_103.
     """
-    today = dt.date.today()
+    # SESSION_240 (walk finding 28) — buyer accuracy is scoped to the
+    # store's calendar window, not the process's.
+    from ..store_time import store_today
+
+    today = store_today(dealership)
     since = today - dt.timedelta(days=window_days)
 
     # Pull acquisitions in-window with non-null buyer. When

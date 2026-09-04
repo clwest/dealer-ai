@@ -34,6 +34,11 @@ const FALLBACK = {
 } as const;
 
 export interface Brand {
+  /** SESSION_240 (walk finding 28) — the store's IANA time zone.
+   *  Empty string until the profile fetch resolves; every consumer
+   *  that formats a business date should route through
+   *  ``lib/storeTime.ts`` which handles the empty case safely. */
+  timezone: string;
   /** Raw dealership name from the profile, or fallback. Headline string. */
   dealershipName: string;
   /** City / location from the profile, or fallback. */
@@ -94,7 +99,9 @@ export function brandFromProfile(
   const salesPhone =
     (profile?.sales_phone && profile.sales_phone.trim()) ||
     FALLBACK.salesPhone;
+  const timezone = profile?.dealership_timezone?.trim() ?? "";
   return {
+    timezone,
     dealershipName,
     storeLocation,
     displayName: `${dealershipName} ${storeLocation}`,
