@@ -92,6 +92,10 @@ def _fetch(url: str, timeout: float = 3.0) -> ServerReport:
 
 
 def _run(*args: str, cwd: Path = REPO_ROOT, timeout: float = 3.0) -> Optional[str]:
+    """Run a subprocess and return stdout (stripped, EMPTY string kept
+    distinct from ``None``). ``None`` means the command failed; empty
+    string means it ran and produced no output. Collapsing those two —
+    L-029 / L-036 — is the exact failure this task is about."""
     try:
         out = subprocess.run(
             list(args),
@@ -105,18 +109,22 @@ def _run(*args: str, cwd: Path = REPO_ROOT, timeout: float = 3.0) -> Optional[st
         return None
     if out.returncode != 0:
         return None
-    return out.stdout.strip() or None
+    return out.stdout.strip()
 
 
 def _head_sha() -> Optional[str]:
-    return _run("git", "--no-optional-locks", "rev-parse", "HEAD")
+    out = _run("git", "--no-optional-locks", "rev-parse", "HEAD")
+    return out if out else None
 
 
 def _tree_dirty() -> Optional[bool]:
+    """Return True/False for the working-tree dirty state, ``None`` when
+    git could not answer. An empty output is a real answer (clean tree),
+    not a failure — see the docstring on ``_run``."""
     out = _run("git", "--no-optional-locks", "status", "--porcelain")
     if out is None:
         return None
-    return bool(out.strip())
+    return bool(out)
 
 
 def _commits_behind(server_sha: str, head_sha: str) -> Optional[int]:
