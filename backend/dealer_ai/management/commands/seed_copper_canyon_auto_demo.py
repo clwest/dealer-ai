@@ -180,6 +180,7 @@ from dealer_ai.services.recon import (
     start_work_order,
 )
 from dealer_ai.services.repossessions.repossession import record_repossession
+from dealer_ai.services.store_time import store_today
 from dealer_ai.services.test_drives.test_drive import record_test_drive
 
 
@@ -1092,7 +1093,7 @@ def _deliver_five_sales(
     # delivery date in the past even against a very recent sale.
     to_deliver.sort(key=lambda s: (s.sale_date, s.vehicle.stock_number), reverse=True)
 
-    today = timezone.now().date()
+    today = store_today(dealership)
     yesterday = today - dt.timedelta(days=1)
     delivered_sale_pks: list[int] = []
     for offset, sale in enumerate(to_deliver):
@@ -1840,7 +1841,7 @@ def _extend_fni_chain(dealership: Dealership, owner, stdout) -> dict:
             finance_charge=Decimal("2489.00"),
             apr_disclosure=Decimal("14.9000"),
             first_payment_date=(
-                timezone.now().date() + dt.timedelta(days=30)
+                store_today(dealership) + dt.timedelta(days=30)
             ),
         )
         sign_contract(

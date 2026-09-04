@@ -815,6 +815,13 @@ export interface OnboardingReadinessPayload {
    *  (7.49 / 72 / 10). Overview surfaces this so a dealer knows the
    *  quoted payments are their numbers, not ours. */
   payment_defaults_set: boolean;
+  /** SESSION_241.1 (walk finding 28 — part 3) — true when the
+   *  Dealership.timezone column carries a real IANA name. False = the
+   *  store has no clock and every business-day helper falls back to
+   *  the project TIME_ZONE with a visible warning. The overview
+   *  attention card surfaces this so a new store can't silently
+   *  inherit Chicago. */
+  timezone_set: boolean;
 }
 
 export interface OnboardingProfilePayload {

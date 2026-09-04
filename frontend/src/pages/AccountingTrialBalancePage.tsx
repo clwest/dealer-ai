@@ -51,6 +51,8 @@ import {
   type TrialBalanceSnapshot,
   type TrialBalanceSnapshotListPage,
 } from "@/lib/accountingApi";
+import { useBrand } from "@/lib/brand";
+import { formatDateTimeInStoreZone } from "@/lib/storeTime";
 
 
 const ACCOUNT_TYPE_LABELS: Record<GLAccountType, string> = {
@@ -74,16 +76,12 @@ function formatMoney(raw: string): string {
 }
 
 
-function formatAsOf(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+// SESSION_241.1 — trial-balance "as of" timestamps must read in the
+// store's zone. Threading the ``timezone`` string through PriorClosesCard
+// and FrozenSnapshotDetailCard keeps the sub-components pure while the
+// page owner picks up brand.timezone from ``useBrand``.
+function formatAsOf(iso: string, timezone: string): string {
+  return formatDateTimeInStoreZone(iso, timezone);
 }
 
 
@@ -91,6 +89,7 @@ type FreezeState = "idle" | "posting" | "success" | "error";
 
 
 export default function AccountingTrialBalancePage() {
+  const brand = useBrand();
   const [asOfDate, setAsOfDate] = useState<string>(todayIsoDate);
   const [snapshot, setSnapshot] = useState<TrialBalanceSnapshot | null>(null);
   const [failures, setFailures] = useState<CostPostingFailure[]>([]);
@@ -159,6 +158,7 @@ export default function AccountingTrialBalancePage() {
       setFreezeMessage(
         `Frozen — snapshot #${frozen.id} recorded for ${formatAsOf(
           frozen.as_of,
+          brand.timezone,
         )}.`,
       );
       await refreshSnapshotList();
@@ -275,7 +275,7 @@ export default function AccountingTrialBalancePage() {
                   {snapshot.dealership_slug || "Dealership"} · Trial Balance
                 </CardTitle>
                 <CardDescription>
-                  As of {formatAsOf(snapshot.as_of)}
+                  As of {formatAsOf(snapshot.as_of, brand.timezone)}
                 </CardDescription>
               </div>
               <Badge
@@ -326,6 +326,7 @@ export default function AccountingTrialBalancePage() {
           list={snapshotList}
           onSelect={handleSelectSnapshot}
           selectedId={selectedSnapshot?.id ?? null}
+          timezone={brand.timezone}
         />
       )}
 
@@ -333,6 +334,7 @@ export default function AccountingTrialBalancePage() {
         <FrozenSnapshotDetailCard
           snapshot={selectedSnapshot}
           onClose={() => setSelectedSnapshot(null)}
+          timezone={brand.timezone}
         />
       )}
     </div>
@@ -387,10 +389,12 @@ function PriorClosesCard({
   list,
   onSelect,
   selectedId,
+  timezone,
 }: {
   list: TrialBalanceSnapshotListPage;
   onSelect: (pk: number) => void;
   selectedId: number | null;
+  timezone: string;
 }) {
   if (list.total_count === 0) {
     return (
@@ -438,13 +442,13 @@ function PriorClosesCard({
                 data-testid={`snapshot-row-${s.id}`}
               >
                 <td className="py-2 font-medium">
-                  {formatAsOf(s.as_of)}
+                  {formatAsOf(s.as_of, timezone)}
                 </td>
                 <td className="py-2 text-xs text-muted-foreground">
                   {s.created_by_username ?? "—"}
                 </td>
                 <td className="py-2 text-xs text-muted-foreground">
-                  {formatAsOf(s.created_at)}
+                  {formatAsOf(s.created_at, timezone)}
                 </td>
                 <td className="py-2 text-right tabular-nums">
                   {formatMoney(s.total_debits)}
@@ -472,9 +476,11 @@ function PriorClosesCard({
 function FrozenSnapshotDetailCard({
   snapshot,
   onClose,
+  timezone,
 }: {
   snapshot: FrozenTrialBalanceSnapshot;
   onClose: () => void;
+  timezone: string;
 }) {
   return (
     <Card>
@@ -483,8 +489,8 @@ function FrozenSnapshotDetailCard({
           <div>
             <CardTitle>Frozen snapshot #{snapshot.id}</CardTitle>
             <CardDescription>
-              As of {formatAsOf(snapshot.as_of)} · frozen{" "}
-              {formatAsOf(snapshot.created_at)}
+              As of {formatAsOf(snapshot.as_of, timezone)} · frozen{" "}
+              {formatAsOf(snapshot.created_at, timezone)}
               {snapshot.created_by_username &&
                 ` by ${snapshot.created_by_username}`}
             </CardDescription>
@@ -505,7 +511,7 @@ function FrozenSnapshotDetailCard({
         {snapshot.rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             This snapshot has no per-account rows — a zero-portfolio
-            close through {formatAsOf(snapshot.as_of)}.
+            close through {formatAsOf(snapshot.as_of, timezone)}.
           </p>
         ) : (
           <FrozenRowsTable rows={snapshot.rows} />

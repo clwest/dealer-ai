@@ -34,8 +34,16 @@ class OnboardingDefaultsTests(TestCase):
         # Default row is *not* created by GET.
         self.assertEqual(DealerOnboardingProfile.objects.count(), 0)
         # Every default key is present in the response.
+        # ``dealership_timezone`` is exempted: SESSION_241.1 changed
+        # the no-profile default to blank, but the response echoes the
+        # actual ``Dealership.timezone`` (which the pre-0064 default
+        # store carries as "America/Chicago"). The default is about
+        # what a *new* store gets, not about rewriting the legacy
+        # tenant.
         for key, expected in ONBOARDING_DEFAULTS.items():
             self.assertIn(key, data)
+            if key == "dealership_timezone":
+                continue
             self.assertEqual(data[key], expected, f"default mismatch for {key}")
 
     def test_default_payment_disclaimer_text(self):

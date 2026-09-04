@@ -122,7 +122,10 @@ export default function DealerOverviewPage() {
           events={audit?.recent_events ?? null}
           timezone={profile?.dealership_timezone}
         />
-        <TodaysLeadsCard leads={leads} />
+        <TodaysLeadsCard
+          leads={leads}
+          timezone={profile?.dealership_timezone}
+        />
         <AttentionItemsCard items={attentionItems} loaded={profile !== null} />
       </div>
     </div>
@@ -303,7 +306,13 @@ function RecentActivityCard({
   );
 }
 
-function TodaysLeadsCard({ leads }: { leads: AdminLead[] | null }) {
+function TodaysLeadsCard({
+  leads,
+  timezone,
+}: {
+  leads: AdminLead[] | null;
+  timezone?: string | null;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -347,7 +356,7 @@ function TodaysLeadsCard({ leads }: { leads: AdminLead[] | null }) {
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <UrgencyBadge urgency={lead.urgency} />
                   <span className="text-xs text-muted-foreground">
-                    {formatRelative(lead.created_at)}
+                    {formatRelative(lead.created_at, timezone)}
                   </span>
                 </div>
               </li>
@@ -529,6 +538,18 @@ function deriveAttentionItems(
     items.push({
       id: "payment-defaults",
       text: "Set your APR, term and down for the est. payment line.",
+      href: "/dealer-ai-onboarding",
+      cta: "Onboarding",
+    });
+  }
+  // SESSION_241.1 — a store without a timezone is a store that will
+  // silently book today's business on the process clock. Surface it
+  // here so the readiness card treats the dealership section as
+  // "not done" until the operator picks one.
+  if (readiness && !readiness.timezone_set) {
+    items.push({
+      id: "timezone",
+      text: "Pick your store's time zone so today's business books to your calendar.",
       href: "/dealer-ai-onboarding",
       cta: "Onboarding",
     });

@@ -510,10 +510,11 @@ ONBOARDING_DEFAULTS: dict = {
     "sales_tax_rate_pct": None,
     "doc_fees": None,
     # SESSION_240 — the store's IANA time zone lives on the Dealership
-    # row; expose the project default so the onboarding page's initial
-    # render has a sensible selection even for a store that never
-    # saved a profile.
-    "dealership_timezone": "America/Chicago",
+    # row; SESSION_241.1 changes the no-profile default from Chicago
+    # to blank so a store that has never picked a zone is honest about
+    # not having one. The onboarding page renders the picker with no
+    # default when this is ``""``.
+    "dealership_timezone": "",
 }
 
 
@@ -584,10 +585,13 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
         # ``to_representation`` override rather than a
         # ``SerializerMethodField`` so the field name stays writable
         # on PATCH / PUT.
+        # SESSION_241.1 — a blank column reads back as ``""``, not as
+        # "America/Chicago". A silent Chicago default on the wire is
+        # what SESSION_240 removed on the database side; do not
+        # reintroduce it here. The onboarding page treats ``""`` as
+        # "operator has not picked yet" and shows the picker.
         data = super().to_representation(instance)
-        data["dealership_timezone"] = (
-            instance.dealership.timezone or "America/Chicago"
-        )
+        data["dealership_timezone"] = instance.dealership.timezone or ""
         return data
 
     class Meta:
@@ -770,9 +774,18 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
         # related Dealership before ModelSerializer touches the
         # profile's own fields. Pop first so ModelSerializer never
         # sees an attribute that doesn't exist on the profile model.
+        # SESSION_241.1 — when the field is blank and the store's zone
+        # is also blank, try to auto-seed from the state. Only writes
+        # when the state resolves to a single zone; a multi-zone state
+        # (TX, FL, ...) still leaves the column blank so the operator
+        # picks explicitly on the onboarding page.
         new_tz = validated_data.pop("dealership_timezone", None)
-        if new_tz and new_tz != instance.dealership.timezone:
-            instance.dealership.timezone = new_tz
+        state = validated_data.get("state") or getattr(instance, "state", "")
+        resolved_tz = _resolve_timezone_or_seed(
+            new_tz, instance.dealership.timezone, state
+        )
+        if resolved_tz != instance.dealership.timezone:
+            instance.dealership.timezone = resolved_tz
             instance.dealership.save(update_fields=["timezone"])
         return super().update(instance, validated_data)
 
@@ -785,13 +798,44 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
         # standalone timezone field and apply it after.
         new_tz = validated_data.pop("dealership_timezone", None)
         instance = super().create(validated_data)
-        if new_tz and new_tz != instance.dealership.timezone:
-            instance.dealership.timezone = new_tz
+        state = validated_data.get("state") or getattr(instance, "state", "")
+        resolved_tz = _resolve_timezone_or_seed(
+            new_tz, instance.dealership.timezone, state
+        )
+        if resolved_tz != instance.dealership.timezone:
+            instance.dealership.timezone = resolved_tz
             instance.dealership.save(update_fields=["timezone"])
         return instance
 
     def get_readiness(self, obj) -> dict:
         return compute_readiness(obj.dealership, profile=obj)
+
+
+def _resolve_timezone_or_seed(
+    explicit: str | None, current: str, state: str
+) -> str:
+    """Return the zone the Dealership row should end up with.
+
+    SESSION_241.1 (walk finding 28 — part 3) — three cases in order:
+
+    1. The operator sent an explicit ``dealership_timezone`` — use it.
+       An empty string is treated as "clear" so the operator can
+       unset a wrong zone.
+    2. No explicit value AND the Dealership is already blank AND the
+       store's state resolves to a single IANA zone — seed from state
+       via ``suggest_timezone_for_state``.
+    3. Otherwise — leave the field alone. A multi-zone state (TX, FL,
+       ...) that has never been picked stays blank; the readiness card
+       shows the attention item and the operator picks on onboarding.
+    """
+    if explicit is not None:
+        return explicit.strip()
+    if (current or "").strip():
+        return current
+    from .services.store_time import suggest_timezone_for_state
+
+    suggested = suggest_timezone_for_state(state or "")
+    return suggested or ""
 
 
 def compute_readiness(dealership, *, profile=None) -> dict:
@@ -810,6 +854,13 @@ def compute_readiness(dealership, *, profile=None) -> dict:
     i.e. the store's own numbers are driving the est-payment
     line and cards are not silently on the 7.49 / 72 / 10 fallback.
 
+    SESSION_241.1 (walk finding 28 — part 3). ``timezone_set`` is true
+    when the dealership's ``timezone`` column carries a real IANA name.
+    When it is blank the store has no clock; every business-day
+    decision then falls back to the process zone with a visible
+    warning (see ``services.store_time._zone_for``) — and the profile
+    section is not "done" until the operator picks one on onboarding.
+
     Returns the shape:
         {
           "salespeople_added":   bool,   # ≥1 active salesperson
@@ -821,6 +872,7 @@ def compute_readiness(dealership, *, profile=None) -> dict:
                                          #   "24 vehicles · CSV import"
                                          #   ""  when count == 0
           "payment_defaults_set": bool,  # all three of APR/term/down set
+          "timezone_set":        bool,   # dealership.timezone non-blank
         }
     """
     salespeople_count = Salesperson.objects.filter(
@@ -843,6 +895,7 @@ def compute_readiness(dealership, *, profile=None) -> dict:
             vehicles_qs, inventory_count
         ),
         "payment_defaults_set": payment_defaults_set,
+        "timezone_set": bool((dealership.timezone or "").strip()),
     }
 
 

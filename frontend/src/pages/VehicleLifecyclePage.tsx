@@ -48,6 +48,8 @@ import {
   type VehicleStageKey,
 } from "@/lib/api";
 import { getStageMeta, type RoleKey } from "@/lib/lifecycle";
+import { useBrand } from "@/lib/brand";
+import { formatDateTimeInStoreZone } from "@/lib/storeTime";
 
 const WRITE_ROLES = ["recon_manager", "sales_manager", "dealer_owner"];
 
@@ -93,6 +95,7 @@ function _humanizeTransitionError(err: unknown): string {
 }
 
 export default function VehicleLifecyclePage() {
+  const brand = useBrand();
   const { stock } = useParams();
   const { hasRole, roles } = useAuth();
   const [dashboard, setDashboard] =
@@ -215,9 +218,10 @@ export default function VehicleLifecyclePage() {
                     <span className="text-muted-foreground">
                       Entered at:
                     </span>{" "}
-                    {new Date(
+                    {formatDateTimeInStoreZone(
                       dashboard.current_stage.entered_at,
-                    ).toLocaleString()}
+                      brand.timezone,
+                    )}
                   </p>
                   <p>
                     <span className="text-muted-foreground">

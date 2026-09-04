@@ -65,10 +65,10 @@ import datetime as dt
 from typing import Optional
 
 from django.core.management.base import BaseCommand, CommandError
-from django.utils import timezone
 
 from ...models import Dealership
 from ...services.floor_plan import accrue_daily_interest
+from ...services.store_time import store_today
 
 
 class Command(BaseCommand):
@@ -113,7 +113,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dealership = self._resolve_dealership(options["dealership"])
-        as_of = self._resolve_as_of(options["as_of"])
+        as_of = self._resolve_as_of(options["as_of"], dealership)
         dry_run: bool = options["dry_run"]
 
         summary = accrue_daily_interest(
@@ -135,9 +135,9 @@ class Command(BaseCommand):
             ) from exc
 
     @staticmethod
-    def _resolve_as_of(raw: Optional[str]) -> dt.date:
+    def _resolve_as_of(raw: Optional[str], dealership: Dealership) -> dt.date:
         if raw is None:
-            return timezone.now().date()
+            return store_today(dealership)
         try:
             return dt.date.fromisoformat(raw)
         except ValueError as exc:

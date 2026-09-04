@@ -36,11 +36,15 @@ orchestrator counting all tenants) keep working.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
 from django.utils import timezone
+
+
+logger = logging.getLogger(__name__)
 
 
 def _project_zone() -> ZoneInfo:
@@ -57,14 +61,38 @@ def _zone_for(dealership) -> ZoneInfo:
 
     ``dealership`` may be ``None`` (project default) or an object with
     a ``timezone`` attribute (the ``Dealership`` model, or a stub in
-    tests). An unknown IANA name silently downgrades to project TIME_ZONE
-    — the Dealership.save() guard should make this branch cold, but the
-    fallback keeps a legacy row from crashing a request handler.
+    tests). An unknown IANA name silently downgrades to project
+    TIME_ZONE — the Dealership.save() guard should make that branch
+    cold, but the fallback keeps a legacy row from crashing a request
+    handler.
+
+    SESSION_241.1 — a blank zone is not the same as an unknown zone.
+    Since the field default is now ``""``, a fresh store carries a
+    blank column until the operator picks a zone on onboarding. If a
+    business-day helper is called while the column is blank we log a
+    warning naming the tenant and fall back to the project TIME_ZONE.
+    The warning is the "visible" half of "do not leave it silent"; the
+    fallback keeps the request path from crashing while the operator
+    finishes onboarding. The Dealership section of the readiness card
+    (``compute_readiness`` → ``timezone_set``) surfaces the same blank
+    state as an attention item.
     """
     if dealership is None:
         return _project_zone()
-    name = getattr(dealership, "timezone", "") or ""
+    name = (getattr(dealership, "timezone", "") or "").strip()
     if not name:
+        # `getattr` twice — do not assume the caller passed a real
+        # Dealership; test stubs may only expose `pk` / `slug`.
+        pk = getattr(dealership, "pk", None)
+        slug = getattr(dealership, "slug", None)
+        logger.warning(
+            "store_time._zone_for: dealership pk=%s slug=%r has no "
+            "timezone set; falling back to project TIME_ZONE. Business-"
+            "day decisions on this store will run on the process clock "
+            "until the operator picks a zone on onboarding.",
+            pk,
+            slug,
+        )
         return _project_zone()
     try:
         return ZoneInfo(name)

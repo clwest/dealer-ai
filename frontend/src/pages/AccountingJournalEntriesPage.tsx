@@ -51,6 +51,8 @@ import {
   type JournalEntryListPage,
   type JournalEntryTemplate,
 } from "@/lib/accountingApi";
+import { useBrand } from "@/lib/brand";
+import { formatDateTimeInStoreZone } from "@/lib/storeTime";
 
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -68,17 +70,12 @@ function formatMoney(raw: string): string {
 }
 
 
-function formatPostedAt(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// SESSION_241.1 — journal timestamps render in the store's zone via
+// ``formatDateTimeInStoreZone`` (see AccountingJournalEntriesPage
+// render for the ``useBrand`` wiring). The old browser-clock helper
+// used to say Sep 4 in Chicago while the overview said Sep 3 in
+// Phoenix; a dealer comparing the two would see two different days
+// for the same event.
 
 
 function templateToInitialValues(
@@ -119,6 +116,7 @@ function templateToLockedLines(
 
 
 export default function AccountingJournalEntriesPage() {
+  const brand = useBrand();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
   const [result, setResult] = useState<JournalEntryListPage | null>(null);
@@ -489,7 +487,11 @@ export default function AccountingJournalEntriesPage() {
                 </thead>
                 <tbody>
                   {result.entries.map((entry) => (
-                    <EntryRow key={entry.id} entry={entry} />
+                    <EntryRow
+                      key={entry.id}
+                      entry={entry}
+                      timezone={brand.timezone}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -959,13 +961,19 @@ function TemplateRestoreConfirmDialog({
 }
 
 
-function EntryRow({ entry }: { entry: JournalEntryListEntry }) {
+function EntryRow({
+  entry,
+  timezone,
+}: {
+  entry: JournalEntryListEntry;
+  timezone: string;
+}) {
   const isReversal = entry.reverses_id !== null;
   return (
     <tr className="border-b border-border">
       <td className="py-2 font-medium">#{entry.id}</td>
       <td className="py-2 whitespace-nowrap">
-        {formatPostedAt(entry.posted_at)}
+        {formatDateTimeInStoreZone(entry.posted_at, timezone)}
       </td>
       <td className="py-2">{entry.description}</td>
       <td className="py-2">

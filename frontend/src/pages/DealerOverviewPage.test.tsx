@@ -45,6 +45,7 @@ function makeReadiness(
     inventory_count: 0,
     inventory_source: "",
     payment_defaults_set: true,
+    timezone_set: true,
     ...overrides,
   };
 }

@@ -68,6 +68,8 @@ import {
   type LenderSubmissionProjection,
 } from "@/lib/fAndIApi";
 import { formatMoney } from "@/lib/utils";
+import { useBrand } from "@/lib/brand";
+import { formatDateTimeInStoreZone } from "@/lib/storeTime";
 
 const INTAKE_OPTIONS: Array<{ value: "all" | "intake"; label: string }> = [
   { value: "intake", label: "Pre-contract only (default)" },
@@ -213,6 +215,7 @@ const CHIP_CLASSES: Record<DerivedChipState, string> = {
 };
 
 export default function DealerFandIIncoming() {
+  const brand = useBrand();
   const [rows, setRows] = useState<CreditApplicationProjection[]>([]);
   const [intakeFilter, setIntakeFilter] = useState<"all" | "intake">("intake");
   const [loadState, setLoadState] = useState<
@@ -576,14 +579,19 @@ export default function DealerFandIIncoming() {
                         Timing
                       </div>
                       <div className="text-xs">
-                        Captured {new Date(ca.captured_at).toLocaleString()}
+                        Captured{" "}
+                        {formatDateTimeInStoreZone(
+                          ca.captured_at,
+                          brand.timezone,
+                        )}
                       </div>
                       {ctx?.handed_off_to_fandi_at ? (
                         <div className="text-xs">
                           Handed off{" "}
-                          {new Date(
+                          {formatDateTimeInStoreZone(
                             ctx.handed_off_to_fandi_at,
-                          ).toLocaleString()}
+                            brand.timezone,
+                          )}
                         </div>
                       ) : null}
                       {ctx ? (

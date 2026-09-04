@@ -135,6 +135,7 @@ from dealer_ai.services.bhph_promises.bhph_promise import (
 from dealer_ai.services.collection_contacts.collection_contact import (
     record_contact,
 )
+from dealer_ai.services.store_time import store_today
 from dealer_ai.services.repossessions.repossession import (
     mark_recovered,
     record_repossession,
@@ -567,7 +568,7 @@ class Command(BaseCommand):
                 "origination acceptance journey."
             ),
         )
-        sale_date = timezone.now().date()
+        sale_date = store_today(dealership)
         sale = Sale.objects.create(
             dealership=dealership,
             vehicle=vehicle,

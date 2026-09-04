@@ -35,6 +35,8 @@ import {
   reverseJournalEntry,
   type JournalEntry,
 } from "@/lib/accountingApi";
+import { useBrand } from "@/lib/brand";
+import { formatDateTimeInStoreZone } from "@/lib/storeTime";
 
 
 function formatMoney(raw: string): string {
@@ -49,20 +51,13 @@ function formatMoney(raw: string): string {
 }
 
 
-function formatDateTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// SESSION_241.1 — journal timestamps render in the store's zone. See
+// ``formatDateTimeInStoreZone`` in ``lib/storeTime`` for the helper
+// and ``useBrand`` in ``lib/brand`` for the tz string.
 
 
 export default function AccountingJournalEntryDetailPage() {
+  const brand = useBrand();
   const params = useParams<{ pk: string }>();
   const pk = params.pk ? Number(params.pk) : NaN;
   const [entry, setEntry] = useState<JournalEntry | null>(null);
@@ -149,7 +144,7 @@ export default function AccountingJournalEntryDetailPage() {
                 <div className="flex flex-col gap-1">
                   <CardTitle>{entry.description}</CardTitle>
                   <CardDescription>
-                    Posted {formatDateTime(entry.posted_at)}
+                    Posted {formatDateTimeInStoreZone(entry.posted_at, brand.timezone)}
                   </CardDescription>
                 </div>
                 {isReversal ? (
@@ -173,7 +168,7 @@ export default function AccountingJournalEntryDetailPage() {
               />
               <MetaRow
                 label="Row created"
-                value={formatDateTime(entry.created_at)}
+                value={formatDateTimeInStoreZone(entry.created_at, brand.timezone)}
               />
               {isReversal && (
                 <MetaRow

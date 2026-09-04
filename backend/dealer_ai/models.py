@@ -301,12 +301,30 @@ class Dealership(models.Model):
     # ``services.store_time.store_now / store_today / store_localize``
     # for every business-day decision (ledger dates, aging, be-back
     # detection, BHPH delinquency day-counts, follow-up cadences).
+    #
+    # SESSION_241.1 (walk finding 28 — part 3): the default is
+    # ``""`` (blank), not ``"America/Chicago"``. A new store created
+    # tomorrow without an explicit zone must not silently inherit
+    # Chicago — that was the bug SESSION_240 removed. When the field
+    # is blank, ``services.store_time._zone_for`` falls back to the
+    # project ``TIME_ZONE`` and emits a warning naming the tenant, so
+    # a blank column is visible instead of invisible. The onboarding
+    # save path seeds the field from the store's state via
+    # ``suggest_timezone_for_state`` (one-zone states resolve outright;
+    # multi-zone states like TX / FL leave it blank and the operator
+    # sees "Your state has more than one zone — pick one"). The
+    # dealership section of the overview readiness card treats a blank
+    # zone as "not done" (see ``compute_readiness`` — ``timezone_set``).
     timezone = models.CharField(
         max_length=64,
-        default="America/Chicago",
+        blank=True,
+        default="",
         help_text=(
             "IANA time zone name (e.g. America/Phoenix). All business-"
-            "day decisions for this store use this zone."
+            "day decisions for this store use this zone. Blank until "
+            "the operator picks one on onboarding — a blank zone falls "
+            "back to the project TIME_ZONE with a visible warning "
+            "rather than silently inheriting Chicago."
         ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -605,17 +623,20 @@ class Vehicle(models.Model):
         to record the acquisition first — a documented invariant
         of Milestone 2's ledger model.
 
-        Timezone: uses ``django.utils.timezone.now().date()`` for
-        "today", which respects ``settings.TIME_ZONE``
-        (``America/Chicago``). Comparing a
-        timezone-aware "now" against a ``purchase_date`` (a naive
-        :class:`datetime.date`) is safe because ``.date()`` strips
-        the timezone.
+        Timezone: uses :func:`services.store_time.store_today`
+        against ``self.dealership``. A Phoenix store at 22:00 local
+        must age against Phoenix's date, not Chicago's — otherwise
+        the aging column jumps a day at 22:00 for every store west
+        of the process zone. Comparing an aware "today" against a
+        ``purchase_date`` (a naive :class:`datetime.date`) is safe
+        because :func:`store_today` returns a naive ``date``.
         """
         purchase_date = self._purchase_date_or_none()
         if purchase_date is None:
             return None
-        today = timezone.now().date()
+        from .services.store_time import store_today
+
+        today = store_today(self.dealership)
         delta_days = (today - purchase_date).days
         return max(0, delta_days)
 

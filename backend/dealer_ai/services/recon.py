@@ -206,6 +206,7 @@ from ..models import (
     WorkOrderFinding,
     WorkOrderPart,
 )
+from .store_time import store_today
 from .condition_report import (
     latest_completed_condition_report as _latest_completed_condition_report,
 )
@@ -1620,7 +1621,7 @@ def complete_work_order(
         wo.actual_completion_date = (
             actual_completion_date
             if actual_completion_date is not None
-            else timezone.now().date()
+            else store_today(dealership)
         )
         wo.completed_by = completed_by
         wo.completed_at = timezone.now()
@@ -2079,7 +2080,7 @@ def transition_part_status(
         refreshed.status = new_status
         timestamp_field = allowed[new_status]
         if timestamp_field is not None:
-            setattr(refreshed, timestamp_field, timezone.now().date())
+            setattr(refreshed, timestamp_field, store_today(dealership))
         refreshed.full_clean()
         refreshed.save()
         # SESSION_228 Part 1b — the parts side of the ledger.

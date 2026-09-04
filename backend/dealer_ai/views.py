@@ -1188,8 +1188,12 @@ def onboarding_profile(request):
                     # the onboarding page's live "It is 3:12 PM at
                     # the store right now" reads correctly on first
                     # paint.
-                    "dealership_timezone": dealership.timezone
-                    or "America/Chicago",
+                    # SESSION_241.1 — a blank column reads back as
+                    # ``""``. The onboarding page treats blank as
+                    # "operator has not picked yet" and shows the
+                    # picker; a silent "America/Chicago" fallback on
+                    # the wire is what part 3 removed.
+                    "dealership_timezone": dealership.timezone or "",
                     "dealership_local_now": store_now(dealership).isoformat(),
                     "readiness": compute_readiness(dealership, profile=None),
                 }
