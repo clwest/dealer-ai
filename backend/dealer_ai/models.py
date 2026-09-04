@@ -1380,6 +1380,64 @@ ACQUISITION_SOURCE_CHOICES = (
 )
 
 
+class FloorPlanCompany(models.Model):
+    """SESSION_243 books-2 — a company that floors this dealer's cars.
+
+    Dealer-maintained panel entry, same shape as the F&I
+    ``LenderProgram`` panel but for a different domain: inventory
+    financing (the company loans the dealer money to buy the car,
+    secured against the car itself), not consumer credit. The two
+    panels are deliberately separate — a floor-plan provider's
+    domain vocabulary (rate, code, contact) and lifecycle
+    (per-vehicle draw / payoff at sale) has no overlap with a
+    lender program's (tier cutoffs, stips, credit-application
+    submissions).
+
+    :attr:`VehicleAcquisition.floor_plan_company` FKs into this
+    row. No company on an acquisition means the car was paid for
+    in cash and held in house — a real state, not a missing value.
+
+    **Uniqueness.** ``(dealership, name)`` unique per-dealership.
+    Deactivated rows still occupy the name slot; operators either
+    reactivate or use a distinct name.
+    """
+
+    dealership = models.ForeignKey(
+        "Dealership",
+        on_delete=models.CASCADE,
+        related_name="floor_plan_companies",
+    )
+    name = models.CharField(max_length=255)
+    # Short code that lands in the JE memo alongside the company name.
+    code = models.CharField(max_length=16)
+    # Free-form single line — contact person / phone / email.
+    contact = models.CharField(max_length=255, blank=True, default="")
+    # Annual percentage rate the company charges for flooring —
+    # informational this session (curtailments, aging, interest
+    # accrual belong to later children of the books scope).
+    apr = models.DecimalField(
+        max_digits=6, decimal_places=4, default=0
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "Floor plan company"
+        verbose_name_plural = "Floor plan companies"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("dealership", "name"),
+                name="unique_floor_plan_company_name_per_dealership",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        active = "active" if self.is_active else "inactive"
+        return f"FloorPlanCompany #{self.pk} — {self.name} ({active})"
+
+
 class VehicleAcquisition(models.Model):
     """Milestone 2 · Increment 1 — per-vehicle acquisition record.
 
@@ -1469,12 +1527,31 @@ class VehicleAcquisition(models.Model):
     # null.
     posted_at = models.DateTimeField(blank=True, null=True)
     # SESSION_241 books-1 — when True the acquisition credit-side lands
-    # on 210000 Floor Plan Payable instead of 100000 Cash on Hand. The
-    # store-level "we floor our cars" switch is a later child of the
-    # books scope (SCOPE_books-real-and-exportable.md, Copper Canyon
-    # persona currently pays cash); this per-row flag is the plumbing
-    # the switch will drive.
+    # on 210000 Floor Plan Payable instead of 100000 Cash on Hand.
+    #
+    # SESSION_243 books-2 — this field is now derived from
+    # :attr:`floor_plan_company` and kept in sync by :meth:`save` so
+    # the two can never disagree. A row with a company is floored;
+    # a row without a company is paid cash and held in house. Reads
+    # should prefer ``floor_plan_company_id`` for correctness; the
+    # field is retained on disk for backward compatibility with
+    # SESSION_241 callers and to keep the shape of the acquisition
+    # ledger uniform.
     is_floored = models.BooleanField(default=False)
+    # SESSION_243 books-2 — the floor company that fronted the money
+    # for this car. NULL means the car was paid for in cash and held
+    # in house (a real state, not a missing value). The acquisition
+    # posting reads this FK to (a) pick the credit account
+    # (210000 Floor Plan Payable vs 100000 Cash on Hand) and
+    # (b) drop the company name into the JE memo so entries read
+    # like a bookkeeper wrote them.
+    floor_plan_company = models.ForeignKey(
+        "FloorPlanCompany",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="acquisitions",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1515,6 +1592,32 @@ class VehicleAcquisition(models.Model):
                     )
                 }
             )
+        # SESSION_243 books-2 — cross-tenant guard for the floor-plan
+        # company panel entry. A company from another dealership on
+        # this row would let a tenant credit another tenant's payable
+        # sub-ledger through the acquisition JE.
+        if (
+            self.floor_plan_company_id is not None
+            and self.floor_plan_company.dealership_id != self.dealership_id
+        ):
+            raise ValidationError(
+                {
+                    "floor_plan_company": (
+                        "VehicleAcquisition.floor_plan_company must belong "
+                        "to the same dealership as the acquisition."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        """SESSION_243 books-2 — keep ``is_floored`` and
+        ``floor_plan_company_id`` in lockstep so the two can never
+        disagree. A company on the row means the car is floored;
+        no company means it was paid cash and held in house. Any
+        caller-supplied ``is_floored`` is overridden here.
+        """
+        self.is_floored = self.floor_plan_company_id is not None
+        return super().save(*args, **kwargs)
 
 
 # Milestone 2 · Increment 1 — VehicleCost category vocabulary.

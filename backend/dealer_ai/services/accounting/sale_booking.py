@@ -10,6 +10,16 @@ then the full basis is relieved out of inventory into COGS. RWIP
 stays at zero or small-positive on the trial balance — no more
 $-379K asset-side surprise.
 
+SESSION_243 books-2 refit (see
+``docs/_internal/TASK_books-2-three-floor-companies.md``): a car
+that was floored at acquisition retires its own floor when it
+sells. The sale-booking journal now includes a DR 210000 Floor
+Plan Payable / CR 100000 Cash on Hand pair for that car's
+floored principal — the acquisition basis at the moment of the
+draw. Without this the payable only ever grows; with it, Floor
+Plan Payable at the end of a full seed equals the acquisition
+basis of the floored cars still on the lot and nothing else.
+
 Finance-type → receivable account mapping (unchanged from M15.1):
 
 - ``cash`` → ``100000`` Cash on Hand.
@@ -71,6 +81,7 @@ CONTRACTS_IN_TRANSIT_ACCOUNT_CODE = "120000"
 USED_VEHICLE_INVENTORY_ACCOUNT_CODE = "121000"
 BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE = "123000"
 RECON_WIP_ACCOUNT_CODE = "122000"
+FLOOR_PLAN_PAYABLE_ACCOUNT_CODE = "210000"
 VEHICLE_SALES_RETAIL_ACCOUNT_CODE = "400000"
 COST_OF_VEHICLE_SALES_ACCOUNT_CODE = "500000"
 
@@ -278,6 +289,54 @@ def post_sale_booking_journal(
             sale.pk,
             stock_number,
         )
+
+    # SESSION_243 books-2 — a floored car retires its own floor on
+    # sale. DR 210000 Floor Plan Payable / CR 100000 Cash on Hand for
+    # the acquisition principal that was drawn on the floor line at
+    # acquisition (purchase price + acquisition fees — the same basis
+    # that was credited to 210000 by ``post_acquisition_journal``).
+    # Without this the payable only ever grows and Floor Plan Payable
+    # becomes the next account that lies. The invariant asserted by
+    # the books-2 tests: after a full seed, Floor Plan Payable equals
+    # the acquisition basis of floored cars still on the lot and
+    # nothing else.
+    acquisition = getattr(sale.vehicle, "acquisition", None)
+    if (
+        acquisition is not None
+        and acquisition.floor_plan_company_id is not None
+    ):
+        floored_principal = (
+            acquisition.purchase_price
+            + acquisition.buyer_fees
+            + acquisition.arbitration_fees
+            + acquisition.transportation_cost
+            + acquisition.title_acquisition_cost
+        )
+        if floored_principal > Decimal("0.00"):
+            floor_plan_payable = _lookup_required_account(
+                dealership, FLOOR_PLAN_PAYABLE_ACCOUNT_CODE
+            )
+            cash = _lookup_required_account(
+                dealership, CASH_ACCOUNT_CODE
+            )
+            company = acquisition.floor_plan_company
+            lines.append(
+                JournalLineInput(
+                    account=floor_plan_payable,
+                    debit=floored_principal,
+                    memo=(
+                        f"Retire floor plan — {company.name} "
+                        f"({company.code})"
+                    ),
+                )
+            )
+            lines.append(
+                JournalLineInput(
+                    account=cash,
+                    credit=floored_principal,
+                    memo="Floor plan payoff on sale",
+                )
+            )
 
     return post_journal_entry(
         dealership=dealership,

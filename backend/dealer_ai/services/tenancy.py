@@ -274,6 +274,13 @@ def _read_dealership_header(request) -> str:
 # trigger app-registry access at import time — the actual model class
 # lookup happens inside ``AppConfig.ready()``.
 _TENANT_CARRIER_MODEL_NAMES = (
+    # SESSION_243 books-2 — sits at the head of the tuple so that
+    # ``reversed(_TENANT_CARRIER_MODEL_NAMES)`` deletes it LAST — after
+    # ``Vehicle`` has cascaded and taken every ``VehicleAcquisition``
+    # (with its PROTECT FK into this table) with it. Otherwise the
+    # panel entry can't be deleted while any acquisition still points
+    # at it. See ``_delete_demo_store_children``.
+    "FloorPlanCompany",
     "Vehicle",
     "Salesperson",
     "ChatSession",

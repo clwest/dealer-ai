@@ -1,4 +1,5 @@
 """SESSION_241 books-1 · acquisition posting.
+SESSION_243 books-2 · floor company on the memo.
 
 Per ``TASK_books-1-acquisition-and-relief.md`` §1: buying a car debits
 :code:`121000 Used Vehicle Inventory` and credits :code:`100000 Cash on
@@ -7,6 +8,12 @@ floored). Today no acquisition is ever booked, and every sale credits
 the car's whole cost out of Recon WIP — so RWIP shows negative and the
 inventory account has never been touched. This module fixes the debit
 side of the spine.
+
+Per ``TASK_books-2-three-floor-companies.md``: the credit side reads
+from ``VehicleAcquisition.floor_plan_company`` (not the derived
+``is_floored`` boolean) so the two can never disagree, and the memo
+on the floor-plan line names the company by name + short code so the
+entry reads like a bookkeeper wrote it.
 
 - :func:`post_acquisition_journal` — atomic sibling verb. Posts one
   balanced two-line entry against the acquisition's cost basis
@@ -154,18 +161,25 @@ def post_acquisition_journal(
     inventory = _lookup_required_account(
         dealership, USED_VEHICLE_INVENTORY_ACCOUNT_CODE
     )
+    # SESSION_243 books-2 — read from the FK, not the derived
+    # ``is_floored`` field. The two are kept in sync in
+    # ``VehicleAcquisition.save`` but the FK is the source of truth
+    # and the company name lands in the memo.
+    company = acquisition.floor_plan_company
+    is_floored = company is not None
     credit_code = (
-        FLOOR_PLAN_PAYABLE_ACCOUNT_CODE
-        if acquisition.is_floored
-        else CASH_ACCOUNT_CODE
+        FLOOR_PLAN_PAYABLE_ACCOUNT_CODE if is_floored else CASH_ACCOUNT_CODE
     )
     credit_account = _lookup_required_account(dealership, credit_code)
 
     description = _acquired_description(acquisition)
     inventory_memo = "Vehicle into inventory"
-    credit_memo = (
-        "Floor plan draw" if acquisition.is_floored else "Cash paid at acquisition"
-    )
+    if is_floored:
+        credit_memo = (
+            f"Floor plan draw — {company.name} ({company.code})"
+        )
+    else:
+        credit_memo = "Cash paid at acquisition"
 
     entry = post_journal_entry(
         dealership=dealership,

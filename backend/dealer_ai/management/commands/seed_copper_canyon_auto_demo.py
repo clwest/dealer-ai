@@ -56,6 +56,7 @@ import datetime as dt
 import hashlib
 import random as _random
 from decimal import Decimal
+from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
@@ -110,7 +111,9 @@ from dealer_ai.models import (
     DealerOnboardingProfile,
     Delivery,
     DealWriteup,
+    FloorPlanCompany,
     GLAccount,
+    JournalEntry,
     LEAD_CHANNEL_CHAT,
     LEAD_CHANNEL_LISTING_FORM,
     LEAD_CHANNEL_PHONE,
@@ -124,6 +127,9 @@ from dealer_ai.models import (
     VehicleStageEvent,
     Vendor,
     WorkOrder,
+)
+from dealer_ai.services.accounting.acquisition import (
+    post_acquisition_journal,
 )
 from dealer_ai.services.accounting.journal import (
     JournalLineInput,
@@ -413,6 +419,17 @@ class Command(BaseCommand):
                 f"buckets={bhph_delinquency['bucket_histogram']!r}, "
                 f"transitioned={bhph_delinquency['transitioned_count']}."
             )
+            # SESSION_243 books-2 — three floor companies, some cars
+            # still in cash. Runs LAST so every acquisition + sale has
+            # already landed. Reverses the acquisition JE for each
+            # floored car and re-posts through the FK path so the
+            # credit lands on 210000 Floor Plan Payable and the memo
+            # names the company. For sold floored cars, drops a
+            # separate floor-payoff JE (DR 210000 / CR 100000) so the
+            # payable retires when the car sells.
+            floor_summary = _provision_floor_plan_companies_and_assign(
+                dealership, owner, self.stdout
+            )
 
         # SESSION_232.2 — reseeding without wiring the public-dealership
         # env var leaves the public chat + showroom bound to the empty
@@ -453,7 +470,8 @@ class Command(BaseCommand):
                 f"deal_writeup_pk={writeup_pk}, "
                 f"sla_stale_wo_pk={sla_wo_pk}, "
                 f"sla_breach_records={sla_breaches}, "
-                f"buyer_estimate_buyer_id={estimate_buyer}."
+                f"buyer_estimate_buyer_id={estimate_buyer}, "
+                f"floor_plan={floor_summary}."
             )
         )
 
@@ -4013,3 +4031,235 @@ def _seed_buyer_estimate_accuracy(
         "so buyer-estimate-accuracy has a computable row."
     )
     return owner.pk
+
+
+# ---------------------------------------------------------------------------
+# SESSION_243 books-2 — three floor companies, some cars still in cash.
+#
+# Per ``docs/_internal/TASK_books-2-three-floor-companies.md`` §5:
+# three invented company names (NOT any real floor plan provider),
+# uneven split with a primary carrying most of the floored lot, and
+# a genuine share held in cash. The bucket table below produces:
+#
+#   cash-held      : 40% (8 of every 20 acquisitions)
+#   Desert Peak    : 35% (7/20) — primary
+#   Sonoran Inv.   : 15% (3/20) — secondary
+#   Ridgeline FP   : 10% (2/20) — tertiary
+#   → 60% floored total
+#
+# Deterministic per acquisition pk so re-seeds land on the same
+# distribution. The three names are invented — a Yuma-adjacent
+# desert/geographic register, deliberately unlike NextGear, AFC,
+# Westlake, Kinetic and Rock so the demo can't be mistaken for
+# implying a real business relationship.
+# ---------------------------------------------------------------------------
+
+
+_FLOOR_PLAN_COMPANIES: tuple[dict, ...] = (
+    {
+        "name": "Desert Peak Capital",
+        "code": "DPC",
+        "contact": "Nadia Ellis · nadia@desertpeakcapital.example · (928) 555-0141",
+        "apr": Decimal("0.0850"),
+    },
+    {
+        "name": "Sonoran Inventory Finance",
+        "code": "SIF",
+        "contact": "Marco Ruiz · marco@sonoraninv.example · (928) 555-0177",
+        "apr": Decimal("0.0925"),
+    },
+    {
+        "name": "Ridgeline Floorplan Group",
+        "code": "RFG",
+        "contact": "Priya Ahluwalia · priya@ridgelinefp.example · (602) 555-0193",
+        "apr": Decimal("0.1015"),
+    },
+)
+
+
+# Bucket → company-index (0/1/2) or None for cash-held.
+# 20 buckets tuned to a 40% / 35% / 15% / 10% split with the primary
+# carrying most of the floored share.
+_FLOOR_PLAN_BUCKETS: tuple[Optional[int], ...] = (
+    None, None, None, None, None, None, None, None,  # 8 cash (40%)
+    0, 0, 0, 0, 0, 0, 0,                              # 7 primary (35%)
+    1, 1, 1,                                          # 3 secondary (15%)
+    2, 2,                                             # 2 tertiary (10%)
+)
+
+
+def _provision_floor_plan_companies_and_assign(
+    dealership: Dealership, owner, stdout
+) -> str:
+    """Create the three panel entries, then reassign acquisitions.
+
+    Runs after every acquisition and every sale has landed. Two
+    passes:
+
+    1. **Acquisition reassignment.** For each acquisition eligible
+       for flooring (bucket maps to a company index), reverse the
+       existing DR 121000 / CR 100000 JE and re-post through the FK
+       path so credit lands on 210000 Floor Plan Payable and the
+       memo names the company. Trade acquisitions and repossessions
+       stay cash — real stores don't floor a trade-in.
+
+    2. **Sale-time payoff.** For each Sale whose vehicle is now
+       floored, post a separate DR 210000 / CR 100000 JE for that
+       car's floored principal. Description reads like a
+       bookkeeper's payoff line, no milestone numbers.
+
+    Returns a one-line summary string for the seed's SUCCESS log.
+    Idempotent: reseeds delete the whole tenant before this runs.
+    """
+    from decimal import Decimal as _D
+
+    companies = [
+        FloorPlanCompany.objects.create(
+            dealership=dealership,
+            name=str(spec["name"]),
+            code=str(spec["code"]),
+            contact=str(spec["contact"]),
+            apr=spec["apr"],
+            is_active=True,
+        )
+        for spec in _FLOOR_PLAN_COMPANIES
+    ]
+
+    acquisitions = list(
+        VehicleAcquisition.objects.filter(dealership=dealership)
+        .select_related("vehicle", "floor_plan_company")
+        .order_by("pk")
+    )
+
+    # Pass 1: reassign acquisition rows and re-post.
+    reposted = 0
+    skipped_traded = 0
+    for index, acq in enumerate(acquisitions):
+        # Trades and repossessions do not draw floor plan — the store
+        # already owns the car (a trade-in came in on the deal; a repo
+        # was already the dealer's paper). Keep them cash regardless
+        # of the bucket.
+        if acq.source in (SOURCE_TRADE,):
+            skipped_traded += 1
+            continue
+        company_index = _FLOOR_PLAN_BUCKETS[index % len(_FLOOR_PLAN_BUCKETS)]
+        if company_index is None:
+            continue  # already cash — leave the existing JE alone
+        company = companies[company_index]
+
+        # DELETE the original acquisition JE (posted DR 121000 /
+        # CR 100000 by the post_save signal), then clear posted_at
+        # and re-post through the FK path. A production ledger would
+        # reverse-and-repost to preserve the immutable audit trail,
+        # but this is a demo seed being rebuilt from scratch and the
+        # reversal chain would fight ``reset_demo_store`` (self-FK
+        # PROTECT on JournalEntry.reverses). Delete-and-repost is
+        # correct for the demo lifecycle.
+        JournalEntry.objects.filter(
+            dealership=dealership,
+            description__startswith=(
+                f"Acquired #{acq.vehicle.stock_number}"
+            ),
+        ).delete()
+        acq.floor_plan_company = company
+        acq.posted_at = None
+        acq.save(
+            update_fields=[
+                "floor_plan_company",
+                "is_floored",
+                "posted_at",
+                "updated_at",
+            ]
+        )
+        post_acquisition_journal(
+            dealership=dealership,
+            acquisition=acq,
+            posted_by_user=owner,
+        )
+        reposted += 1
+
+    # Pass 2: retire the floor for sold floored cars — a separate
+    # payoff JE per sale. New sales after the seed will get the
+    # payoff bundled into the sale JE by
+    # ``post_sale_booking_journal``; the seed's pre-existing sale
+    # JEs are left untouched and the payoff runs beside them.
+    floor_plan_payable = GLAccount.objects.get(
+        dealership=dealership, code="210000", is_active=True
+    )
+    cash_account = GLAccount.objects.get(
+        dealership=dealership, code="100000", is_active=True
+    )
+    payoffs = 0
+    sold_qs = (
+        Sale.objects.filter(dealership=dealership)
+        .select_related("vehicle", "vehicle__acquisition")
+        .order_by("pk")
+    )
+    for sale in sold_qs:
+        acq = getattr(sale.vehicle, "acquisition", None)
+        if acq is None or acq.floor_plan_company_id is None:
+            continue
+        principal = (
+            acq.purchase_price
+            + acq.buyer_fees
+            + acq.arbitration_fees
+            + acq.transportation_cost
+            + acq.title_acquisition_cost
+        )
+        if principal <= _D("0.00"):
+            continue
+        company = acq.floor_plan_company
+        stock = sale.vehicle.stock_number
+        post_journal_entry(
+            dealership=dealership,
+            description=(
+                f"Floor payoff — #{stock} — Sale #{sale.pk} "
+                f"({company.name})"
+            ),
+            posted_at=None,
+            posted_by_user=owner,
+            lines=[
+                JournalLineInput(
+                    account=floor_plan_payable,
+                    debit=principal,
+                    memo=(
+                        f"Retire floor plan — {company.name} "
+                        f"({company.code})"
+                    ),
+                ),
+                JournalLineInput(
+                    account=cash_account,
+                    credit=principal,
+                    memo="Floor plan payoff on sale",
+                ),
+            ],
+        )
+        payoffs += 1
+
+    on_lot_floored_basis = sum(
+        (
+            acq.purchase_price
+            + acq.buyer_fees
+            + acq.arbitration_fees
+            + acq.transportation_cost
+            + acq.title_acquisition_cost
+        )
+        for acq in acquisitions
+        if acq.floor_plan_company_id is not None
+        and not Sale.objects.filter(vehicle=acq.vehicle_id).exists()
+    )
+
+    stdout.write(
+        "provisioned floor plan panel: "
+        f"companies={len(companies)}, reposted={reposted} acquisition JE(s) "
+        f"onto floor plan, kept {skipped_traded} trade acquisition(s) in "
+        f"cash, {payoffs} sold-floored car(s) paid off. Principal owed on "
+        f"floored cars still on the lot = ${on_lot_floored_basis:,.2f}; "
+        "any manual interest-accrual JEs from ``_seed_journal_month`` sit "
+        "on top of that on 210000."
+    )
+    return (
+        f"companies={len(companies)}, "
+        f"reposted={reposted}, payoffs={payoffs}, "
+        f"principal_still_on_lot=${on_lot_floored_basis:,.2f}"
+    )

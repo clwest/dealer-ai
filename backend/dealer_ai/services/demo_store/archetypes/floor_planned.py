@@ -89,6 +89,7 @@ from ....models import (
     ConditionReport,
     CustomerLead,
     Dealership,
+    FloorPlanCompany,
     ReconDecision,
     Salesperson,
     UserDealershipRole,
@@ -435,7 +436,26 @@ class FloorPlannedArchetypeBuilder(ArchetypeBuilder):
             "the builder means a bypass. Broken invariant."
         )
 
-        stock_numbers, staged_vehicles = _seed_inventory(dealership)
+        # SESSION_243 books-2 — the floor-planned archetype now
+        # provisions its own single floor-plan company on the panel
+        # so ``VehicleAcquisition.floor_plan_company`` FK can be set
+        # for auction buys. ``is_floored`` is derived from the FK on
+        # save; the archetype used to set it directly, which under
+        # the books-2 invariant would silently reset to False.
+        floor_company = FloorPlanCompany.objects.create(
+            dealership=dealership,
+            name="Sun Belt Wholesale Capital",
+            code="SBWC",
+            contact=(
+                "Toni Alcaraz · toni@sunbeltwholesalecap.example · "
+                "(760) 555-0146"
+            ),
+            apr=Decimal("0.0885"),
+            is_active=True,
+        )
+        stock_numbers, staged_vehicles = _seed_inventory(
+            dealership, floor_company=floor_company
+        )
         staff_by_slug = _seed_staff(dealership)
         leads_by_lead_index = _seed_leads(
             dealership, staff_by_slug
@@ -479,6 +499,8 @@ class FloorPlannedArchetypeBuilder(ArchetypeBuilder):
 
 def _seed_inventory(
     dealership: Dealership,
+    *,
+    floor_company: FloorPlanCompany,
 ) -> tuple[list[str], dict[str, Vehicle]]:
     stock_numbers: list[str] = []
     staged: dict[str, Vehicle] = {}
@@ -519,7 +541,9 @@ def _seed_inventory(
                 "Manheim SoCal, lane 4" if source == SOURCE_AUCTION
                 else f"Trade-in from prior deal, ref #{index:03d}"
             ),
-            is_floored=(source == SOURCE_AUCTION),
+            floor_plan_company=(
+                floor_company if source == SOURCE_AUCTION else None
+            ),
         )
 
         ensure_current_stage(

@@ -27,6 +27,7 @@ from dealer_ai.models import (
     SOURCE_AUCTION,
     SOURCE_TRADE,
     Dealership,
+    FloorPlanCompany,
     JournalEntry,
     Sale,
     Vehicle,
@@ -63,14 +64,28 @@ def _mk_acquisition(
     price: str = "12000.00",
     source: str = SOURCE_AUCTION,
     is_floored: bool = False,
+    floor_plan_company: FloorPlanCompany | None = None,
 ) -> VehicleAcquisition:
+    # SESSION_243 books-2 — ``is_floored`` is now derived from the FK
+    # inside ``VehicleAcquisition.save``. Legacy callers that passed
+    # ``is_floored=True`` without a company get one lazily so the JE
+    # still lands on 210000 Floor Plan Payable.
+    if is_floored and floor_plan_company is None:
+        floor_plan_company, _ = FloorPlanCompany.objects.get_or_create(
+            dealership=dealership,
+            name="Books-1 legacy test panel",
+            defaults={
+                "code": "TEST",
+                "apr": Decimal("0.0900"),
+            },
+        )
     return VehicleAcquisition.objects.create(
         dealership=dealership,
         vehicle=vehicle,
         source=source,
         purchase_price=Decimal(price),
         purchase_date=dt.date(2026, 8, 1),
-        is_floored=is_floored,
+        floor_plan_company=floor_plan_company,
     )
 
 
