@@ -20,7 +20,20 @@ vi.mock("@/lib/accountingApi", async () => {
   };
 });
 
+// SESSION_244 (walk finding 53) — the page seeds the picker from
+// ``useBrand().timezone``, so the profile fetch has to resolve with a
+// real IANA zone before the picker's default is anything but blank.
+vi.mock("@/lib/api", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
+  return {
+    ...actual,
+    fetchOnboardingProfile: vi.fn(),
+  };
+});
+
+import { fetchOnboardingProfile, type OnboardingProfilePayload } from "@/lib/api";
 import { ApiError } from "@/lib/authFetch";
+import { storeTodayIsoDate } from "@/lib/storeTime";
 import {
   fetchCostPostingFailures,
   fetchTrialBalance,
@@ -187,6 +200,19 @@ async function renderPage() {
 }
 
 
+// Any real IANA zone works. Phoenix (no DST) keeps the arithmetic
+// visible for maintainers debugging a failing assertion.
+const STORE_TIMEZONE = "America/Phoenix";
+
+function makeProfilePayload(): OnboardingProfilePayload {
+  // The page only reads ``dealership_timezone``; the rest of the
+  // OnboardingProfilePayload shape can be stubbed as the resolver's
+  // fallbacks handle missing values. Cast keeps this stub small.
+  return {
+    dealership_timezone: STORE_TIMEZONE,
+  } as unknown as OnboardingProfilePayload;
+}
+
 describe("AccountingTrialBalancePage", () => {
   beforeEach(() => {
     vi.mocked(fetchTrialBalance).mockReset();
@@ -199,6 +225,8 @@ describe("AccountingTrialBalancePage", () => {
     vi.mocked(listTrialBalanceSnapshots).mockResolvedValue(makeSnapshotList());
     vi.mocked(freezeTrialBalance).mockReset();
     vi.mocked(fetchTrialBalanceSnapshot).mockReset();
+    vi.mocked(fetchOnboardingProfile).mockReset();
+    vi.mocked(fetchOnboardingProfile).mockResolvedValue(makeProfilePayload());
   });
 
   // ---- M14.2 legacy coverage (preserved) --------------------------------
@@ -228,6 +256,12 @@ describe("AccountingTrialBalancePage", () => {
         </Routes>
       </MemoryRouter>,
     );
+    // The page gates its first fetch on the brand profile arriving
+    // (SESSION_244 — store-zone seeding). Wait until the fetch has
+    // fired before resolving it.
+    await waitFor(() => {
+      expect(fetchTrialBalance).toHaveBeenCalled();
+    });
     expect(screen.getByText(/Loading trial balance/i)).toBeInTheDocument();
     resolveIt(makeSnapshot());
     await waitFor(() =>
@@ -348,25 +382,25 @@ describe("AccountingTrialBalancePage", () => {
 
   // ---- M17.2 new coverage -----------------------------------------------
 
-  it("renders the as_of picker with today as default", async () => {
+  it("renders the as_of picker seeded from the store's today (not the browser's)", async () => {
     await renderPage();
     const picker = screen.getByLabelText(/As of/i) as HTMLInputElement;
     expect(picker).toBeInTheDocument();
     expect(picker.type).toBe("date");
-    const today = new Date();
-    const expected = `${today.getFullYear()}-${String(
-      today.getMonth() + 1,
-    ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    expect(picker.value).toBe(expected);
+    await waitFor(() => {
+      expect(picker.value).toBe(storeTodayIsoDate(STORE_TIMEZONE));
+    });
   });
 
   it("passes the picker date to fetchTrialBalance as an ISO timestamp", async () => {
     await renderPage();
-    const [call] = vi.mocked(fetchTrialBalance).mock.calls;
-    expect(call).toBeDefined();
-    expect(typeof call[0]).toBe("string");
-    // ISO timestamp should be end-of-day.
-    expect(call[0]).toMatch(/T\d{2}:\d{2}:\d{2}/);
+    await waitFor(() => {
+      const [call] = vi.mocked(fetchTrialBalance).mock.calls;
+      expect(call).toBeDefined();
+      expect(typeof call[0]).toBe("string");
+      // ISO timestamp should be end-of-day.
+      expect(call[0]).toMatch(/T\d{2}:\d{2}:\d{2}/);
+    });
   });
 
   it("refetches trial balance when the picker changes", async () => {

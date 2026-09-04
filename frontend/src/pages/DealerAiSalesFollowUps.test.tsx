@@ -17,6 +17,17 @@ vi.mock("@/lib/salesApi", async () => {
   };
 });
 
+// SESSION_244 (walk finding 53) — the "due today" filter is a
+// store-day concept; the page reads the store's zone from useBrand().
+vi.mock("@/lib/api", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
+  return {
+    ...actual,
+    fetchOnboardingProfile: vi.fn(),
+  };
+});
+
+import { fetchOnboardingProfile, type OnboardingProfilePayload } from "@/lib/api";
 import {
   completeTask,
   listFollowUpTasks,
@@ -79,6 +90,9 @@ describe("DealerAiSalesFollowUps", () => {
     vi.mocked(skipTask).mockResolvedValue(
       makeTask({ id: 1, state: "skipped" }),
     );
+    vi.mocked(fetchOnboardingProfile).mockResolvedValue({
+      dealership_timezone: "America/Phoenix",
+    } as unknown as OnboardingProfilePayload);
   });
 
   afterEach(() => vi.clearAllMocks());

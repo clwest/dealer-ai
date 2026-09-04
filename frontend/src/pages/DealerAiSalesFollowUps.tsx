@@ -26,6 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useBrand } from "@/lib/brand";
 import {
   completeTask,
   listFollowUpTasks,
@@ -33,6 +34,10 @@ import {
   type FollowUpTaskProjection,
   type FollowUpTaskState,
 } from "@/lib/salesApi";
+import {
+  dateEndOfDayInStoreZoneIso,
+  storeTodayIsoDate,
+} from "@/lib/storeTime";
 import { formatDateTime, plural } from "@/lib/text";
 
 type StateFilter = "" | FollowUpTaskState;
@@ -53,6 +58,7 @@ const STATE_OPTIONS: Array<{ value: StateFilter; label: string }> = [
 ];
 
 export default function DealerAiSalesFollowUps() {
+  const brand = useBrand();
   const [tasks, setTasks] = useState<FollowUpTaskProjection[]>([]);
   const [stateFilter, setStateFilter] = useState<StateFilter>("pending");
   const [dueTodayOnly, setDueTodayOnly] = useState(true);
@@ -62,12 +68,18 @@ export default function DealerAiSalesFollowUps() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<number | null>(null);
 
+  // SESSION_244 (walk finding 53) — "due today" is a store-day concept.
+  // Building the end-of-day boundary in the browser's zone truncates
+  // the last hour east of the store (queue prematurely empties) or
+  // reaches into the store's next day west of it. Route through the
+  // store's zone. brand.timezone is empty until the profile fetch
+  // resolves; the load effect below waits for brand.loaded so we don't
+  // fire an initial wrong-zone fetch and then immediately re-fetch.
   const dueBefore = useMemo(() => {
     if (!dueTodayOnly) return undefined;
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    return end.toISOString();
-  }, [dueTodayOnly]);
+    const today = storeTodayIsoDate(brand.timezone);
+    return dateEndOfDayInStoreZoneIso(today, brand.timezone);
+  }, [dueTodayOnly, brand.timezone]);
 
   const load = useCallback(async () => {
     setLoadState("loading");
@@ -89,8 +101,9 @@ export default function DealerAiSalesFollowUps() {
   }, [stateFilter, dueBefore]);
 
   useEffect(() => {
+    if (!brand.loaded) return;
     void load();
-  }, [load]);
+  }, [brand.loaded, load]);
 
   const handleTransition = useCallback(
     async (taskId: number, verb: "complete" | "skip") => {

@@ -21,11 +21,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  TrialBalanceDatePicker,
-  dateToEndOfDayIso,
-  todayIsoDate,
-} from "@/components/accounting/TrialBalanceDatePicker";
+import { TrialBalanceDatePicker } from "@/components/accounting/TrialBalanceDatePicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,7 +48,11 @@ import {
   type TrialBalanceSnapshotListPage,
 } from "@/lib/accountingApi";
 import { useBrand } from "@/lib/brand";
-import { formatDateTimeInStoreZone } from "@/lib/storeTime";
+import {
+  dateEndOfDayInStoreZoneIso,
+  formatDateTimeInStoreZone,
+  storeTodayIsoDate,
+} from "@/lib/storeTime";
 
 
 const ACCOUNT_TYPE_LABELS: Record<GLAccountType, string> = {
@@ -90,7 +90,10 @@ type FreezeState = "idle" | "posting" | "success" | "error";
 
 export default function AccountingTrialBalancePage() {
   const brand = useBrand();
-  const [asOfDate, setAsOfDate] = useState<string>(todayIsoDate);
+  // SESSION_244 (walk finding 53) — the default date is the store's
+  // today, not the browser's. Left blank until the brand fetch resolves
+  // so we don't briefly render (and re-fetch) a wrong-zone default.
+  const [asOfDate, setAsOfDate] = useState<string>("");
   const [snapshot, setSnapshot] = useState<TrialBalanceSnapshot | null>(null);
   const [failures, setFailures] = useState<CostPostingFailure[]>([]);
   const [snapshotList, setSnapshotList] =
@@ -116,15 +119,24 @@ export default function AccountingTrialBalancePage() {
     }
   }, []);
 
+  // Seed the picker with the store's today once the brand payload is in
+  // — brand.timezone is empty until then and empty falls back to the
+  // browser's zone, which is exactly the bug this session is fixing.
   useEffect(() => {
+    if (!brand.loaded) return;
+    setAsOfDate((current) => current || storeTodayIsoDate(brand.timezone));
+  }, [brand.loaded, brand.timezone]);
+
+  useEffect(() => {
+    if (!asOfDate) return;
     let cancelled = false;
     async function load() {
       setLoadState("loading");
       setErrorMessage(null);
       try {
-        const asOfIso = asOfDate ? dateToEndOfDayIso(asOfDate) : undefined;
+        const asOfIso = dateEndOfDayInStoreZoneIso(asOfDate, brand.timezone);
         const [snap, failuresResult, list] = await Promise.all([
-          fetchTrialBalance(asOfIso),
+          fetchTrialBalance(asOfIso || undefined),
           fetchCostPostingFailures(),
           listTrialBalanceSnapshots({ pageSize: 10 }).catch(() => null),
         ]);
@@ -145,14 +157,14 @@ export default function AccountingTrialBalancePage() {
     return () => {
       cancelled = true;
     };
-  }, [asOfDate]);
+  }, [asOfDate, brand.timezone]);
 
   async function handleFreeze() {
     if (!asOfDate) return;
     setFreezeState("posting");
     setFreezeMessage(null);
     try {
-      const asOfIso = dateToEndOfDayIso(asOfDate);
+      const asOfIso = dateEndOfDayInStoreZoneIso(asOfDate, brand.timezone);
       const frozen = await freezeTrialBalance(asOfIso);
       setFreezeState("success");
       setFreezeMessage(

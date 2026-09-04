@@ -72,6 +72,96 @@ export function storeNowLabel(
   }).format(reference);
 }
 
+// SESSION_244 (walk finding 53) — date-boundary helpers in the store's
+// zone. The trial balance's "as of" is a store-day concept: 11:59 PM
+// belongs to whichever day it is at the store, not at the browser.
+// Building the boundary in the browser's local zone silently truncates
+// the last hour east of the store or reaches into the next day west of
+// it. Both directions land in the books once the view is frozen.
+
+/** The store's own "today" as a `YYYY-MM-DD` string. Falls back to the
+ *  browser's today if the zone is missing / invalid — same contract as
+ *  the display helpers above. */
+export function storeTodayIsoDate(
+  timezone: string | null | undefined,
+  reference: Date = new Date(),
+): string {
+  const zone = resolveZone(timezone);
+  // en-CA renders numeric dates as YYYY-MM-DD; simpler than reassembling
+  // parts by hand and it respects the `timeZone` option.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(reference);
+}
+
+/** Convert a `YYYY-MM-DD` date-string to the full ISO instant that is
+ *  23:59:59.999 on that date in the given store zone. Falls back to the
+ *  browser's zone if the zone is missing / invalid. Empty / malformed
+ *  date input returns an empty string so callers can skip the network. */
+export function dateEndOfDayInStoreZoneIso(
+  dateIso: string | null | undefined,
+  timezone: string | null | undefined,
+): string {
+  if (!dateIso || !/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) return "";
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const zone = resolveZone(timezone);
+  const instantMs = endOfDayInstantMs(year, month, day, zone);
+  return new Date(instantMs).toISOString();
+}
+
+/** Wall-clock in `zone` for the given UTC instant, as numeric parts. */
+function wallClockPartsInZone(
+  instantMs: number,
+  zone: string,
+): { y: number; m: number; d: number; h: number; min: number; s: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(instantMs));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
+  let h = get("hour");
+  // Intl occasionally reports midnight as 24; normalise so downstream
+  // arithmetic stays honest.
+  if (h === 24) h = 0;
+  return { y: get("year"), m: get("month"), d: get("day"), h, min: get("minute"), s: get("second") };
+}
+
+/** Offset in ms between the zone's wall-clock and UTC at the given
+ *  instant. Positive east of UTC; negative west. */
+function zoneOffsetMs(instantMs: number, zone: string): number {
+  const wc = wallClockPartsInZone(instantMs, zone);
+  const asUtc = Date.UTC(wc.y, wc.m - 1, wc.d, wc.h, wc.min, wc.s);
+  const flooredInstant = Math.floor(instantMs / 1000) * 1000;
+  return asUtc - flooredInstant;
+}
+
+/** UTC instant of 23:59:59.999 on the given calendar date in `zone`.
+ *  Uses one DST correction pass — enough for every real IANA zone. */
+function endOfDayInstantMs(
+  year: number,
+  month: number,
+  day: number,
+  zone: string,
+): number {
+  const desiredWallAsUtc = Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+  const guessOffset = zoneOffsetMs(desiredWallAsUtc, zone);
+  let instant = desiredWallAsUtc - guessOffset;
+  const actualOffset = zoneOffsetMs(instant, zone);
+  if (actualOffset !== guessOffset) {
+    instant = desiredWallAsUtc - actualOffset;
+  }
+  return instant;
+}
+
 function parseIso(iso: string | null | undefined): Date | null {
   if (!iso) return null;
   const d = new Date(iso);

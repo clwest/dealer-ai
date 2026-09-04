@@ -17,8 +17,13 @@
 // month, range, presets), swap in shadcn Calendar at that time.
 //
 // The emitted value is the ISO date-string ``YYYY-MM-DD`` — the caller
-// converts to a full ISO timestamp (end-of-day tenant-local) before
-// hitting the backend.
+// resolves the store's zone (via ``useBrand`` + ``lib/storeTime``) and
+// converts to a full ISO timestamp before hitting the backend.
+// SESSION_244 (walk finding 53): the "today" default + end-of-day
+// conversion used to live here in the browser's zone. They moved to
+// ``lib/storeTime`` and now key off the store's IANA zone so freezing
+// "as of today" from a laptop east of the store no longer truncates
+// the last hour of the store's business day.
 
 import { Input } from "@/components/ui/input";
 
@@ -32,29 +37,6 @@ interface TrialBalanceDatePickerProps {
   label?: string;
   /** Disables the input during network activity. */
   disabled?: boolean;
-}
-
-/** Returns today's date as an ISO date-string ``YYYY-MM-DD``. */
-export function todayIsoDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-/**
- * Converts an ISO date-string ``YYYY-MM-DD`` to a full ISO timestamp
- * at the end of that day in the browser's local timezone. Matches
- * the operational convention of "reports as of end-of-business."
- * Backend accepts any ISO string per M13.3 ``TrialBalanceQuerySerializer``.
- */
-export function dateToEndOfDayIso(dateIso: string): string {
-  const [year, month, day] = dateIso.split("-").map(Number);
-  // Local end-of-day. Constructing with day-1 and calling setHours
-  // wraps around DST cleanly.
-  const dt = new Date(year, month - 1, day, 23, 59, 59, 0);
-  return dt.toISOString();
 }
 
 export function TrialBalanceDatePicker({
