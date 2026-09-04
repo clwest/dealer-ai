@@ -334,4 +334,29 @@ until formally amended.
 
 ---
 
+## Where those documents actually are — checked 2026-09-04
+
+The list above was written at SESSION_033 and four of its five pointers have
+moved since. The rules themselves are unchanged; only the addresses are wrong,
+and a wrong address in a rules document sends the next reader hunting.
+
+- **`CLAUDE.md`** — there is no `CLAUDE.md` in this repo. The standing rules
+  live one level up, at `~/Donkey_Betz/CLAUDE.md`, which a Claude Code session
+  opened in this folder picks up from the parent directory. Nothing is missing;
+  the pointer just names the wrong path.
+- **`docs/CAPABILITY_MATRIX.md`** — now `docs/_internal/CAPABILITY_MATRIX.md`,
+  inside the private tree, which is its own git repo with a private remote.
+  A reader of the public repo cannot open it at all.
+- **`docs/research/`** — still correct.
+- **`docs/handoffs/SESSION_033_*.md`** — handoffs now live at
+  `docs/_internal/handoffs/`, private tree.
+- **`00-START-NEXT-SESSION.md`** — now
+  `docs/_internal/00-START-NEXT-SESSION.md`, private tree, and it is
+  overwritten every session rather than appended to.
+
+Added rather than corrected in place, because this document is a record of what
+was adopted at SESSION_033 and the original list is part of that record.
+
+---
+
 *End of Project Rules.*
