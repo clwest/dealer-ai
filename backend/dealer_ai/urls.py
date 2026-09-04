@@ -15,6 +15,7 @@ from . import (
     views_demo_store,
     views_f_and_i,
     views_follow_ups,
+    views_health,
     views_leads,
     views_lifecycle,
     views_listings,
@@ -30,6 +31,14 @@ from . import (
 app_name = "dealer_ai"
 
 urlpatterns = [
+    # SESSION_246 — the server says which code it is serving.
+    # BUILD_IDENTITY was captured at process boot; the handler only
+    # reads it — never shells out to git.
+    path(
+        "health/version/",
+        views_health.health_version,
+        name="health-version",
+    ),
     path("chat/start/", views.start_chat, name="chat-start"),
     path("chat/message/", views.send_message, name="chat-message"),
     path(

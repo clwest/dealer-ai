@@ -9,6 +9,12 @@ class DealerAiConfig(AppConfig):
     verbose_name = "Dealer AI"
 
     def ready(self) -> None:
+        # Capture the git identity this process booted with, exactly
+        # once. Module-level BUILD_IDENTITY in build_identity.py runs at
+        # first import. Never call git per-request — a captured value is
+        # the whole point of the /health/version/ check.
+        from .services import build_identity  # noqa: F401
+
         # Milestone 1 · Increment 3 — wire the write-path tenancy
         # fallback. Any save() on the six tenant carriers without an
         # explicit dealership= gets the default row attached via the
