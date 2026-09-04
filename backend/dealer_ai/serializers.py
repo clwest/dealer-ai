@@ -455,6 +455,10 @@ class AdminChatSessionListSerializer(serializers.ModelSerializer):
 ONBOARDING_DEFAULTS: dict = {
     "dealership_name": "",
     "store_location": "",
+    "street_address": "",
+    "city": "",
+    "state": "",
+    "postal_code": "",
     "main_brands": "",
     "sales_phone": "",
     "website": "",
@@ -500,6 +504,11 @@ ONBOARDING_DEFAULTS: dict = {
     "default_apr": None,
     "default_term_months": None,
     "default_down_payment_pct": None,
+    # SESSION_239 — per-store sales tax rate (combined state + city +
+    # county) and doc/admin fee dollar amount. Null falls through to
+    # the payment_engine constants (4.5% / $599).
+    "sales_tax_rate_pct": None,
+    "doc_fees": None,
 }
 
 
@@ -512,6 +521,15 @@ PAYMENT_DEFAULT_TERM_MIN = 12
 PAYMENT_DEFAULT_TERM_MAX = 96
 PAYMENT_DEFAULT_DOWN_PCT_MIN = 0
 PAYMENT_DEFAULT_DOWN_PCT_MAX = 50
+# SESSION_239 — sales tax 0-15% is wider than any real jurisdiction
+# but leaves headroom for future combined-rate outliers; doc fees
+# capped at $2,000 because that already exceeds every state's
+# statutory cap and the highest observed lot practice. Bounds match
+# the frontend gate so the dealer sees the same message twice.
+PAYMENT_DEFAULT_TAX_RATE_MIN = 0
+PAYMENT_DEFAULT_TAX_RATE_MAX = 15
+PAYMENT_DEFAULT_DOC_FEES_MIN = 0
+PAYMENT_DEFAULT_DOC_FEES_MAX = 2000
 
 
 class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
@@ -545,6 +563,14 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
             "readiness",
             "dealership_name",
             "store_location",
+            # SESSION_239 — structured address parts. ``store_location``
+            # stays as the free-text line the header renders; the four
+            # parts below are what tax rate + (next session's) time
+            # zone can be read from.
+            "street_address",
+            "city",
+            "state",
+            "postal_code",
             "main_brands",
             "sales_phone",
             "website",
@@ -584,6 +610,12 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
             "default_apr",
             "default_term_months",
             "default_down_payment_pct",
+            # SESSION_239 — per-store tax rate and doc fees. Nullable;
+            # when null the payment_engine constants (4.5 / 599) supply
+            # the fallback so a fresh install still renders a payment
+            # line.
+            "sales_tax_rate_pct",
+            "doc_fees",
             "created_at",
             "updated_at",
         ]
@@ -620,6 +652,56 @@ class DealerOnboardingProfileSerializer(serializers.ModelSerializer):
                 f"and {PAYMENT_DEFAULT_DOWN_PCT_MAX}%."
             )
         return value
+
+    def validate_sales_tax_rate_pct(self, value):
+        # SESSION_239 — bounds named in the message so the field-scoped
+        # 400 reads plainly on the frontend (mirrors SESSION_238).
+        if value is None:
+            return value
+        if not (
+            PAYMENT_DEFAULT_TAX_RATE_MIN
+            <= float(value)
+            <= PAYMENT_DEFAULT_TAX_RATE_MAX
+        ):
+            raise serializers.ValidationError(
+                f"Sales tax rate must be between "
+                f"{PAYMENT_DEFAULT_TAX_RATE_MIN}% and "
+                f"{PAYMENT_DEFAULT_TAX_RATE_MAX}%."
+            )
+        return value
+
+    def validate_doc_fees(self, value):
+        if value is None:
+            return value
+        if not (
+            PAYMENT_DEFAULT_DOC_FEES_MIN
+            <= float(value)
+            <= PAYMENT_DEFAULT_DOC_FEES_MAX
+        ):
+            raise serializers.ValidationError(
+                f"Doc / admin fee must be between "
+                f"${PAYMENT_DEFAULT_DOC_FEES_MIN} and "
+                f"${PAYMENT_DEFAULT_DOC_FEES_MAX}."
+            )
+        return value
+
+    def validate_state(self, value):
+        # SESSION_239 — the state field is a two-letter code from
+        # US_STATE_CODES (or blank). A full-name string (``"Arizona"``)
+        # or an unknown two-letter code (``"ZZ"``) is rejected so
+        # anything that later derives a tax jurisdiction or a time
+        # zone from this field can trust it.
+        from .models import US_STATE_CODES
+
+        if not value:
+            return value
+        upper = value.strip().upper()
+        if upper not in US_STATE_CODES:
+            raise serializers.ValidationError(
+                f"State must be a two-letter US code (e.g., AZ). "
+                f"Got: {value!r}."
+            )
+        return upper
 
     def get_readiness(self, obj) -> dict:
         return compute_readiness(obj.dealership, profile=obj)

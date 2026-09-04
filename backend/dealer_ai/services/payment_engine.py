@@ -111,6 +111,10 @@ def resolve_store_payment_defaults(profile) -> dict:
     """SESSION_234 (finding 31) — resolve APR / term / down% for the
     per-card est-payment line.
 
+    SESSION_239 (finding 49, second half) — extended to carry the
+    store's own sales-tax rate and doc/admin fee so tax and fees stop
+    being module constants that every store silently shares.
+
     ``profile`` is a :class:`DealerOnboardingProfile` or ``None``. Any
     field that is null on the profile falls through to the module
     constant above so a fresh install still renders a payment line.
@@ -120,6 +124,8 @@ def resolve_store_payment_defaults(profile) -> dict:
     apr = float(DEFAULT_APR)
     term_months = DEFAULT_TERM_MONTHS
     down_pct = float(DEFAULT_DOWN_PAYMENT_PCT)
+    tax_rate = float(DEFAULT_TAX_RATE)
+    fees = float(DEFAULT_FEES)
     disclaimer = ""
     if profile is not None:
         if profile.default_apr is not None:
@@ -128,11 +134,17 @@ def resolve_store_payment_defaults(profile) -> dict:
             term_months = int(profile.default_term_months)
         if profile.default_down_payment_pct is not None:
             down_pct = float(profile.default_down_payment_pct)
+        if profile.sales_tax_rate_pct is not None:
+            tax_rate = float(profile.sales_tax_rate_pct)
+        if profile.doc_fees is not None:
+            fees = float(profile.doc_fees)
         disclaimer = profile.payment_disclaimer or ""
     return {
         "apr": apr,
         "term_months": term_months,
         "down_payment_pct": down_pct,
+        "tax_rate": tax_rate,
+        "fees": fees,
         "disclaimer": disclaimer,
     }
 
@@ -163,6 +175,8 @@ def render_estimated_payment_line(
 
     apr = defaults.get("apr", float(DEFAULT_APR))
     term = int(term_months or defaults.get("term_months") or DEFAULT_TERM_MONTHS)
+    tax_rate = float(defaults.get("tax_rate", DEFAULT_TAX_RATE))
+    fees = float(defaults.get("fees", DEFAULT_FEES))
     if down_payment is None:
         down_pct = defaults.get("down_payment_pct", DEFAULT_DOWN_PAYMENT_PCT)
         down = price_f * (float(down_pct) / 100.0)
@@ -174,18 +188,29 @@ def render_estimated_payment_line(
         down_payment=down,
         apr=apr,
         term_months=term,
+        tax_rate=tax_rate,
+        fees=fees,
     )
     monthly = int(round(estimate.monthly_payment))
     down_int = int(round(down))
     label = (
         f"est. ${monthly:,}/mo · ${down_int:,} down · {term} mo · W.A.C."
     )
+    # SESSION_239 (finding 49, second half) — the caller (the
+    # onboarding live-example line and any UI that wants a "$12,000
+    # + $540 tax + $599 fees − $1,200 down = $11,939 financed"
+    # breakdown) needs the tax and fee dollar figures alongside the
+    # label. The label itself stays the same; the breakdown is a
+    # second line.
     return {
         "label": label,
         "monthly_payment": monthly,
         "down_payment": down_int,
         "term_months": term,
         "apr": apr,
+        "taxes": round(estimate.taxes, 2),
+        "fees": round(estimate.fees, 2),
+        "total_financed": round(estimate.total_financed, 2),
     }
 
 

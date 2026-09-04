@@ -544,6 +544,14 @@ def _provision_onboarding_profile(dealership: Dealership, stdout) -> None:
         defaults={
             "dealership_name": STORE_NAME,
             "store_location": "1420 Frontage Rd, Yuma, AZ 85364",
+            # SESSION_239 — same address, split. ``save()`` derives
+            # ``store_location`` from these four when all are set, so
+            # a re-run of the seed keeps the header consistent with
+            # the parts rather than the legacy free-text row.
+            "street_address": "1420 Frontage Rd",
+            "city": "Yuma",
+            "state": "AZ",
+            "postal_code": "85364",
             "main_brands": "Ford, Chevrolet, Toyota, Honda — mixed used",
             "sales_phone": "928-555-0100",
             "website": "https://coppercanyonauto.example",
@@ -588,6 +596,20 @@ def _provision_onboarding_profile(dealership: Dealership, stdout) -> None:
     profile.default_apr = Decimal("7.49")
     profile.default_term_months = 72
     profile.default_down_payment_pct = Decimal("10.00")
+    # SESSION_239 — Yuma, AZ combined vehicle sales-tax rate and doc
+    # fee. Sales tax on a vehicle sold at the dealer in Yuma runs
+    # Arizona state TPT (5.6%) plus Yuma city privilege tax on retail
+    # (~1.7% typical), totalling ~7.3%. Doc fee below the AZ observed
+    # practice ceiling. See TASK_tax-fees-and-store-address.md report
+    # for the source and confidence.
+    profile.sales_tax_rate_pct = Decimal("7.30")
+    profile.doc_fees = Decimal("499.00")
+    # Also seed the four address parts so a re-run keeps store_location
+    # in sync with what the operator saw in the four inputs.
+    profile.street_address = "1420 Frontage Rd"
+    profile.city = "Yuma"
+    profile.state = "AZ"
+    profile.postal_code = "85364"
     profile.save(
         update_fields=[
             "recon_authorization_mode",
@@ -596,6 +618,13 @@ def _provision_onboarding_profile(dealership: Dealership, stdout) -> None:
             "default_apr",
             "default_term_months",
             "default_down_payment_pct",
+            "sales_tax_rate_pct",
+            "doc_fees",
+            "street_address",
+            "city",
+            "state",
+            "postal_code",
+            "store_location",
             "updated_at",
         ]
     )

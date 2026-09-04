@@ -40,6 +40,15 @@ import {
 interface DealershipProfile {
   name: string;
   location: string;
+  /** SESSION_239 — structured address parts. `location` (aka
+   *  `store_location`) stays as the free-text line the header
+   *  renders; the four parts below are what the tax rate label and
+   *  the next session's per-store time zone read from. `location`
+   *  derives from these once all four are set. */
+  streetAddress: string;
+  city: string;
+  state: string;
+  postalCode: string;
   brands: string;
   salesPhone: string;
   website: string;
@@ -106,6 +115,11 @@ interface PaymentDefaults {
   defaultApr: string;
   defaultTermMonths: string;
   defaultDownPaymentPct: string;
+  // SESSION_239 — per-store tax rate and doc fees. Same empty-
+  // string convention: "" = "unset — payment_engine fallback
+  // (4.5% / $599)".
+  salesTaxRatePct: string;
+  docFees: string;
 }
 
 interface OnboardingState {
@@ -161,9 +175,15 @@ const PAYMENT_TERM_MIN = 12;
 const PAYMENT_TERM_MAX = 96;
 const PAYMENT_DOWN_MIN = 0;
 const PAYMENT_DOWN_MAX = 50;
+const PAYMENT_TAX_RATE_MIN = 0;
+const PAYMENT_TAX_RATE_MAX = 15;
+const PAYMENT_DOC_FEES_MIN = 0;
+const PAYMENT_DOC_FEES_MAX = 2000;
 const PAYMENT_FALLBACK_APR = 7.49;
 const PAYMENT_FALLBACK_TERM = 72;
 const PAYMENT_FALLBACK_DOWN_PCT = 10;
+const PAYMENT_FALLBACK_TAX_RATE = 4.5;
+const PAYMENT_FALLBACK_DOC_FEES = 599;
 
 const SECTION_COUNT = 7; // dealership, manager, salesperson, assistant, indie, payments, checklist
 
@@ -171,6 +191,10 @@ const EMPTY_STATE: OnboardingState = {
   dealership: {
     name: "",
     location: "",
+    streetAddress: "",
+    city: "",
+    state: "",
+    postalCode: "",
     brands: "",
     salesPhone: "",
     website: "",
@@ -212,6 +236,8 @@ const EMPTY_STATE: OnboardingState = {
     defaultApr: "",
     defaultTermMonths: "",
     defaultDownPaymentPct: "",
+    salesTaxRatePct: "",
+    docFees: "",
   },
   checklist: {
     inventoryConnected: false,
@@ -228,6 +254,10 @@ function fromApi(payload: OnboardingProfilePayload): OnboardingState {
     dealership: {
       name: payload.dealership_name,
       location: payload.store_location,
+      streetAddress: payload.street_address ?? "",
+      city: payload.city ?? "",
+      state: payload.state ?? "",
+      postalCode: payload.postal_code ?? "",
       brands: payload.main_brands,
       salesPhone: payload.sales_phone,
       website: payload.website,
@@ -280,6 +310,15 @@ function fromApi(payload: OnboardingProfilePayload): OnboardingState {
         payload.default_down_payment_pct === undefined
           ? ""
           : String(payload.default_down_payment_pct),
+      salesTaxRatePct:
+        payload.sales_tax_rate_pct === null ||
+        payload.sales_tax_rate_pct === undefined
+          ? ""
+          : String(payload.sales_tax_rate_pct),
+      docFees:
+        payload.doc_fees === null || payload.doc_fees === undefined
+          ? ""
+          : String(payload.doc_fees),
     },
     checklist: {
       inventoryConnected: payload.inventory_connected,
@@ -296,6 +335,10 @@ function toApi(state: OnboardingState): OnboardingProfilePayload {
   return {
     dealership_name: state.dealership.name,
     store_location: state.dealership.location,
+    street_address: state.dealership.streetAddress,
+    city: state.dealership.city,
+    state: state.dealership.state,
+    postal_code: state.dealership.postalCode,
     main_brands: state.dealership.brands,
     sales_phone: state.dealership.salesPhone,
     website: state.dealership.website,
@@ -344,6 +387,15 @@ function toApi(state: OnboardingState): OnboardingProfilePayload {
       state.payments.defaultDownPaymentPct.trim() === ""
         ? null
         : Number(state.payments.defaultDownPaymentPct),
+    // SESSION_239 — same empty-string maps to null convention.
+    sales_tax_rate_pct:
+      state.payments.salesTaxRatePct.trim() === ""
+        ? null
+        : Number(state.payments.salesTaxRatePct),
+    doc_fees:
+      state.payments.docFees.trim() === ""
+        ? null
+        : Number(state.payments.docFees),
   };
 }
 
@@ -409,13 +461,16 @@ export default function DealerOnboardingPage() {
       // Indie section — complete when dealer type is chosen AND BHPH
       // is explicitly configured (either enabled or disabled).
       Boolean(indie.dealerType && indie.bhphConfigured),
-      // SESSION_238 — payment defaults section is complete only when
-      // all three fields are populated. Falling back silently to the
-      // module constants is not a real answer.
+      // SESSION_238 + SESSION_239 — payment defaults section is
+      // complete only when all five fields are populated (APR / term
+      // / down%, plus the store's tax rate and doc fees). Falling
+      // back silently to the module constants is not a real answer.
       Boolean(
         payments.defaultApr.trim() &&
           payments.defaultTermMonths.trim() &&
-          payments.defaultDownPaymentPct.trim(),
+          payments.defaultDownPaymentPct.trim() &&
+          payments.salesTaxRatePct.trim() &&
+          payments.docFees.trim(),
       ),
       Object.values(checklist).every(Boolean),
     ].filter(Boolean).length;
@@ -445,6 +500,18 @@ export default function DealerOnboardingPage() {
       PAYMENT_DOWN_MIN,
       PAYMENT_DOWN_MAX,
       "Down payment",
+    ) !== null ||
+    validatePaymentField(
+      payments.salesTaxRatePct,
+      PAYMENT_TAX_RATE_MIN,
+      PAYMENT_TAX_RATE_MAX,
+      "Sales tax rate",
+    ) !== null ||
+    validatePaymentField(
+      payments.docFees,
+      PAYMENT_DOC_FEES_MIN,
+      PAYMENT_DOC_FEES_MAX,
+      "Doc / admin fee",
     ) !== null;
 
   const handleSave = async () => {
@@ -587,11 +654,34 @@ export default function DealerOnboardingPage() {
             onChange={(v) => setDealership({ ...dealership, name: v })}
             placeholder="Your dealership name"
           />
+          {/* SESSION_239 — one free-text "Store location" became four
+              inputs. The header + assistant prompt still read
+              ``store_location``; the backend derives it from these
+              four once all are set. Same card, no new section. */}
           <Field
-            label="Store location"
-            value={dealership.location}
-            onChange={(v) => setDealership({ ...dealership, location: v })}
-            placeholder="City, State"
+            label="Street address"
+            value={dealership.streetAddress}
+            onChange={(v) => setDealership({ ...dealership, streetAddress: v })}
+            placeholder="1420 Frontage Rd"
+          />
+          <Field
+            label="City"
+            value={dealership.city}
+            onChange={(v) => setDealership({ ...dealership, city: v })}
+            placeholder="Yuma"
+          />
+          <Field
+            label="State"
+            value={dealership.state}
+            onChange={(v) => setDealership({ ...dealership, state: v })}
+            placeholder="AZ"
+            helperText="Two-letter US code (AL, AK, AZ, …)."
+          />
+          <Field
+            label="ZIP / postal code"
+            value={dealership.postalCode}
+            onChange={(v) => setDealership({ ...dealership, postalCode: v })}
+            placeholder="85364"
           />
           <Field
             label="Main brands carried"
@@ -1353,8 +1443,23 @@ function PaymentDefaultsSection({
     PAYMENT_DOWN_MAX,
     "Down payment",
   );
+  // SESSION_239 — tax rate and doc fees join the same card.
+  const taxError = validatePaymentField(
+    payments.salesTaxRatePct,
+    PAYMENT_TAX_RATE_MIN,
+    PAYMENT_TAX_RATE_MAX,
+    "Sales tax rate",
+  );
+  const feesError = validatePaymentField(
+    payments.docFees,
+    PAYMENT_DOC_FEES_MIN,
+    PAYMENT_DOC_FEES_MAX,
+    "Doc / admin fee",
+  );
 
-  const anyError = Boolean(aprError || termError || downError);
+  const anyError = Boolean(
+    aprError || termError || downError || taxError || feesError,
+  );
 
   // Debounce the preview so a running edit doesn't fire a request
   // per keystroke. 250 ms is short enough to feel live and long
@@ -1373,10 +1478,14 @@ function PaymentDefaultsSection({
       const apr = parseNumericInput(payments.defaultApr);
       const termMonths = parseNumericInput(payments.defaultTermMonths);
       const downPaymentPct = parseNumericInput(payments.defaultDownPaymentPct);
+      const taxRate = parseNumericInput(payments.salesTaxRatePct);
+      const docFees = parseNumericInput(payments.docFees);
       fetchPaymentPreview({
         apr: apr ?? undefined,
         termMonths: termMonths ?? undefined,
         downPaymentPct: downPaymentPct ?? undefined,
+        taxRate: taxRate ?? undefined,
+        docFees: docFees ?? undefined,
       })
         .then((response) => {
           if (controller.signal.aborted) return;
@@ -1398,15 +1507,19 @@ function PaymentDefaultsSection({
     payments.defaultApr,
     payments.defaultTermMonths,
     payments.defaultDownPaymentPct,
+    payments.salesTaxRatePct,
+    payments.docFees,
   ]);
 
-  const aprPlaceholder = `using ${PAYMENT_FALLBACK_APR}% until you set one`;
-  // TASK_label-pass §7 — the term field is narrower than the APR / down
-  // columns because it is an integer, so the "until you set one"
-  // suffix clipped mid-word (``using 72 unti``). Shorter placeholder
-  // matches the same fallback intent without overrunning the input.
+  // SESSION_239 label pass — the three payment-fallback placeholders
+  // now read the same way ("default <value>") and none clips at the
+  // narrower Term column. The prior mix ("using 7.49%", "default 72",
+  // "using 10% u…") had two different verbs and one clip.
+  const aprPlaceholder = `default ${PAYMENT_FALLBACK_APR}%`;
   const termPlaceholder = `default ${PAYMENT_FALLBACK_TERM}`;
-  const downPlaceholder = `using ${PAYMENT_FALLBACK_DOWN_PCT}% until you set one`;
+  const downPlaceholder = `default ${PAYMENT_FALLBACK_DOWN_PCT}%`;
+  const taxPlaceholder = `default ${PAYMENT_FALLBACK_TAX_RATE}%`;
+  const feesPlaceholder = `default $${PAYMENT_FALLBACK_DOC_FEES}`;
 
   return (
     <SectionCard
@@ -1446,6 +1559,29 @@ function PaymentDefaultsSection({
           error={downError}
           step="0.01"
         />
+        {/* SESSION_239 — tax + fees on the same card. Two rows on the
+            grid; the sm:grid-cols-3 layout wraps them under the top
+            row without adding a new section. */}
+        <NumericField
+          label="Sales tax rate"
+          value={payments.salesTaxRatePct}
+          onChange={(v) => onChange((p) => ({ ...p, salesTaxRatePct: v }))}
+          placeholder={taxPlaceholder}
+          helperText="Combined state + city + county rate on a vehicle sale — not the state rate alone."
+          suffix="%"
+          error={taxError}
+          step="0.01"
+        />
+        <NumericField
+          label="Doc / admin fee"
+          value={payments.docFees}
+          onChange={(v) => onChange((p) => ({ ...p, docFees: v }))}
+          placeholder={feesPlaceholder}
+          helperText="Dollar amount. Some states cap this; check yours."
+          suffix="$"
+          error={feesError}
+          step="1"
+        />
       </div>
       <div
         className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3"
@@ -1460,10 +1596,35 @@ function PaymentDefaultsSection({
           ) : previewError ? (
             <span className="text-rose-600">Preview failed: {previewError}</span>
           ) : preview ? (
-            <span>
-              A $12,000 car would show{" "}
-              <span className="font-semibold">{preview.line.label}</span>
-            </span>
+            <div className="space-y-1">
+              <div>
+                A $12,000 car would show{" "}
+                <span className="font-semibold">{preview.line.label}</span>
+              </div>
+              {/* SESSION_239 — second line spells out the tax and fee
+                  contribution so a dealer can see the $1,139 of "not
+                  the sticker price" that this task exists to expose. */}
+              <div className="text-xs text-slate-500">
+                $
+                {preview.price.toLocaleString()} + $
+                {preview.line.taxes.toLocaleString(undefined, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}{" "}
+                tax + $
+                {preview.line.fees.toLocaleString(undefined, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}{" "}
+                fees − $
+                {preview.line.down_payment.toLocaleString()} down = $
+                {preview.line.total_financed.toLocaleString(undefined, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}{" "}
+                financed
+              </div>
+            </div>
           ) : (
             <span className="text-slate-400">Loading example…</span>
           )}

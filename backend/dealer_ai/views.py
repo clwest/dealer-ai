@@ -1296,8 +1296,12 @@ def onboarding_payment_preview(request):
     from .serializers import (
         PAYMENT_DEFAULT_APR_MAX,
         PAYMENT_DEFAULT_APR_MIN,
+        PAYMENT_DEFAULT_DOC_FEES_MAX,
+        PAYMENT_DEFAULT_DOC_FEES_MIN,
         PAYMENT_DEFAULT_DOWN_PCT_MAX,
         PAYMENT_DEFAULT_DOWN_PCT_MIN,
+        PAYMENT_DEFAULT_TAX_RATE_MAX,
+        PAYMENT_DEFAULT_TAX_RATE_MIN,
         PAYMENT_DEFAULT_TERM_MAX,
         PAYMENT_DEFAULT_TERM_MIN,
     )
@@ -1349,6 +1353,22 @@ def onboarding_payment_preview(request):
             PAYMENT_DEFAULT_DOWN_PCT_MAX,
             "Down payment",
         )
+        # SESSION_239 — accept tax_rate + doc_fees so the live example
+        # on the onboarding page can preview the store's own numbers
+        # before save, matching the SESSION_238 pattern for APR / term
+        # / down%.
+        tax_rate = _parse_float(
+            "tax_rate",
+            PAYMENT_DEFAULT_TAX_RATE_MIN,
+            PAYMENT_DEFAULT_TAX_RATE_MAX,
+            "Sales tax rate",
+        )
+        doc_fees = _parse_float(
+            "doc_fees",
+            PAYMENT_DEFAULT_DOC_FEES_MIN,
+            PAYMENT_DEFAULT_DOC_FEES_MAX,
+            "Doc / admin fee",
+        )
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1359,6 +1379,10 @@ def onboarding_payment_preview(request):
         defaults["term_months"] = term
     if down_pct is not None:
         defaults["down_payment_pct"] = down_pct
+    if tax_rate is not None:
+        defaults["tax_rate"] = tax_rate
+    if doc_fees is not None:
+        defaults["fees"] = doc_fees
     line = render_estimated_payment_line(_PAYMENT_PREVIEW_PRICE, defaults=defaults)
     if line is None:
         return Response(

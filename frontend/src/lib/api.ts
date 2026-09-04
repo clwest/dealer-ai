@@ -828,6 +828,16 @@ export interface OnboardingProfilePayload {
   readiness?: OnboardingReadinessPayload;
   dealership_name: string;
   store_location: string;
+  /** SESSION_239 — structured address parts. `store_location` stays
+   *  as the free-text one-line address the header renders; the four
+   *  parts below carry state (which the tax-rate label and the next
+   *  session's per-store time zone both need). `store_location`
+   *  derives from the parts once all four are set. */
+  street_address: string;
+  city: string;
+  /** Two-letter US state code (validated server-side). */
+  state: string;
+  postal_code: string;
   main_brands: string;
   sales_phone: string;
   website: string;
@@ -881,6 +891,11 @@ export interface OnboardingProfilePayload {
   default_apr: string | number | null;
   default_term_months: number | null;
   default_down_payment_pct: string | number | null;
+  /** SESSION_239 — per-store combined sales-tax rate (state + city +
+   *  county on a vehicle sale) and dollar doc/admin fee. Null =
+   *  "unset — payment_engine fallback in play (4.5% / $599)". */
+  sales_tax_rate_pct: string | number | null;
+  doc_fees: string | number | null;
   // Server-managed; present on GET, ignored on PUT.
   created_at?: string;
   updated_at?: string;
@@ -888,6 +903,10 @@ export interface OnboardingProfilePayload {
 
 // SESSION_238 — payment-preview endpoint response. The label mirrors
 // the assistant card's est-payment line exactly.
+// SESSION_239 — the response now carries the tax and fee dollar
+// figures + the resulting total_financed so the onboarding page can
+// render the second line of the live example ("$12,000 + $540 tax +
+// $599 fees − $1,200 down = $11,939 financed").
 export interface PaymentPreviewResponse {
   price: number;
   line: {
@@ -896,6 +915,9 @@ export interface PaymentPreviewResponse {
     down_payment: number;
     term_months: number;
     apr: number;
+    taxes: number;
+    fees: number;
+    total_financed: number;
   };
 }
 
@@ -903,6 +925,8 @@ export async function fetchPaymentPreview(params: {
   apr?: number;
   termMonths?: number;
   downPaymentPct?: number;
+  taxRate?: number;
+  docFees?: number;
 }) {
   const q = new URLSearchParams();
   if (params.apr !== undefined && !Number.isNaN(params.apr))
@@ -914,6 +938,10 @@ export async function fetchPaymentPreview(params: {
     !Number.isNaN(params.downPaymentPct)
   )
     q.set("down_payment_pct", String(params.downPaymentPct));
+  if (params.taxRate !== undefined && !Number.isNaN(params.taxRate))
+    q.set("tax_rate", String(params.taxRate));
+  if (params.docFees !== undefined && !Number.isNaN(params.docFees))
+    q.set("doc_fees", String(params.docFees));
   return getJSON<PaymentPreviewResponse>(
     `/onboarding/payment-preview/?${q.toString()}`,
   );

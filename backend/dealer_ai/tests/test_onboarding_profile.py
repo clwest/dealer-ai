@@ -673,3 +673,203 @@ class OnboardingPaymentPreviewTests(TestCase):
         res = self.client.get(self.PREVIEW_URL + "?apr=abc")
         self.assertEqual(res.status_code, 400, res.content)
         self.assertIn("APR", res.json()["detail"])
+
+
+class OnboardingAddressAndTaxFieldsTests(TestCase):
+    """SESSION_239 (finding 49, second half) — the four address parts,
+    the state whitelist, the store's own tax rate + doc fees, and the
+    derivation of ``store_location`` from the parts once they're all
+    set.
+    """
+
+    def setUp(self):
+        self.client = dealer_owner_client_at_default()
+
+    def test_patch_round_trips_address_parts(self):
+        body = {
+            "street_address": "1420 Frontage Rd",
+            "city": "Yuma",
+            "state": "AZ",
+            "postal_code": "85364",
+        }
+        res = self.client.patch(
+            URL, data=json.dumps(body), content_type="application/json"
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        self.assertEqual(data["street_address"], "1420 Frontage Rd")
+        self.assertEqual(data["city"], "Yuma")
+        self.assertEqual(data["state"], "AZ")
+        self.assertEqual(data["postal_code"], "85364")
+        # ``store_location`` derives once all four are set.
+        self.assertEqual(
+            data["store_location"], "1420 Frontage Rd, Yuma, AZ 85364"
+        )
+
+    def test_partial_address_does_not_overwrite_store_location(self):
+        # A legacy free-text ``store_location`` must survive a save
+        # that only fills part of the structured address.
+        self.client.patch(
+            URL,
+            data=json.dumps({"store_location": "Legacy free-text address"}),
+            content_type="application/json",
+        )
+        self.client.patch(
+            URL,
+            data=json.dumps({"city": "Yuma", "state": "AZ"}),
+            content_type="application/json",
+        )
+        data = self.client.get(URL).json()
+        self.assertEqual(data["store_location"], "Legacy free-text address")
+        self.assertEqual(data["city"], "Yuma")
+        self.assertEqual(data["state"], "AZ")
+
+    def test_state_full_name_rejected(self):
+        res = self.client.patch(
+            URL,
+            data=json.dumps({"state": "Arizona"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("state", res.json())
+
+    def test_state_unknown_two_letter_rejected(self):
+        res = self.client.patch(
+            URL,
+            data=json.dumps({"state": "ZZ"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("state", res.json())
+
+    def test_patch_round_trips_tax_and_fees(self):
+        res = self.client.patch(
+            URL,
+            data=json.dumps(
+                {"sales_tax_rate_pct": "7.30", "doc_fees": "499.00"}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        self.assertEqual(data["sales_tax_rate_pct"], "7.30")
+        self.assertEqual(data["doc_fees"], "499.00")
+
+    def test_tax_rate_above_bound_rejected(self):
+        res = self.client.patch(
+            URL,
+            data=json.dumps({"sales_tax_rate_pct": "20.00"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400, res.content)
+        body = res.json()
+        self.assertIn("sales_tax_rate_pct", body)
+        self.assertIn("15", body["sales_tax_rate_pct"][0])
+
+    def test_doc_fees_above_bound_rejected(self):
+        res = self.client.patch(
+            URL,
+            data=json.dumps({"doc_fees": "5000.00"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 400, res.content)
+        body = res.json()
+        self.assertIn("doc_fees", body)
+        self.assertIn("2000", body["doc_fees"][0])
+
+    def test_store_tax_and_fees_change_card_monthly(self):
+        """A card rendered after the dealer sets tax and doc fees must
+        reflect them — proves the resolve/render path threads the
+        store's own numbers into the est-payment line.
+        """
+        from dealer_ai.models import Vehicle
+        from dealer_ai.serializers import VehicleSerializer
+        from dealer_ai.services.tenancy import get_default_dealership
+
+        dealership = get_default_dealership()
+        vehicle = Vehicle.objects.create(
+            dealership=dealership,
+            stock_number="CC-TAX-01",
+            year=2022,
+            model="Sedan",
+            price=20000,
+            source="test",
+        )
+        # Baseline: no store tax/fees — falls back to 4.5% / $599.
+        self.client.patch(
+            URL,
+            data=json.dumps(
+                {
+                    "default_apr": "7.49",
+                    "default_term_months": 72,
+                    "default_down_payment_pct": "10.00",
+                }
+            ),
+            content_type="application/json",
+        )
+        baseline = dict(
+            VehicleSerializer(
+                vehicle,
+                context={
+                    "onboarding_profile": DealerOnboardingProfile.objects.get()
+                },
+            ).data
+        )["estimated_payment_line"]
+        # Now set the store's own tax + doc fees — a higher rate
+        # (7.30% instead of 4.5%) and a lower fee ($499 instead of
+        # $599) both shift the financed number, and the monthly with
+        # it. If the numbers do not change, the resolve/render path
+        # is not reading the profile's fields.
+        self.client.patch(
+            URL,
+            data=json.dumps(
+                {"sales_tax_rate_pct": "7.30", "doc_fees": "499.00"}
+            ),
+            content_type="application/json",
+        )
+        after = dict(
+            VehicleSerializer(
+                vehicle,
+                context={
+                    "onboarding_profile": DealerOnboardingProfile.objects.get()
+                },
+            ).data
+        )["estimated_payment_line"]
+        self.assertNotEqual(baseline["monthly_payment"], after["monthly_payment"])
+        # The task-required breakdown fields land on the payload.
+        self.assertIn("taxes", after)
+        self.assertIn("fees", after)
+        self.assertIn("total_financed", after)
+        self.assertAlmostEqual(after["fees"], 499.00, places=2)
+
+
+class OnboardingPreviewTaxAndFeesTests(TestCase):
+    """SESSION_239 — the live-example preview must accept tax_rate and
+    doc_fees query params so the onboarding page shows the store's own
+    tax and fee contribution before the profile is saved."""
+
+    PREVIEW_URL = reverse("dealer_ai:onboarding-payment-preview")
+
+    def test_preview_returns_tax_and_fees(self):
+        res = self.client.get(
+            self.PREVIEW_URL
+            + "?apr=7.49&term_months=72&down_payment_pct=10"
+            + "&tax_rate=4.5&doc_fees=599"
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        line = res.json()["line"]
+        # $12,000 × 4.5% = $540.
+        self.assertAlmostEqual(line["taxes"], 540.00, places=2)
+        self.assertAlmostEqual(line["fees"], 599.00, places=2)
+        # $12,000 + $540 tax + $599 fees − $1,200 down = $11,939.
+        self.assertAlmostEqual(line["total_financed"], 11939.00, places=2)
+
+    def test_preview_rejects_out_of_range_tax(self):
+        res = self.client.get(self.PREVIEW_URL + "?tax_rate=20")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("Sales tax rate", res.json()["detail"])
+
+    def test_preview_rejects_out_of_range_doc_fees(self):
+        res = self.client.get(self.PREVIEW_URL + "?doc_fees=5000")
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertIn("Doc", res.json()["detail"])

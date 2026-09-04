@@ -55,6 +55,10 @@ function makeProfile(
   return {
     dealership_name: "Copper Canyon Auto",
     store_location: "Yuma, AZ",
+    street_address: "",
+    city: "",
+    state: "",
+    postal_code: "",
     main_brands: "",
     sales_phone: "",
     website: "",
@@ -91,6 +95,8 @@ function makeProfile(
     default_apr: null,
     default_term_months: null,
     default_down_payment_pct: null,
+    sales_tax_rate_pct: null,
+    doc_fees: null,
     readiness: makeReadiness(),
     ...overrides,
   };

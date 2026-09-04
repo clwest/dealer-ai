@@ -35,6 +35,34 @@ ROLE_CHOICES = (
 )
 
 
+# SESSION_239 (finding 49, second half) — two-letter US state codes.
+# ``DealerOnboardingProfile.state`` is one of these; anything else is
+# rejected at the serializer boundary (a "state" of ``"Arizona"`` or
+# ``"ZZ"`` is not routable to a tax rate, a time zone, or a lookup).
+# The next session (per-store time zones) reads this same field to
+# default the store's zone from its state.
+US_STATE_CHOICES = (
+    ("AL", "Alabama"), ("AK", "Alaska"), ("AZ", "Arizona"),
+    ("AR", "Arkansas"), ("CA", "California"), ("CO", "Colorado"),
+    ("CT", "Connecticut"), ("DE", "Delaware"), ("DC", "District of Columbia"),
+    ("FL", "Florida"), ("GA", "Georgia"), ("HI", "Hawaii"),
+    ("ID", "Idaho"), ("IL", "Illinois"), ("IN", "Indiana"),
+    ("IA", "Iowa"), ("KS", "Kansas"), ("KY", "Kentucky"),
+    ("LA", "Louisiana"), ("ME", "Maine"), ("MD", "Maryland"),
+    ("MA", "Massachusetts"), ("MI", "Michigan"), ("MN", "Minnesota"),
+    ("MS", "Mississippi"), ("MO", "Missouri"), ("MT", "Montana"),
+    ("NE", "Nebraska"), ("NV", "Nevada"), ("NH", "New Hampshire"),
+    ("NJ", "New Jersey"), ("NM", "New Mexico"), ("NY", "New York"),
+    ("NC", "North Carolina"), ("ND", "North Dakota"), ("OH", "Ohio"),
+    ("OK", "Oklahoma"), ("OR", "Oregon"), ("PA", "Pennsylvania"),
+    ("RI", "Rhode Island"), ("SC", "South Carolina"), ("SD", "South Dakota"),
+    ("TN", "Tennessee"), ("TX", "Texas"), ("UT", "Utah"),
+    ("VT", "Vermont"), ("VA", "Virginia"), ("WA", "Washington"),
+    ("WV", "West Virginia"), ("WI", "Wisconsin"), ("WY", "Wyoming"),
+)
+US_STATE_CODES = frozenset(code for code, _ in US_STATE_CHOICES)
+
+
 # Milestone 18 · Increment 1 (SESSION_147) — demo-store archetype vocab.
 # Per MILESTONE_18_PLANNING.md §5.b Option A (user-confirmed at SESSION_146
 # open) fixed vocab for ``Dealership.demo_archetype``. Growth-only-list
@@ -985,7 +1013,21 @@ class DealerOnboardingProfile(models.Model):
 
     # Dealership profile.
     dealership_name = models.CharField(max_length=255, blank=True, default="")
+    # SESSION_239 (finding 49, second half) — ``store_location`` stays
+    # as the human-readable one-line address the header renders and the
+    # assistant's prompt uses; the four fields below carry the
+    # structured pieces (state especially, since sales-tax combined
+    # rates and — next session — the store's time zone can't be read
+    # out of one free-text field reliably). ``store_location`` derives
+    # from the parts once all four are set; a legacy row keeps its
+    # free-text value until an operator edits any of the parts.
     store_location = models.CharField(max_length=255, blank=True, default="")
+    street_address = models.CharField(max_length=255, blank=True, default="")
+    city = models.CharField(max_length=128, blank=True, default="")
+    state = models.CharField(
+        max_length=2, blank=True, default="", choices=US_STATE_CHOICES
+    )
+    postal_code = models.CharField(max_length=16, blank=True, default="")
     main_brands = models.CharField(max_length=255, blank=True, default="")
     sales_phone = models.CharField(max_length=64, blank=True, default="")
     website = models.CharField(max_length=255, blank=True, default="")
@@ -1102,6 +1144,21 @@ class DealerOnboardingProfile(models.Model):
         max_digits=5, decimal_places=2, null=True, blank=True
     )
 
+    # SESSION_239 (finding 49, second half) — the store's own
+    # combined sales-tax rate (state + city + county on a vehicle
+    # sale) and dollar doc/admin fee. Both nullable so a fresh install
+    # still renders a payment line via the payment_engine module
+    # constants (DEFAULT_TAX_RATE = 4.5, DEFAULT_FEES = 599). The
+    # onboarding form makes them dealer-settable because these vary
+    # by store and by city, not just by state — Yuma's combined rate
+    # is not Phoenix's, and Arizona doc-fee practice differs by lot.
+    sales_tax_rate_pct = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    doc_fees = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True
+    )
+
     # SESSION_228 (recon-budget-and-price-sheet). The recon
     # authorization gate is one of two competitive differentiators;
     # historically approve-every-job (Chris's wholesale process).
@@ -1139,6 +1196,27 @@ class DealerOnboardingProfile(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+
+    def save(self, *args, **kwargs):
+        # SESSION_239 (finding 49, second half) — once every part of
+        # the structured address is set, derive ``store_location`` from
+        # them so the header, the assistant's prompt and any legacy
+        # reader stay consistent with what the operator typed into the
+        # four inputs. A partial address (missing any of street / city
+        # / state / postal) leaves the free-text ``store_location``
+        # untouched so a legacy row keeps its value until an operator
+        # fills the parts in.
+        if (
+            self.street_address
+            and self.city
+            and self.state
+            and self.postal_code
+        ):
+            self.store_location = (
+                f"{self.street_address}, {self.city}, "
+                f"{self.state} {self.postal_code}"
+            )
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.dealership_name or "Dealer onboarding profile"
