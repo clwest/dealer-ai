@@ -49,3 +49,6 @@ Dealer OS/
 # in the public tree. Defensive rule in case a local copy is ever
 # dropped back into this path.
 /docs/_internal/
+
+# Django --parallel test runner leaves one clone per worker (SESSION_240)
+backend/default_*.sqlite3
