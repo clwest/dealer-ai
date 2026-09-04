@@ -56,7 +56,6 @@ import datetime as dt
 import hashlib
 import random as _random
 from decimal import Decimal
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
@@ -4034,24 +4033,38 @@ def _seed_buyer_estimate_accuracy(
 
 
 # ---------------------------------------------------------------------------
-# SESSION_243 books-2 — three floor companies, some cars still in cash.
+# SESSION_245 books-2.1 — most of the lot is floored, not most held in cash.
 #
-# Per ``docs/_internal/TASK_books-2-three-floor-companies.md`` §5:
-# three invented company names (NOT any real floor plan provider),
-# uneven split with a primary carrying most of the floored lot, and
-# a genuine share held in cash. The bucket table below produces:
+# Per ``docs/_internal/TASK_books-2-1-most-of-the-lot-is-floored.md``:
+# under 30% of the lot bought cash and held in house; the remainder
+# floored across the three companies from books-2 (DPC / SIF / RFG),
+# keeping the uneven shape a real store ends up with — a primary
+# source carrying most of it and two smaller ones.
 #
-#   cash-held      : 40% (8 of every 20 acquisitions)
-#   Desert Peak    : 35% (7/20) — primary
-#   Sonoran Inv.   : 15% (3/20) — secondary
-#   Ridgeline FP   : 10% (2/20) — tertiary
-#   → 60% floored total
+# Selection rule for cash-held: cheapest acquisitions by basis, with
+# pk as a deterministic tie-break. A store that carries some of its
+# lot outright does it at the cheap end; the expensive units tie up
+# too much capital and land on floor plan. Deterministic across
+# re-seeds because basis is deterministic and ties break on pk.
 #
-# Deterministic per acquisition pk so re-seeds land on the same
-# distribution. The three names are invented — a Yuma-adjacent
-# desert/geographic register, deliberately unlike NextGear, AFC,
-# Westlake, Kinetic and Rock so the demo can't be mistaken for
-# implying a real business relationship.
+# Books-2 shipped a "trades stay cash regardless" heuristic on top of
+# a bucket table; books-2.1 drops that heuristic. Reason: trades are
+# ~1/3 of every acquisition source rotation (index % 3 == 1 in both
+# the CC-#### import and the RS-## archetype), so holding all trades
+# in cash makes < 30% cash mathematically unreachable. Real-store
+# semantics say a trade-in doesn't draw floor plan; the demo trades
+# that end up on the floor line here are a seed artefact of hitting
+# the 30% target, not a claim about how a store books a trade.
+#
+# Uneven split within the floored pool (kept from books-2):
+#   Desert Peak Capital (DPC, primary):   ~59%
+#   Sonoran Inventory Finance (SIF):      ~24%
+#   Ridgeline Floorplan Group (RFG):      ~16%
+#
+# The three names are invented — a Yuma-adjacent desert/geographic
+# register, deliberately unlike NextGear, AFC, Westlake, Kinetic and
+# Rock so the demo can't be mistaken for implying a real business
+# relationship.
 # ---------------------------------------------------------------------------
 
 
@@ -4077,15 +4090,16 @@ _FLOOR_PLAN_COMPANIES: tuple[dict, ...] = (
 )
 
 
-# Bucket → company-index (0/1/2) or None for cash-held.
-# 20 buckets tuned to a 40% / 35% / 15% / 10% split with the primary
-# carrying most of the floored share.
-_FLOOR_PLAN_BUCKETS: tuple[Optional[int], ...] = (
-    None, None, None, None, None, None, None, None,  # 8 cash (40%)
-    0, 0, 0, 0, 0, 0, 0,                              # 7 primary (35%)
-    1, 1, 1,                                          # 3 secondary (15%)
-    2, 2,                                             # 2 tertiary (10%)
-)
+# Cash-held target as a fraction of every acquisition on the books.
+# Held safely under the 30% Chris named so a small re-seed drift can
+# never push it over.
+_FLOOR_PLAN_CASH_HELD_TARGET: float = 0.28
+
+# Uneven share within the floored pool — same shape books-2 shipped;
+# only the pool size grows because cash-held dropped. Tertiary is the
+# remainder so rounding never leaves an acquisition unassigned.
+_FLOOR_PLAN_PRIMARY_SHARE: float = 0.59
+_FLOOR_PLAN_SECONDARY_SHARE: float = 0.24
 
 
 def _provision_floor_plan_companies_and_assign(
@@ -4096,12 +4110,15 @@ def _provision_floor_plan_companies_and_assign(
     Runs after every acquisition and every sale has landed. Two
     passes:
 
-    1. **Acquisition reassignment.** For each acquisition eligible
-       for flooring (bucket maps to a company index), reverse the
-       existing DR 121000 / CR 100000 JE and re-post through the FK
-       path so credit lands on 210000 Floor Plan Payable and the
-       memo names the company. Trade acquisitions and repossessions
-       stay cash — real stores don't floor a trade-in.
+    1. **Acquisition reassignment.** Sort every acquisition by basis
+       ascending (pk breaks ties); the cheapest ~28% are cash-held
+       and left alone (their existing DR 121000 / CR 100000 JE
+       stands). Every other acquisition is floored across DPC / SIF
+       / RFG in an uneven 59 / 24 / 16 share of the floored pool.
+       For each floored acquisition, delete the DR 121000 / CR 100000
+       JE that the post_save signal posted at acquisition time and
+       re-post through the FK path so credit lands on 210000 Floor
+       Plan Payable with the company named in the memo.
 
     2. **Sale-time payoff.** For each Sale whose vehicle is now
        floored, post a separate DR 210000 / CR 100000 JE for that
@@ -4131,21 +4148,50 @@ def _provision_floor_plan_companies_and_assign(
         .order_by("pk")
     )
 
+    def _basis(acq: VehicleAcquisition) -> _D:
+        return (
+            acq.purchase_price
+            + acq.buyer_fees
+            + acq.arbitration_fees
+            + acq.transportation_cost
+            + acq.title_acquisition_cost
+        )
+
+    # Cheapest-first cash-held selection. Sort on (basis, pk) so the
+    # cheap-end pick is deterministic across re-seeds even when two
+    # acquisitions share a basis.
+    ordered = sorted(acquisitions, key=lambda a: (_basis(a), a.pk))
+    total = len(ordered)
+    target_cash = int(total * _FLOOR_PLAN_CASH_HELD_TARGET)
+    cash_ids = {a.pk for a in ordered[:target_cash]}
+
+    # Distribute the floored pool across the three companies with the
+    # 59 / 24 / 16 uneven shape. Tertiary is the remainder so rounding
+    # never orphans a car.
+    floored_pool = ordered[target_cash:]
+    n_floored = len(floored_pool)
+    n_primary = round(n_floored * _FLOOR_PLAN_PRIMARY_SHARE)
+    n_secondary = round(n_floored * _FLOOR_PLAN_SECONDARY_SHARE)
+    n_tertiary = n_floored - n_primary - n_secondary
+    company_by_pk: dict[int, int] = {}
+    cursor = 0
+    for company_index, count in (
+        (0, n_primary),
+        (1, n_secondary),
+        (2, n_tertiary),
+    ):
+        for offset in range(count):
+            company_by_pk[floored_pool[cursor + offset].pk] = company_index
+        cursor += count
+
     # Pass 1: reassign acquisition rows and re-post.
     reposted = 0
-    skipped_traded = 0
-    for index, acq in enumerate(acquisitions):
-        # Trades and repossessions do not draw floor plan — the store
-        # already owns the car (a trade-in came in on the deal; a repo
-        # was already the dealer's paper). Keep them cash regardless
-        # of the bucket.
-        if acq.source in (SOURCE_TRADE,):
-            skipped_traded += 1
+    cash_held = 0
+    for acq in acquisitions:
+        if acq.pk in cash_ids:
+            cash_held += 1
             continue
-        company_index = _FLOOR_PLAN_BUCKETS[index % len(_FLOOR_PLAN_BUCKETS)]
-        if company_index is None:
-            continue  # already cash — leave the existing JE alone
-        company = companies[company_index]
+        company = companies[company_by_pk[acq.pk]]
 
         # DELETE the original acquisition JE (posted DR 121000 /
         # CR 100000 by the post_save signal), then clear posted_at
@@ -4249,17 +4295,19 @@ def _provision_floor_plan_companies_and_assign(
         and not Sale.objects.filter(vehicle=acq.vehicle_id).exists()
     )
 
+    cash_pct = (cash_held / total * 100) if total else 0
     stdout.write(
         "provisioned floor plan panel: "
         f"companies={len(companies)}, reposted={reposted} acquisition JE(s) "
-        f"onto floor plan, kept {skipped_traded} trade acquisition(s) in "
-        f"cash, {payoffs} sold-floored car(s) paid off. Principal owed on "
-        f"floored cars still on the lot = ${on_lot_floored_basis:,.2f}; "
-        "any manual interest-accrual JEs from ``_seed_journal_month`` sit "
-        "on top of that on 210000."
+        f"onto floor plan, {cash_held} of {total} acquisition(s) "
+        f"held in cash ({cash_pct:.1f}%), {payoffs} sold-floored car(s) "
+        f"paid off. Principal owed on floored cars still on the lot = "
+        f"${on_lot_floored_basis:,.2f}; any manual interest-accrual JEs "
+        "from ``_seed_journal_month`` sit on top of that on 210000."
     )
     return (
         f"companies={len(companies)}, "
-        f"reposted={reposted}, payoffs={payoffs}, "
+        f"reposted={reposted}, cash_held={cash_held}/{total} "
+        f"({cash_pct:.1f}%), payoffs={payoffs}, "
         f"principal_still_on_lot=${on_lot_floored_basis:,.2f}"
     )
