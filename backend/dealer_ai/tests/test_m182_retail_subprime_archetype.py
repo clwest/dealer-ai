@@ -275,20 +275,20 @@ class RetailSubprimeGLPostingTests(_BuildTestMixin):
         self.assertGreaterEqual(entries.count(), len(_SALES))
 
     def test_sale_descriptions_reference_stock_numbers(self) -> None:
-        # M15.1 description format:
-        # "M9 sale booking — Sale #<pk> of stock <stock> (...)"
+        # SESSION_241 books-1 description format:
+        # "Sold #<stock> — Sale #<pk> (<finance_type>)"
         sale_stocks = {str(s["stock"]) for s in _SALES}
         entry_descriptions = list(
             JournalEntry.objects.filter(
                 dealership=self.dealership,
-                description__startswith="M9 sale booking",
+                description__startswith="Sold #",
             ).values_list("description", flat=True)
         )
-        # Each Sale should produce one M15 entry naming its stock.
+        # Each Sale should produce one sale-booking entry naming its stock.
         for stock in sale_stocks:
             self.assertTrue(
                 any(stock in desc for desc in entry_descriptions),
-                f"No M9 sale-booking journal entry mentions stock {stock}",
+                f"No sale-booking journal entry mentions stock {stock}",
             )
 
 

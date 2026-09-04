@@ -23,6 +23,19 @@ class DealerAiConfig(AppConfig):
         # drift needs to surface at startup as a one-line warning.
         from . import checks  # noqa: F401
 
+        # SESSION_241 books-1 — the ``VehicleAcquisition`` post_save
+        # receiver in ``services/accounting/acquisition.py`` posts the
+        # DR 121000 / CR 100000 (or CR 210000, floored) journal entry
+        # the moment a new acquisition row lands. Import registers
+        # the receiver via ``@receiver(post_save, sender=...)``;
+        # ``register_acquisition_post_save`` exists only to make the
+        # wiring explicit alongside the M1.3 tenancy autofill.
+        from .services.accounting.acquisition import (
+            register_acquisition_post_save,
+        )
+
+        register_acquisition_post_save()
+
         # Milestone 5 · Increment 5 (SESSION_079) — test-only Vehicle
         # stage auto-bootstrap.
         #

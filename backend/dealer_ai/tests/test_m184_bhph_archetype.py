@@ -258,30 +258,31 @@ class BhphCrossDomainTests(_BuildTestMixin):
 
 class BhphGLPostingTests(_BuildTestMixin):
     def test_recent_sales_produced_journal_entries(self) -> None:
-        # Each of the 5 recent BHPH Sales fires the M15.1 sync-
+        # Each of the 5 recent BHPH Sales fires the sale-booking sync-
         # sibling GL post via record_sale. The 25 historical Sales
         # bypass record_sale (direct-create for scenario-authored
         # reasons documented in the archetype) so they do NOT fire.
         entries = JournalEntry.objects.filter(
             dealership=self.dealership,
-            description__startswith="M9 sale booking",
+            description__startswith="Sold #",
         )
         self.assertGreaterEqual(entries.count(), len(_RECENT_SALES))
 
     def test_each_recent_sale_stock_referenced_in_a_journal_entry(
         self,
     ) -> None:
+        # SESSION_241 books-1 description format: "Sold #<stock> — ..."
         descriptions = list(
             JournalEntry.objects.filter(
                 dealership=self.dealership,
-                description__startswith="M9 sale booking",
+                description__startswith="Sold #",
             ).values_list("description", flat=True)
         )
         for spec in _RECENT_SALES:
             stock = str(spec["stock"])
             self.assertTrue(
                 any(stock in d for d in descriptions),
-                f"No M9 sale-booking entry mentions {stock}",
+                f"No sale-booking entry mentions {stock}",
             )
 
 

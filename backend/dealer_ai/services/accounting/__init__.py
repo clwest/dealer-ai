@@ -37,6 +37,11 @@ Domain-error → HTTP mapping (consumed by ``views_accounting.py``):
 
 from __future__ import annotations
 
+from .acquisition import (
+    FLOOR_PLAN_PAYABLE_ACCOUNT_CODE,
+    USED_VEHICLE_INVENTORY_ACCOUNT_CODE,
+    post_acquisition_journal,
+)
 from .bhph_payment import (
     BHPH_INTEREST_INCOME_ACCOUNT_CODE,
     UnexpectedBhphPaymentFeesError,
@@ -119,6 +124,7 @@ __all__ = [
     "DuplicateTrialBalanceSnapshotError",
     "EmptyJournalEntryError",
     "EmptyJournalEntryTemplateError",
+    "FLOOR_PLAN_PAYABLE_ACCOUNT_CODE",
     "ImmutableJournalEntryError",
     "InvalidJournalLineError",
     "InvalidJournalEntryTemplateLineError",
@@ -134,6 +140,7 @@ __all__ = [
     "UnbalancedJournalEntryTemplateError",
     "UnexpectedBhphPaymentFeesError",
     "UnmappedFinanceTypeError",
+    "USED_VEHICLE_INVENTORY_ACCOUNT_CODE",
     "VEHICLE_SALES_RETAIL_ACCOUNT_CODE",
     "compute_trial_balance",
     "create_journal_entry_template",
@@ -148,6 +155,7 @@ __all__ = [
     "list_journal_entries",
     "list_journal_entry_templates",
     "list_trial_balance_snapshots",
+    "post_acquisition_journal",
     "post_all_unposted_bhph_payments_for_dealership",
     "post_all_unposted_costs_for_dealership",
     "post_bhph_payment_journal",

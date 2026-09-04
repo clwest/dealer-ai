@@ -1,40 +1,42 @@
-"""Milestone 15 · Increment 1 (SESSION_140) — sale-booking GL post.
+"""Sale-booking GL post — receivable + revenue + inventory relief.
 
-One atomic sibling-service verb per MILESTONE_15_PLANNING.md §7 M15.1
-+ §5.a-§5.f (all as-recommended at SESSION_139 open):
+SESSION_241 books-1 refit (see
+``docs/_internal/TASK_books-1-acquisition-and-relief.md``): COGS
+relieves :code:`121000 Used Vehicle Inventory`, never
+:code:`122000 Recon Work in Process`. RWIP now only ever holds
+open recon-in-progress balances. Any recon that hit RWIP for the
+sold car transfers into inventory first (DR 121000 / CR 122000),
+then the full basis is relieved out of inventory into COGS. RWIP
+stays at zero or small-positive on the trial balance — no more
+$-379K asset-side surprise.
 
-- :func:`post_sale_booking_journal` — atomic sibling-service call.
-  Composes finance-type-aware receivable line + revenue line + COGS
-  line + Recon-WIP-clear line and delegates to
-  :func:`post_journal_entry` for the balanced double-entry write.
-
-Called from :func:`services.sale.record_sale` inside its existing
-``@transaction.atomic`` block per §5.d Option C hybrid posture (sale
-booking is operator intent — synchronous, not detector-driven).
-
-Finance-type → receivable account mapping per §5.b Option A:
+Finance-type → receivable account mapping (unchanged from M15.1):
 
 - ``cash`` → ``100000`` Cash on Hand.
 - ``retail`` → ``120000`` Contracts in Transit.
 - ``bhph`` → ``123000`` BHPH Notes Receivable.
 
 Revenue always credits ``400000`` Vehicle Sales — Retail (wholesale
-variant defers per §3 item 7 — no ``SALE_FINANCE_TYPE_WHOLESALE``
-vocab yet).
+variant defers — no ``SALE_FINANCE_TYPE_WHOLESALE`` vocab yet).
 
-COGS pair debits ``500000`` Cost of Vehicle Sales — Retail and
-credits ``122000`` Recon Work in Process for the vehicle's
-``total_investment`` (matches the M13.2 uniform-mapping posture —
-every VehicleCost sits in Recon WIP until sale clears it).
+Lines composed per sale:
 
-Zero-cost path per §5.c Option A: when ``total_investment == 0`` the
-COGS pair is skipped (revenue pair still posts) and a warning is
-logged. M13.1 rejects zero-value lines outright so a $0.00 COGS pair
-is architecturally impossible.
+1. **DR receivable** ``sold_price`` (per ``finance_type``).
+2. **CR 400000 Vehicle Sales — Retail** ``sold_price``.
+3. **DR 121000 / CR 122000** for the vehicle's recon amount — only
+   when recon > 0 (skipped for cars that never carried any
+   posted VehicleCost). This is the RWIP → Inventory transfer.
+4. **DR 500000 Cost of Vehicle Sales / CR 121000 Used Vehicle
+   Inventory** for the vehicle's ``total_investment`` (acquisition
+   + recon).
 
-Un-posted VehicleCost flush happens in :func:`services.sale.record_sale`
-per §5.d Option A — this module assumes all costs for the vehicle
-have posted by the time it's called.
+Zero-cost path (unchanged): when ``total_investment == 0`` the COGS
+pair and the transfer are both skipped, revenue-only entry is
+posted, and a warning is logged.
+
+Un-posted VehicleCost flush still happens in
+:func:`services.sale.record_sale` before this verb runs — this
+module assumes every posted cost is visible.
 """
 
 from __future__ import annotations
@@ -66,6 +68,7 @@ _LOGGER = logging.getLogger("dealer_ai.accounting.sale_booking")
 
 CASH_ACCOUNT_CODE = "100000"
 CONTRACTS_IN_TRANSIT_ACCOUNT_CODE = "120000"
+USED_VEHICLE_INVENTORY_ACCOUNT_CODE = "121000"
 BHPH_NOTES_RECEIVABLE_ACCOUNT_CODE = "123000"
 RECON_WIP_ACCOUNT_CODE = "122000"
 VEHICLE_SALES_RETAIL_ACCOUNT_CODE = "400000"
@@ -187,14 +190,14 @@ def post_sale_booking_journal(
 
     stock_number = getattr(sale.vehicle, "stock_number", "?")
     description = (
-        f"M9 sale booking — Sale #{sale.pk} of stock {stock_number} "
+        f"Sold #{stock_number} — Sale #{sale.pk} "
         f"({sale.get_finance_type_display()})"
     )
     receivable_memo = (
-        f"Sale #{sale.pk} — receivable"
-        + (f" ({sale.lender_name})" if sale.lender_name else "")
+        "Amount owed by buyer"
+        + (f" via {sale.lender_name}" if sale.lender_name else "")
     )
-    revenue_memo = f"Sale #{sale.pk} — revenue"
+    revenue_memo = "Vehicle sale revenue"
 
     lines: list[JournalLineInput] = [
         JournalLineInput(
@@ -212,28 +215,60 @@ def post_sale_booking_journal(
     totals = compute_totals(sale.vehicle, dealership=dealership)
     cogs_amount = totals.total_investment
     if cogs_amount > Decimal("0.00"):
-        cogs = _lookup_required_account(
-            dealership, COST_OF_VEHICLE_SALES_ACCOUNT_CODE
+        # SESSION_241 books-1 — first move any RWIP for THIS car into
+        # inventory (DR 121000 / CR 122000), then relieve the full
+        # basis (acquisition + recon) out of inventory into COGS. The
+        # transfer keeps RWIP at zero for sold cars while unsold cars
+        # still in recon retain their small-positive RWIP balances.
+        inventory = _lookup_required_account(
+            dealership, USED_VEHICLE_INVENTORY_ACCOUNT_CODE
         )
         recon_wip = _lookup_required_account(
             dealership, RECON_WIP_ACCOUNT_CODE
         )
+        cogs = _lookup_required_account(
+            dealership, COST_OF_VEHICLE_SALES_ACCOUNT_CODE
+        )
+
+        # Recon basis for this vehicle only: flooring + recon
+        # categories + administrative + photography. The
+        # ``compute_totals`` verb already partitions these; we sum the
+        # four category buckets which equal ``actual_cost_total`` (no
+        # estimates by construction).
+        recon_amount = totals.actual_cost_total
+        if recon_amount > Decimal("0.00"):
+            lines.append(
+                JournalLineInput(
+                    account=inventory,
+                    debit=recon_amount,
+                    memo="Move recon spend into the car's basis",
+                )
+            )
+            lines.append(
+                JournalLineInput(
+                    account=recon_wip,
+                    credit=recon_amount,
+                    memo="Clear this car's Recon WIP",
+                )
+            )
+
         lines.append(
             JournalLineInput(
                 account=cogs,
                 debit=cogs_amount,
-                memo=f"Sale #{sale.pk} — COGS",
+                memo="Cost of vehicle sold",
             )
         )
         lines.append(
             JournalLineInput(
-                account=recon_wip,
+                account=inventory,
                 credit=cogs_amount,
-                memo=f"Sale #{sale.pk} — clear Recon WIP",
+                memo="Vehicle out of inventory",
             )
         )
     else:
-        # §5.c Option A: skip COGS pair; log so miss is discoverable.
+        # Zero-cost basis: skip COGS + transfer; log so miss is
+        # discoverable and the operator can post an adjusting entry.
         _LOGGER.warning(
             "accounting.sale_booking zero-cost basis dealership=%s "
             "sale_pk=%s vehicle_stock=%s — COGS pair skipped, revenue "

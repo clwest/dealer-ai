@@ -526,10 +526,15 @@ def _seed_recent_sales(
     dealership: Dealership,
     staged: dict[str, Vehicle],
 ) -> list[BhphNote]:
-    """Origin ate 5 recent BHPH sales via record_sale (fires M15 GL)
-    + record_bhph_note. Returns the resulting BhphNote list."""
-    from ....models import CATEGORY_PARTS, VehicleCost
+    """Originate 5 recent BHPH sales via record_sale (fires the sale-
+    booking GL post) + record_bhph_note. Returns the resulting
+    BhphNote list.
 
+    SESSION_241 books-1 — the acquisition cost basis is no longer
+    shadow-posted as a VehicleCost row. The VehicleAcquisition
+    post_save signal now debits 121000 for the purchase price, and
+    the sale-booking journal relieves inventory (not RWIP).
+    """
     now = timezone.now()
     notes: list[BhphNote] = []
     for spec in _RECENT_SALES:
@@ -538,15 +543,6 @@ def _seed_recent_sales(
         sale_date = (
             now - dt.timedelta(days=int(spec["days_ago"]))
         ).date()
-        cost_posted_at = now - dt.timedelta(days=int(spec["days_ago"]) + 20)
-        VehicleCost.objects.create(
-            dealership=dealership, vehicle=vehicle,
-            category=CATEGORY_PARTS, amount=Decimal(spec["cost_basis"]),
-            incurred_at=cost_posted_at,
-            vendor=f"Acquisition basis for {stock}",
-            reference=f"ACQ-{stock}", is_estimate=False,
-            posted_at=cost_posted_at,
-        )
         buyer_name = SYNTHETIC_NAMES[
             int(spec["buyer_name_index"]) % len(SYNTHETIC_NAMES)
         ]

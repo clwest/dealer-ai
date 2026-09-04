@@ -1178,46 +1178,17 @@ def _backdate_off_market_for_deliveries(
 
 
 def _normalize_sale_gross(dealership: Dealership, stdout) -> None:
-    """Work around the archetype's acquisition-basis double-count so the
-    gross-profit endpoints do not report the store losing money on
-    every retail sale.
+    """Recompute ``Sale.gross_realized`` from the current ledger state.
 
-    The C1 review's original diagnosis was wrong (see task file's
-    Correction section, 2026-09-01). The real defect lives in
-    ``services/demo_store/archetypes/retail_subprime.py`` `_seed_sales`
-    — for every Sale it posts a `VehicleCost(category=parts,
-    vendor="Acquisition basis for ...")` row that carries the same
-    purchase_price the parent :class:`VehicleAcquisition` already
-    holds. `services/vehicle_ledger.py` sums acquisition + recon
-    (including parts) into ``total_investment``, so the acquisition
-    price gets counted twice, gross reads negative by roughly the
-    purchase price, and the recon-cost-per-source analytics
-    mis-attribute the acquisition as a $5,500-mean "parts" spend.
-
-    This function papers over that defect for the demo store only:
-
-    1. Delete the "Acquisition basis for X" VehicleCost rows the
-       archetype double-posts, so ``total_investment`` reflects the
-       parent :class:`VehicleAcquisition` alone.
-    2. Also delete "Acquisition basis" duplicates on any Sale
-       originated by ``_originate_bhph_sale_and_note`` further down
-       the seed pipeline (defensive — that helper does not create
-       them today, but the same rule applies if it ever does).
-    3. Recompute :attr:`Sale.gross_realized` for every Sale via
-       :func:`services.sale.computation.gross_realized`, so the
-       denormalized column reads the corrected number the analytics
-       endpoints will show.
-
-    Called twice from ``handle()`` — once after archetype sales, once
-    after BHPH extension sales — so the second pass catches the two
-    BHPH-originated Sales the first pass missed.
-
-    **Product-code defect, not fixed here.** The archetype double-
-    count also lands in prod for any dealer whose seed inherits the
-    same shape; ``docs/_internal/TASK_archetype_acquisition_
-    double_count.md`` tracks it. Do not fix
-    ``retail_subprime.py`` inside this task — Non-goal amended
-    2026-09-01 keeps ``services/demo_store/`` out of bounds.
+    SESSION_241 books-1 fixed the archetype acquisition double-count at
+    the source: the three archetype ``_seed_sales`` helpers no longer
+    post shadow "Acquisition basis for X" VehicleCost rows on top of
+    the parent VehicleAcquisition. The delete pass here is now a
+    defensive layer that costs nothing when there is nothing to
+    delete (idempotent no-op on a clean archetype); the recompute
+    pass is still worthwhile because the seeded ``gross_realized``
+    values on any partially-seeded database now match the corrected
+    ``compute_totals`` output.
     """
     duplicate_qs = VehicleCost.objects.filter(
         dealership=dealership,
@@ -2520,6 +2491,12 @@ def _seed_be_back(dealership: Dealership, stdout):
 
 # (offset days ago, description, debit_code, credit_code, amount)
 _JOURNAL_ENTRIES: tuple[tuple[int, str, str, str, str], ...] = (
+    # SESSION_241 books-1 — the opening contribution. Without this row
+    # the trial balance showed 300000 Owner Equity as a $2,000 debit
+    # (the March 15 owner draw pulled cash out of an empty equity
+    # account). Post the contribution first so the equity balance is
+    # positive and owner-draw semantics are the right way round.
+    (60, "Opening owner contribution — start-of-year capital", "110000", "300000", "100000.00"),
     (30, "Monthly rent — Yuma showroom + lot", "800000", "110000", "4800.00"),
     (29, "Google Ads — March campaign accrual", "600000", "200000", "620.00"),
     (28, "Facebook Ads — March campaign accrual", "600000", "200000", "380.00"),

@@ -1460,6 +1460,21 @@ class VehicleAcquisition(models.Model):
         related_name="acquisitions_bought",
     )
     notes = models.TextField(blank=True, default="")
+    # SESSION_241 books-1 — set when the post_save signal in
+    # ``services.accounting.acquisition`` posts the DR 121000 / CR 100000
+    # (or CR 210000, floored) journal entry for this row. Null means the
+    # acquisition has NOT been booked yet — the guard test in
+    # ``test_books_1_acquisition_and_relief.py`` asserts that fresh
+    # acquisitions on a COA-seeded tenant never leave ``posted_at``
+    # null.
+    posted_at = models.DateTimeField(blank=True, null=True)
+    # SESSION_241 books-1 — when True the acquisition credit-side lands
+    # on 210000 Floor Plan Payable instead of 100000 Cash on Hand. The
+    # store-level "we floor our cars" switch is a later child of the
+    # books scope (SCOPE_books-real-and-exportable.md, Copper Canyon
+    # persona currently pays cash); this per-row flag is the plumbing
+    # the switch will drive.
+    is_floored = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

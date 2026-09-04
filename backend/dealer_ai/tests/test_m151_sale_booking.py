@@ -1,20 +1,27 @@
-"""Milestone 15 · Increment 1 (SESSION_140) — sale-booking GL post tests.
+"""Sale-booking GL post tests — receivable + revenue + inventory relief.
 
-Locks the sale-booking sibling-service verb + the ``record_sale``
-extension per ``MILESTONE_15_PLANNING.md`` §5.a-§5.f (all as-
-recommended at SESSION_139 open) + §7 M15.1.
+SESSION_241 books-1 refit: COGS now relieves 121000 Used Vehicle
+Inventory (never 122000 Recon Work in Process). When the sold car
+carries recon spend, the sale-booking entry also transfers the
+recon amount from RWIP into inventory (DR 121000 / CR 122000)
+before the COGS relief. RWIP only ever holds open recon-in-progress
+after a sale — never a negative balance.
 
 Coverage:
 
 - Cash finance-type → 100000 debit + 400000 credit.
 - Retail finance-type → 120000 debit + 400000 credit.
 - BHPH finance-type → 123000 debit + 400000 credit.
-- COGS pair uses 500000 debit + 122000 credit for
+- COGS pair uses 500000 debit + 121000 credit for
   ``total_investment``.
-- Balanced double-entry.
+- Recon-carrying sale posts the RWIP → Inventory transfer alongside
+  the COGS pair; RWIP is left flat.
+- No sale-booking line ever credits 122000 Recon WIP for the full
+  basis (the pre-fix behavior that drove RWIP negative).
+- Balanced double-entry (even with the transfer lines).
 - Cross-tenant Sale guard.
-- Zero-total-investment path per §5.c Option A — revenue-only, warning.
-- Un-posted VehicleCost flush per §5.d Option A.
+- Zero-total-investment path — revenue-only, warning.
+- Un-posted VehicleCost flush.
 - Missing default account raises ``MissingDefaultAccountError``.
 - ``UnmappedFinanceTypeError`` raises when finance-type has no
   receivable-account mapping.
@@ -60,6 +67,7 @@ from dealer_ai.services.accounting import (
     CONTRACTS_IN_TRANSIT_ACCOUNT_CODE,
     COST_OF_VEHICLE_SALES_ACCOUNT_CODE,
     RECON_WIP_ACCOUNT_CODE,
+    USED_VEHICLE_INVENTORY_ACCOUNT_CODE,
     VEHICLE_SALES_RETAIL_ACCOUNT_CODE,
     CrossTenantGLAccountError,
     MissingDefaultAccountError,
@@ -238,9 +246,10 @@ class RevenueAndCogsLineTests(TestCase):
         self.assertEqual(revenue_line.credit, Decimal("25000.00"))
         self.assertEqual(revenue_line.debit, Decimal("0.00"))
 
-    def test_cogs_pair_uses_500000_and_122000(self) -> None:
-        # purchase 20,000 → total_investment 20,000 → COGS pair
-        # posts DR 500000 20,000 / CR 122000 20,000.
+    def test_cogs_pair_uses_500000_and_121000(self) -> None:
+        # purchase 20,000 → total_investment 20,000 (no recon) →
+        # COGS pair posts DR 500000 20,000 / CR 121000 20,000. No
+        # transfer line because the car had no VehicleCost.
         vehicle = _seed_vehicle_with_investment(
             self.dealership, stock="M151-COGS", purchase_price="20000.00"
         )
@@ -258,9 +267,79 @@ class RevenueAndCogsLineTests(TestCase):
         cogs_line = _get_line(
             entry, account_code=COST_OF_VEHICLE_SALES_ACCOUNT_CODE
         )
-        recon_line = _get_line(entry, account_code=RECON_WIP_ACCOUNT_CODE)
+        inventory_line = _get_line(
+            entry, account_code=USED_VEHICLE_INVENTORY_ACCOUNT_CODE
+        )
         self.assertEqual(cogs_line.debit, Decimal("20000.00"))
-        self.assertEqual(recon_line.credit, Decimal("20000.00"))
+        self.assertEqual(inventory_line.credit, Decimal("20000.00"))
+
+    def test_no_sale_line_credits_recon_wip_when_no_recon(self) -> None:
+        # SESSION_241 books-1 guard — the sale-booking journal must
+        # never credit 122000 for the full basis. A car with no recon
+        # produces no RWIP touch at all.
+        vehicle = _seed_vehicle_with_investment(
+            self.dealership, stock="M151-NORWIP", purchase_price="20000.00"
+        )
+        sale = record_sale(
+            vehicle,
+            dealership=self.dealership,
+            sale_date=dt.date(2026, 8, 1),
+            sold_price=Decimal("25000.00"),
+            finance_type=SALE_FINANCE_TYPE_CASH,
+        )
+        entry = JournalEntry.objects.filter(
+            dealership=self.dealership,
+            description__contains=f"Sale #{sale.pk}",
+        ).get()
+        rwip_lines = entry.lines.filter(account__code=RECON_WIP_ACCOUNT_CODE)
+        self.assertEqual(rwip_lines.count(), 0)
+
+    def test_recon_bearing_sale_transfers_rwip_to_inventory(self) -> None:
+        # A car with $2,000 of recon posts a transfer pair
+        # (DR 121000 2,000 / CR 122000 2,000) alongside the COGS pair
+        # (DR 500000 17,000 / CR 121000 17,000). Total inventory
+        # activity nets to a $15,000 credit (in - out) for this car.
+        vehicle = _seed_vehicle_with_investment(
+            self.dealership,
+            stock="M151-RECON",
+            purchase_price="15000.00",
+            extra_costs=["800.00", "1200.00"],
+        )
+        sale = record_sale(
+            vehicle,
+            dealership=self.dealership,
+            sale_date=dt.date(2026, 8, 1),
+            sold_price=Decimal("22000.00"),
+            finance_type=SALE_FINANCE_TYPE_RETAIL,
+        )
+        entry = JournalEntry.objects.filter(
+            dealership=self.dealership,
+            description__contains=f"Sale #{sale.pk}",
+        ).get()
+        rwip_lines = entry.lines.filter(
+            account__code=RECON_WIP_ACCOUNT_CODE
+        )
+        # Exactly one RWIP line — the credit that clears the recon
+        # spend into inventory. Never a credit for the full basis.
+        self.assertEqual(rwip_lines.count(), 1)
+        rwip_line = rwip_lines.get()
+        self.assertEqual(rwip_line.credit, Decimal("2000.00"))
+        self.assertEqual(rwip_line.debit, Decimal("0.00"))
+
+        # Inventory line count: two — the transfer debit AND the COGS
+        # credit for the full basis.
+        inv_lines = entry.lines.filter(
+            account__code=USED_VEHICLE_INVENTORY_ACCOUNT_CODE
+        )
+        self.assertEqual(inv_lines.count(), 2)
+        inv_debit = sum(
+            (ln.debit for ln in inv_lines), Decimal("0.00")
+        )
+        inv_credit = sum(
+            (ln.credit for ln in inv_lines), Decimal("0.00")
+        )
+        self.assertEqual(inv_debit, Decimal("2000.00"))
+        self.assertEqual(inv_credit, Decimal("17000.00"))
 
     def test_entry_is_balanced(self) -> None:
         vehicle = _seed_vehicle_with_investment(
@@ -269,7 +348,7 @@ class RevenueAndCogsLineTests(TestCase):
             purchase_price="15000.00",
             extra_costs=["800.00", "1200.00"],
         )
-        # total_investment 15,000 + 800 + 1,200 = 17,000.
+        # total_investment 15,000 + 800 + 1,200 = 17,000; recon = 2,000.
         sale = record_sale(
             vehicle,
             dealership=self.dealership,
@@ -286,8 +365,8 @@ class RevenueAndCogsLineTests(TestCase):
             (ln.credit for ln in entry.lines.all()), Decimal("0.00")
         )
         self.assertEqual(totals_debit, totals_credit)
-        # DR 22k receivable + DR 17k COGS = 39k on each side.
-        self.assertEqual(totals_debit, Decimal("39000.00"))
+        # DR 22k receivable + DR 17k COGS + DR 2k transfer = 41k.
+        self.assertEqual(totals_debit, Decimal("41000.00"))
 
 
 class ZeroCostBasisPathTests(TestCase):
@@ -398,10 +477,12 @@ class UnpostedCostFlushTests(TestCase):
             vehicle=vehicle, posted_at__isnull=True
         ).count()
         self.assertEqual(unposted_after, 0)
-        # Three journal entries created: two M13.2 cost accruals + one
-        # M15.1 sale-booking.
+        # Four journal entries created: one acquisition JE (posted by
+        # the SESSION_241 books-1 post_save signal on
+        # VehicleAcquisition), two M13.2 cost accruals, and one
+        # sale-booking entry.
         entries = JournalEntry.objects.filter(dealership=self.dealership)
-        self.assertEqual(entries.count(), 3)
+        self.assertEqual(entries.count(), 4)
 
     def test_flush_scoped_to_this_vehicle_only(self) -> None:
         # A second vehicle with its own unposted cost — flush must
@@ -623,9 +704,15 @@ class AtomicRollbackTests(TestCase):
         self.assertEqual(
             Sale.objects.filter(vehicle=vehicle).count(), 0
         )
-        # No journal entry either.
+        # No sale-booking journal entry either. The acquisition JE
+        # (posted by the books-1 post_save signal on VehicleAcquisition
+        # creation) is unrelated and stays committed — the rollback is
+        # scoped to record_sale's atomic block.
         self.assertEqual(
-            JournalEntry.objects.filter(dealership=self.dealership).count(),
+            JournalEntry.objects.filter(
+                dealership=self.dealership,
+                description__startswith="Sold #",
+            ).count(),
             0,
         )
 

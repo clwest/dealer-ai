@@ -339,21 +339,22 @@ class FloorPlannedGLPostingTests(_BuildTestMixin):
         entries = JournalEntry.objects.filter(
             dealership=self.dealership
         )
-        # Each Sale fires an M15 sync-sibling entry (M9 sale booking).
+        # Each Sale fires a sale-booking sibling GL entry.
         self.assertGreaterEqual(entries.count(), len(_SALES))
 
     def test_each_sale_entry_references_its_stock_number(self) -> None:
+        # SESSION_241 books-1 description format: "Sold #<stock> — ..."
         entry_descriptions = list(
             JournalEntry.objects.filter(
                 dealership=self.dealership,
-                description__startswith="M9 sale booking",
+                description__startswith="Sold #",
             ).values_list("description", flat=True)
         )
         for spec in _SALES:
             stock = str(spec["stock"])
             self.assertTrue(
                 any(stock in desc for desc in entry_descriptions),
-                f"No M9 sale-booking entry mentions {stock}",
+                f"No sale-booking entry mentions {stock}",
             )
 
 

@@ -705,11 +705,12 @@ def _seed_sales(dealership: Dealership) -> None:
     ``services.bhph_notes.record_bhph_note`` so the M12 portfolio
     surface shows one active note.
 
-    Before each Sale, the seeder posts a small VehicleCost row
-    (auction purchase basis) so the M15 sale-booking journal has
-    non-zero COGS to clear from Recon WIP — mirrors the operational
-    reality that a used-car dealer books its auction purchase
-    price into VehicleCost at acquisition.
+    SESSION_241 books-1 — the acquisition cost basis is no longer
+    shadow-posted as a ``VehicleCost(category=parts)`` row. The
+    ``VehicleAcquisition`` post_save signal (see
+    ``services/accounting/acquisition.py``) posts DR 121000 / CR
+    100000 for the purchase price directly, and the sale-booking
+    journal relieves inventory (not RWIP) for the full basis.
     """
     now = timezone.now()
     for spec in _SALES:
@@ -720,18 +721,6 @@ def _seed_sales(dealership: Dealership) -> None:
         sale_date = (
             now - dt.timedelta(days=int(spec["days_ago"]))
         ).date()
-        # Post the acquisition cost basis as a VehicleCost so the
-        # M15 sale-booking journal has a matching COGS + Recon WIP
-        # amount to clear.
-        cost_posted_at = now - dt.timedelta(days=int(spec["days_ago"]) + 20)
-        VehicleCost.objects.create(
-            dealership=dealership, vehicle=vehicle,
-            category=CATEGORY_PARTS, amount=Decimal(spec["cost_basis"]),
-            incurred_at=cost_posted_at,
-            vendor=f"Acquisition basis for {stock}",
-            reference=f"ACQ-{stock}", is_estimate=False,
-            posted_at=cost_posted_at,
-        )
 
         # Optional buyer lead — creates a CustomerLead row so the
         # sale has a documented buyer trail. Only for sales that

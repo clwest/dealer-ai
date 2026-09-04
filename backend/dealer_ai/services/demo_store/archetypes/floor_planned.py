@@ -505,7 +505,9 @@ def _seed_inventory(
         stock_numbers.append(stock)
         staged[stock] = vehicle
 
-        # Auction-heavy for a floor-planned dealer.
+        # Auction-heavy for a floor-planned dealer. Trades don't
+        # draw floor plan — the store already owns the trade — so
+        # only auction buys land on the floor line.
         source = SOURCE_AUCTION if index % 4 != 3 else SOURCE_TRADE
         VehicleAcquisition.objects.create(
             dealership=dealership,
@@ -517,6 +519,7 @@ def _seed_inventory(
                 "Manheim SoCal, lane 4" if source == SOURCE_AUCTION
                 else f"Trade-in from prior deal, ref #{index:03d}"
             ),
+            is_floored=(source == SOURCE_AUCTION),
         )
 
         ensure_current_stage(
@@ -845,6 +848,11 @@ def _seed_recon(
 
 
 def _seed_sales(dealership: Dealership) -> None:
+    # SESSION_241 books-1 — the acquisition cost basis is no longer
+    # shadow-posted as a VehicleCost row. The VehicleAcquisition
+    # post_save signal now debits 121000 for the purchase price, and
+    # the sale-booking journal relieves inventory (not RWIP) for the
+    # full basis.
     now = timezone.now()
     for spec in _SALES:
         stock = str(spec["stock"])
@@ -854,15 +862,6 @@ def _seed_sales(dealership: Dealership) -> None:
         sale_date = (
             now - dt.timedelta(days=int(spec["days_ago"]))
         ).date()
-        cost_posted_at = now - dt.timedelta(days=int(spec["days_ago"]) + 25)
-        VehicleCost.objects.create(
-            dealership=dealership, vehicle=vehicle,
-            category=CATEGORY_PARTS, amount=Decimal(spec["cost_basis"]),
-            incurred_at=cost_posted_at,
-            vendor=f"Auction basis for {stock}",
-            reference=f"ACQ-{stock}", is_estimate=False,
-            posted_at=cost_posted_at,
-        )
         buyer_name = SYNTHETIC_NAMES[
             int(spec["buyer_name_index"]) % len(SYNTHETIC_NAMES)
         ]
