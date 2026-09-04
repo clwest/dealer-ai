@@ -21,16 +21,29 @@ from .llm.factory import get_llm_provider
 logger = logging.getLogger(__name__)
 
 
-def _render(template: str) -> str:
-    """Format a dealer-templated string with the current dealer name.
+def _resolve_signature(lead: CustomerLead) -> tuple[str, str]:
+    """Return ``(sender_line, store_name)`` for the draft signature.
 
-    Prompt / signature constants use ``{dealer_name}`` as a placeholder
-    resolved at call time via :func:`dealer_config.get_dealer_name`.
+    TASK_label-pass §4 — the packet header already names the assigned
+    salesperson; the draft has to as well or it goes out signed as
+    "the dealership" or as the store alone, and a first text from a
+    dealership that does not say who it is from is one a customer
+    ignores.
+
+    Also fixes an unscoped ``get_dealer_name()`` chain — every call in
+    this module now passes ``lead.dealership`` so the DB layer of the
+    fallback resolves to the real store name for the lead's tenant
+    instead of landing on the "the dealership" fallback.
     """
-    return template.format(dealer_name=get_dealer_name())
+    store = get_dealer_name(dealership=lead.dealership)
+    salesperson = lead.assigned_to
+    if salesperson and (salesperson.name or "").strip():
+        first = _first_name(salesperson.name)
+        return first, store
+    return store, store
 
 
-SUGGESTED_MESSAGE_PROMPT = """You are drafting a short, friendly first message from a salesperson at {dealer_name} to a customer who just asked the AI concierge for help.
+SUGGESTED_MESSAGE_PROMPT = """You are drafting a short, friendly first message from a salesperson at {store_name} to a customer who just asked the AI concierge for help.
 
 Write 3-5 sentences. Cover:
 - A warm, no-pressure hello using the customer's first name.
@@ -42,7 +55,9 @@ Style:
 - Friendly, professional, dealership-appropriate. Plain English.
 - No emojis. No exclamation overload (one max).
 - Don't quote financing terms. Don't promise approval or rebates.
-- Sign off as "{dealer_name}".
+- Sign off with the salesperson's first name on one line and the store name on the next:
+  {sender_line}
+  {store_name}
 """
 
 
@@ -264,9 +279,13 @@ def _call_llm_for_message(
         "Write the message now."
     )
 
+    sender_line, store_name = _resolve_signature(lead)
+    system_prompt = SUGGESTED_MESSAGE_PROMPT.format(
+        store_name=store_name, sender_line=sender_line
+    )
     return provider.chat(
         [
-            {"role": "system", "content": _render(SUGGESTED_MESSAGE_PROMPT)},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_payload},
         ],
         temperature=0.4,
@@ -275,9 +294,10 @@ def _call_llm_for_message(
 
 
 def _deterministic_message(lead: CustomerLead, interested: List) -> str:
+    sender_line, store_name = _resolve_signature(lead)
     pieces: List[str] = [
         f"Hi {_first_name(lead.name)},",
-        f"Thanks for reaching out to {get_dealer_name()} — I saw the notes from our AI concierge.",
+        f"Thanks for reaching out to {store_name} — I saw the notes from our AI concierge.",
     ]
     if interested:
         names = ", ".join(v.display_name for v in interested[:2])
@@ -293,5 +313,14 @@ def _deterministic_message(lead: CustomerLead, interested: List) -> str:
             "Whenever you're ready, I can pull together a real quote and "
             "answer any questions."
         )
-    pieces.append(f"Talk soon,\n{get_dealer_name()}")
+    # TASK_label-pass §4 — deterministic fallback matches the LLM
+    # prompt: salesperson first name on one line, store on the next.
+    # When the lead has no assigned salesperson, the signature
+    # collapses to the store name (never to "the dealership" on a
+    # store that has a name — see ``_resolve_signature``).
+    if sender_line == store_name:
+        signature = f"Talk soon,\n{store_name}"
+    else:
+        signature = f"Talk soon,\n{sender_line}\n{store_name}"
+    pieces.append(signature)
     return " ".join(pieces[:3]) + "\n\n" + " ".join(pieces[3:])

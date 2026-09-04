@@ -1401,7 +1401,11 @@ function PaymentDefaultsSection({
   ]);
 
   const aprPlaceholder = `using ${PAYMENT_FALLBACK_APR}% until you set one`;
-  const termPlaceholder = `using ${PAYMENT_FALLBACK_TERM} until you set one`;
+  // TASK_label-pass §7 — the term field is narrower than the APR / down
+  // columns because it is an integer, so the "until you set one"
+  // suffix clipped mid-word (``using 72 unti``). Shorter placeholder
+  // matches the same fallback intent without overrunning the input.
+  const termPlaceholder = `default ${PAYMENT_FALLBACK_TERM}`;
   const downPlaceholder = `using ${PAYMENT_FALLBACK_DOWN_PCT}% until you set one`;
 
   return (

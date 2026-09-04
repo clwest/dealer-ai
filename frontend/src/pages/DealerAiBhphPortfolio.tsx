@@ -50,6 +50,19 @@ const BUCKET_LABELS: Record<string, string> = {
   charge_off_candidate: "Charge-off candidate",
 };
 
+// TASK_label-pass §3 — the payment-frequency column rendered the
+// raw ``weekly`` / ``biweekly`` / ``semi_monthly`` machine values.
+// Same pattern SESSION_236 used for BE_BACK_STATE_LABELS et al on
+// the sales pages: a per-page ``Record<Enum, label>`` map with a raw
+// fallback. Every choice on the backend model is covered here, not
+// just the ones the seed produces — see
+// ``BHPH_PAYMENT_FREQUENCY_CHOICES`` in backend/dealer_ai/models.py.
+const PAYMENT_FREQUENCY_LABELS: Record<string, string> = {
+  weekly: "Weekly",
+  biweekly: "Bi-weekly",
+  semi_monthly: "Semi-monthly",
+};
+
 
 function formatMoney(raw: string): string {
   const amount = Number(raw);
@@ -191,7 +204,7 @@ export default function DealerAiBhphPortfolio() {
                       <div className="font-semibold">
                         {BUCKET_LABELS[row.bucket] ?? row.bucket}
                       </div>
-                      <div>{row.note_count} notes</div>
+                      <div>{plural(row.note_count, "note")}</div>
                       <div className="text-muted-foreground">
                         {formatMoney(row.principal_total)}
                       </div>
@@ -261,7 +274,10 @@ export default function DealerAiBhphPortfolio() {
                             {formatMoney(note.principal_financed)}
                           </td>
                           <td className="py-2">{formatApr(note.apr)}</td>
-                          <td className="py-2">{note.payment_frequency}</td>
+                          <td className="py-2">
+                            {PAYMENT_FREQUENCY_LABELS[note.payment_frequency] ??
+                              note.payment_frequency}
+                          </td>
                           <td className="py-2">
                             {BUCKET_LABELS[note.current_bucket] ?? note.current_bucket}
                           </td>

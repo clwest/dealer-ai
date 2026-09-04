@@ -45,6 +45,7 @@ import {
   type AuditEventsResponse,
   type OnboardingProfilePayload,
 } from "@/lib/api";
+import { categoryLabel, flagDisplayName } from "@/lib/flagLabels";
 
 interface AttentionItem {
   id: string;
@@ -556,8 +557,14 @@ function humanize(token: string): string {
 }
 
 function humanizeFlag(flag: string, category: string): string {
-  const flagText = humanize(flag);
-  const categoryText = humanize(category);
+  // TASK_label-pass §1 + §5 — use the shared FLAG_DISPLAY_NAMES /
+  // CATEGORY_LABELS map so a new scrub only needs one entry to fix
+  // both this card and the audit panel. Title-case fallback lives
+  // in ``flagLabels.ts`` for anything the map has not seen yet, and
+  // the backend guard test keeps the map complete against the flags
+  // the services layer can actually emit.
+  const flagText = flagDisplayName(flag);
+  const categoryText = categoryLabel(category);
   if (flagText.toLowerCase() === categoryText.toLowerCase()) return flagText;
   return `${flagText} (${categoryText})`;
 }

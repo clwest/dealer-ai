@@ -33,6 +33,7 @@ import {
   type DealListItem,
   type FundingState,
 } from "@/lib/fAndIApi";
+import { plural } from "@/lib/text";
 
 const CONTRACT_STATE_OPTIONS: Array<{
   value: ContractState | "";
@@ -183,7 +184,7 @@ export default function DealerFandIDeals() {
       {loadState === "ready" && deals.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>{deals.length} deals</CardTitle>
+            <CardTitle>{plural(deals.length, "deal")}</CardTitle>
           </CardHeader>
           <CardContent>
             <table className="w-full text-sm">

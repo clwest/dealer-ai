@@ -52,6 +52,17 @@ import {
 } from "@/lib/bhphApi";
 
 
+// TASK_label-pass §3 — the header rendered `weekly` raw; label it
+// the same way the portfolio page does. Every choice on the backend
+// model is covered here — see ``BHPH_PAYMENT_FREQUENCY_CHOICES`` in
+// backend/dealer_ai/models.py.
+const PAYMENT_FREQUENCY_LABELS: Record<string, string> = {
+  weekly: "Weekly",
+  biweekly: "Bi-weekly",
+  semi_monthly: "Semi-monthly",
+};
+
+
 function formatMoney(raw: string): string {
   const amount = Number(raw);
   if (Number.isNaN(amount)) return `$${raw}`;
@@ -175,7 +186,9 @@ export default function DealerAiBhphNoteDetail() {
         </p>
         <p className="text-sm text-muted-foreground">
           {formatMoney(note.principal_financed)} @ {formatApr(note.apr)} ·{" "}
-          {note.term_weeks} weeks · {note.payment_frequency}
+          {note.term_weeks} weeks ·{" "}
+          {PAYMENT_FREQUENCY_LABELS[note.payment_frequency] ??
+            note.payment_frequency}
         </p>
       </header>
 

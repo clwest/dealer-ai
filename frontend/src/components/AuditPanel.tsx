@@ -20,6 +20,7 @@ import type {
   AuditFlagBucket,
   AuditSeverity,
 } from "@/lib/api";
+import { CATEGORY_LABELS, flagDisplayName } from "@/lib/flagLabels";
 import { cn } from "@/lib/utils";
 
 type Window = "24h" | "7d" | "30d";
@@ -28,35 +29,6 @@ const WINDOW_LABELS: Record<Window, string> = {
   "24h": "Last 24h",
   "7d": "Last 7d",
   "30d": "Last 30d",
-};
-
-const FLAG_DISPLAY_NAMES: Record<string, string> = {
-  prompt_injection: "Prompt injection attempt",
-  rate_inquiry: "Rate / APR question",
-  external_value_inquiry: "Blue Book / KBB / trade-in value",
-  identity_request: "Identity question (are you real?)",
-  negotiation_request: "Price negotiation",
-  handoff_request: "Live agent / handoff request",
-  image_request: "Picture / image request",
-  image_request_needs_vehicle: "Image request (no vehicle context)",
-  appointment_request: "Appointment / test drive",
-  appointment_request_needs_vehicle: "Appointment (no vehicle context)",
-  post_llm_safety_rewrite: "Post-LLM safety rewrite",
-  internal_confusion_fallback: "Internal-confusion fallback",
-  post_llm_override: "Post-LLM override",
-  rate_language_scrubbed: "Rate language scrubbed",
-  internal_directive_scrubbed: "Internal directive scrubbed",
-  default_assumption_scrubbed: "Default-assumption scrubbed",
-  category_label_scrubbed: "Category label scrubbed",
-  multiple_scrubs_fired: "Multiple scrubs fired",
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  pre_llm_guard: "Pre-LLM guard",
-  post_llm_rewrite: "Post-LLM rewrite",
-  post_llm_override: "Post-LLM override",
-  scrub: "Partial scrub",
-  unknown: "Other",
 };
 
 function severityRowClasses(sev: AuditSeverity): string {
@@ -69,10 +41,6 @@ function severityRowClasses(sev: AuditSeverity): string {
     default:
       return "border-slate-100 bg-white hover:bg-slate-50";
   }
-}
-
-function flagDisplay(flag: string): string {
-  return FLAG_DISPLAY_NAMES[flag] ?? flag.replace(/_/g, " ");
 }
 
 function timeShort(iso: string) {
@@ -273,7 +241,7 @@ export default function AuditPanel({ refreshKey }: Props) {
                     )}
                   >
                     <span className="text-slate-700">
-                      {flagDisplay(b.flag)}
+                      {flagDisplayName(b.flag)}
                     </span>
                     <span className="rounded-md bg-white px-2 py-0.5 text-xs font-bold text-slate-700 ring-1 ring-slate-200">
                       {b.count}
@@ -317,7 +285,7 @@ function AuditDrilldownModal({
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <div>
             <h3 className="text-sm font-bold text-brand-ink">
-              {flagDisplay(drilldown.flag)}
+              {flagDisplayName(drilldown.flag)}
             </h3>
             <div className="text-xs text-slate-500">
               {drilldown.events.length} recent event

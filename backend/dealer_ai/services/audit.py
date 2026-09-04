@@ -26,10 +26,14 @@ from ..models import ChatMessage
 #
 #   info  — pre-LLM short-circuit (customer asked something the AI
 #           shouldn't answer; deterministic refusal). Healthy signal.
-#   warn  — post-LLM rewrite or override. The model produced something
-#           unsafe and the safety layer caught it. Worth investigating
-#           if rates trend up.
+#   warn  — post-LLM rewrite or override, or an upstream provider
+#           outage. Worth investigating if rates trend up.
 #   muted — partial post-LLM scrub. Self-healing; lowest urgency.
+#
+# Coverage is enforced by
+# ``test_audit_flag_coverage.py`` — every string the services layer
+# assigns to ``ChatMessage.metadata["flag"]`` must appear here or the
+# suite fails.
 _FLAG_CATEGORIES: Dict[str, str] = {
     # Pre-LLM short-circuits
     "prompt_injection": "pre_llm_guard",
@@ -53,7 +57,23 @@ _FLAG_CATEGORIES: Dict[str, str] = {
     "internal_directive_scrubbed": "scrub",
     "default_assumption_scrubbed": "scrub",
     "category_label_scrubbed": "scrub",
+    "meta_narration_scrubbed": "scrub",
+    "list_shape_scrubbed": "scrub",
+    "banned_phrase_scrubbed": "scrub",
+    "payment_drift_scrubbed": "scrub",
+    "extra_payment_quote_scrubbed": "scrub",
+    "followup_question_scrubbed": "scrub",
+    "generic_use_case_scrubbed": "scrub",
+    "followup_anchors_scrubbed": "scrub",
+    "drivetrain_claim_scrubbed": "scrub",
+    "financing_language_scrubbed": "scrub",
+    "fallback_stall_scrubbed": "scrub",
+    "both_wording_scrubbed": "scrub",
     "multiple_scrubs_fired": "scrub",
+    # Upstream provider outage — not a guard action. Filed separately
+    # so a dealer reading the coaching card doesn't see an API outage
+    # sitting under "phrases scrubbed".
+    "provider_unavailable": "provider_outage",
 }
 
 _CATEGORY_SEVERITY: Dict[str, str] = {
@@ -61,6 +81,7 @@ _CATEGORY_SEVERITY: Dict[str, str] = {
     "post_llm_rewrite": "warn",
     "post_llm_override": "warn",
     "scrub": "muted",
+    "provider_outage": "warn",
 }
 
 

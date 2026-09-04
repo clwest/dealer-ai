@@ -66,6 +66,7 @@ import {
   createReferralLead,
   createWalkInLead,
 } from "@/lib/salesApi";
+import { plural } from "@/lib/text";
 
 type ChannelFilter =
   | ""
@@ -199,7 +200,7 @@ export default function DealerAiSalesLeads() {
       {loadState === "ready" && leads.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>{leads.length} leads</CardTitle>
+            <CardTitle>{plural(leads.length, "lead")}</CardTitle>
           </CardHeader>
           <CardContent>
             <table className="w-full text-sm">

@@ -7,7 +7,13 @@ from decimal import Decimal
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from dealer_ai.models import ChatMessage, ChatSession, CustomerLead, Vehicle
+from dealer_ai.models import (
+    ChatMessage,
+    ChatSession,
+    CustomerLead,
+    Salesperson,
+    Vehicle,
+)
 from dealer_ai.services import handoff_service
 from dealer_ai.services.handoff_service import (
     build_handoff_packet,
@@ -130,6 +136,37 @@ class HandoffServiceTests(TestCase):
         self.assertEqual(packet["interested_vehicles"], [])
         self.assertIsNone(packet["session_id"])
         self.assertIsNone(packet["budget"]["target_monthly_payment"])
+
+    def test_deterministic_message_signs_with_assigned_salesperson(self):
+        """TASK_label-pass §4 — draft signs with the assigned salesperson's
+        first name on top of the store name; when no salesperson is
+        assigned the signature collapses to the store alone. Never falls
+        to the bland ``the dealership`` string when the store has a name.
+        """
+        lead = _make_lead_with_session()
+        # Force the LLM to fail so the deterministic path renders.
+        provider = MockLLMProvider(replies=[""])
+        salesperson = Salesperson.objects.create(
+            dealership=lead.dealership,
+            name="Ashley Nguyen",
+            slug="ashley-nguyen-test",
+        )
+        lead.assigned_to = salesperson
+        lead.save(update_fields=["assigned_to"])
+        packet = build_handoff_packet(lead, provider=provider)
+        message = packet["suggested_message"]
+        self.assertIn("Ashley\nDealer OS", message)
+        self.assertNotIn("the dealership", message)
+
+    def test_deterministic_message_signs_with_store_when_unassigned(self):
+        """Null ``assigned_to`` collapses the signature to the store."""
+        lead = _make_lead_with_session()
+        self.assertIsNone(lead.assigned_to)
+        provider = MockLLMProvider(replies=[""])
+        packet = build_handoff_packet(lead, provider=provider)
+        message = packet["suggested_message"]
+        self.assertIn("Talk soon,\nDealer OS", message)
+        self.assertNotIn("the dealership", message)
 
 
 # ---- /admin/lead/<id>/ -----------------------------------------------------

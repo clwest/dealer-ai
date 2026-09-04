@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from .models import (
@@ -856,20 +858,20 @@ class AcquisitionUpsertRequestSerializer(serializers.Serializer):
         required=False, allow_blank=True, default="", max_length=255
     )
     purchase_price = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0
+        max_digits=10, decimal_places=2, min_value=Decimal("0")
     )
     purchase_date = serializers.DateField()
     buyer_fees = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0, required=False, default=0
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False, default=Decimal("0")
     )
     arbitration_fees = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0, required=False, default=0
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False, default=Decimal("0")
     )
     transportation_cost = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0, required=False, default=0
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False, default=Decimal("0")
     )
     title_acquisition_cost = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0, required=False, default=0
+        max_digits=10, decimal_places=2, min_value=Decimal("0"), required=False, default=Decimal("0")
     )
     notes = serializers.CharField(required=False, allow_blank=True, default="")
 
@@ -953,7 +955,7 @@ class ConditionFindingCreateRequestSerializer(serializers.Serializer):
     estimated_cost = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
-        min_value=0,
+        min_value=Decimal("0"),
         required=False,
         allow_null=True,
         default=None,
@@ -996,7 +998,7 @@ class ConditionFindingUpdateRequestSerializer(serializers.Serializer):
     estimated_cost = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
-        min_value=0,
+        min_value=Decimal("0"),
         required=False,
         allow_null=True,
     )
