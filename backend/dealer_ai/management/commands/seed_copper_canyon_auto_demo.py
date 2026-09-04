@@ -2008,10 +2008,20 @@ def _backfill_lead_details_and_history(
         ).order_by("stock_number")
     )
 
+    # Salespeople for buyer-lead terminal-state assignment. Ordered by
+    # ``pk`` so ``lead.pk % len(salespeople)`` is stable across re-runs.
+    # SESSION_240.1: buyer leads that closed a sale need
+    # ``assigned_to`` populated so the pipeline reads sold-from-lead
+    # rather than a queue of un-owned closed shoppers.
+    salespeople = list(
+        Salesperson.objects.filter(dealership=dealership).order_by("pk")
+    )
+
     updated = 0
     with_trade = 0
     with_interested = 0
     date_span_days = 0
+    buyer_leads_closed = 0
     for lead in (
         CustomerLead.objects.filter(dealership=dealership)
         .select_related()
@@ -2032,13 +2042,19 @@ def _backfill_lead_details_and_history(
         else:
             down_dollars = rng.randint(3000, 3500)
 
-        # Target monthly — correlated with down. Not a rule; a real
-        # store sees the "bigger down + bigger payment" curve with
-        # meaningful noise (some walk in with $3,000 down because
-        # $400/mo is the ceiling; others have $800 down and $900/mo).
-        base_monthly = 350 + int(0.15 * (down_dollars - 800))
-        jitter = rng.randint(-60, 260)
-        target_monthly = max(400, min(1200, base_monthly + jitter))
+        # Target monthly — drawn uniformly across Chris's stated range
+        # ($400-$1,200, 2026-09-03: "everything can just be randomized
+        # from there"). SESSION_240 shipped a correlated draw
+        # (``base = 350 + 0.15·(down − 800) + jitter``) that never
+        # reached the top of the range — measured max on 60 leads was
+        # $893, with the whole $900-$1,200 band empty. Nobody was
+        # shopping the $1,000 payment the $20k Tacoma/Tundra listings
+        # sit for. Uniform draw closes the ceiling; the affordable-car
+        # picker below then follows the payment, not the other way
+        # round. Guarded by a seed test (see
+        # ``test_seed_copper_canyon_auto_demo.py`` — the down/monthly
+        # band pair, same shape as SESSION_237's cost-band lock).
+        target_monthly = rng.randint(400, 1200)
 
         credit = _CREDIT_RANGE_MIX[lead.pk % 100]
 
@@ -2062,11 +2078,19 @@ def _backfill_lead_details_and_history(
             sale=sale,
         )
 
-        urgency = _URGENCY_MIX[lead.pk % 4]
+        # Urgency: for open leads, spread pk % 4 across the four values.
+        # For buyer leads, urgency is a *current* state on the model
+        # (SegmentedControl chip on ``/dealer-ai-leads``); after a lead
+        # closes, they no longer have an active urgency. Blank so the
+        # "Immediate" counter at the top of the leads page reads the
+        # open pipeline instead of counting the 45 people who already
+        # drove home a car. Historical intake urgency lives in
+        # ``conversation_summary`` ("wants a truck under $X/mo").
         channel = _CHANNEL_MIX[(lead.pk // 4) % 4]
-        # A buyer who actually closed is not still "researching."
-        if is_buyer and urgency == "researching":
-            urgency = "immediate"
+        if is_buyer:
+            urgency = ""
+        else:
+            urgency = _URGENCY_MIX[lead.pk % 4]
 
         summary, next_action = _compose_lead_narrative(
             interested=interested,
@@ -2088,7 +2112,8 @@ def _backfill_lead_details_and_history(
         lead.channel = channel
         lead.conversation_summary = summary
         lead.recommended_next_action = next_action
-        lead.save(update_fields=[
+
+        save_fields = [
             "down_payment",
             "target_monthly_payment",
             "credit_range",
@@ -2098,7 +2123,26 @@ def _backfill_lead_details_and_history(
             "conversation_summary",
             "recommended_next_action",
             "updated_at",
-        ])
+        ]
+
+        # Buyer leads → terminal state. A lead that produced a sale is
+        # not still an open shopper on the pipeline. ``handed_off=True``
+        # + ``assigned_to`` + ``assigned_at`` is what the leads page's
+        # status filter (``new`` hides ``handed_off``) and the
+        # ``Handed off`` counter read. See SESSION_240.1 brief.
+        if is_buyer and sale is not None:
+            lead.handed_off = True
+            lead.assigned_at = dt.datetime.combine(
+                sale.sale_date,
+                dt.time(16, lead.pk % 60),
+                tzinfo=dt.timezone.utc,
+            )
+            if salespeople:
+                lead.assigned_to = salespeople[lead.pk % len(salespeople)]
+            save_fields.extend(["handed_off", "assigned_at", "assigned_to"])
+            buyer_leads_closed += 1
+
+        lead.save(update_fields=save_fields)
         if interested:
             lead.interested_vehicles.set(interested)
             with_interested += 1
@@ -2142,13 +2186,15 @@ def _backfill_lead_details_and_history(
         f"backfilled lead details on {updated} lead(s): "
         f"with_trade={with_trade}, "
         f"with_interested_vehicles={with_interested}, "
-        f"open_lead_date_span_days={date_span_days}."
+        f"open_lead_date_span_days={date_span_days}, "
+        f"buyer_leads_closed={buyer_leads_closed}."
     )
     return {
         "leads_backfilled": updated,
         "with_trade": with_trade,
         "with_interested": with_interested,
         "open_lead_date_span_days": date_span_days,
+        "buyer_leads_closed": buyer_leads_closed,
     }
 
 

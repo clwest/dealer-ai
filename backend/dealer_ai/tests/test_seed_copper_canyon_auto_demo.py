@@ -69,6 +69,7 @@ from dealer_ai.models import (
     WORK_ORDER_STATUS_DRAFT,
     BhphNote,
     CreditApplication,
+    CustomerLead,
     Dealership,
     Delivery,
     Repossession,
@@ -780,6 +781,147 @@ class CopperCanyonAutoSeedFreshRunTests(TestCase):
                 "payment date. The detector's projection is off, or "
                 "the seed changed shape.",
             )
+
+
+    # -------------------------------------------------------------------
+    # SESSION_240.1 — leads carry money in the stated bands, and buyer
+    # leads are in a terminal state on the pipeline. Two shape locks:
+    #
+    #   1. Every lead's ``down_payment`` sits in $800-$3,500 and every
+    #      ``target_monthly_payment`` sits in $400-$1,200, AND the
+    #      observed max on ``target_monthly_payment`` actually reaches
+    #      the top of the range. SESSION_240 shipped a correlated draw
+    #      that never crossed $893 — the whole $900-$1,200 band was
+    #      empty. The floor + ceiling assertions here would have
+    #      failed on that seed and pass on the uniform draw.
+    #   2. Every lead that has a Sale (``buyer`` FK back-reference) is
+    #      ``handed_off=True`` with an ``assigned_to`` + ``assigned_at``
+    #      set. A closed lead sitting as an open shopper on
+    #      ``/dealer-ai-leads`` is the SESSION_240.1 defect this locks
+    #      against.
+    # -------------------------------------------------------------------
+
+    def test_lead_money_bands_hit_the_ceiling(self) -> None:
+        """Down $800-$3,500, monthly $400-$1,200 — and the monthly max
+        actually reaches the top of Chris's stated range.
+
+        The floor/ceiling pair is the guard; the additional "max
+        observed within $100 of $1,200" assertion is the SESSION_240.1
+        catch. A correlated draw that clips at ~$900 passes the range
+        check (every observation sits within the range, just not near
+        the top). The near-ceiling check catches the drift.
+        """
+        dealership = _demo_dealership()
+        downs: list[Decimal] = []
+        monthlies: list[Decimal] = []
+        for lead in CustomerLead.objects.filter(dealership=dealership):
+            self.assertIsNotNone(
+                lead.down_payment,
+                f"lead pk={lead.pk} ({lead.name}) has null down_payment; "
+                "backfill did not touch it.",
+            )
+            self.assertIsNotNone(
+                lead.target_monthly_payment,
+                f"lead pk={lead.pk} ({lead.name}) has null "
+                "target_monthly_payment; backfill did not touch it.",
+            )
+            downs.append(lead.down_payment)
+            monthlies.append(lead.target_monthly_payment)
+
+        self.assertGreater(len(downs), 0, "no leads on the demo store")
+
+        down_min, down_max = min(downs), max(downs)
+        monthly_min, monthly_max = min(monthlies), max(monthlies)
+
+        self.assertGreaterEqual(
+            down_min,
+            Decimal("800"),
+            f"observed down_payment min ${down_min} is below Chris's "
+            "$800 floor (2026-09-03 decision: down payments range from "
+            "$800 to $3,500).",
+        )
+        self.assertLessEqual(
+            down_max,
+            Decimal("3500"),
+            f"observed down_payment max ${down_max} exceeds Chris's "
+            "$3,500 ceiling (2026-09-03 decision).",
+        )
+        self.assertGreaterEqual(
+            monthly_min,
+            Decimal("400"),
+            f"observed target_monthly_payment min ${monthly_min} is "
+            "below Chris's $400 floor (2026-09-03 decision: monthly "
+            "payment range of $400-$1,200).",
+        )
+        self.assertLessEqual(
+            monthly_max,
+            Decimal("1200"),
+            f"observed target_monthly_payment max ${monthly_max} "
+            "exceeds Chris's $1,200 ceiling (2026-09-03 decision).",
+        )
+        # SESSION_240.1 catch: SESSION_240's correlated draw landed
+        # ``max = $893``, silently narrowing the top of the band.
+        # Require the observed max within $100 of $1,200 so a future
+        # narrowing fails loudly.
+        self.assertGreaterEqual(
+            monthly_max,
+            Decimal("1100"),
+            f"observed target_monthly_payment max ${monthly_max} does "
+            "not reach the top of the $400-$1,200 range. The seed is "
+            "clipping the band — see SESSION_240.1: a correlated draw "
+            "off ``down`` narrowed the top of the range to ~$893 and "
+            "the $20k Tacoma/Tundra listings had no matching shoppers.",
+        )
+
+    def test_buyer_leads_are_terminal_state(self) -> None:
+        """A lead that produced a sale is not an open shopper.
+
+        Every ``CustomerLead`` referenced by a ``Sale.buyer`` FK has:
+
+        - ``handed_off = True`` — hides them from the default ``new``
+          status filter on ``/dealer-ai-leads``.
+        - ``assigned_to`` set — pairs the closed deal with the
+          salesperson credited for the sale (deterministic per
+          ``lead.pk % len(salespeople)``).
+        - ``assigned_at`` set — the leads page reads timestamped
+          assignment rather than a bare boolean.
+
+        SESSION_240.1 defect: 45 buyer leads sat in the open pipeline
+        as ``handed_off=False`` / ``assigned_to=None``, telling a
+        salesperson opening the queue there were 26 people to call
+        today when most had their car in the driveway. This test
+        prevents the regression.
+        """
+        dealership = _demo_dealership()
+        buyer_leads = list(
+            CustomerLead.objects.filter(
+                dealership=dealership, sales__isnull=False
+            ).distinct()
+        )
+        self.assertGreater(
+            len(buyer_leads),
+            0,
+            "no buyer leads on the demo store — the seed's extension "
+            "sales did not attach ``buyer=CustomerLead`` on each Sale.",
+        )
+        offenders = [
+            (lead.pk, lead.name, lead.handed_off,
+             lead.assigned_to_id, lead.assigned_at)
+            for lead in buyer_leads
+            if not (
+                lead.handed_off
+                and lead.assigned_to_id is not None
+                and lead.assigned_at is not None
+            )
+        ]
+        self.assertEqual(
+            offenders,
+            [],
+            f"{len(offenders)} buyer lead(s) are not in terminal state "
+            "(need handed_off=True + assigned_to + assigned_at). "
+            "SESSION_240.1 lock: a lead that closed a sale is not an "
+            f"open shopper. First few: {offenders[:5]!r}",
+        )
 
 
 class CopperCanyonAutoSeedIdempotencyTests(TestCase):
