@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import random as _random
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -62,7 +63,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from dealer_ai.models import (
+    BE_BACK_REASON_BRING_CO_SIGNER,
+    BE_BACK_REASON_BRING_TRADE_IN,
     BE_BACK_REASON_TEST_DRIVE,
+    BE_BACK_STATE_RETURNED,
     BHPH_PAYMENT_METHOD_CASH,
     CONDITION_CATEGORY_MECHANICAL,
     CONDITION_REPORT_STATUS_COMPLETE,
@@ -100,12 +104,17 @@ from dealer_ai.models import (
     ConditionFinding,
     ConditionReport,
     CreditApplication,
+    BeBack,
     CustomerLead,
     Dealership,
     DealerOnboardingProfile,
     Delivery,
     DealWriteup,
     GLAccount,
+    LEAD_CHANNEL_CHAT,
+    LEAD_CHANNEL_LISTING_FORM,
+    LEAD_CHANNEL_PHONE,
+    LEAD_CHANNEL_WALK_IN,
     Sale,
     Salesperson,
     UserDealershipRole,
@@ -154,6 +163,10 @@ from dealer_ai.services.deal_writeups.deal_writeup import (
     record_deal_writeup,
 )
 from dealer_ai.services.delivery.workflow import record_delivery
+from dealer_ai.services.payment_engine import (
+    affordable_max_price,
+    resolve_store_payment_defaults,
+)
 from dealer_ai.services.sale import record_sale
 from dealer_ai.services.lifecycle_aging.snapshots import snapshot_stage_ages
 from dealer_ai.services.vendor_sla.detection import detect_sla_breaches
@@ -332,6 +345,15 @@ class Command(BaseCommand):
             extended_sales = _extend_sales_history(
                 dealership, owner, self.stdout
             )
+            # SESSION_240 — before any lead-consuming seeder runs, fill
+            # money/story fields, spread urgency+channel+created_at on
+            # all 60 leads. Test drives / be-backs seeded below pick
+            # leads whose dates have already been backdated, so their
+            # promised_at values still read believable relative to
+            # their lead.
+            lead_backfill = _backfill_lead_details_and_history(
+                dealership, self.stdout
+            )
             test_drives = _seed_test_drives(dealership, self.stdout)
             be_back = _seed_be_back(dealership, self.stdout)
             journals = _seed_journal_month(dealership, owner, self.stdout)
@@ -420,6 +442,7 @@ class Command(BaseCommand):
                 f"fni={fni_summary}, "
                 f"delivered_archetype_sale_pks={delivered_pks}, "
                 f"extended_sales={extended_sales}, "
+                f"lead_backfill={lead_backfill}, "
                 f"test_drives={test_drives}, "
                 f"be_back_pk={be_back.pk}, "
                 f"manual_journal_entries={journals}, "
@@ -1894,6 +1917,400 @@ def _extend_fni_chain(dealership: Dealership, owner, stdout) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Lead detail backfill — SESSION_240
+#
+# Chris, 2026-09-03: "down payments range from $800 to $3500, monthly
+# payment range of $400-$1200, everything can just be randomized from
+# there but let's get them all filled out and updated."
+#
+# The retail_subprime archetype seeds 15 open leads + 5 buyer leads and
+# leaves ``down_payment``, ``target_monthly_payment``, ``credit_range``,
+# ``trade_in``, ``interested_vehicles``, ``conversation_summary`` and
+# ``recommended_next_action`` blank on every one. The Copper Canyon
+# extension adds ~2 BHPH buyer leads + 38 extended-sales buyer leads
+# with the same fields blank. Every field exists on ``CustomerLead``;
+# the seeders just never filled them.
+#
+# On a subprime lot those are the fields that decide whether there is
+# a deal. Follow-up cadences, the be-back detector and the three-week
+# rule have no history to act on without them. This backfill fills
+# them deterministically per lead pk, using the store's own payment
+# defaults to pick interested vehicles by payment fit (not a hand-
+# picked mapping), and spreads urgency + channel + created_at so the
+# 60-lead board stops reading as "49 walk-ins in the last hour."
+# ---------------------------------------------------------------------------
+
+
+_CREDIT_RANGE_MIX: tuple[str, ...] = (
+    # 20 % deep subprime, 45 % subprime, 25 % near-prime, 10 % prime —
+    # the shape the pivot doc's Copper Canyon persona actually sees.
+    # Deterministic 100-bucket pick via ``lead.pk % 100``.
+    *(("rebuilding",) * 20),
+    *(("poor",) * 45),
+    *(("fair",) * 25),
+    *(("good",) * 10),
+)
+
+_URGENCY_MIX: tuple[str, ...] = (
+    "immediate", "this_week", "this_month", "researching",
+)
+
+_CHANNEL_MIX: tuple[str, ...] = (
+    LEAD_CHANNEL_WALK_IN,
+    LEAD_CHANNEL_PHONE,
+    LEAD_CHANNEL_CHAT,
+    LEAD_CHANNEL_LISTING_FORM,
+)
+
+# Trade-in strings — plausible for a Yuma-area subprime shopper. The
+# ``owes`` column carries the rough negative-equity number a third of
+# trade-having leads land on. Chosen so a mix of $0 (paid off) and
+# actual balances shows up in the trade-in column.
+_TRADE_OPTIONS: tuple[tuple[str, int], ...] = (
+    ("2011 Nissan Altima", 2500),
+    ("2009 Ford F-150", 1800),
+    ("2013 Honda Civic", 0),
+    ("2010 Chevrolet Malibu", 1200),
+    ("2008 Toyota Camry", 0),
+    ("2012 Hyundai Elantra", 900),
+    ("2007 GMC Sierra", 0),
+    ("2014 Kia Soul", 1600),
+    ("2011 Ford Fusion", 0),
+    ("2009 Dodge Grand Caravan", 750),
+    ("2010 Jeep Liberty", 0),
+    ("2013 Nissan Sentra", 1100),
+    ("2015 Chevrolet Cruze", 2100),
+    ("2012 Toyota Corolla", 0),
+)
+
+
+def _backfill_lead_details_and_history(
+    dealership: Dealership, stdout
+) -> dict:
+    """Fill money / story / history fields on every ``CustomerLead``.
+
+    Deterministic per ``lead.pk`` — a re-run produces the same rows.
+    Runs after ``_extend_sales_history`` so all 60 leads exist.
+    """
+    now = timezone.now()
+    profile = DealerOnboardingProfile.objects.filter(
+        dealership=dealership
+    ).first()
+    defaults = resolve_store_payment_defaults(profile)
+
+    # Frontline pool for the "interested_vehicles" payment-fit picker.
+    # Ordered by stock number so per-pk seed choices are stable.
+    frontline_vehicles = list(
+        Vehicle.objects.filter(
+            dealership=dealership,
+            sale__isnull=True,
+            stage__current_stage=VEHICLE_STAGE_FRONTLINE,
+        ).order_by("stock_number")
+    )
+
+    updated = 0
+    with_trade = 0
+    with_interested = 0
+    date_span_days = 0
+    for lead in (
+        CustomerLead.objects.filter(dealership=dealership)
+        .select_related()
+        .order_by("pk")
+    ):
+        rng = _random.Random(lead.pk)
+        sale = Sale.objects.filter(buyer=lead).select_related("vehicle").first()
+        is_buyer = sale is not None
+
+        # Down payment — skewed low. 55 % of leads land in $800–$1,500,
+        # 30 % in $1,500–$2,500, 15 % in $3,000–$3,500 (the "tax refund
+        # season" tail Chris named).
+        down_bucket = rng.random()
+        if down_bucket < 0.55:
+            down_dollars = rng.randint(800, 1500)
+        elif down_bucket < 0.85:
+            down_dollars = rng.randint(1500, 2500)
+        else:
+            down_dollars = rng.randint(3000, 3500)
+
+        # Target monthly — correlated with down. Not a rule; a real
+        # store sees the "bigger down + bigger payment" curve with
+        # meaningful noise (some walk in with $3,000 down because
+        # $400/mo is the ceiling; others have $800 down and $900/mo).
+        base_monthly = 350 + int(0.15 * (down_dollars - 800))
+        jitter = rng.randint(-60, 260)
+        target_monthly = max(400, min(1200, base_monthly + jitter))
+
+        credit = _CREDIT_RANGE_MIX[lead.pk % 100]
+
+        trade_str = ""
+        if rng.random() < 0.40:
+            veh, owed = _TRADE_OPTIONS[
+                lead.pk % len(_TRADE_OPTIONS)
+            ]
+            if owed and rng.random() < 0.33:
+                trade_str = f"{veh} (owes ~${owed:,})"
+            else:
+                trade_str = veh
+
+        interested = _pick_interested_by_payment(
+            frontline_vehicles,
+            target_monthly=target_monthly,
+            down_payment=down_dollars,
+            defaults=defaults,
+            rng=rng,
+            is_buyer=is_buyer,
+            sale=sale,
+        )
+
+        urgency = _URGENCY_MIX[lead.pk % 4]
+        channel = _CHANNEL_MIX[(lead.pk // 4) % 4]
+        # A buyer who actually closed is not still "researching."
+        if is_buyer and urgency == "researching":
+            urgency = "immediate"
+
+        summary, next_action = _compose_lead_narrative(
+            interested=interested,
+            target_monthly=target_monthly,
+            down_dollars=down_dollars,
+            credit=credit,
+            trade_str=trade_str,
+            urgency=urgency,
+            channel=channel,
+            is_buyer=is_buyer,
+            sale=sale,
+        )
+
+        lead.down_payment = Decimal(down_dollars)
+        lead.target_monthly_payment = Decimal(target_monthly)
+        lead.credit_range = credit
+        lead.trade_in = trade_str
+        lead.urgency = urgency
+        lead.channel = channel
+        lead.conversation_summary = summary
+        lead.recommended_next_action = next_action
+        lead.save(update_fields=[
+            "down_payment",
+            "target_monthly_payment",
+            "credit_range",
+            "trade_in",
+            "urgency",
+            "channel",
+            "conversation_summary",
+            "recommended_next_action",
+            "updated_at",
+        ])
+        if interested:
+            lead.interested_vehicles.set(interested)
+            with_interested += 1
+
+        # created_at — the archetype + extension writers all pass a
+        # backdated ``created_at`` to ``objects.create()``, but the
+        # field's ``auto_now_add=True`` silently overrides them at
+        # INSERT time, so every lead lands at ``now``. Rewrite via
+        # queryset ``.update()`` (bypasses ``auto_now_add``) so
+        # buyer leads sit before their sale date (funnel reads as
+        # sold-from-lead, not "45 sales from nowhere") and open
+        # leads spread across the trailing 45 days weighted toward
+        # recent (a handful today, some at the 45-day edge).
+        if is_buyer and sale is not None:
+            u = ((lead.pk * 41) % 1000) / 1000.0
+            # 3–45 days before the sale — a typical subprime shopping
+            # window. Bell-ish via 1 - (1 - u) ** 2 so the median lands
+            # in the middle of the window rather than at the extremes.
+            days_before_sale = 3 + int((1.0 - (1.0 - u) ** 2) * 42)
+            new_created_at = dt.datetime.combine(
+                sale.sale_date, dt.time(10, lead.pk % 60),
+                tzinfo=dt.timezone.utc,
+            ) - dt.timedelta(days=days_before_sale)
+        else:
+            u = ((lead.pk * 37) % 1000) / 1000.0
+            # Squaring biases toward zero (recent). Handful today via
+            # the low tail; oldest ~45 days out.
+            days_ago = int((u * u) * 45)
+            hour = lead.pk % 24
+            new_created_at = now - dt.timedelta(days=days_ago, hours=hour)
+            date_span_days = max(date_span_days, days_ago)
+        CustomerLead.objects.filter(pk=lead.pk).update(
+            created_at=new_created_at
+        )
+
+        updated += 1
+        if trade_str:
+            with_trade += 1
+
+    stdout.write(
+        f"backfilled lead details on {updated} lead(s): "
+        f"with_trade={with_trade}, "
+        f"with_interested_vehicles={with_interested}, "
+        f"open_lead_date_span_days={date_span_days}."
+    )
+    return {
+        "leads_backfilled": updated,
+        "with_trade": with_trade,
+        "with_interested": with_interested,
+        "open_lead_date_span_days": date_span_days,
+    }
+
+
+def _pick_interested_by_payment(
+    frontline_vehicles: list[Vehicle],
+    *,
+    target_monthly: int,
+    down_payment: int,
+    defaults: dict,
+    rng: _random.Random,
+    is_buyer: bool,
+    sale,
+) -> list[Vehicle]:
+    """Return 1 or 2 vehicles the lead is plausibly interested in.
+
+    For buyer leads the first pick is the car they actually bought
+    (via ``Sale.buyer`` FK) so the demo tells sold-from-lead; a
+    second frontline pick reads as "also looked at". For open
+    leads the picks come from the current frontline pool filtered
+    by payment fit — using the store's own APR / term / down%
+    defaults via :func:`affordable_max_price`, not a hand-picked
+    map.
+    """
+    picks: list[Vehicle] = []
+    if is_buyer and sale is not None and sale.vehicle is not None:
+        picks.append(sale.vehicle)
+        # Give the buyer's lead one "also-looked-at" frontline pick
+        # so ``interested_vehicles`` reads as a shopping history,
+        # not just the closed car.
+        if frontline_vehicles:
+            picks.append(rng.choice(frontline_vehicles))
+        return picks
+
+    if not frontline_vehicles:
+        return []
+
+    max_price = affordable_max_price(
+        target_monthly=float(target_monthly),
+        down_payment=float(down_payment),
+        apr=defaults["apr"],
+        term_months=defaults["term_months"],
+        tax_rate=defaults["tax_rate"],
+        fees=defaults["fees"],
+    )
+    # +20 % headroom so a shopper's realistic range covers cars
+    # slightly above the tight fit — a real buyer stretches for
+    # the one they like.
+    ceiling = Decimal(str(max_price)) * Decimal("1.20")
+    fits = [v for v in frontline_vehicles if v.price <= ceiling]
+    if not fits:
+        # Nothing in the pool fits — take the three cheapest as
+        # the "in reach if we stretch" set. A demo lead with no
+        # interested vehicles reads as broken.
+        fits = sorted(frontline_vehicles, key=lambda v: v.price)[:3]
+
+    n = 1 if rng.random() < 0.4 else 2
+    n = min(n, len(fits))
+    return rng.sample(fits, n)
+
+
+def _compose_lead_narrative(
+    *,
+    interested: list[Vehicle],
+    target_monthly: int,
+    down_dollars: int,
+    credit: str,
+    trade_str: str,
+    urgency: str,
+    channel: str,
+    is_buyer: bool,
+    sale,
+) -> tuple[str, str]:
+    """Deterministic ``conversation_summary`` + ``recommended_next_action``.
+
+    Composed from the lead's own fields — not a model call. Two or
+    three plain sentences that read as if a salesperson wrote them
+    after the first conversation.
+    """
+    body_phrase_map = {
+        "truck": "a truck",
+        "suv": "an SUV",
+        "car": "a car",
+        "van": "a van",
+    }
+    urgency_phrase = {
+        "immediate": "buying now",
+        "this_week": "buying this week",
+        "this_month": "buying this month",
+        "researching": "just researching",
+    }.get(urgency, "timing unclear")
+    channel_phrase = {
+        LEAD_CHANNEL_WALK_IN: "walked in",
+        LEAD_CHANNEL_PHONE: "called in",
+        LEAD_CHANNEL_CHAT: "chatted in",
+        LEAD_CHANNEL_LISTING_FORM: "came in via web listing",
+    }.get(channel, "reached out")
+    credit_phrase = {
+        "rebuilding": "credit is rebuilding",
+        "poor": "credit is rough",
+        "fair": "credit is fair",
+        "good": "credit looks good",
+        "excellent": "credit is strong",
+        "unknown": "credit not run yet",
+    }.get(credit, "credit unknown")
+
+    picked = interested[0] if interested else None
+    if picked is not None:
+        veh_phrase = body_phrase_map.get(
+            (picked.body_style or "").lower(),
+            f"a {picked.year} {picked.make} {picked.model}",
+        )
+    else:
+        veh_phrase = "something they can afford"
+
+    trade_phrase = (
+        f", has a {trade_str} to trade"
+        if trade_str
+        else ""
+    )
+
+    if is_buyer and sale is not None and sale.vehicle is not None:
+        summary = (
+            f"Wanted {veh_phrase} under ${target_monthly}/mo with "
+            f"${down_dollars:,} down; {credit_phrase}"
+            f"{trade_phrase}. Closed on stock "
+            f"{sale.vehicle.stock_number} for ${int(sale.sold_price):,}."
+        )
+        next_action = (
+            "Add to service reminder list; call in 60 days to check "
+            "on the car and ask for a referral."
+        )
+        return summary, next_action
+
+    summary = (
+        f"Wants {veh_phrase} under ${target_monthly}/mo with "
+        f"${down_dollars:,} down; {credit_phrase}"
+        f"{trade_phrase}. {channel_phrase}, {urgency_phrase}."
+    )
+    if urgency == "immediate":
+        target = picked.stock_number if picked else "best match"
+        next_action = (
+            f"Call today — offer a test drive on {target}."
+        )
+    elif urgency == "this_week":
+        target = picked.stock_number if picked else "the top pick"
+        next_action = (
+            f"Text within 24 hours; hold {target} for this weekend."
+        )
+    elif urgency == "this_month":
+        next_action = (
+            "Follow up in 3-5 days; run a soft-pull so the payment "
+            "estimate is firm."
+        )
+    else:
+        next_action = (
+            "Add to the weekly touch list; send a new-arrival email "
+            "when a fit hits the lot."
+        )
+    return summary, next_action
+
+
+# ---------------------------------------------------------------------------
 # Sales-side channels — test drives + one be-back due today
 # ---------------------------------------------------------------------------
 
@@ -1963,37 +2380,84 @@ def _seed_test_drives(dealership: Dealership, stdout) -> int:
 
 
 def _seed_be_back(dealership: Dealership, stdout):
-    """Create one be-back due today so the sales-side "today" card
-    reads real. Reuses one of the archetype's assigned leads.
+    """Create three be-backs — one already returned in the past, one
+    due later today, one promised a few days out — so the be-back
+    board reads with promised dates in the past AND the future
+    (SESSION_240 verification target).
+
+    Reuses assigned archetype leads. Returns the today-due be-back
+    for shape-parity with the prior single-be-back signature.
     """
     now = timezone.now()
-    lead = (
+    assigned = list(
         CustomerLead.objects.filter(
             dealership=dealership, assigned_to__isnull=False
         )
         .order_by("-pk")
-        .first()
     )
-    if lead is None:
-        stdout.write("no assigned lead for be-back; skipping.")
+    if not assigned:
+        stdout.write("no assigned leads for be-back; skipping.")
         return None
-    # Promised for later today; slightly in the past shows the
-    # "overdue today" chip if the operator opens the page late.
-    promised_at = now.replace(hour=17, minute=0, second=0, microsecond=0)
-    be_back = record_be_back(
+    today_lead = assigned[0]
+    past_lead = assigned[1] if len(assigned) > 1 else assigned[0]
+    future_lead = assigned[2] if len(assigned) > 2 else assigned[0]
+
+    # 1) Today (promised for later today; slightly in the past shows
+    # the "overdue today" chip if the operator opens the page late).
+    today_promised_at = now.replace(
+        hour=17, minute=0, second=0, microsecond=0
+    )
+    today_be_back = record_be_back(
         dealership=dealership,
-        lead=lead,
-        promised_at=promised_at,
+        lead=today_lead,
+        promised_at=today_promised_at,
         promised_reason=BE_BACK_REASON_TEST_DRIVE,
         notes=(
             "Customer promised to return this afternoon with their "
             "spouse for a second test drive."
         ),
     )
-    stdout.write(
-        f"seeded be-back pk={be_back.pk} due {promised_at.isoformat()}."
+
+    # 2) Past (returned four days ago — a be-back that actually
+    # closed the loop; the past column on the board needs a row).
+    past_promised_at = now - dt.timedelta(days=4, hours=2)
+    past_be_back = record_be_back(
+        dealership=dealership,
+        lead=past_lead,
+        promised_at=past_promised_at,
+        promised_reason=BE_BACK_REASON_BRING_CO_SIGNER,
+        notes=(
+            "Customer came back with cosigner as promised; deal "
+            "moved into F&I."
+        ),
     )
-    return be_back
+    BeBack.objects.filter(pk=past_be_back.pk).update(
+        state=BE_BACK_STATE_RETURNED,
+        actual_return_at=past_promised_at + dt.timedelta(minutes=30),
+    )
+
+    # 3) Future (promised in three days — the upcoming column needs
+    # a row too so the board isn't a single overdue chip).
+    future_promised_at = (now + dt.timedelta(days=3)).replace(
+        hour=15, minute=30, second=0, microsecond=0
+    )
+    future_be_back = record_be_back(
+        dealership=dealership,
+        lead=future_lead,
+        promised_at=future_promised_at,
+        promised_reason=BE_BACK_REASON_BRING_TRADE_IN,
+        notes=(
+            "Customer will bring the trade-in Saturday afternoon "
+            "for appraisal."
+        ),
+    )
+    stdout.write(
+        f"seeded 3 be-back(s): "
+        f"past pk={past_be_back.pk} (returned), "
+        f"today pk={today_be_back.pk} (promised), "
+        f"future pk={future_be_back.pk} (promised)."
+    )
+    return today_be_back
 
 
 # ---------------------------------------------------------------------------
